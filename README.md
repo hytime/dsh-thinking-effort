@@ -1,4 +1,4 @@
-# dsh-pi-effort
+# dsh-thinking-effort
 
 DSH（DeepSeek Harness）第三方模型思考强度档位插件。
 
@@ -19,10 +19,10 @@ DSH（DeepSeek Harness）第三方模型思考强度档位插件。
 
 ```bash
 # 本地目录
-dsh plugin --profile <profile> add ./dsh-pi-effort
+dsh plugin --profile <profile> add ./dsh-thinking-effort
 
 # 或直接从 GitHub 安装
-dsh plugin --profile <profile> add github:hytime/dsh-pi-effort
+dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort
 ```
 
 > 从 git 安装需授权构建（本插件为纯手写 bundle、无构建步骤，授权时把
@@ -61,9 +61,9 @@ dsh plugin --profile <profile> add github:hytime/dsh-pi-effort
 
 ## 调试
 
-- 宿主加载/补齐会在 `$DSH_HOME/pi-effort-loaded.json` 写标记
+- 宿主加载/补齐会在 `$DSH_HOME/thinking-effort-loaded.json` 写标记
   （`apply` / `filled-N`）。
-- 宿主日志前缀 `[pi-effort]`。
+- 宿主日志前缀 `[dsh-thinking-effort]`。
 
 ## License
 

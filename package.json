@@ -1,5 +1,5 @@
 {
-  "name": "dsh-pi-effort",
+  "name": "dsh-thinking-effort",
   "version": "0.1.0",
   "description": "DSH 第三方模型思考强度档位插件：默认档位自动补齐（宿主）+ 设置页自定义档位编辑器（客户端）",
   "private": false,

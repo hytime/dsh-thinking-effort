@@ -1,5 +1,5 @@
 /**
- * dsh-pi-effort-client — 浏览器半区 bundle。
+ * dsh-thinking-effort-client — 浏览器半区 bundle。
  *
  * 注册“设置 → 思考强度档位”页面：按路由列出 pi-ai 手工声明模型，
  * 逐模型自定义思考档位（勾选档位 + 自由填写发送给网关的线上值）。
@@ -9,7 +9,7 @@
  * 与 tsdown 生成的 client bundle 格式一致（手写、内联样式、零构建）。
  */
 window.__ModuleLoader__.load({
-  id: 'dsh-pi-effort-client',
+  id: 'dsh-thinking-effort',
   factory: (require) => {
     var module = { exports: {} };
     var exports = module.exports;
@@ -291,7 +291,7 @@ window.__ModuleLoader__.load({
     }
 
     module.exports = {
-      name: 'dsh-pi-effort-client',
+      name: 'dsh-thinking-effort',
       inject: ['slots', 'connection'],
       apply(ctx) {
         const slots = ctx.get('slots');

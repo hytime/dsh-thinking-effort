@@ -1,5 +1,5 @@
 /**
- * dsh-pi-effort — 宿主半区：第三方模型思考强度默认档位自动补齐。
+ * dsh-thinking-effort — 宿主半区：第三方模型思考强度默认档位自动补齐。
  *
  * 扫描 llm-pi-ai 设置中手工声明的模型，给缺少 reasoningEfforts 的模型自动
  * 补上默认档位（Off / High / Max，官方 DeepSeek 风格），使 composer 选择该
@@ -11,10 +11,10 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-export const name = 'dsh-pi-effort'
+export const name = 'dsh-thinking-effort'
 export const inject = ['settings', 'timer']
 
-const MARKER = join(process.env.DSH_HOME || process.cwd(), 'pi-effort-loaded.json')
+const MARKER = join(process.env.DSH_HOME || process.cwd(), 'thinking-effort-loaded.json')
 
 /** 写加载/运行标记，便于确认插件是否被组合加载。 */
 function mark(event) {
@@ -32,7 +32,7 @@ function mark(event) {
 export function apply(ctx) {
   const NS = 'llm-pi-ai'
   const DEFAULT_LEVELS = { off: null, high: 'high', max: 'max' }
-  const log = (...args) => console.log('[pi-effort]', ...args)
+  const log = (...args) => console.log('[dsh-thinking-effort]', ...args)
 
   mark('apply')
 

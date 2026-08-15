@@ -32,22 +32,22 @@ ls "$HOME/.dsh/profiles"
 ### 方式 A：从 GitHub 安装（推荐）
 
 ```bash
-dsh plugin --profile <profile> add github:hytime/dsh-pi-effort
+dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort
 ```
 
 ### 方式 B：本地目录安装（先用 git 克隆或解压到本机）
 
 ```bash
 # 克隆（或用你已有的本地副本路径）
-git clone https://github.com/hytime/dsh-pi-effort.git /tmp/dsh-pi-effort
-dsh plugin --profile <profile> add /tmp/dsh-pi-effort
+git clone https://github.com/hytime/dsh-thinking-effort.git /tmp/dsh-thinking-effort
+dsh plugin --profile <profile> add /tmp/dsh-thinking-effort
 ```
 
 > 校验点：命令成功退出；profile 的 package.json 里出现
-> `"dsh-pi-effort"` 依赖，且 bundles 列表包含它：
+> `"dsh-thinking-effort"` 依赖，且 bundles 列表包含它：
 
 ```bash
-grep -n "dsh-pi-effort" "$HOME/.dsh/profiles/<profile>/package.json"
+grep -n "dsh-thinking-effort" "$HOME/.dsh/profiles/<profile>/package.json"
 ```
 
 ---
@@ -60,10 +60,10 @@ pnpm >= 10 默认拒绝 git 依赖的 `prepare`。若上一步输出提示需要
 ```bash
 cat >> "$HOME/.dsh/profiles/<profile>/pnpm-workspace.yaml" <<'EOF'
 allowBuilds:
-  dsh-pi-effort: true
+  dsh-thinking-effort: true
 EOF
 # 然后重跑安装
-dsh plugin --profile <profile> add github:hytime/dsh-pi-effort
+dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort
 ```
 
 > 说明：本插件为纯手写 bundle、无构建脚本；授权仅满足 pnpm 的默认安全策略。
@@ -78,7 +78,7 @@ DSH 的组合补丁支持热加载。安装后等待几秒，然后：
 
 ```bash
 # 宿主加载标记应出现（包含 "apply"）
-cat "$HOME/.dsh/pi-effort-loaded.json"
+cat "$HOME/.dsh/thinking-effort-loaded.json"
 ```
 
 ### 3b. 若未热加载：重启 DSH
@@ -93,10 +93,10 @@ cat "$HOME/.dsh/pi-effort-loaded.json"
 
 ```bash
 # 以默认 3080 端口为例；换成你实际监听的端口
-curl -s http://127.0.0.1:3080/ | grep -o "dsh-pi-effort[^\"]*" | head -3
+curl -s http://127.0.0.1:3080/ | grep -o "dsh-thinking-effort[^\"]*" | head -3
 # 期望输出至少包含：
-#   dsh-pi-effort
-#   dsh-pi-effort/client.js?rev=...
+#   dsh-thinking-effort
+#   dsh-thinking-effort/client.js?rev=...
 ```
 
 ---
@@ -117,8 +117,8 @@ curl -s http://127.0.0.1:3080/ | grep -o "dsh-pi-effort[^\"]*" | head -3
 
 | 现象 | 检查 |
 | --- | --- |
-| 宿主未加载（无 `pi-effort-loaded.json`） | 组合行是否生效：`grep -rn pi-effort "$HOME/.dsh/profiles/<profile>/cordis.patch.yml"`；重启 DSH；看启动日志里 `[pi-effort]` 行 |
-| 设置页没出现 | 刷新页面；`curl` 校验清单含 `dsh-pi-effort-client`；bundle 路由 `curl -s http://127.0.0.1:3080/plugins/dsh-pi-effort/client.js` 是否 200 |
+| 宿主未加载（无 `thinking-effort-loaded.json`） | 组合行是否生效：`grep -rn dsh-thinking-effort "$HOME/.dsh/profiles/<profile>/cordis.patch.yml"`；重启 DSH；看启动日志里 `[dsh-thinking-effort]` 行 |
+| 设置页没出现 | 刷新页面；`curl` 校验清单含 `dsh-thinking-effort`；bundle 路由 `curl -s http://127.0.0.1:3080/plugins/dsh-thinking-effort/client.js` 是否 200 |
 | 设置页报「未找到 llm-pi-ai」 | 该部署没有配置任何 `llm-pi-ai` 第三方模型；先配置模型再使用 |
 | 写档位报错 | 页面红字会显示具体原因（通常是档位字典不合法，如非 off 档位缺线上值） |
 
@@ -127,9 +127,9 @@ curl -s http://127.0.0.1:3080/ | grep -o "dsh-pi-effort[^\"]*" | head -3
 ## 6. 卸载
 
 ```bash
-dsh plugin --profile <profile> remove dsh-pi-effort
+dsh plugin --profile <profile> remove dsh-thinking-effort
 # 清理加载标记
-rm -f "$HOME/.dsh/pi-effort-loaded.json"
+rm -f "$HOME/.dsh/thinking-effort-loaded.json"
 ```
 
 ---
@@ -140,8 +140,8 @@ rm -f "$HOME/.dsh/pi-effort-loaded.json"
 
 ```yaml
 - insert:
-    - id: pi-effort
-      name: dsh-pi-effort
+    - id: thinking-effort
+      name: dsh-thinking-effort
 ```
 
-并确保 `dsh-pi-effort` 包可被解析（npm link / node_modules / workspace）。
+并确保 `dsh-thinking-effort` 包可被解析（npm link / node_modules / workspace）。

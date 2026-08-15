@@ -1,5 +1,5 @@
-# dsh-pi-effort: 第三方模型思考强度档位插件（持久化组合条目）。
+# dsh-thinking-effort: 第三方模型思考强度档位插件（持久化组合条目）。
 # 安装后一行同时挂载：宿主自动补齐 + 客户端设置页。
 - insert:
-    - id: pi-effort
-      name: dsh-pi-effort
+    - id: thinking-effort
+      name: dsh-thinking-effort
