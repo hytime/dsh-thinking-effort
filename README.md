@@ -15,6 +15,8 @@ DSH（DeepSeek Harness）第三方模型思考强度档位插件。
 
 ## 安装
 
+> 完整的 AI 可执行安装步骤见 [INSTALL.md](./INSTALL.md)（确定 profile → 安装 → 授权 → 生效 → 验证 → 排查）。
+
 ```bash
 # 本地目录
 dsh plugin --profile <profile> add ./dsh-pi-effort
