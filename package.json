@@ -1,0 +1,39 @@
+{
+  "name": "dsh-pi-effort",
+  "version": "0.1.0",
+  "description": "DSH 第三方模型思考强度档位插件：默认档位自动补齐（宿主）+ 设置页自定义档位编辑器（客户端）",
+  "private": false,
+  "type": "module",
+  "main": "./src/host.mjs",
+  "files": [
+    "src/",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "exports": {
+    ".": "./src/host.mjs",
+    "./client": "./src/client.js",
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "plugin",
+    "reasoning-effort",
+    "thinking",
+    "llm-pi-ai"
+  ],
+  "license": "MIT"
+}
