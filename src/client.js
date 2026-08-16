@@ -134,22 +134,22 @@ window.__ModuleLoader__.load({
             setState(s => ({ ...s, loading: false, busy: false, nsFound: false, inventory: [], subagent: null }));
             return;
           }
-          // 本插件的命名空间：子 agent 默认思考强度。
-          const effortNs = namespaces.find(n => n.ns === 'dsh-thinking-effort');
-          const effortValue = effortNs && typeof effortNs.value === 'object' && effortNs.value !== null ? effortNs.value : {};
+          // 子 agent 默认思考强度：存储在 llm-pi-ai 用户层顶层键 subagentEffort
+          // （pi-ai schema 会忽略该键但原样持久化，因此从 user 层读取）。
+          const rawUser = ns.user && typeof ns.user === 'object' ? ns.user : {};
           const subagent = {
-            effort: typeof effortValue.subagentEffort === 'string' && effortValue.subagentEffort.length > 0
-              ? effortValue.subagentEffort
+            effort: typeof rawUser.subagentEffort === 'string' && rawUser.subagentEffort.length > 0
+              ? rawUser.subagentEffort
               : null,
-            revision: typeof effortNs.revision === 'number' ? effortNs.revision : 0,
+            revision: typeof ns.revision === 'number' ? ns.revision : 0,
           };
           setState(s => ({
             ...s, loading: false, busy: false, nsFound: true,
             inventory: inventoryFrom(ns), revision: typeof ns.revision === 'number' ? ns.revision : 0,
             subagent, subagentDraft: 'default', subagentCustom: '',
           }));
-        }).catch(() => {
-          setState(s => ({ ...s, loading: false, busy: false, error: '无法读取设置，请重试' }));
+        }).catch((error) => {
+          setState(s => ({ ...s, loading: false, busy: false, error: '读取设置失败：' + (error && error.message ? error.message : String(error)) }));
         });
       };
 
@@ -198,14 +198,14 @@ window.__ModuleLoader__.load({
           ops.push({ op: 'set', path: ['subagentEffort'], value });
         }
         setState(s => ({ ...s, busy: true, error: null }));
-        connection.api.settings.mutate({ ns: 'dsh-thinking-effort', ops, expectedRevision: state.subagent ? state.subagent.revision : 0 }).then((response) => {
+        connection.api.settings.mutate({ ns: NS, ops, expectedRevision: state.subagent ? state.subagent.revision : 0 }).then((response) => {
           if (!response.result.ok) {
             setState(s => ({ ...s, busy: false, error: response.result.error.message }));
             return;
           }
           load();
-        }).catch(() => {
-          setState(s => ({ ...s, busy: false, error: '写入失败，请重试' }));
+        }).catch((error) => {
+          setState(s => ({ ...s, busy: false, error: '写入失败：' + (error && error.message ? error.message : String(error)) }));
         });
       };
 
