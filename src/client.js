@@ -118,6 +118,7 @@ window.__ModuleLoader__.load({
       const [state, setState] = React.useState({
         loading: true, inventory: [], revision: 0, expanded: {}, drafts: {},
         busy: false, error: null, query: '', nsFound: true,
+        subagent: null, subagentDraft: 'default', subagentCustom: '',
       });
 
       const load = () => {
@@ -130,12 +131,22 @@ window.__ModuleLoader__.load({
           const namespaces = response.result.value.namespaces || [];
           const ns = namespaces.find(n => n.ns === NS);
           if (!ns) {
-            setState(s => ({ ...s, loading: false, busy: false, nsFound: false, inventory: [] }));
+            setState(s => ({ ...s, loading: false, busy: false, nsFound: false, inventory: [], subagent: null }));
             return;
           }
+          // 本插件的命名空间：子 agent 默认思考强度。
+          const effortNs = namespaces.find(n => n.ns === 'dsh-thinking-effort');
+          const effortValue = effortNs && typeof effortNs.value === 'object' && effortNs.value !== null ? effortNs.value : {};
+          const subagent = {
+            effort: typeof effortValue.subagentEffort === 'string' && effortValue.subagentEffort.length > 0
+              ? effortValue.subagentEffort
+              : null,
+            revision: typeof effortNs.revision === 'number' ? effortNs.revision : 0,
+          };
           setState(s => ({
             ...s, loading: false, busy: false, nsFound: true,
             inventory: inventoryFrom(ns), revision: typeof ns.revision === 'number' ? ns.revision : 0,
+            subagent, subagentDraft: 'default', subagentCustom: '',
           }));
         }).catch(() => {
           setState(s => ({ ...s, loading: false, busy: false, error: '无法读取设置，请重试' }));
@@ -169,6 +180,33 @@ window.__ModuleLoader__.load({
       const applyPreset = (levels) => {
         const ops = state.inventory.map(item => setOp(item, levels));
         runOps(ops);
+      };
+
+      // 子 agent 思考强度：写入本插件命名空间 dsh-thinking-effort。
+      const applySubagentEffort = () => {
+        const ops = [];
+        if (state.subagentDraft === 'default') {
+          ops.push({ op: 'unset', path: ['subagentEffort'] });
+        } else {
+          const value = state.subagentDraft === 'custom'
+            ? state.subagentCustom.trim()
+            : state.subagentDraft;
+          if (value.length === 0) {
+            setState(s => ({ ...s, error: '请输入自定义思考档位' }));
+            return;
+          }
+          ops.push({ op: 'set', path: ['subagentEffort'], value });
+        }
+        setState(s => ({ ...s, busy: true, error: null }));
+        connection.api.settings.mutate({ ns: 'dsh-thinking-effort', ops, expectedRevision: state.subagent ? state.subagent.revision : 0 }).then((response) => {
+          if (!response.result.ok) {
+            setState(s => ({ ...s, busy: false, error: response.result.error.message }));
+            return;
+          }
+          load();
+        }).catch(() => {
+          setState(s => ({ ...s, busy: false, error: '写入失败，请重试' }));
+        });
       };
 
       const keyOf = (item) => item.route + '/' + item.model;
@@ -218,6 +256,34 @@ window.__ModuleLoader__.load({
         React.createElement('p', { style: { fontSize: '12px', opacity: 0.75, margin: '0 0 10px' } },
           '勾选档位后，右侧输入框可自由定义“发送给网关的线上值”——例如给 high 填 ultra，composer 选中 High 时网关就收到 ultra。未设置档位的模型自动采用默认档位（Off / High / Max）。'),
         state.error ? React.createElement('p', { style: { fontSize: '12px', color: '#d92d20', margin: '0 0 8px' } }, state.error) : null,
+        React.createElement('div', { style: { border: '1px solid rgba(128,128,128,0.25)', borderRadius: '8px', padding: '10px', marginBottom: '12px' } },
+          React.createElement('div', { style: { fontSize: '13px', fontWeight: 600, marginBottom: '4px' } }, '子 agent 思考强度（Subagent 默认档位）'),
+          React.createElement('div', { style: { fontSize: '12px', opacity: 0.75, marginBottom: '8px' } },
+            state.subagent
+              ? '当前默认：' + (state.subagent.effort || '提供方默认')
+              : '未配置（子 agent 继承主 agent / 提供方默认）'),
+          React.createElement('div', { style: { display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' } },
+            React.createElement('select', {
+              value: state.subagentDraft,
+              disabled: state.busy,
+              onChange: (e) => setState(s => ({ ...s, subagentDraft: e.target.value })),
+              style: { height: '28px', padding: '0 8px', border: '1px solid rgba(128,128,128,0.35)', borderRadius: '6px', fontSize: '12px', background: 'transparent', color: 'inherit' },
+            }, [['default', '提供方默认'], ['off', 'off'], ['minimal', 'minimal'], ['low', 'low'], ['medium', 'medium'], ['high', 'high'], ['xhigh', 'xhigh'], ['max', 'max'], ['custom', '自定义…']]
+              .map(function (pair) {
+                return React.createElement('option', { key: pair[0], value: pair[0] }, pair[1]);
+              })),
+            state.subagentDraft === 'custom'
+              ? React.createElement('input', {
+                  type: 'text',
+                  value: state.subagentCustom,
+                  placeholder: '自定义档位，如 ultra',
+                  style: { flex: 1, minWidth: '140px', height: '28px', padding: '0 8px', border: '1px solid rgba(128,128,128,0.35)', borderRadius: '6px', fontSize: '12px', background: 'transparent', color: 'inherit' },
+                  onChange: (e) => setState(s => ({ ...s, subagentCustom: e.target.value })),
+                })
+              : null,
+            btn('应用', applySubagentEffort, state.busy),
+          ),
+        ),
         state.nsFound === false
           ? React.createElement('p', { style: { fontSize: '12px', opacity: 0.75 } }, '未找到 llm-pi-ai 设置命名空间（无第三方模型配置）。')
           : React.createElement('div', null,

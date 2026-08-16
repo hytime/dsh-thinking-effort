@@ -10,9 +10,15 @@
  */
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import z from '@deepseek-ai/schemastery'
+import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 
 export const name = 'dsh-thinking-effort'
 export const inject = ['settings', 'timer']
+
+/** 本插件自己的设置命名空间：子 agent 默认思考强度。 */
+const EFFORT_NS = settingsNamespace('dsh-thinking-effort')
+const EFFORT_SCHEMA = z.object({ subagentEffort: z.string() })
 
 const MARKER = join(process.env.DSH_HOME || process.cwd(), 'thinking-effort-loaded.json')
 
@@ -112,5 +118,31 @@ export function apply(ctx) {
     void fillDefaults().catch((error) => {
       log('watch fill error:', error && error.message ? error.message : String(error))
     })
+  })
+
+  // ── 子 agent 思考强度 ─────────────────────────────────────────────
+  // 1) 注册自己的设置命名空间 dsh-thinking-effort（subagentEffort）。
+  let effortSource = () => ({})
+  installSettingsSection(ctx, EFFORT_NS, EFFORT_SCHEMA, {}, {
+    setSource: (current) => { effortSource = current },
+    onChange: () => {},
+  })
+
+  // 2) agent/request waterfall：子 agent 的模型调用若未显式指定思考档位，
+  //    则填入配置的 subagentEffort（调用 next() 后改写，遵守 waterfall 纪律）。
+  ctx.on('agent/request', async (payload, next) => {
+    const config = await next()
+    try {
+      const effort = effortSource().subagentEffort
+      if (typeof effort !== 'string' || effort.length === 0) return config
+      const agent = payload && payload.agent
+      const header = agent && agent.session && agent.session.header
+      if (!header || header.origin !== 'subagent') return config
+      if (config.reasoningEffort !== undefined) return config
+      return { ...config, reasoningEffort: effort }
+    } catch (error) {
+      log('agent/request override error:', error && error.message ? error.message : String(error))
+      return config
+    }
   })
 }
