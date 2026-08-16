@@ -108,7 +108,10 @@ curl -s http://127.0.0.1:3080/ | grep -o "dsh-thinking-effort[^\"]*" | head -3
    也可以手动移除一个模型的档位后，等待数秒确认被补回。
 2. **设置页**：Web 界面 → 设置 → 左侧出现「思考强度档位」（位于「模型」与
    「插件」之间）；可展开模型、勾选档位、填线上值、应用/恢复默认。
-3. **composer**：选择该第三方模型 → 模型选择器出现「推理等级」（Off / High / Max
+3. **子 agent 思考强度**：设置页顶部卡片选档位并「应用」后，
+   `$HOME/.dsh/settings.yaml` 的 `llm-pi-ai:` 下出现 `subagentEffort: <值>`；
+   派发子 agent 后其模型调用带上该思考强度。
+4. **composer**：选择该第三方模型 → 模型选择器出现「推理等级」（Off / High / Max
    或你自定义的档位）。
 
 ---
@@ -118,9 +121,11 @@ curl -s http://127.0.0.1:3080/ | grep -o "dsh-thinking-effort[^\"]*" | head -3
 | 现象 | 检查 |
 | --- | --- |
 | 宿主未加载（无 `thinking-effort-loaded.json`） | 组合行是否生效：`grep -rn dsh-thinking-effort "$HOME/.dsh/profiles/<profile>/cordis.patch.yml"`；重启 DSH；看启动日志里 `[dsh-thinking-effort]` 行 |
+| 宿主改动不生效 | host HMR 默认关闭，**重启 DSH** 后再验证 |
 | 设置页没出现 | 刷新页面；`curl` 校验清单含 `dsh-thinking-effort`；bundle 路由 `curl -s http://127.0.0.1:3080/plugins/dsh-thinking-effort/client.js` 是否 200 |
 | 设置页报「未找到 llm-pi-ai」 | 该部署没有配置任何 `llm-pi-ai` 第三方模型；先配置模型再使用 |
 | 写档位报错 | 页面红字会显示具体原因（通常是档位字典不合法，如非 off 档位缺线上值） |
+| 子 agent 报 `UNSUPPORTED_REASONING_EFFORT` | `subagentEffort` 超出了子 agent 所用模型支持的档位范围，改用该模型支持的档位 |
 
 ---
 
