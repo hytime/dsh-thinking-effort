@@ -1,147 +1,55 @@
-# 安装指南（AI 可执行版）
+# 安装指南（官方 DSH CLI）
 
-本文件为机器可执行步骤：每步给出精确命令、期望输出与校验点。适合任何 AI
-助手或人工按序执行。全文以 `<profile>` 占位符表示目标 DSH profile，步骤 0
-会教你如何确定它。
+本指南只使用 DSH 官方 `dsh plugin` 命令管理插件。命令会在目标 profile 中安装依赖，并自动同步 `dsh.profile.bundles`；不要用普通 `npm install`、profile 目录下的直接 `pnpm add` 或手工编辑 profile 配置替代它。
 
----
+本文统一使用以下占位符：
+
+- `<profile>`：目标 DSH profile，例如 `web`；
+- `${DSH_HOME}`：DSH home，默认是 `$HOME/.dsh`；
+- `@hytime/dsh-thinking-effort`：npm 包名；
+- `dsh-thinking-effort`：旧版本包名和运行时插件 ID，不是新包的安装名。
 
 ## 0. 前置条件与确定 profile
 
-前置：已安装 `dsh` CLI，且 `gh`（或等效 git 凭据）可访问 GitHub。
+前置条件：已安装 DSH CLI，并且当前终端可以执行 `dsh`。
 
 ```bash
-# 确认 dsh 可用
-dsh --version
-
-# 确定目标 profile：列出 DSH home 下已存在的 profile
-# （一般部署为 web；以实际存在、正在运行的那个为准）
 echo "DSH_HOME=${DSH_HOME:-$HOME/.dsh}"
-ls "$HOME/.dsh/profiles"
+dsh --version
+ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 ```
 
-> 校验点：上面 `ls` 至少列出一个 profile 名（如 `web`）。把你要用的名字记为
-> `<profile>`。不确定时优先选启动命令里 `--profile` 指定的那个；没有则用 `web`。
+选择正在运行的 profile。一般部署使用 `web`，但应以实际启动命令中的 `--profile` 为准。
 
----
-
-## 1. 安装
-
-二选一（推荐 git 方式，来源单一、可升级）：
-
-### 方式 A：从 GitHub 安装（推荐）
+校验点：目标目录存在：
 
 ```bash
-dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort
+ls "${DSH_HOME:-$HOME/.dsh}/profiles/<profile>"
 ```
 
-### 方式 B：本地目录安装（先用 git 克隆或解压到本机）
+## 1. 官方安装
+
+安装最新版本：
 
 ```bash
-# 克隆（或用你已有的本地副本路径）
-git clone https://github.com/hytime/dsh-thinking-effort.git /tmp/dsh-thinking-effort
-dsh plugin --profile <profile> add /tmp/dsh-thinking-effort
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 ```
 
-> 校验点：命令成功退出；profile 的 package.json 里出现
-> `"@hytime/dsh-thinking-effort"` 依赖，且 bundles 列表包含它：
+安装指定版本：
 
 ```bash
-grep -n "@hytime/dsh-thinking-effort" "$HOME/.dsh/profiles/<profile>/package.json"
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.2
 ```
 
----
+官方 CLI 会自动完成以下工作：
 
-## 2. 授权构建（仅 git 安装需要）
+1. 将 `@hytime/dsh-thinking-effort` 写入 profile 依赖；
+2. 更新 profile 的 pnpm lockfile；
+3. 发现包中的 `dsh.bundle` 声明；
+4. 将 `@hytime/dsh-thinking-effort` 加入 `dsh.profile.bundles`；
+5. 让组合树加载 `thinking-effort` 条目。
 
-pnpm >= 10 默认拒绝 git 依赖的 `prepare`。若上一步输出提示需要授权，把提示
-中的包键写入该 profile 的 `pnpm-workspace.yaml`：
-
-```bash
-cat >> "$HOME/.dsh/profiles/<profile>/pnpm-workspace.yaml" <<'EOF'
-allowBuilds:
-  '@hytime/dsh-thinking-effort': true
-EOF
-# 然后重跑安装
-dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort
-```
-
-> 说明：本插件为纯手写 bundle、无构建脚本；授权仅满足 pnpm 的默认安全策略。
-
----
-
-## 3. 生效
-
-### 3a. 热加载（无需重启）
-
-DSH 的组合补丁支持热加载。安装后等待几秒，然后：
-
-```bash
-# 宿主加载标记应出现（包含 "apply"）
-cat "$HOME/.dsh/thinking-effort-loaded.json"
-```
-
-### 3b. 若未热加载：重启 DSH
-
-```bash
-# 重启你的 DSH 服务进程（以你的启动方式为准），重启后再验证。
-```
-
-### 3c. 浏览器侧
-
-**刷新 Web 页面**（Cmd+R / F5）。验证设置页 bundle 已被 Web 清单注入：
-
-```bash
-# 以默认 3080 端口为例；换成你实际监听的端口
-curl -s http://127.0.0.1:3080/ | grep -o "dsh-thinking-effort[^\"]*" | head -3
-# 期望输出至少包含：
-#   dsh-thinking-effort
-#   dsh-thinking-effort/client.js?rev=...
-```
-
----
-
-## 4. 功能验证清单
-
-1. **宿主自动补齐**：打开/查看 `llm-pi-ai` 设置（`$HOME/.dsh/settings.yaml`），
-   手工声明模型缺少 `reasoningEfforts` 的会自动补上 `off: null / high: high / max: max`；
-   也可以手动移除一个模型的档位后，等待数秒确认被补回。
-2. **设置页**：Web 界面 → 设置 → 左侧出现「思考强度档位」（位于「模型」与
-   「插件」之间）；可展开模型、勾选档位、填线上值、应用/恢复默认。
-3. **子 agent 思考强度**：设置页顶部卡片选档位并「应用」后，
-   `$HOME/.dsh/settings.yaml` 的 `llm-pi-ai:` 下出现 `subagentEffort: <值>`；
-   派发子 agent 后其模型调用带上该思考强度。
-4. **composer**：选择该第三方模型 → 模型选择器出现「推理等级」（Off / High / Max
-   或你自定义的档位）。
-
----
-
-## 5. 故障排查
-
-| 现象 | 检查 |
-| --- | --- |
-| 宿主未加载（无 `thinking-effort-loaded.json`） | 组合行是否生效：`grep -rn dsh-thinking-effort "$HOME/.dsh/profiles/<profile>/cordis.patch.yml"`；重启 DSH；看启动日志里 `[dsh-thinking-effort]` 行 |
-| 宿主改动不生效 | host HMR 默认关闭，**重启 DSH** 后再验证 |
-| 设置页没出现 | 刷新页面；`curl` 校验清单含 `dsh-thinking-effort`；bundle 路由 `curl -s http://127.0.0.1:3080/plugins/dsh-thinking-effort/client.js` 是否 200 |
-| 设置页报「未找到 llm-pi-ai」 | 该部署没有配置任何 `llm-pi-ai` 第三方模型；先配置模型再使用 |
-| 写档位报错 | 页面红字会显示具体原因（通常是档位字典不合法，如非 off 档位缺线上值） |
-| 子 agent 报 `UNSUPPORTED_REASONING_EFFORT` | `subagentEffort` 超出了子 agent 所用模型支持的档位范围，改用该模型支持的档位 |
-
----
-
-## 6. 卸载
-
-```bash
-dsh plugin --profile <profile> remove dsh-thinking-effort
-# 清理加载标记
-rm -f "$HOME/.dsh/thinking-effort-loaded.json"
-```
-
----
-
-## 附：手动组合安装（不经过 `dsh plugin`，适合已有补丁文件的部署）
-
-若你的部署直接用 `cordis.patch.yml` 组合，追加：
+不需要手工追加以下 YAML：
 
 ```yaml
 - insert:
@@ -149,4 +57,179 @@ rm -f "$HOME/.dsh/thinking-effort-loaded.json"
       name: '@hytime/dsh-thinking-effort'
 ```
 
-并确保 `@hytime/dsh-thinking-effort` 包可被解析（npm link / node_modules / workspace）。
+## 2. 升级
+
+升级到 npm registry 中的最新版本：
+
+```bash
+dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
+```
+
+升级到指定版本：
+
+```bash
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.2
+```
+
+升级后重新执行验证步骤。宿主侧代码需要重启 DSH；浏览器侧代码需要刷新 Web 页面。
+
+## 3. 从旧包迁移
+
+旧版本可能使用以下依赖：
+
+```text
+dsh-thinking-effort
+github:hytime/dsh-thinking-effort
+```
+
+### 3.1 旧依赖仍存在
+
+直接执行官方迁移命令：
+
+```bash
+dsh plugin --profile <profile> remove dsh-thinking-effort
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.2
+```
+
+### 3.2 旧依赖已被移除，但旧 bundle 残留
+
+先检查组合配置：
+
+```bash
+dsh --profile <profile> --dump-default-config
+```
+
+如果输出中仍出现：
+
+```yaml
+name: dsh-thinking-effort
+```
+
+从旧 profile 的 lockfile 中找到旧 GitHub commit：
+
+```bash
+grep -n "dsh-thinking-effort" \
+  "${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/pnpm-lock.yaml"
+```
+
+然后使用官方命令恢复旧依赖、执行官方卸载，再安装新包：
+
+```bash
+dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
+dsh plugin --profile <profile> remove dsh-thinking-effort
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.2
+```
+
+这一步的目的不是继续使用旧插件，而是让官方 CLI 识别旧依赖并自动删除残留 bundle。不要手工把旧包名重新写入新的 bundle 列表。
+
+## 4. 安装验证
+
+### 4.1 检查依赖
+
+```bash
+grep -n "@hytime/dsh-thinking-effort" \
+  "${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/package.json"
+```
+
+期望看到：
+
+```text
+@hytime/dsh-thinking-effort
+```
+
+确认旧依赖没有出现在 package manifest：
+
+```bash
+grep -n "dsh-thinking-effort" \
+  "${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/package.json"
+```
+
+这个命令可能会因为新包名中包含 `dsh-thinking-effort` 而匹配到 scoped 包，这是正常的。需要确认没有独立的旧依赖键：
+
+```json
+"dsh-thinking-effort": "..."
+```
+
+### 4.2 检查官方组合树
+
+```bash
+dsh --profile <profile> --dump-default-config
+```
+
+期望包含：
+
+```yaml
+# == @hytime/dsh-thinking-effort
+- id: thinking-effort
+  name: '@hytime/dsh-thinking-effort'
+```
+
+期望不包含：
+
+```yaml
+name: dsh-thinking-effort
+```
+
+如果 `dump-default-config` 失败，不能认为插件已经安装成功。
+
+### 4.3 检查宿主加载
+
+重启 DSH 后检查：
+
+```bash
+cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
+```
+
+成功加载后应看到包含 `apply` 或 `filled-N` 的事件标记。日志前缀为：
+
+```text
+[dsh-thinking-effort]
+```
+
+### 4.4 检查浏览器侧
+
+刷新 Web 页面（Cmd+R / F5），然后检查页面清单：
+
+```bash
+curl -s http://127.0.0.1:3080/ \
+  | grep -o "dsh-thinking-effort[^\"]*" \
+  | head -3
+```
+
+根据 DSH 版本，输出可能包含运行时 ID `dsh-thinking-effort` 或对应的客户端 bundle 路径。浏览器侧最终加载的是新 npm 包中的 `src/client.js`。
+
+## 5. 功能验证
+
+1. **宿主自动补齐：** 手工声明模型缺少 `reasoningEfforts` 时，设置中应出现 `off: null / high: high / max: max`。
+2. **设置页：** Web 界面 → 设置 → 出现「思考强度档位」，可以编辑模型档位和线上值。
+3. **子 agent 思考强度：** 设置页配置后，`llm-pi-ai` 用户层出现 `subagentEffort`，未显式指定档位的子 agent 请求会使用它。
+4. **未设置默认值：** 插件不会自动选择 `off`、`high` 或 `max`；请求不发送 `reasoning` 参数，由第三方网关决定默认行为。
+5. **Composer：** 选择第三方模型后，模型选择器显示已声明的「推理等级」。
+
+## 6. 故障排查
+
+| 现象 | 处理方式 |
+| --- | --- |
+| `dsh` 命令不存在 | 安装或启用 DSH 官方 CLI，不要改用普通 npm/pnpm 命令模拟 profile 安装 |
+| `add` 成功但 `dump-default-config` 报旧包名 | 按「3.2 旧依赖已被移除，但旧 bundle 残留」恢复旧 commit 后执行官方 remove，再 add 新包 |
+| 宿主没有加载 | 重启 DSH，检查 `thinking-effort-loaded.json` 和启动日志 |
+| 设置页没有出现 | 重启 DSH 后刷新页面，检查浏览器 bundle 清单 |
+| 写入档位失败 | 检查非 `off` 档位是否填写线上值 |
+| 子 agent 报 `UNSUPPORTED_REASONING_EFFORT` | 改用目标模型支持的档位，或恢复为「提供方默认」 |
+
+## 7. 卸载
+
+使用官方命令：
+
+```bash
+dsh plugin --profile <profile> remove @hytime/dsh-thinking-effort
+rm -f "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
+```
+
+卸载后验证：
+
+```bash
+dsh --profile <profile> --dump-default-config
+```
+
+如果 profile 仍包含旧 bundle 条目，按「3.2」处理残留，不要直接猜测修改配置。
