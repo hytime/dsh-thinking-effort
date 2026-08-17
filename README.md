@@ -2,8 +2,8 @@
 
 为 [DSH（DeepSeek Harness）](https://github.com/deepseek-ai/deepseek-harness) 的 `llm-pi-ai` 第三方模型补充可配置的思考强度档位，并设置子 agent 的默认思考强度。
 
-[![npm version](https://img.shields.io/npm/v/dsh-thinking-effort)](https://www.npmjs.com/package/dsh-thinking-effort)
-[![npm downloads](https://img.shields.io/npm/dm/dsh-thinking-effort)](https://www.npmjs.com/package/dsh-thinking-effort)
+[![npm version](https://img.shields.io/npm/v/@hytime/dsh-thinking-effort)](https://www.npmjs.com/package/@hytime/dsh-thinking-effort)
+[![npm downloads](https://img.shields.io/npm/dm/@hytime/dsh-thinking-effort)](https://www.npmjs.com/package/@hytime/dsh-thinking-effort)
 [![GitHub license](https://img.shields.io/github/license/hytime/dsh-thinking-effort)](https://github.com/hytime/dsh-thinking-effort/blob/main/LICENSE)
 
 ## 为什么需要它？
@@ -43,7 +43,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 ### 使用 npm 安装
 
 ```bash
-npm install dsh-thinking-effort
+npm install @hytime/dsh-thinking-effort
 ```
 
 然后在目标 DSH profile 中挂载插件：
