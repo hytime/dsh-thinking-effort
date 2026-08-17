@@ -2,3 +2,4 @@ node_modules/
 *.tgz
 *.log
 .pnpm-store/
+AGENTS.md
