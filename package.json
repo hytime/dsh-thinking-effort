@@ -1,10 +1,21 @@
 {
   "name": "dsh-thinking-effort",
-  "version": "0.1.0",
-  "description": "DSH 第三方模型思考强度档位插件：默认档位自动补齐（宿主）+ 设置页自定义档位编辑器（客户端）",
+  "version": "0.1.1",
+  "description": "为 DSH 的 pi-ai 第三方模型补充可配置的思考强度档位，并设置子 agent 默认思考强度。",
   "private": false,
   "type": "module",
   "main": "./src/host.mjs",
+  "homepage": "https://github.com/hytime/dsh-thinking-effort#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hytime/dsh-thinking-effort.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hytime/dsh-thinking-effort/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "src/",
     "cordis.patch.yml",
