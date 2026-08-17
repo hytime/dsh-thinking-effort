@@ -2,4 +2,4 @@
 # 安装后一行同时挂载：宿主自动补齐 + 客户端设置页。
 - insert:
     - id: thinking-effort
-      name: dsh-thinking-effort
+      name: '@hytime/dsh-thinking-effort'

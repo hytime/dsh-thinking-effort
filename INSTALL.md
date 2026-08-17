@@ -44,10 +44,10 @@ dsh plugin --profile <profile> add /tmp/dsh-thinking-effort
 ```
 
 > 校验点：命令成功退出；profile 的 package.json 里出现
-> `"dsh-thinking-effort"` 依赖，且 bundles 列表包含它：
+> `"@hytime/dsh-thinking-effort"` 依赖，且 bundles 列表包含它：
 
 ```bash
-grep -n "dsh-thinking-effort" "$HOME/.dsh/profiles/<profile>/package.json"
+grep -n "@hytime/dsh-thinking-effort" "$HOME/.dsh/profiles/<profile>/package.json"
 ```
 
 ---
@@ -60,7 +60,7 @@ pnpm >= 10 默认拒绝 git 依赖的 `prepare`。若上一步输出提示需要
 ```bash
 cat >> "$HOME/.dsh/profiles/<profile>/pnpm-workspace.yaml" <<'EOF'
 allowBuilds:
-  dsh-thinking-effort: true
+  '@hytime/dsh-thinking-effort': true
 EOF
 # 然后重跑安装
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort
@@ -146,7 +146,7 @@ rm -f "$HOME/.dsh/thinking-effort-loaded.json"
 ```yaml
 - insert:
     - id: thinking-effort
-      name: dsh-thinking-effort
+      name: '@hytime/dsh-thinking-effort'
 ```
 
-并确保 `dsh-thinking-effort` 包可被解析（npm link / node_modules / workspace）。
+并确保 `@hytime/dsh-thinking-effort` 包可被解析（npm link / node_modules / workspace）。

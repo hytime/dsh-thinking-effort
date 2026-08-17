@@ -52,7 +52,7 @@ npm install @hytime/dsh-thinking-effort
 # <DSH_HOME>/profiles/<profile>/cordis.patch.yml
 - insert:
     - id: thinking-effort
-      name: dsh-thinking-effort
+      name: '@hytime/dsh-thinking-effort'
 ```
 
 ### 使用 DSH CLI 从 GitHub 安装
