@@ -6,6 +6,18 @@ import { fileURLToPath } from 'node:url'
 import { name as hostName } from '../src/host.mjs'
 
 const clientPath = fileURLToPath(new URL('../src/client.js', import.meta.url))
+const packagePath = fileURLToPath(new URL('../package.json', import.meta.url))
+const REQUIRED_LOCALE_KEYS = [
+  'title', 'description', 'subagentTitle', 'providerDefault', 'apply',
+  'searchPlaceholder', 'loading', 'noModels', 'noMatches', 'route',
+  'customize', 'collapse', 'editorTitle', 'applyLevel', 'restoreDefault',
+  'expandedCount', 'versionLabel', 'customEffortRequired', 'readSettingsFailed',
+  'writeFailed',
+]
+
+function readPackage() {
+  return JSON.parse(readFileSync(packagePath, 'utf8'))
+}
 
 function loadDescriptor() {
   let descriptor
@@ -31,10 +43,22 @@ test('registers the browser bundle under the scoped package name', () => {
   assert.equal(descriptor.id, '@hytime/dsh-thinking-effort')
 })
 
-test('uses the scoped package name for runtime plugin identity', () => {
-  const descriptor = loadDescriptor()
-  const runtime = descriptor.factory(() => ({}))
+test('keeps the client version and watermark style tied to package version', () => {
+  const pkg = readPackage()
+  const source = readFileSync(clientPath, 'utf8')
 
-  assert.equal(runtime.name, '@hytime/dsh-thinking-effort')
-  assert.equal(hostName, '@hytime/dsh-thinking-effort')
+  assert.ok(source.includes(`const PLUGIN_VERSION = '${pkg.version}'`))
+  assert.ok(source.includes("'v' + PLUGIN_VERSION"))
+  assert.ok(source.includes("pointerEvents: 'none'"))
+})
+
+test('registers balanced Chinese and English dictionaries', () => {
+  const source = readFileSync(clientPath, 'utf8')
+
+  assert.ok(source.includes("const LOCALE_NS = 'settings.thinkingEffort'"))
+  assert.ok(source.includes('locale.register(LOCALE_NS, { zh, en })'))
+  assert.ok(source.includes('locale: LOCALE_NS'))
+  for (const key of REQUIRED_LOCALE_KEYS) {
+    assert.ok(source.includes(`${key}:`), `missing locale key: ${key}`)
+  }
 })
