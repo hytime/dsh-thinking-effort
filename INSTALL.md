@@ -2,6 +2,8 @@
 
 本指南只使用 DSH 官方 `dsh plugin` 命令管理插件。命令会在目标 profile 中安装依赖，并自动同步 `dsh.profile.bundles`；不要用普通 `npm install`、profile 目录下的直接 `pnpm add` 或手工编辑 profile 配置替代它。
 
+每个已发布版本的功能和修复记录见 [CHANGELOG.md](./CHANGELOG.md)。升级前后请先查看对应版本条目，确认是否包含配置、运行时 ID 或迁移流程变更。
+
 本文统一使用以下占位符：
 
 - `<profile>`：目标 DSH profile，例如 `web`；
