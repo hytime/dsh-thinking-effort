@@ -5,8 +5,8 @@
  * 逐模型自定义思考档位（勾选档位 + 自由填写发送给网关的线上值）。
  * 数据经标准 API client（connection.api.settings）读写，无需自定义 remote。
  *
- * 本文件即产物 bundle：CJS 工厂经 window.__ModuleLoader__.load 注册，
- * 与 tsdown 生成的 client bundle 格式一致（手写、内联样式、零构建）。
+ * 本文件是发布时生成的单文件 bundle：CJS 工厂经 window.__ModuleLoader__.load 注册，
+ * locale 数据由 src/locales/zh.json 和 src/locales/en.json 生成后内联。
  */
 window.__ModuleLoader__.load({
   id: '@hytime/dsh-thinking-effort',

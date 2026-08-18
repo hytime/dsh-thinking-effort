@@ -6,7 +6,9 @@
 [![npm downloads](https://img.shields.io/npm/dm/@hytime/dsh-thinking-effort)](https://www.npmjs.com/package/@hytime/dsh-thinking-effort)
 [![GitHub license](https://img.shields.io/github/license/hytime/dsh-thinking-effort)](https://github.com/hytime/dsh-thinking-effort/blob/main/LICENSE)
 
+- [English README](./README.en.md)
 - [安装指南](./INSTALL.md)
+- [English installation guide](./INSTALL.en.md)
 - [版本更新日志](./CHANGELOG.md)
 
 ## 为什么需要它？
@@ -74,7 +76,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.5
 ```
 
 官方 CLI 会同时更新 profile 依赖、锁文件和 `dsh.profile.bundles`，无需手工追加 YAML。
@@ -109,7 +111,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.5
 ```
 
 如果旧依赖已经被其他工具移除，但 profile 的 bundle 列表仍残留旧名称，先从旧 profile 的 `pnpm-lock.yaml` 找到旧 GitHub commit，再使用官方命令恢复并移除：
@@ -117,7 +119,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.5
 ```
 
 不要把 `dsh-thinking-effort` 添加到新的 `dsh.profile.bundles` 中。
@@ -125,9 +127,10 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
 ## 快速使用
 
 1. 打开 DSH 的「设置 → 思考强度档位」。
-2. 在「子 agent 思考强度」卡片中选择提供方默认、标准档位或自定义值，然后点击「应用」。
-3. 使用页面顶部的快捷预设，为全部第三方模型应用一组默认档位，或展开单个模型进行精细配置。
-4. 勾选需要的标准档位，并填写发送给网关的线上值。例如：
+2. 在页面顶部的「页面语言」中选择中文或 English；默认使用 DSH 已保存的语言，其次使用浏览器语言，最后回退中文。选择会持久化到 DSH，刷新页面或重启后仍然生效。
+3. 在「子 agent 思考强度」卡片中选择提供方默认、标准档位或自定义值，然后点击「应用」。
+4. 使用页面顶部的快捷预设，为全部第三方模型应用一组默认档位，或展开单个模型进行精细配置。
+5. 勾选需要的标准档位，并填写发送给网关的线上值。例如：
 
    | DSH 档位 | 网关线上值 |
    | --- | --- |
@@ -135,14 +138,14 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
    | `high` | `ultra` |
    | `max` | `max` |
 
-5. 回到 Composer，选择对应模型后即可使用「推理等级」。
+6. 回到 Composer，选择对应模型后即可使用「推理等级」。
 
 ## 工作方式
 
 - **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位。
-- **客户端：** 插件注册一个设置页，通过 DSH 标准设置 API 读取和写入配置，不引入额外后端服务。
+- **客户端：** 插件注册一个设置页，通过 DSH 标准设置 API 读取和写入配置，并使用 DSH 官方 locale 服务切换和持久化中文/English。中英文文案分别维护在 `src/locales/zh.json` 和 `src/locales/en.json`，发布前生成到客户端 bundle。
 - **子 agent：** 默认值存储在 `llm-pi-ai` 用户层的 `subagentEffort`；`agent/request` waterfall 只对未显式指定档位的子 agent 请求进行补全。
-- **未设置默认值时：** 插件不会自动选择 `off`、`high` 或 `max`，请求不发送 `reasoning` 参数，由第三方网关决定默认行为。
+- **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.5`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
 
 ## 安装验证
 

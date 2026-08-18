@@ -2,6 +2,9 @@
 
 本指南只使用 DSH 官方 `dsh plugin` 命令管理插件。命令会在目标 profile 中安装依赖，并自动同步 `dsh.profile.bundles`；不要用普通 `npm install`、profile 目录下的直接 `pnpm add` 或手工编辑 profile 配置替代它。
 
+- [English installation guide](./INSTALL.en.md)
+- [English README](./README.en.md)
+
 每个已发布版本的功能和修复记录见 [CHANGELOG.md](./CHANGELOG.md)。升级前后请先查看对应版本条目，确认是否包含配置、运行时 ID 或迁移流程变更。
 
 本文统一使用以下占位符：
@@ -41,7 +44,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.5
 ```
 
 官方 CLI 会自动完成以下工作：
@@ -71,7 +74,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 升级到指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.5
 ```
 
 升级后重新执行验证步骤。宿主侧代码需要重启 DSH；浏览器侧代码需要刷新 Web 页面。
@@ -91,7 +94,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.5
 ```
 
 ### 3.2 旧依赖已被移除，但旧 bundle 残留
@@ -120,7 +123,7 @@ grep -n "dsh-thinking-effort" \
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.5
 ```
 
 这一步的目的不是继续使用旧插件，而是让官方 CLI 识别旧依赖并自动删除残留 bundle。不要手工把旧包名重新写入新的 bundle 列表。
@@ -203,11 +206,12 @@ curl -s http://127.0.0.1:3080/ \
 
 ## 5. 功能验证
 
-1. **宿主自动补齐：** 手工声明模型缺少 `reasoningEfforts` 时，设置中应出现 `off: null / high: high / max: max`。
-2. **设置页：** Web 界面 → 设置 → 出现「思考强度档位」，可以编辑模型档位和线上值。
-3. **子 agent 思考强度：** 设置页配置后，`llm-pi-ai` 用户层出现 `subagentEffort`，未显式指定档位的子 agent 请求会使用它。
-4. **未设置默认值：** 插件不会自动选择 `off`、`high` 或 `max`；请求不发送 `reasoning` 参数，由第三方网关决定默认行为。
-5. **Composer：** 选择第三方模型后，模型选择器显示已声明的「推理等级」。
+1. **语言选择：** 设置页顶部选择中文或 English；默认优先使用 DSH 已保存的语言，其次使用浏览器语言，最后回退中文。选择后刷新页面或重启 DSH，确认语言保持不变。
+2. **宿主自动补齐：** 手工声明模型缺少 `reasoningEfforts` 时，设置中应出现 `off: null / high: high / max: max`。
+3. **设置页：** Web 界面 → 设置 → 出现「思考强度档位」，可以编辑模型档位和线上值。
+4. **子 agent 思考强度：** 设置页配置后，`llm-pi-ai` 用户层出现 `subagentEffort`，未显式指定档位的子 agent 请求会使用它。
+5. **未设置默认值：** 插件不会自动选择 `off`、`high` 或 `max`；请求不发送 `reasoning` 参数，由第三方网关决定默认行为。
+6. **Composer：** 选择第三方模型后，模型选择器显示已声明的「推理等级」。
 
 ## 6. 故障排查
 
