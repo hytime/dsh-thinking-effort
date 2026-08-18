@@ -11,7 +11,7 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-export const name = 'dsh-thinking-effort'
+export const name = '@hytime/dsh-thinking-effort'
 export const inject = ['settings', 'timer']
 
 const MARKER = join(process.env.DSH_HOME || process.cwd(), 'thinking-effort-loaded.json')
@@ -32,7 +32,7 @@ function mark(event) {
 export function apply(ctx) {
   const NS = 'llm-pi-ai'
   const DEFAULT_LEVELS = { off: null, high: 'high', max: 'max' }
-  const log = (...args) => console.log('[dsh-thinking-effort]', ...args)
+  const log = (...args) => console.log('[@hytime/dsh-thinking-effort]', ...args)
 
   mark('apply')
 

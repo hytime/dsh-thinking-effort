@@ -396,7 +396,7 @@ window.__ModuleLoader__.load({
     }
 
     module.exports = {
-      name: 'dsh-thinking-effort',
+      name: '@hytime/dsh-thinking-effort',
       inject: ['slots', 'connection'],
       apply(ctx) {
         const slots = ctx.get('slots');

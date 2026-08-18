@@ -35,9 +35,8 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 
 | 名称 | 用途 |
 | --- | --- |
-| `@hytime/dsh-thinking-effort` | npm 包名、浏览器 bundle 请求路径和模块加载器注册 ID，安装、升级和卸载时使用 |
-| `thinking-effort` | Cordis 组合条目 ID |
-| `dsh-thinking-effort` | 宿主运行时插件 ID 和日志前缀 |
+| `@hytime/dsh-thinking-effort` | npm 包名、浏览器 bundle 请求路径、模块加载器注册 ID 和宿主/客户端运行时 ID，安装、升级和卸载时使用 |
+| `thinking-effort` | Cordis 组合条目 ID 和设置页 Slot ID |
 
 ## 功能概览
 
@@ -72,7 +71,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.3
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
 ```
 
 官方 CLI 会同时更新 profile 依赖、锁文件和 `dsh.profile.bundles`，无需手工追加 YAML。
@@ -107,7 +106,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.3
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
 ```
 
 如果旧依赖已经被其他工具移除，但 profile 的 bundle 列表仍残留旧名称，先从旧 profile 的 `pnpm-lock.yaml` 找到旧 GitHub commit，再使用官方命令恢复并移除：
@@ -115,7 +114,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.3
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.3
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
 ```
 
 不要把 `dsh-thinking-effort` 添加到新的 `dsh.profile.bundles` 中。
@@ -181,7 +180,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 
 - **官方组合配置失败：** 执行 `dsh --profile <profile> --dump-default-config`，检查是否仍有旧的 `name: dsh-thinking-effort`。
 - **设置页没有出现：** 重启 DSH 后刷新 Web 页面，确认 profile 的 bundle 清单包含 `@hytime/dsh-thinking-effort`。
-- **宿主没有补齐：** 检查 `$DSH_HOME/thinking-effort-loaded.json` 是否存在；日志前缀为 `[dsh-thinking-effort]`。
+- **宿主没有补齐：** 检查 `$DSH_HOME/thinking-effort-loaded.json` 是否存在；日志前缀为 `[@hytime/dsh-thinking-effort]`。
 - **写入档位失败：** 检查非 `off` 档位是否填写了线上值，并确认目标模型配置仍然存在。
 - **子 agent 报 `UNSUPPORTED_REASONING_EFFORT`：** 改用该模型支持的档位，或恢复为「提供方默认」。
 

@@ -6,8 +6,9 @@
 
 - `<profile>`：目标 DSH profile，例如 `web`；
 - `${DSH_HOME}`：DSH home，默认是 `$HOME/.dsh`；
-- `@hytime/dsh-thinking-effort`：npm 包名；
-- `dsh-thinking-effort`：旧版本包名和运行时插件 ID，不是新包的安装名。
+- `@hytime/dsh-thinking-effort`：npm 包名、浏览器 bundle 路径、loader 注册 ID 和运行时插件 ID；
+- `thinking-effort`：Cordis 组合条目 ID 和设置页 Slot ID；
+- `dsh-thinking-effort`：旧版本包名和旧运行时 ID，仅用于迁移和排查历史配置。
 
 ## 0. 前置条件与确定 profile
 
@@ -38,7 +39,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.3
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
 ```
 
 官方 CLI 会自动完成以下工作：
@@ -68,7 +69,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 升级到指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.3
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
 ```
 
 升级后重新执行验证步骤。宿主侧代码需要重启 DSH；浏览器侧代码需要刷新 Web 页面。
@@ -88,7 +89,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.3
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
 ```
 
 ### 3.2 旧依赖已被移除，但旧 bundle 残留
@@ -117,7 +118,7 @@ grep -n "dsh-thinking-effort" \
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.3
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
 ```
 
 这一步的目的不是继续使用旧插件，而是让官方 CLI 识别旧依赖并自动删除残留 bundle。不要手工把旧包名重新写入新的 bundle 列表。
@@ -183,7 +184,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 成功加载后应看到包含 `apply` 或 `filled-N` 的事件标记。日志前缀为：
 
 ```text
-[dsh-thinking-effort]
+[@hytime/dsh-thinking-effort]
 ```
 
 ### 4.4 检查浏览器侧
@@ -196,7 +197,7 @@ curl -s http://127.0.0.1:3080/ \
   | head -3
 ```
 
-根据 DSH 版本，页面清单中可能包含运行时条目 `dsh-thinking-effort`；浏览器 bundle 的请求路径应使用 scoped 包名，例如 `/plugins/@hytime/dsh-thinking-effort/client.js`。该 bundle 内部也必须以 `@hytime/dsh-thinking-effort` 作为 `__ModuleLoader__.load` 的注册 ID。浏览器侧最终加载的是新 npm 包中的 `src/client.js`。
+根据 DSH 版本，页面清单中可能包含运行时条目 `@hytime/dsh-thinking-effort`；浏览器 bundle 的请求路径也应使用 scoped 包名，例如 `/plugins/@hytime/dsh-thinking-effort/client.js`。该 bundle 内部必须以 `@hytime/dsh-thinking-effort` 作为 `__ModuleLoader__.load` 的注册 ID，宿主和客户端插件 `name` 也应使用同一个 scoped ID。浏览器侧最终加载的是新 npm 包中的 `src/client.js`。
 
 ## 5. 功能验证
 
