@@ -86,6 +86,7 @@ window.__ModuleLoader__.load({
               route, model: entry.id,
               name: typeof entry.name === 'string' && entry.name.length ? entry.name : entry.id,
               levels: entry.reasoningEfforts === undefined ? null : entry.reasoningEfforts,
+              raw: entry,
               index, inOverrides: false,
             });
           });
@@ -97,6 +98,7 @@ window.__ModuleLoader__.load({
               route, model: id,
               name: typeof obj.name === 'string' && obj.name.length ? obj.name : id,
               levels: obj.reasoningEfforts === undefined ? null : obj.reasoningEfforts,
+              raw: obj,
               index: -1, inOverrides: true,
             });
           }
@@ -105,12 +107,45 @@ window.__ModuleLoader__.load({
       return out;
     }
 
-    /** 单个模型的档位写入 path op。 */
-    function setOp(item, levels) {
-      const path = item.inOverrides
-        ? ['providers', item.route, 'modelOverrides', item.model, 'reasoningEfforts']
-        : ['providers', item.route, 'models', String(item.index), 'reasoningEfforts'];
-      return { op: 'set', path, value: levels };
+    /**
+     * 构造档位写入 ops。
+     *
+     * settings.mutate 的 path 只支持对象字段；把数组下标（models/0/...）
+     * 当作路径继续下钻会把 models 解析成对象，最终触发 schema 校验失败。
+     * 因此按路由整体替换 models/modelOverrides，同时保留所有未编辑字段。
+     */
+    function setOps(inventory, updates) {
+      const groups = {};
+      for (const update of updates) {
+        const item = update && update.item;
+        if (!item) continue;
+        const type = item.inOverrides ? 'modelOverrides' : 'models';
+        const key = item.route + '\u0000' + type;
+        if (!groups[key]) groups[key] = { route: item.route, type, updates: [] };
+        groups[key].updates.push(update);
+      }
+      return Object.values(groups).map((group) => {
+        const candidates = inventory.filter((item) => item.route === group.route
+          && (group.type === 'modelOverrides' ? item.inOverrides : !item.inOverrides));
+        if (group.type === 'modelOverrides') {
+          const overrides = {};
+          for (const item of candidates) {
+            overrides[item.model] = item.raw && typeof item.raw === 'object' ? { ...item.raw } : {};
+          }
+          for (const update of group.updates) {
+            const item = update.item;
+            overrides[item.model] = { ...(overrides[item.model] || {}), reasoningEfforts: update.levels };
+          }
+          return { op: 'set', path: ['providers', group.route, 'modelOverrides'], value: overrides };
+        }
+        const models = candidates.slice().sort((a, b) => a.index - b.index).map((item) => {
+          const update = group.updates.find((candidate) => candidate.item.index === item.index
+            && candidate.item.model === item.model);
+          const raw = item.raw && typeof item.raw === 'object' ? { ...item.raw } : { id: item.model };
+          return update ? { ...raw, reasoningEfforts: update.levels } : raw;
+        });
+        return { op: 'set', path: ['providers', group.route, 'models'], value: models };
+      });
     }
 
     function SectionEditor(props) {
@@ -143,10 +178,14 @@ window.__ModuleLoader__.load({
               : null,
             revision: typeof ns.revision === 'number' ? ns.revision : 0,
           };
+          const subagentDraft = subagent.effort === null
+            ? 'default'
+            : ALL_LEVELS.includes(subagent.effort) ? subagent.effort : 'custom';
+          const subagentCustom = subagentDraft === 'custom' ? subagent.effort : '';
           setState(s => ({
             ...s, loading: false, busy: false, nsFound: true,
             inventory: inventoryFrom(ns), revision: typeof ns.revision === 'number' ? ns.revision : 0,
-            subagent, subagentDraft: 'default', subagentCustom: '',
+            subagent, subagentDraft, subagentCustom,
           }));
         }).catch((error) => {
           setState(s => ({ ...s, loading: false, busy: false, error: '读取设置失败：' + (error && error.message ? error.message : String(error)) }));
@@ -173,13 +212,13 @@ window.__ModuleLoader__.load({
         const levels = buildLevels(state.drafts[key] || {});
         const err = validateLevels(levels);
         if (err) { setState(s => ({ ...s, error: err })); return; }
-        runOps([setOp(item, levels)]);
+        runOps(setOps(state.inventory, [{ item, levels }]));
       };
 
-      const restoreDefault = (item) => { runOps([setOp(item, DEFAULT_LEVELS)]); };
+      const restoreDefault = (item) => { runOps(setOps(state.inventory, [{ item, levels: DEFAULT_LEVELS }])); };
       const applyPreset = (levels) => {
-        const ops = state.inventory.map(item => setOp(item, levels));
-        runOps(ops);
+        const updates = state.inventory.map(item => ({ item, levels }));
+        runOps(setOps(state.inventory, updates));
       };
 
       // 子 agent 思考强度：写入本插件命名空间 dsh-thinking-effort。

@@ -135,17 +135,39 @@ export function apply(ctx) {
   }
   readSubagentEffort()
 
+  /** 将子 agent 配置中的线上值还原为 DSH 标准档位 ID。 */
+  const resolveSubagentEffort = (config) => {
+    if (typeof subagentEffort !== 'string' || subagentEffort.length === 0) return undefined
+    const standard = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+    if (standard.includes(subagentEffort)) return subagentEffort
+    const section = readSection()
+    const profile = section && section.providers && config && section.providers[config.provider]
+    if (!profile || typeof profile !== 'object') return undefined
+    let model
+    if (Array.isArray(profile.models)) model = profile.models.find(entry => entry && entry.id === config.model)
+    if (!model && profile.modelOverrides && typeof profile.modelOverrides === 'object') {
+      model = profile.modelOverrides[config.model]
+    }
+    const efforts = model && model.reasoningEfforts
+    if (!efforts || typeof efforts !== 'object' || Array.isArray(efforts)) return undefined
+    for (const [level, wire] of Object.entries(efforts)) {
+      if (typeof wire === 'string' && wire === subagentEffort) return level
+    }
+    log('subagent custom effort is not mapped for', config.provider + '/' + config.model)
+    return undefined
+  }
+
   // agent/request waterfall：子 agent 的模型调用若未显式指定思考档位，
   // 则填入配置的 subagentEffort（调用 next() 后改写，遵守 waterfall 纪律）。
   ctx.on('agent/request', async (payload, next) => {
     const config = await next()
     try {
-      if (typeof subagentEffort !== 'string' || subagentEffort.length === 0) return config
       const agent = payload && payload.agent
       const header = agent && agent.session && agent.session.header
       if (!header || header.origin !== 'subagent') return config
       if (config.reasoningEffort !== undefined) return config
-      return { ...config, reasoningEffort: subagentEffort }
+      const effort = resolveSubagentEffort(config)
+      return effort === undefined ? config : { ...config, reasoningEffort: effort }
     } catch (error) {
       log('agent/request override error:', error && error.message ? error.message : String(error))
       return config
