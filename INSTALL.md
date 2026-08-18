@@ -38,7 +38,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.2
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.3
 ```
 
 官方 CLI 会自动完成以下工作：
@@ -68,7 +68,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 升级到指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.2
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.3
 ```
 
 升级后重新执行验证步骤。宿主侧代码需要重启 DSH；浏览器侧代码需要刷新 Web 页面。
@@ -88,7 +88,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.2
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.3
 ```
 
 ### 3.2 旧依赖已被移除，但旧 bundle 残留
@@ -117,7 +117,7 @@ grep -n "dsh-thinking-effort" \
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.2
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.3
 ```
 
 这一步的目的不是继续使用旧插件，而是让官方 CLI 识别旧依赖并自动删除残留 bundle。不要手工把旧包名重新写入新的 bundle 列表。
@@ -196,7 +196,7 @@ curl -s http://127.0.0.1:3080/ \
   | head -3
 ```
 
-根据 DSH 版本，输出可能包含运行时 ID `dsh-thinking-effort` 或对应的客户端 bundle 路径。浏览器侧最终加载的是新 npm 包中的 `src/client.js`。
+根据 DSH 版本，页面清单中可能包含运行时条目 `dsh-thinking-effort`；浏览器 bundle 的请求路径应使用 scoped 包名，例如 `/plugins/@hytime/dsh-thinking-effort/client.js`。该 bundle 内部也必须以 `@hytime/dsh-thinking-effort` 作为 `__ModuleLoader__.load` 的注册 ID。浏览器侧最终加载的是新 npm 包中的 `src/client.js`。
 
 ## 5. 功能验证
 

@@ -9,7 +9,7 @@
  * 与 tsdown 生成的 client bundle 格式一致（手写、内联样式、零构建）。
  */
 window.__ModuleLoader__.load({
-  id: 'dsh-thinking-effort',
+  id: '@hytime/dsh-thinking-effort',
   factory: (require) => {
     var module = { exports: {} };
     var exports = module.exports;

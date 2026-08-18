@@ -34,9 +34,9 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 
 | 名称 | 用途 |
 | --- | --- |
-| `@hytime/dsh-thinking-effort` | npm 包名，安装、升级和卸载时使用 |
+| `@hytime/dsh-thinking-effort` | npm 包名、浏览器 bundle 请求路径和模块加载器注册 ID，安装、升级和卸载时使用 |
 | `thinking-effort` | Cordis 组合条目 ID |
-| `dsh-thinking-effort` | 插件运行时 ID、日志前缀和浏览器 bundle ID |
+| `dsh-thinking-effort` | 宿主运行时插件 ID 和日志前缀 |
 
 ## 功能概览
 
@@ -71,7 +71,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.2
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.3
 ```
 
 官方 CLI 会同时更新 profile 依赖、锁文件和 `dsh.profile.bundles`，无需手工追加 YAML。
@@ -106,7 +106,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.2
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.3
 ```
 
 如果旧依赖已经被其他工具移除，但 profile 的 bundle 列表仍残留旧名称，先从旧 profile 的 `pnpm-lock.yaml` 找到旧 GitHub commit，再使用官方命令恢复并移除：
@@ -114,7 +114,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.2
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.2
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.3
 ```
 
 不要把 `dsh-thinking-effort` 添加到新的 `dsh.profile.bundles` 中。
