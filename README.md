@@ -16,6 +16,8 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 - 在设置页按模型自定义档位，并把 `high` 映射为网关需要的任意字符串，例如 `ultra`；
 - 为子 agent 设置统一的默认思考强度，同时保留显式指定值的优先级；
 - 子 agent 的自定义线上值会按实际模型的 `reasoningEfforts` 映射回标准档位，找不到映射时不会注入非法档位；
+- 开启非 `off` 思考档位时自动填入同名线上值，已有自定义线上值会保留；
+- 编辑模型时折叠再展开不会丢失草稿，保存后就地更新设置并保留当前页面位置；
 - 不修改已经存在的用户自定义档位，避免覆盖现有配置。
 
 ## 适合谁？
@@ -43,8 +45,9 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 | 功能 | 作用 |
 | --- | --- |
 | 默认档位补齐 | 为缺少配置的模型添加 `off`、`high`、`max`，不覆盖已有自定义值 |
-| 模型级编辑 | 在「设置 → 思考强度档位」中逐模型勾选档位并填写线上值 |
+| 模型级编辑 | 在「设置 → 思考强度档位」中逐模型选择档位，线上值自动填入并可继续修改 |
 | 网关值映射 | 例如 DSH 选择 `high` 时，实际向网关发送 `ultra` |
+| 编辑状态反馈 | 显示未保存状态，保存成功后不重置当前页面位置 |
 | 子 agent 默认值 | 为未显式指定档位的子 agent 请求自动填入默认思考强度 |
 | 快捷预设 | 一键应用官方 DeepSeek 风格或通用档位组合 |
 
@@ -71,7 +74,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.5
 ```
 
 官方 CLI 会同时更新 profile 依赖、锁文件和 `dsh.profile.bundles`，无需手工追加 YAML。
@@ -106,7 +109,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.5
 ```
 
 如果旧依赖已经被其他工具移除，但 profile 的 bundle 列表仍残留旧名称，先从旧 profile 的 `pnpm-lock.yaml` 找到旧 GitHub commit，再使用官方命令恢复并移除：
@@ -114,7 +117,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.5
 ```
 
 不要把 `dsh-thinking-effort` 添加到新的 `dsh.profile.bundles` 中。
@@ -124,7 +127,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.4
 1. 打开 DSH 的「设置 → 思考强度档位」。
 2. 在「子 agent 思考强度」卡片中选择提供方默认、标准档位或自定义值，然后点击「应用」。
 3. 使用页面顶部的快捷预设，为全部第三方模型应用一组默认档位，或展开单个模型进行精细配置。
-4. 勾选需要的标准档位，并填写发送给网关的线上值。例如：
+4. 勾选需要的标准档位，线上值会自动填入同名档位；如网关名称不同，再手动修改。例如：
 
    | DSH 档位 | 网关线上值 |
    | --- | --- |
