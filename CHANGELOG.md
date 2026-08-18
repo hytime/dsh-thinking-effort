@@ -8,6 +8,17 @@ This file records the features, fixes, and user-facing impact of every published
 
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.6] - 英文主文档入口 / English documentation entrypoints
+
+### 变更 / Changed
+
+- `README.md` 和 `INSTALL.md` 现在是默认英文文档入口。
+- `README.md` and `INSTALL.md` are now the default English documentation entrypoints.
+- 中文文档分别移动到 `README.zh.md` 和 `INSTALL.zh.md`，并通过链接手动切换。
+- Chinese documentation is provided as `README.zh.md` and `INSTALL.zh.md`, with explicit links for manual switching.
+- npm 包文件白名单同步新的文档文件名。
+- Update the npm package file list for the renamed documentation files.
+
 ## [0.1.5] - 设置页版本信息与中英文支持 / Settings version and bilingual UI
 
 ### 新增 / Added
@@ -41,8 +52,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### 文档 / Documentation
 
-- 新增独立英文文档 `README.en.md` 和 `INSTALL.en.md`。
-- Add standalone English documentation in `README.en.md` and `INSTALL.en.md`.
+- README.md 和 INSTALL.md 现在作为英文主文档，中文版本分别为 `README.zh.md` 和 `INSTALL.zh.md`。
+- `README.md` and `INSTALL.md` are now the primary English documents; Chinese versions are `README.zh.md` and `INSTALL.zh.md`.
 - 补充官方 DSH CLI 的安装、升级、卸载、旧包迁移和验证流程。
 - Document official DSH CLI installation, upgrade, removal, old-package migration, and verification.
 

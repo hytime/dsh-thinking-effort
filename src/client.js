@@ -23,7 +23,7 @@ window.__ModuleLoader__.load({
     ];
     const NS = 'llm-pi-ai';
     const LOCALE_NS = 'settings.thinkingEffort';
-    const PLUGIN_VERSION = '0.1.5';
+    const PLUGIN_VERSION = '0.1.6';
     const DEFAULT_LEVELS = { off: null, high: 'high', max: 'max' };
     const LEVEL_LABEL_KEYS = {
       off: 'levelOff', minimal: 'levelMinimal', low: 'levelLow', medium: 'levelMedium',
