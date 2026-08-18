@@ -1,9 +1,11 @@
 {
   "name": "@hytime/dsh-thinking-effort",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "为 DSH 的 pi-ai 第三方模型补充可配置的思考强度档位，并设置子 agent 默认思考强度。",
   "private": false,
   "scripts": {
+    "build": "node scripts/build-client.mjs",
+    "prepublishOnly": "npm run build",
     "test": "node --test"
   },
   "type": "module",
@@ -21,8 +23,12 @@
   },
   "files": [
     "src/",
+    "scripts/build-client.mjs",
     "cordis.patch.yml",
     "README.md",
+    "README.en.md",
+    "INSTALL.md",
+    "INSTALL.en.md",
     "CHANGELOG.md",
     "LICENSE"
   ],

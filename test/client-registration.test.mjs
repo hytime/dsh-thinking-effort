@@ -7,16 +7,22 @@ import { name as hostName } from '../src/host.mjs'
 
 const clientPath = fileURLToPath(new URL('../src/client.js', import.meta.url))
 const packagePath = fileURLToPath(new URL('../package.json', import.meta.url))
+const zhPath = fileURLToPath(new URL('../src/locales/zh.json', import.meta.url))
+const enPath = fileURLToPath(new URL('../src/locales/en.json', import.meta.url))
 const REQUIRED_LOCALE_KEYS = [
   'title', 'description', 'subagentTitle', 'providerDefault', 'apply',
   'searchPlaceholder', 'loading', 'noModels', 'noMatches', 'route',
   'customize', 'collapse', 'editorTitle', 'applyLevel', 'restoreDefault',
   'expandedCount', 'versionLabel', 'customEffortRequired', 'readSettingsFailed',
-  'writeFailed',
+  'writeFailed', 'languageLabel', 'languageChinese', 'languageEnglish',
 ]
 
 function readPackage() {
   return JSON.parse(readFileSync(packagePath, 'utf8'))
+}
+
+function readLocale(path) {
+  return JSON.parse(readFileSync(path, 'utf8'))
 }
 
 function loadDescriptor() {
@@ -54,11 +60,17 @@ test('keeps the client version and watermark style tied to package version', () 
 
 test('registers balanced Chinese and English dictionaries', () => {
   const source = readFileSync(clientPath, 'utf8')
+  const zh = readLocale(zhPath)
+  const en = readLocale(enPath)
+  const zhKeys = Object.keys(zh).sort()
+  const enKeys = Object.keys(en).sort()
 
+  assert.deepEqual(zhKeys, enKeys)
+  for (const key of REQUIRED_LOCALE_KEYS) assert.ok(zhKeys.includes(key), `missing locale key: ${key}`)
   assert.ok(source.includes("const LOCALE_NS = 'settings.thinkingEffort'"))
   assert.ok(source.includes('locale.register(LOCALE_NS, { zh, en })'))
   assert.ok(source.includes('locale: LOCALE_NS'))
-  for (const key of REQUIRED_LOCALE_KEYS) {
-    assert.ok(source.includes(`${key}:`), `missing locale key: ${key}`)
-  }
+  assert.ok(source.includes('locale.getSnapshot()'))
+  assert.ok(source.includes('locale.setLocale('))
+  assert.ok(source.includes('const LOCALE_DATA = '))
 })
