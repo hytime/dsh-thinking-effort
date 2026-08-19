@@ -7,9 +7,15 @@
 [![GitHub license](https://img.shields.io/github/license/hytime/dsh-thinking-effort)](https://github.com/hytime/dsh-thinking-effort/blob/main/LICENSE)
 
 - [English README](./README.md)
+- [日本語 README](./README.ja.md)
+- [한국어 README](./README.ko.md)
 - [安装指南](./INSTALL.zh.md)
 - [English installation guide](./INSTALL.md)
+- [日本語インストールガイド](./INSTALL.ja.md)
+- [한국어 설치 안내](./INSTALL.ko.md)
 - [版本更新日志](./CHANGELOG.md)
+- [日本語 changelog](./CHANGELOG.ja.md)
+- [한국어 changelog](./CHANGELOG.ko.md)
 
 ## 为什么需要它？
 

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { name as hostName } from '../src/host.mjs'
@@ -87,4 +87,18 @@ test('registers balanced Chinese, English, Japanese, and Korean dictionaries', (
   assert.ok(source.includes('locale.getSnapshot()'))
   assert.ok(source.includes('locale.setLocale('))
   assert.ok(source.includes('const LOCALE_DATA = '))
+})
+
+test('ships Japanese and Korean README and installation guides', () => {
+  const documents = [
+    'README.md', 'README.zh.md', 'README.ja.md', 'README.ko.md',
+    'INSTALL.md', 'INSTALL.zh.md', 'INSTALL.ja.md', 'INSTALL.ko.md',
+  ]
+  for (const name of documents) {
+    assert.ok(existsSync(fileURLToPath(new URL(`../${name}`, import.meta.url))), `missing document: ${name}`)
+  }
+  const pkg = readPackage()
+  for (const name of ['README.ja.md', 'README.ko.md', 'INSTALL.ja.md', 'INSTALL.ko.md']) {
+    assert.ok(pkg.files.includes(name), `package files missing: ${name}`)
+  }
 })

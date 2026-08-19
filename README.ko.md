@@ -1,0 +1,107 @@
+# dsh-thinking-effort
+
+[DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness)의 `llm-pi-ai` 수동 선언 모델에 추론 강도를 추가하고 Subagent의 기본 추론 강도를 설정하는 플러그인입니다.
+
+[![npm version](https://img.shields.io/npm/v/@hytime/dsh-thinking-effort)](https://www.npmjs.com/package/@hytime/dsh-thinking-effort)
+[![npm downloads](https://img.shields.io/npm/dm/@hytime/dsh-thinking-effort)](https://www.npmjs.com/package/@hytime/dsh-thinking-effort)
+[![GitHub license](https://img.shields.io/github/license/hytime/dsh-thinking-effort)](https://github.com/hytime/dsh-thinking-effort/blob/main/LICENSE)
+
+- [English README](./README.md)
+- [中文 README](./README.zh.md)
+- [日本語 README](./README.ja.md)
+- [한국어 README](./README.ko.md)
+- [English installation guide](./INSTALL.md)
+- [中文安装指南](./INSTALL.zh.md)
+- [日本語インストールガイド](./INSTALL.ja.md)
+- [한국어 설치 안내](./INSTALL.ko.md)
+- [Changelog](./CHANGELOG.md) · [日本語](./CHANGELOG.ja.md) · [한국어](./CHANGELOG.ko.md)
+
+## 왜 필요한가요?
+
+`llm-pi-ai` 어댑터는 타사 모델을 수동으로 선언할 수 있지만, 모델에 `reasoningEfforts`가 없는 경우가 많습니다. 그러면 Composer에 추론 강도 선택기가 표시되지 않고, `ultra`와 같은 게이트웨이 전용 값을 DSH 표준 단계에 매핑할 수도 없습니다.
+
+이 플러그인은 다음 설정 기능을 제공합니다.
+
+- 설정이 없는 모델에 `off`, `high`, `max` 기본 항목을 추가합니다.
+- DSH 설정 페이지에서 모델별 추론 단계를 설정합니다.
+- DSH의 `high`를 게이트웨이의 `ultra`와 같은 값으로 매핑합니다.
+- 명시적인 요청 값을 유지하면서 Subagent 기본 추론 강도를 설정합니다.
+- 기존 사용자 모델 설정을 변경하지 않습니다.
+
+DSH 내장 모델만 사용하고 이미 추론 제어가 정상 작동한다면 이 플러그인은 보통 필요하지 않습니다.
+
+## 식별자
+
+| 식별자 | 용도 |
+| --- | --- |
+| `@hytime/dsh-thinking-effort` | npm 패키지, 브라우저 bundle, loader ID, Host/Client 런타임 ID |
+| `thinking-effort` | Cordis composition entry ID 및 설정 Slot ID |
+
+## 기능
+
+| 기능 | 설명 |
+| --- | --- |
+| 기본 단계 | 사용자 지정 값을 덮어쓰지 않고 `off`, `high`, `max` 추가 |
+| 모델별 편집 | Settings에서 단계와 게이트웨이 값을 설정 |
+| 게이트웨이 값 매핑 | DSH에서 `high`를 선택하면 `ultra` 전송 가능 |
+| Subagent 기본값 | 명시적 값이 없는 요청에만 기본값 적용 |
+| 다국어 설정 | 中文, English, 日本語, 한국어 간 전환 |
+| 버전 표시 | 설정 페이지 오른쪽 아래에 설치된 버전 표시 |
+
+## 설치, 업데이트, 제거
+
+profile은 공식 DSH CLI로 관리하세요. 일반 `npm install`은 DSH profile bundle을 등록하지 않습니다.
+
+```bash
+# 최신 버전 설치
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
+
+# 특정 버전 설치
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.7
+
+# 업데이트
+dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
+
+# 제거
+dsh plugin --profile <profile> remove @hytime/dsh-thinking-effort
+rm -f "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
+```
+
+profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](./INSTALL.ko.md)를 참조하세요.
+
+## 빠른 사용
+
+1. DSH에서 **Settings → Reasoning effort**를 엽니다.
+2. 상단 **Page language**에서 `中文`, `English`, `日本語`, `한국어` 중 하나를 선택합니다. DSH는 저장된 locale, 브라우저 언어, 중국어 순서로 fallback합니다. 선택은 DSH에 저장되어 새로 고침과 재시작 후에도 유지됩니다.
+3. **Subagent reasoning effort** 카드에서 기본값을 선택하고 **Apply**를 클릭합니다.
+4. 프리셋을 모든 모델에 적용하거나 모델을 펼쳐 상세 설정을 엽니다.
+5. 단계를 선택하고 게이트웨이에 보낼 값을 입력합니다.
+
+   | DSH 단계 | 게이트웨이 값 |
+   | --- | --- |
+   | `off` | 비워 두어 매개변수 생략 |
+   | `high` | `ultra` |
+   | `max` | `max` |
+
+6. Composer로 돌아가 설정한 모델을 선택하고 추론 선택기를 사용합니다.
+
+설정 페이지 오른쪽 아래에는 `v0.1.7`과 같은 작은 버전 표시가 나타납니다.
+
+## 작동 방식
+
+- **Host:** 시작 및 설정 변경 시 `llm-pi-ai`의 `models`와 `modelOverrides`를 검사하고 `reasoningEfforts`가 없는 경우에만 기본값을 추가합니다.
+- **Client:** DSH 표준 Settings API와 locale service로 설정 페이지를 등록합니다. 사전은 `src/locales/ja.json`, `src/locales/ko.json` 등에서 관리하고 게시 전에 클라이언트 bundle로 생성합니다.
+- **Subagent:** `llm-pi-ai` 사용자 레이어에 `subagentEffort`를 저장합니다. `agent/request` waterfall은 명시적 값이 없는 요청에만 기본값을 추가합니다.
+- **기본값 없음:** 플러그인은 `off`, `high`, `max`를 자동으로 선택하지 않습니다. `reasoning`을 생략하고 게이트웨이 기본 동작을 따릅니다.
+
+## 제한 사항
+
+- `llm-pi-ai`는 `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`의 7단계를 제공합니다.
+- `off`가 아닌 단계에는 게이트웨이 값이 필요합니다. 빈 `off` 값은 매개변수를 생략합니다.
+- Subagent 단계가 대상 모델에서 지원되지 않으면 게이트웨이가 `UNSUPPORTED_REASONING_EFFORT`를 반환할 수 있습니다.
+- `off`와 설정되지 않은 추론 강도가 모두 `reasoning`을 생략할 수 있으며, 실제로 사고를 비활성화하는지는 게이트웨이 프로토콜에 달려 있습니다.
+- Host 변경에는 DSH 재시작이 필요합니다. 설정과 언어 변경은 브라우저에서 적용됩니다.
+
+## 라이선스
+
+[MIT](./LICENSE)
