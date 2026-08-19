@@ -24,6 +24,8 @@
   "languageLabel": "Page language",
   "languageChinese": "中文",
   "languageEnglish": "English",
+  "languageJapanese": "日本語",
+  "languageKorean": "한국어",
   "customPlaceholder": "Custom effort, e.g. ultra",
   "offPlaceholder": "Empty = do not send",
   "wirePlaceholder": "Custom wire value, e.g. ultra",

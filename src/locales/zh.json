@@ -24,6 +24,8 @@
   "languageLabel": "页面语言",
   "languageChinese": "中文",
   "languageEnglish": "English",
+  "languageJapanese": "日本語",
+  "languageKorean": "한국어",
   "customPlaceholder": "自定义档位，如 ultra",
   "offPlaceholder": "留空 = 不发送",
   "wirePlaceholder": "自定义线上值，如 ultra",
