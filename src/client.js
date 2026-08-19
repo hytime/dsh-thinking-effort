@@ -706,7 +706,7 @@ window.__ModuleLoader__.load({
             value: localeSnapshot.active,
             onChange: (e) => locale.setLocale(e.target.value),
             style: { height: '26px', padding: '0 7px', border: '1px solid ' + theme.border, borderRadius: '7px', backgroundColor: theme.field, color: theme.text, fontSize: '12px' },
-          }, React.createElement('option', { value: 'zh' }, t('languageChinese')), React.createElement('option', { value: 'en' }, t('languageEnglish'))),
+          }, React.createElement('option', { value: 'zh' }, t('languageChinese')), React.createElement('option', { value: 'en' }, t('languageEnglish')), React.createElement('option', { value: 'ja' }, t('languageJapanese')), React.createElement('option', { value: 'ko' }, t('languageKorean'))),
         ),
         React.createElement('h3', { style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: '8px', rowGap: '4px', fontSize: '18px', lineHeight: '24px', fontWeight: 700, letterSpacing: 0, margin: '0 0 7px' } },
           svgIcon('sliders', 19), React.createElement('span', null, t('pageTitle')),
@@ -905,7 +905,7 @@ window.__ModuleLoader__.load({
         if (connection === undefined) return;
         const locale = ctx.get('locale');
         if (locale === undefined) return;
-        ctx.effect(() => locale.register(LOCALE_NS, { zh, en }), 'dsh-thinking-effort: dictionaries');
+        ctx.effect(() => locale.register(LOCALE_NS, { zh, en, ja, ko }), 'dsh-thinking-effort: dictionaries');
         const t = locale.bind(LOCALE_NS);
         slots.inject('settings.section', () => slots.register(
           { name: 'settings.section', id: 'thinking-effort', order: 12, locale: LOCALE_NS, label: () => t('pageTitle') },

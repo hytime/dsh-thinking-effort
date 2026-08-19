@@ -77,7 +77,12 @@ test('registers balanced Chinese, English, Japanese, and Korean dictionaries', (
     for (const key of REQUIRED_LOCALE_KEYS) assert.ok(key in locales[code], `${code} missing locale key: ${key}`)
   }
   assert.ok(source.includes("const LOCALE_NS = 'settings.thinkingEffort'"))
-  assert.ok(source.includes('locale.register(LOCALE_NS, { zh, en })'))
+  assert.ok(source.includes('locale.register(LOCALE_NS, { zh, en, ja, ko })'))
+  assert.ok(source.includes("value: 'ja'"))
+  assert.ok(source.includes("value: 'ko'"))
+  assert.ok(source.includes('languageJapanese'))
+  assert.ok(source.includes('languageKorean'))
+  for (const code of LOCALE_CODES) assert.ok(source.includes(`"${code}"`), `generated locale missing: ${code}`)
   assert.ok(source.includes('locale: LOCALE_NS'))
   assert.ok(source.includes('locale.getSnapshot()'))
   assert.ok(source.includes('locale.setLocale('))
