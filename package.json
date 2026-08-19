@@ -1,6 +1,6 @@
 {
   "name": "@hytime/dsh-thinking-effort",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "为 DSH 的 pi-ai 第三方模型补充可配置的思考强度档位，并设置子 agent 默认思考强度。",
   "private": false,
   "scripts": {
@@ -34,6 +34,8 @@
     "INSTALL.ja.md",
     "INSTALL.ko.md",
     "CHANGELOG.md",
+    "CHANGELOG.ja.md",
+    "CHANGELOG.ko.md",
     "LICENSE"
   ],
   "dsh": {

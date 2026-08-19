@@ -48,7 +48,7 @@ These identifiers have different responsibilities:
 | Per-model editor | Select levels and configure their gateway values from Settings |
 | Gateway mapping | Send `ultra` when the user selects DSH `high` |
 | Subagent default | Apply a default effort only when a subagent request has no explicit value |
-| Bilingual settings | Switch the plugin settings page between Chinese and English |
+| Multilingual settings | Switch the plugin settings page between Chinese, English, Japanese, and Korean |
 | Version watermark | Show the installed plugin version in the bottom-right corner |
 
 ## Install, upgrade, and remove
@@ -60,7 +60,7 @@ Use the official DSH CLI to manage the plugin profile. A plain `npm install` doe
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # Install a specific version
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.6
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.7
 
 # Upgrade
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -75,7 +75,7 @@ See [INSTALL.md](./INSTALL.md) for profile discovery, migration, validation, and
 ## Quick use
 
 1. Open DSH **Settings → Reasoning effort**.
-2. Use the **Page language** selector at the top to choose `中文` or `English`. DSH uses the persisted locale first, then the browser language, then Chinese as the fallback. The selection is persisted by DSH and survives refreshes and restarts.
+2. Use the **Page language** selector at the top to choose `中文`, `English`, `日本語`, or `한국어`. DSH uses the persisted locale first, then the browser language, then Chinese as the fallback. The selection is persisted by DSH and survives refreshes and restarts.
 3. Choose a subagent default from the **Subagent reasoning effort** card, then click **Apply**.
 4. Apply a preset to all models, or expand one model for detailed configuration.
 5. Select a level and enter the exact gateway value. For example:
@@ -88,12 +88,12 @@ See [INSTALL.md](./INSTALL.md) for profile discovery, migration, validation, and
 
 6. Return to Composer and select the model to use its reasoning selector.
 
-The settings page shows the installed version as a small watermark such as `v0.1.6` in the bottom-right corner.
+The settings page shows the installed version as a small watermark such as `v0.1.7` in the bottom-right corner.
 
 ## How it works
 
 - **Host:** Scans `llm-pi-ai` `models` and `modelOverrides` on startup and settings changes, adding defaults only where `reasoningEfforts` is missing.
-- **Client:** Registers a settings page through the standard DSH settings API and the official DSH locale service. Chinese and English dictionaries are maintained separately in `src/locales/zh.json` and `src/locales/en.json`, then generated into the client bundle before publishing.
+- **Client:** Registers a settings page through the standard DSH settings API and the official DSH locale service. Chinese, English, Japanese, and Korean dictionaries are maintained separately in `src/locales/zh.json`, `src/locales/en.json`, `src/locales/ja.json`, and `src/locales/ko.json`, then generated into the client bundle before publishing.
 - **Subagents:** Stores the default in the `llm-pi-ai` user layer as `subagentEffort`. The `agent/request` waterfall only fills requests that do not already specify an effort.
 - **No configured default:** The plugin does not automatically choose `off`, `high`, or `max`; the request omits `reasoning` and the gateway decides its own default behavior.
 

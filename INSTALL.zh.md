@@ -52,7 +52,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.6
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.7
 ```
 
 官方 CLI 会自动完成以下工作：
@@ -82,7 +82,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 升级到指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.6
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.7
 ```
 
 升级后重新执行验证步骤。宿主侧代码需要重启 DSH；浏览器侧代码需要刷新 Web 页面。
@@ -102,7 +102,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.6
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.7
 ```
 
 ### 3.2 旧依赖已被移除，但旧 bundle 残留
@@ -131,7 +131,7 @@ grep -n "dsh-thinking-effort" \
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.6
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.7
 ```
 
 这一步的目的不是继续使用旧插件，而是让官方 CLI 识别旧依赖并自动删除残留 bundle。不要手工把旧包名重新写入新的 bundle 列表。
@@ -214,7 +214,7 @@ curl -s http://127.0.0.1:3080/ \
 
 ## 5. 功能验证
 
-1. **语言选择：** 设置页顶部选择中文或 English；默认优先使用 DSH 已保存的语言，其次使用浏览器语言，最后回退中文。选择后刷新页面或重启 DSH，确认语言保持不变。
+1. **语言选择：** 设置页顶部选择中文、English、日本語或한국어；默认优先使用 DSH 已保存的语言，其次使用浏览器语言，最后回退中文。选择后刷新页面或重启 DSH，确认语言保持不变。
 2. **宿主自动补齐：** 手工声明模型缺少 `reasoningEfforts` 时，设置中应出现 `off: null / high: high / max: max`。
 3. **设置页：** Web 界面 → 设置 → 出现「思考强度档位」，可以编辑模型档位和线上值。
 4. **子 agent 思考强度：** 设置页配置后，`llm-pi-ai` 用户层出现 `subagentEffort`，未显式指定档位的子 agent 请求会使用它。

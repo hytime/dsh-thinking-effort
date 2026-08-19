@@ -1,0 +1,85 @@
+# 変更履歴
+
+- [English / 中文](./CHANGELOG.md)
+- [日本語](./CHANGELOG.ja.md)
+- [한국어](./CHANGELOG.ko.md)
+
+`@hytime/dsh-thinking-effort` の公開バージョンごとの機能、修正、ユーザーへの影響を記録します。
+
+バージョン番号は [Semantic Versioning](https://semver.org/) に従います。
+
+## [0.1.7] - 日本語と韓国語のローカライズ
+
+### 追加
+
+- 設定ページに `日本語` と `한국어` を追加し、中文と English も継続してサポート。
+- 4 つの locale 辞書をビルドスクリプトで検証し、クライアント bundle に生成。
+- 日本語と韓国語の README、INSTALL、CHANGELOG を追加し、4 言語の相互リンクを提供。
+
+### 互換性
+
+- パッケージと設定ページのバージョン表示を `0.1.7` に更新。
+- Host の動作、`thinking-effort` の Cordis composition と設定 Slot ID、ランタイム ID は変更なし。
+
+## [0.1.6] - 英語ドキュメントを既定の入口に変更
+
+- `README.md` と `INSTALL.md` を既定の英語ドキュメント入口に変更。
+- 中国語ドキュメントを `README.zh.md` と `INSTALL.zh.md` に分離し、明示的なリンクで切り替え。
+- npm パッケージのファイル一覧を新しいドキュメント名に更新。
+
+## [0.1.5] - 設定ページのバージョン表示と中英 UI
+
+### 追加
+
+- 設定ページ右下に低コントラストのバージョン表示を追加。
+- DSH の保存済み locale、ブラウザ言語、中国語フォールバックに対応した中文と English の設定ページを追加。
+- locale 辞書を `src/locales/zh.json` と `src/locales/en.json` に分離し、公開前に bundle へ生成。
+
+### 修正
+
+- settings schema 検証に失敗する可能性があった配列インデックス形式のモデル設定書き込みを修正。
+- ルート単位で `models` と `modelOverrides` を更新する際、未編集のモデルフィールドを保持。
+- 複数ルートでの一括プリセットによる値の上書きを修正。
+- 設定ページ更新後に Subagent のカスタム送信値が失われる問題を修正。
+- カスタム値を対象モデルが対応する DSH 標準レベルへマッピング。
+
+### 互換性
+
+- npm、ブラウザ loader、Host、Client の ID を `@hytime/dsh-thinking-effort` に統一。
+- Cordis composition と設定 Slot ID は `thinking-effort` のまま維持。
+
+### ドキュメント
+
+- 公式 DSH CLI によるインストール、更新、削除、旧パッケージ移行、検証手順を追加。
+
+## [0.1.4] - ランタイム ID の統一と設定修正
+
+- モデルレベル、プリセット、Subagent のカスタムマッピングを修正。
+- scoped Client bundle と DSH loader の登録 ID の不一致を修正。
+- 公式プラグインのライフサイクルと旧パッケージ移行を文書化。
+
+## [0.1.3] - scoped ブラウザ bundle の登録修正
+
+- `__ModuleLoader__.load` の登録 ID を `dsh-thinking-effort` から `@hytime/dsh-thinking-effort` へ変更。
+- scoped npm パッケージのインストール後に Web ページがプラグインをロードできない問題を修正。
+- ブラウザ bundle 登録 ID の回帰テストを追加。
+
+## [0.1.2] - scoped npm パッケージへ移行
+
+- npm パッケージ名を `@hytime/dsh-thinking-effort` に変更。
+- `cordis.patch.yml` の bundle 名を scoped パッケージ名へ更新。
+- README と INSTALL のインストール、mount、削除コマンドを更新。
+
+## [0.1.1] - 初回公開準備
+
+- repository、homepage、bugs、public access を含む npm メタデータを整備。
+- 使用例、クイックスタート、制限、トラブルシューティングを含む README を更新。
+- GitHub と npm のインストール手順を追加。
+
+## [0.1.0] - 初回リリース
+
+- `reasoningEfforts` がないサードパーティモデルへ `off`、`high`、`max` を追加。
+- モデルごとにレベルとゲートウェイ送信値を編集できる設定ページを追加。
+- `high` を `ultra` などのゲートウェイ固有値へマッピング。
+- 一括推論強度プリセットを追加。
+- Subagent の既定の推論強度を設定可能に。

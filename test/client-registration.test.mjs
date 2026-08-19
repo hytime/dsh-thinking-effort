@@ -102,3 +102,24 @@ test('ships Japanese and Korean README and installation guides', () => {
     assert.ok(pkg.files.includes(name), `package files missing: ${name}`)
   }
 })
+
+test('keeps the multilingual release version consistent', () => {
+  const pkg = readPackage()
+  const source = readFileSync(clientPath, 'utf8')
+  const documents = [
+    'README.md', 'README.zh.md', 'README.ja.md', 'README.ko.md',
+    'INSTALL.md', 'INSTALL.zh.md', 'INSTALL.ja.md', 'INSTALL.ko.md',
+    'CHANGELOG.md', 'CHANGELOG.ja.md', 'CHANGELOG.ko.md',
+  ]
+
+  assert.equal(pkg.version, '0.1.7')
+  assert.ok(source.includes(`const PLUGIN_VERSION = '${pkg.version}'`))
+  for (const name of documents) {
+    const path = fileURLToPath(new URL(`../${name}`, import.meta.url))
+    assert.ok(existsSync(path), `missing document: ${name}`)
+    assert.ok(readFileSync(path, 'utf8').includes(pkg.version), `${name} is missing ${pkg.version}`)
+  }
+  for (const name of ['CHANGELOG.ja.md', 'CHANGELOG.ko.md']) {
+    assert.ok(pkg.files.includes(name), `package files missing: ${name}`)
+  }
+})

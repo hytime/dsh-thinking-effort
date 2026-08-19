@@ -1,5 +1,9 @@
 # 更新日志 / Changelog
 
+- [English / 中文](./CHANGELOG.md)
+- [日本語](./CHANGELOG.ja.md)
+- [한국어](./CHANGELOG.ko.md)
+
 本文件记录 `@hytime/dsh-thinking-effort` 每个已发布版本的功能、修复和使用影响。
 
 This file records the features, fixes, and user-facing impact of every published version of `@hytime/dsh-thinking-effort`.
@@ -8,7 +12,25 @@ This file records the features, fixes, and user-facing impact of every published
 
 Versions follow [Semantic Versioning](https://semver.org/).
 
-## [0.1.6] - 英文主文档入口 / English documentation entrypoints
+## [0.1.7] - 日语和韩语本地化 / Japanese and Korean localization
+
+### 新增 / Added
+
+- 设置页新增 `日本語` 和 `한국어`，并继续支持中文与 English。
+- Add Japanese and Korean settings-page localization while retaining Chinese and English.
+- 四份语言字典统一由构建脚本校验并生成到客户端 bundle。
+- Validate and generate all four locale dictionaries into the client bundle.
+- 新增日语和韩语 README、INSTALL、CHANGELOG 文档，并提供四语言互链。
+- Add Japanese and Korean README, INSTALL, and CHANGELOG documents with links across all four languages.
+
+### 兼容性 / Compatibility
+
+- 版本升级到 `0.1.7`，设置页版本水印同步显示 `v0.1.7`。
+- Bump the package to `0.1.7`; the settings-page watermark shows `v0.1.7`.
+- Host 行为、Cordis 组合条目 `thinking-effort`、设置 Slot ID 和运行时 ID 保持不变。
+- Host behavior, the `thinking-effort` Cordis composition and settings Slot IDs, and runtime IDs remain unchanged.
+
+
 
 ### 变更 / Changed
 
