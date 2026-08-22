@@ -29,6 +29,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - Bump the package to `0.1.7`; the settings-page watermark shows `v0.1.7`.
 - Host 行为、Cordis 组合条目 `thinking-effort`、设置 Slot ID 和运行时 ID 保持不变。
 - Host behavior, the `thinking-effort` Cordis composition and settings Slot IDs, and runtime IDs remain unchanged.
+- 日语和韩语切换需要 DSH 核心支持全局 locale ID；当前原版 DSH 中这两个选择项暂不可用。
+- Japanese and Korean switching requires DSH core global locale IDs; the two entries are not usable on current stock DSH.
 
 
 

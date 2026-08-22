@@ -17,6 +17,8 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 - [日本語 changelog](./CHANGELOG.ja.md)
 - [한국어 changelog](./CHANGELOG.ko.md)
 
+> **Compatibility note:** Version `0.1.7` includes Japanese (`ja`) and Korean (`ko`) dictionaries and selector entries, but the current official DSH releases expose only `zh` and `en` through `LocaleRuntime`. On stock DSH, selecting `ja` or `ko` fails with `locale "<id>" is not registered`. These languages will work after official DSH adds the locale IDs. Advanced users can use a DSH fork that updates `packages/client/locale/src/locale-settings.ts` (`LOCALE_IDS`) and `packages/client/locale/src/client/index.ts` (`LOCALES` labels), together with the corresponding core dictionaries and tests, then rebuild and run the forked DSH. Changing this plugin alone cannot extend DSH's global locale list.
+
 ## Why use it?
 
 The `llm-pi-ai` adapter supports hand-declared third-party models, but those entries often do not declare `reasoningEfforts`. As a result, Composer does not show a reasoning effort selector, and gateway-specific values such as `ultra` cannot be mapped to DSH's standard levels.
@@ -48,7 +50,7 @@ These identifiers have different responsibilities:
 | Per-model editor | Select levels and configure their gateway values from Settings |
 | Gateway mapping | Send `ultra` when the user selects DSH `high` |
 | Subagent default | Apply a default effort only when a subagent request has no explicit value |
-| Multilingual settings | Switch the plugin settings page between Chinese, English, Japanese, and Korean |
+| Multilingual settings | Includes Chinese, English, Japanese, and Korean dictionaries; Japanese/Korean switching requires DSH core locale support |
 | Version watermark | Show the installed plugin version in the bottom-right corner |
 
 ## Install, upgrade, and remove
@@ -75,7 +77,7 @@ See [INSTALL.md](./INSTALL.md) for profile discovery, migration, validation, and
 ## Quick use
 
 1. Open DSH **Settings → Reasoning effort**.
-2. Use the **Page language** selector at the top to choose `中文`, `English`, `日本語`, or `한국어`. DSH uses the persisted locale first, then the browser language, then Chinese as the fallback. The selection is persisted by DSH and survives refreshes and restarts.
+2. On stock DSH, use the **Page language** selector at the top to choose `中文` or `English`. The `日本語` and `한국어` entries require the DSH core locale changes described above. DSH uses the persisted locale first, then the browser language, then Chinese as the fallback.
 3. Choose a subagent default from the **Subagent reasoning effort** card, then click **Apply**.
 4. Apply a preset to all models, or expand one model for detailed configuration.
 5. Select a level and enter the exact gateway value. For example:

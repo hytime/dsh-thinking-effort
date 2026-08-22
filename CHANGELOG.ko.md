@@ -20,6 +20,7 @@
 
 - 패키지 및 설정 페이지 버전을 `0.1.7`로 업데이트했습니다.
 - Host 동작, `thinking-effort` Cordis composition 및 설정 Slot ID, 런타임 ID는 변경하지 않았습니다.
+- 일본어와 한국어 전환에는 DSH 코어의 전역 locale ID가 필요합니다. 현재 기본 DSH에서는 이 두 선택 항목을 사용할 수 없습니다.
 
 ## [0.1.6] - English 문서를 기본 입구로 변경
 

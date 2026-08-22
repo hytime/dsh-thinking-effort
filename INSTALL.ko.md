@@ -105,6 +105,18 @@ node -p "require('${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/node_modules/@hytim
 
 이 릴리스의 버전은 `0.1.7`이어야 합니다.
 
+## 일본어 및 한국어 지원 상태
+
+플러그인에는 `ja`와 `ko` 사전이 포함되어 있지만 현재 공식 DSH의 `LocaleRuntime`은 `zh`와 `en`만 제공합니다. 기본 DSH에서 일본어 또는 한국어를 선택하면 `locale "<id>" is not registered` 오류가 발생합니다.
+
+공식 지원 전에 사용하려면 DSH를 fork하여 다음을 수정하세요.
+
+- `packages/client/locale/src/locale-settings.ts`: `LOCALE_IDS`에 `ja`와 `ko`를 추가합니다. Host preference schema는 이 목록에서 파생됩니다.
+- `packages/client/locale/src/client/index.ts`: `LOCALES`에 `{ id: 'ja', label: '日本語' }`와 `{ id: 'ko', label: '한국어' }`를 추가합니다.
+- 관련 코어 사전과 테스트를 추가한 뒤 fork한 DSH를 다시 빌드하고 실행합니다.
+
+이 플러그인만 수정해서는 DSH 전역 locale 목록을 확장할 수 없습니다. fork 버전의 빌드 안내를 따르고 profile 작업에는 공식 명령을 사용하세요. profile manifest를 수동으로 편집하지 마세요.
+
 공식 composition을 확인합니다.
 
 ```bash
@@ -128,7 +140,7 @@ name: dsh-thinking-effort
 
 DSH를 재시작하고 Web 페이지를 새로 고친 다음 **Settings → Reasoning effort**를 엽니다.
 
-1. 언어 선택기에 `中文`, `English`, `日本語`, `한국어`가 표시됩니다.
+1. 기본 DSH에서는 언어 선택기에 `中文`과 `English`가 표시됩니다. `日本語`와 `한국어`를 사용하려면 위에 설명한 DSH 코어 locale 변경이 필요합니다.
 2. 기본 언어는 저장된 DSH locale, 브라우저 언어, 중국어 순서로 결정됩니다.
 3. 언어 선택은 페이지 새로 고침과 DSH 재시작 후에도 유지됩니다.
 4. 오른쪽 아래 버전 표시가 `v0.1.7`로 표시됩니다.

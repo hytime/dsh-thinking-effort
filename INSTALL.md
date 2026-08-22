@@ -107,6 +107,18 @@ node -p "require('${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/node_modules/@hytim
 
 The version must be `0.1.7` for this release.
 
+## Japanese and Korean support status
+
+The plugin ships `ja` and `ko` dictionaries, but the current official DSH release exposes only `zh` and `en` through `LocaleRuntime`. On stock DSH, selecting Japanese or Korean fails with `locale "<id>" is not registered`.
+
+To use them before official support lands, maintain a DSH fork and update:
+
+- `packages/client/locale/src/locale-settings.ts`: add `ja` and `ko` to `LOCALE_IDS` (the Host preference schema derives from this list).
+- `packages/client/locale/src/client/index.ts`: add `{ id: 'ja', label: '日本語' }` and `{ id: 'ko', label: '한국어' }` to `LOCALES`.
+- Add the corresponding core dictionaries and tests, then rebuild and run the forked DSH.
+
+A plugin-only change cannot extend DSH's global locale list. Use the fork's documented build and official profile commands; do not manually edit a profile manifest.
+
 Check the official composition:
 
 ```bash
@@ -130,7 +142,7 @@ name: dsh-thinking-effort
 
 Restart DSH, then refresh the Web page. Open **Settings → Reasoning effort**.
 
-1. The page language selector offers `中文`, `English`, `日本語`, and `한국어`.
+1. On stock DSH, the page language selector offers `中文` and `English`. `日本語` and `한국어` require the DSH core locale changes described above.
 2. The default is the persisted DSH locale, then the browser language, then Chinese.
 3. Selecting a language survives page refresh and DSH restart.
 4. The bottom-right watermark shows `v0.1.7`.

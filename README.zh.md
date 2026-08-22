@@ -17,6 +17,8 @@
 - [日本語 changelog](./CHANGELOG.ja.md)
 - [한국어 changelog](./CHANGELOG.ko.md)
 
+> **兼容性说明：** `0.1.7` 已包含日本語（`ja`）和한국어（`ko`）字典及选择项，但当前官方 DSH 只通过 `LocaleRuntime` 提供 `zh` 和 `en`。在原版 DSH 中选择 `ja` 或 `ko` 会失败，并提示 `locale "<id>" is not registered`。需要等待官方 DSH 增加对应 locale ID 后才能正常使用。高级用户可以维护 DSH fork，在 `packages/client/locale/src/locale-settings.ts` 更新 `LOCALE_IDS`，在 `packages/client/locale/src/client/index.ts` 更新 `LOCALES` 标签，并补齐核心字典和测试，然后重新构建并运行 fork 版本。仅修改本插件无法扩展 DSH 的全局 locale 列表。
+
 ## 为什么需要它？
 
 DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模型通常没有 `reasoningEfforts` 配置。因此，Composer 的模型选择器不会显示「推理等级」，你也无法把网关实际支持的值（例如 `ultra`）映射到 DSH 的标准档位。
@@ -58,7 +60,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 | 网关值映射 | 例如 DSH 选择 `high` 时，实际向网关发送 `ultra` |
 | 子 agent 默认值 | 为未显式指定档位的子 agent 请求自动填入默认思考强度 |
 | 快捷预设 | 一键应用官方 DeepSeek 风格或通用档位组合 |
-| 多语言设置 | 在中文、English、日本語和한국어之间切换设置页 |
+| 多语言设置 | 已包含中文、English、日本語和한국어字典；日语/韩语切换需要 DSH 核心支持 |
 
 ## 安装、升级与卸载
 
@@ -134,7 +136,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.7
 ## 快速使用
 
 1. 打开 DSH 的「设置 → 思考强度档位」。
-2. 在页面顶部的「页面语言」中选择中文、English、日本語或한국어；默认使用 DSH 已保存的语言，其次使用浏览器语言，最后回退中文。选择会持久化到 DSH，刷新页面或重启后仍然生效。
+2. 在原版 DSH 中，使用页面顶部的「页面语言」选择中文或 English。日本語和한국어需要先完成上方所述的 DSH 核心 locale 修改。DSH 默认优先使用已保存的语言，其次使用浏览器语言，最后回退中文；选择会持久化到 DSH。
 3. 在「子 agent 思考强度」卡片中选择提供方默认、标准档位或自定义值，然后点击「应用」。
 4. 使用页面顶部的快捷预设，为全部第三方模型应用一组默认档位，或展开单个模型进行精细配置。
 5. 勾选需要的标准档位，并填写发送给网关的线上值。例如：

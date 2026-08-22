@@ -164,7 +164,19 @@ grep -n "dsh-thinking-effort" \
 "dsh-thinking-effort": "..."
 ```
 
-### 4.2 检查官方组合树
+### 4.2 日语和韩语支持状态
+
+插件已经包含 `ja` 和 `ko` 字典，但当前官方 DSH 的 `LocaleRuntime` 只公开 `zh` 和 `en`。在原版 DSH 中选择日语或韩语会失败，并提示 `locale "<id>" is not registered`。
+
+在官方支持发布前，如需使用这两种语言，可以维护 DSH fork 并修改：
+
+- `packages/client/locale/src/locale-settings.ts`：将 `ja` 和 `ko` 加入 `LOCALE_IDS`，Host preference schema 会从该列表派生。
+- `packages/client/locale/src/client/index.ts`：在 `LOCALES` 中加入 `{ id: 'ja', label: '日本語' }` 和 `{ id: 'ko', label: '한국어' }`。
+- 补充对应的核心字典和测试，然后重新构建并运行 fork 版 DSH。
+
+仅修改本插件无法扩展 DSH 的全局 locale 列表。请遵循 fork 版本自身的构建说明，并继续使用官方 profile 命令；不要手工编辑 profile manifest。
+
+### 4.3 检查官方组合树
 
 ```bash
 dsh --profile <profile> --dump-default-config
@@ -214,7 +226,7 @@ curl -s http://127.0.0.1:3080/ \
 
 ## 5. 功能验证
 
-1. **语言选择：** 设置页顶部选择中文、English、日本語或한국어；默认优先使用 DSH 已保存的语言，其次使用浏览器语言，最后回退中文。选择后刷新页面或重启 DSH，确认语言保持不变。
+1. **语言选择：** 原版 DSH 设置页顶部只能选择中文和 English；日本語、한국어需要先完成上方所述的 DSH 核心 locale 修改。默认优先使用 DSH 已保存的语言，其次使用浏览器语言，最后回退中文。
 2. **宿主自动补齐：** 手工声明模型缺少 `reasoningEfforts` 时，设置中应出现 `off: null / high: high / max: max`。
 3. **设置页：** Web 界面 → 设置 → 出现「思考强度档位」，可以编辑模型档位和线上值。
 4. **子 agent 思考强度：** 设置页配置后，`llm-pi-ai` 用户层出现 `subagentEffort`，未显式指定档位的子 agent 请求会使用它。

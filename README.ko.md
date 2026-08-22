@@ -16,6 +16,8 @@
 - [한국어 설치 안내](./INSTALL.ko.md)
 - [Changelog](./CHANGELOG.md) · [日本語](./CHANGELOG.ja.md) · [한국어](./CHANGELOG.ko.md)
 
+> **호환성 안내:** `0.1.7`에는 日本語(`ja`)와 한국어(`ko`) 사전 및 선택 항목이 포함되어 있지만, 현재 공식 DSH의 `LocaleRuntime`은 `zh`와 `en`만 제공합니다. 기본 DSH에서 `ja` 또는 `ko`를 선택하면 `locale "<id>" is not registered` 오류가 발생하여 전환되지 않습니다. 공식 DSH가 해당 locale ID를 추가할 때까지 이 언어는 사용할 수 없습니다. 고급 사용자는 DSH를 fork하여 `packages/client/locale/src/locale-settings.ts`의 `LOCALE_IDS`와 `packages/client/locale/src/client/index.ts`의 `LOCALES` 라벨을 수정하고, 관련 핵심 사전과 테스트를 추가한 뒤 fork 버전을 다시 빌드하여 실행할 수 있습니다. 이 플러그인만 수정해서는 DSH 전역 locale 목록을 확장할 수 없습니다.
+
 ## 왜 필요한가요?
 
 `llm-pi-ai` 어댑터는 타사 모델을 수동으로 선언할 수 있지만, 모델에 `reasoningEfforts`가 없는 경우가 많습니다. 그러면 Composer에 추론 강도 선택기가 표시되지 않고, `ultra`와 같은 게이트웨이 전용 값을 DSH 표준 단계에 매핑할 수도 없습니다.
@@ -45,7 +47,7 @@ DSH 내장 모델만 사용하고 이미 추론 제어가 정상 작동한다면
 | 모델별 편집 | Settings에서 단계와 게이트웨이 값을 설정 |
 | 게이트웨이 값 매핑 | DSH에서 `high`를 선택하면 `ultra` 전송 가능 |
 | Subagent 기본값 | 명시적 값이 없는 요청에만 기본값 적용 |
-| 다국어 설정 | 中文, English, 日本語, 한국어 간 전환 |
+| 다국어 설정 | 中文, English, 日本語, 한국어 사전 포함; 일본어/한국어 전환에는 DSH 코어 locale 지원 필요 |
 | 버전 표시 | 설정 페이지 오른쪽 아래에 설치된 버전 표시 |
 
 ## 설치, 업데이트, 제거
@@ -72,7 +74,7 @@ profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](
 ## 빠른 사용
 
 1. DSH에서 **Settings → Reasoning effort**를 엽니다.
-2. 상단 **Page language**에서 `中文`, `English`, `日本語`, `한국어` 중 하나를 선택합니다. DSH는 저장된 locale, 브라우저 언어, 중국어 순서로 fallback합니다. 선택은 DSH에 저장되어 새로 고침과 재시작 후에도 유지됩니다.
+2. 기본 DSH에서는 상단 **Page language** 선택기에서 `中文` 또는 `English`를 선택합니다. `日本語`와 `한국어`를 사용하려면 위에 설명한 DSH 코어 locale 변경이 필요합니다. DSH는 저장된 locale, 브라우저 언어, 중국어 순서로 fallback합니다.
 3. **Subagent reasoning effort** 카드에서 기본값을 선택하고 **Apply**를 클릭합니다.
 4. 프리셋을 모든 모델에 적용하거나 모델을 펼쳐 상세 설정을 엽니다.
 5. 단계를 선택하고 게이트웨이에 보낼 값을 입력합니다.
