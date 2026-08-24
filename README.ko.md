@@ -94,7 +94,7 @@ profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](
 
 페이지 상단에는 언어 선택기가 있습니다. 그 아래의 **Subagent default effort** 카드는 명시적인 값이 없는 요청의 기본값을 관리합니다. **Quick settings**는 일괄 프리셋을 적용합니다. 제공자와 모델 목록은 펼치거나 접을 수 있으며, 각 모델 행의 입력 기능, 컨텍스트 길이 및 설정 버튼에서 추론 단계와 게이트웨이 값을 편집할 수 있습니다.
 
-![영문 Model capabilities and effort 설정 페이지](./docs/assets/settings-model-capabilities-en.png)
+![영문 Model capabilities and effort 설정 페이지](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/settings-model-capabilities-en.png)
 
 
 ## 작동 방식

@@ -97,7 +97,7 @@ The settings page shows the installed version as a small watermark such as `v0.1
 
 The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and a settings control for reasoning levels and gateway values.
 
-![English Model capabilities and effort settings page](./docs/assets/settings-model-capabilities-en.png)
+![English Model capabilities and effort settings page](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/settings-model-capabilities-en.png)
 
 
 ## How it works

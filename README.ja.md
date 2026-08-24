@@ -94,7 +94,7 @@ profile の確認、移行、検証、トラブルシューティングについ
 
 ページ上部に言語セレクターがあります。その下の **Subagent default effort** カードは明示値のないリクエストの既定値を管理します。**Quick settings** は一括プリセットを適用します。プロバイダーとモデルの一覧は展開/折りたたみができ、各モデル行の入力能力、コンテキスト長、設定ボタンから推論レベルとゲートウェイ値を編集できます。
 
-![英語版 Model capabilities and effort 設定ページ](./docs/assets/settings-model-capabilities-en.png)
+![英語版 Model capabilities and effort 設定ページ](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/settings-model-capabilities-en.png)
 
 
 ## 仕組み
