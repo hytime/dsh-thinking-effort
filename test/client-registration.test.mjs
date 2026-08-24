@@ -94,13 +94,18 @@ test('ships Japanese and Korean README and installation guides', () => {
     'README.md', 'README.zh.md', 'README.ja.md', 'README.ko.md',
     'INSTALL.md', 'INSTALL.zh.md', 'INSTALL.ja.md', 'INSTALL.ko.md',
   ]
-  for (const name of documents) {
-    assert.ok(existsSync(fileURLToPath(new URL(`../${name}`, import.meta.url))), `missing document: ${name}`)
+  const assets = [
+    'docs/assets/settings-model-capabilities-zh.png',
+    'docs/assets/settings-model-capabilities-en.png',
+  ]
+  for (const name of [...documents, ...assets]) {
+    assert.ok(existsSync(fileURLToPath(new URL(`../${name}`, import.meta.url))), `missing package asset: ${name}`)
   }
   const pkg = readPackage()
   for (const name of ['README.ja.md', 'README.ko.md', 'INSTALL.ja.md', 'INSTALL.ko.md']) {
     assert.ok(pkg.files.includes(name), `package files missing: ${name}`)
   }
+  assert.ok(pkg.files.includes('docs/assets/'), 'package files missing: docs/assets/')
 })
 
 test('keeps the multilingual release version consistent', () => {

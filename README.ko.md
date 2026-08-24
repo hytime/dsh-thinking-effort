@@ -73,11 +73,12 @@ profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](
 
 ## 빠른 사용
 
-1. DSH에서 **Settings → Reasoning effort**를 엽니다.
+1. DSH에서 **Settings → Model capabilities and effort**를 엽니다.
 2. 기본 DSH에서는 상단 **Page language** 선택기에서 `中文` 또는 `English`를 선택합니다. `日本語`와 `한국어`를 사용하려면 위에 설명한 DSH 코어 locale 변경이 필요합니다. DSH는 저장된 locale, 브라우저 언어, 중국어 순서로 fallback합니다.
-3. **Subagent reasoning effort** 카드에서 기본값을 선택하고 **Apply**를 클릭합니다.
-4. 프리셋을 모든 모델에 적용하거나 모델을 펼쳐 상세 설정을 엽니다.
-5. 단계를 선택하고 게이트웨이에 보낼 값을 입력합니다.
+3. **Subagent default effort** 카드에서 명시적인 값이 없는 요청에 사용할 기본값을 선택하고 **Apply**를 클릭합니다.
+4. **Quick settings**에서 공식 DeepSeek 방식 또는 일반 프리셋을 모든 모델에 적용하거나, 제공자와 모델을 펼쳐 상세 설정을 엽니다.
+5. 검색 필드에서 모델 이름 또는 ID로 필터링합니다. 모델 행에는 텍스트/이미지 입력 기능, 선언된 컨텍스트 길이 및 모델 설정 버튼이 표시됩니다.
+6. 단계를 선택하고 게이트웨이에 보낼 값을 입력합니다.
 
    | DSH 단계 | 게이트웨이 값 |
    | --- | --- |
@@ -85,9 +86,16 @@ profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](
    | `high` | `ultra` |
    | `max` | `max` |
 
-6. Composer로 돌아가 설정한 모델을 선택하고 추론 선택기를 사용합니다.
+7. Composer로 돌아가 설정한 모델을 선택하고 추론 선택기를 사용합니다.
 
 설정 페이지 오른쪽 아래에는 `v0.1.7`과 같은 작은 버전 표시가 나타납니다.
+
+### 설정 페이지 구성
+
+페이지 상단에는 언어 선택기가 있습니다. 그 아래의 **Subagent default effort** 카드는 명시적인 값이 없는 요청의 기본값을 관리합니다. **Quick settings**는 일괄 프리셋을 적용합니다. 제공자와 모델 목록은 펼치거나 접을 수 있으며, 각 모델 행의 입력 기능, 컨텍스트 길이 및 설정 버튼에서 추론 단계와 게이트웨이 값을 편집할 수 있습니다.
+
+![영문 Model capabilities and effort 설정 페이지](./docs/assets/settings-model-capabilities-en.png)
+
 
 ## 작동 방식
 

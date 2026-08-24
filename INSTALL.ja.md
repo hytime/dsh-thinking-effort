@@ -138,13 +138,13 @@ name: dsh-thinking-effort
 
 ## 5. 設定ページの確認
 
-DSH を再起動し、Web ページを更新してから **Settings → Reasoning effort** を開きます。
+DSH を再起動し、Web ページを更新してから **Settings → Model capabilities and effort** を開きます。
 
 1. 標準の DSH では、言語セレクターに `中文` と `English` が表示されます。`日本語` と `한국어` を使うには、上記の DSH コア locale 変更が必要です。
-2. 既定値は保存済み DSH locale、ブラウザ言語、最後に中国語の順で決まる。
-3. 言語選択はページ更新と DSH 再起動後も維持される。
-4. 右下のバージョン表示が `v0.1.7` になる。
-5. モデルの推論強度編集と Subagent 設定が使用できる。
+2. **Subagent default effort** カードに現在の既定値と **Apply** が表示されます。
+3. **Quick settings** から公式 DeepSeek 形式または汎用プリセットを一括適用できます。
+4. プロバイダー/モデル一覧では検索、展開/折りたたみ、入力能力、コンテキスト長、モデル設定ボタンを確認できます。
+5. 右下のバージョン表示が `v0.1.7` になります。
 
 Host のロードマーカーは次で確認できます。
 

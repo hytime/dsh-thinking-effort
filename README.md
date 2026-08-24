@@ -76,11 +76,12 @@ See [INSTALL.md](./INSTALL.md) for profile discovery, migration, validation, and
 
 ## Quick use
 
-1. Open DSH **Settings → Reasoning effort**.
+1. Open DSH **Settings → Model capabilities and effort**.
 2. On stock DSH, use the **Page language** selector at the top to choose `中文` or `English`. The `日本語` and `한국어` entries require the DSH core locale changes described above. DSH uses the persisted locale first, then the browser language, then Chinese as the fallback.
-3. Choose a subagent default from the **Subagent reasoning effort** card, then click **Apply**.
-4. Apply a preset to all models, or expand one model for detailed configuration.
-5. Select a level and enter the exact gateway value. For example:
+3. Choose a subagent default from the **Subagent default effort** card, then click **Apply**.
+4. Use **Quick settings** to apply the official DeepSeek or generic preset to all models, or expand a provider and model for detailed configuration.
+5. Use the search field to filter models by name or ID. Model rows show text/image input capability badges, a context-window badge when declared, and a settings button for per-model editing.
+6. Select a reasoning level and enter the exact gateway value. For example:
 
    | DSH level | Gateway value |
    | --- | --- |
@@ -88,9 +89,16 @@ See [INSTALL.md](./INSTALL.md) for profile discovery, migration, validation, and
    | `high` | `ultra` |
    | `max` | `max` |
 
-6. Return to Composer and select the model to use its reasoning selector.
+7. Return to Composer and select the model to use its reasoning selector.
 
 The settings page shows the installed version as a small watermark such as `v0.1.7` in the bottom-right corner.
+
+### Settings page layout
+
+The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and a settings control for reasoning levels and gateway values.
+
+![English Model capabilities and effort settings page](./docs/assets/settings-model-capabilities-en.png)
+
 
 ## How it works
 

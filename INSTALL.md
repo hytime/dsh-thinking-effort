@@ -140,13 +140,13 @@ name: dsh-thinking-effort
 
 ## 5. Verify the settings page
 
-Restart DSH, then refresh the Web page. Open **Settings → Reasoning effort**.
+Restart DSH, then refresh the Web page. Open **Settings → Model capabilities and effort**.
 
 1. On stock DSH, the page language selector offers `中文` and `English`. `日本語` and `한국어` require the DSH core locale changes described above.
-2. The default is the persisted DSH locale, then the browser language, then Chinese.
-3. Selecting a language survives page refresh and DSH restart.
-4. The bottom-right watermark shows `v0.1.7`.
-5. Model effort editing and subagent effort settings remain available.
+2. The **Subagent default effort** card shows the current default and provides **Apply**.
+3. **Quick settings** offers the official DeepSeek and generic batch presets.
+4. The provider/model list supports search, expand/collapse, input-capability badges, context badges, and per-model settings controls.
+5. The bottom-right watermark shows `v0.1.7`.
 
 The host marker can be checked with:
 

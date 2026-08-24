@@ -36,6 +36,7 @@
     "CHANGELOG.md",
     "CHANGELOG.ja.md",
     "CHANGELOG.ko.md",
+    "docs/assets/",
     "LICENSE"
   ],
   "dsh": {
