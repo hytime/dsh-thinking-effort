@@ -17,7 +17,7 @@
 - [日本語 changelog](./CHANGELOG.ja.md)
 - [한국어 changelog](./CHANGELOG.ko.md)
 
-> **兼容性说明：** `0.1.7` 已包含日本語（`ja`）和한국어（`ko`）字典及选择项，但当前官方 DSH 只通过 `LocaleRuntime` 提供 `zh` 和 `en`。在原版 DSH 中选择 `ja` 或 `ko` 会失败，并提示 `locale "<id>" is not registered`。需要等待官方 DSH 增加对应 locale ID 后才能正常使用。高级用户可以维护 DSH fork，在 `packages/client/locale/src/locale-settings.ts` 更新 `LOCALE_IDS`，在 `packages/client/locale/src/client/index.ts` 更新 `LOCALES` 标签，并补齐核心字典和测试，然后重新构建并运行 fork 版本。仅修改本插件无法扩展 DSH 的全局 locale 列表。
+> **兼容性说明：** `0.1.8` 已包含日本語（`ja`）和한국어（`ko`）字典及选择项，但当前官方 DSH 只通过 `LocaleRuntime` 提供 `zh` 和 `en`。在原版 DSH 中选择 `ja` 或 `ko` 会失败，并提示 `locale "<id>" is not registered`。需要等待官方 DSH 增加对应 locale ID 后才能正常使用。高级用户可以维护 DSH fork，在 `packages/client/locale/src/locale-settings.ts` 更新 `LOCALE_IDS`，在 `packages/client/locale/src/client/index.ts` 更新 `LOCALES` 标签，并补齐核心字典和测试，然后重新构建并运行 fork 版本。仅修改本插件无法扩展 DSH 的全局 locale 列表。
 
 ## 为什么需要它？
 
@@ -85,7 +85,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.8
 ```
 
 官方 CLI 会同时更新 profile 依赖、锁文件和 `dsh.profile.bundles`，无需手工追加 YAML。
@@ -120,7 +120,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.8
 ```
 
 如果旧依赖已经被其他工具移除，但 profile 的 bundle 列表仍残留旧名称，先从旧 profile 的 `pnpm-lock.yaml` 找到旧 GitHub commit，再使用官方命令恢复并移除：
@@ -128,7 +128,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.7
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.8
 ```
 
 不要把 `dsh-thinking-effort` 添加到新的 `dsh.profile.bundles` 中。
@@ -150,7 +150,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.7
 
 7. 回到 Composer，选择对应模型后即可使用「推理等级」。
 
-设置页右下角会显示当前安装版本，例如 `v0.1.7`。
+设置页右下角会显示当前安装版本，例如 `v0.1.8`。
 
 ### 设置页界面
 
@@ -164,7 +164,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.7
 - **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位。
 - **客户端：** 插件注册一个设置页，通过 DSH 标准设置 API 读取和写入配置，并使用 DSH 官方 locale 服务切换和持久化中文、English、日本語、한국어。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
 - **子 agent：** 默认值存储在 `llm-pi-ai` 用户层的 `subagentEffort`；`agent/request` waterfall 只对未显式指定档位的子 agent 请求进行补全。
-- **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.7`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
+- **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.8`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
 
 ## 安装验证
 

@@ -12,6 +12,17 @@ This file records the features, fixes, and user-facing impact of every published
 
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.8] - 修复子 agent 默认档位注入 / Fix subagent default effort injection
+
+### 修复 / Fixed
+
+- 修复 `agent/request` 未使用全局监听，导致子 agent 请求无法被插件处理。
+- Fix the missing global `agent/request` listener that prevented the plugin from handling subagent requests.
+- 修复 `llm-pi-ai` 设置命名空间延迟注册时 `subagentEffort` 缓存为空的问题。
+- Read the current `subagentEffort` at request time so delayed namespace registration and later settings changes take effect.
+- 新增 Host 侧回归测试，覆盖全局监听和实时配置读取。
+- Add Host regression tests for global event registration and live settings reads.
+
 ## [0.1.7] - 日语和韩语本地化 / Japanese and Korean localization
 
 ### 新增 / Added

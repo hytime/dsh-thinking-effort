@@ -17,7 +17,7 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 - [日本語 changelog](./CHANGELOG.ja.md)
 - [한국어 changelog](./CHANGELOG.ko.md)
 
-> **Compatibility note:** Version `0.1.7` includes Japanese (`ja`) and Korean (`ko`) dictionaries and selector entries, but the current official DSH releases expose only `zh` and `en` through `LocaleRuntime`. On stock DSH, selecting `ja` or `ko` fails with `locale "<id>" is not registered`. These languages will work after official DSH adds the locale IDs. Advanced users can use a DSH fork that updates `packages/client/locale/src/locale-settings.ts` (`LOCALE_IDS`) and `packages/client/locale/src/client/index.ts` (`LOCALES` labels), together with the corresponding core dictionaries and tests, then rebuild and run the forked DSH. Changing this plugin alone cannot extend DSH's global locale list.
+> **Compatibility note:** Version `0.1.8` includes Japanese (`ja`) and Korean (`ko`) dictionaries and selector entries, but the current official DSH releases expose only `zh` and `en` through `LocaleRuntime`. On stock DSH, selecting `ja` or `ko` fails with `locale "<id>" is not registered`. These languages will work after official DSH adds the locale IDs. Advanced users can use a DSH fork that updates `packages/client/locale/src/locale-settings.ts` (`LOCALE_IDS`) and `packages/client/locale/src/client/index.ts` (`LOCALES` labels), together with the corresponding core dictionaries and tests, then rebuild and run the forked DSH. Changing this plugin alone cannot extend DSH's global locale list.
 
 ## Why use it?
 
@@ -62,7 +62,7 @@ Use the official DSH CLI to manage the plugin profile. A plain `npm install` doe
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # Install a specific version
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.8
 
 # Upgrade
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -91,7 +91,7 @@ See [INSTALL.md](./INSTALL.md) for profile discovery, migration, validation, and
 
 7. Return to Composer and select the model to use its reasoning selector.
 
-The settings page shows the installed version as a small watermark such as `v0.1.7` in the bottom-right corner.
+The settings page shows the installed version as a small watermark such as `v0.1.8` in the bottom-right corner.
 
 ### Settings page layout
 

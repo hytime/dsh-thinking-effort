@@ -16,7 +16,7 @@
 - [한국어 설치 안내](./INSTALL.ko.md)
 - [Changelog](./CHANGELOG.md) · [日本語](./CHANGELOG.ja.md) · [한국어](./CHANGELOG.ko.md)
 
-> **호환성 안내:** `0.1.7`에는 日本語(`ja`)와 한국어(`ko`) 사전 및 선택 항목이 포함되어 있지만, 현재 공식 DSH의 `LocaleRuntime`은 `zh`와 `en`만 제공합니다. 기본 DSH에서 `ja` 또는 `ko`를 선택하면 `locale "<id>" is not registered` 오류가 발생하여 전환되지 않습니다. 공식 DSH가 해당 locale ID를 추가할 때까지 이 언어는 사용할 수 없습니다. 고급 사용자는 DSH를 fork하여 `packages/client/locale/src/locale-settings.ts`의 `LOCALE_IDS`와 `packages/client/locale/src/client/index.ts`의 `LOCALES` 라벨을 수정하고, 관련 핵심 사전과 테스트를 추가한 뒤 fork 버전을 다시 빌드하여 실행할 수 있습니다. 이 플러그인만 수정해서는 DSH 전역 locale 목록을 확장할 수 없습니다.
+> **호환성 안내:** `0.1.8`에는 日本語(`ja`)와 한국어(`ko`) 사전 및 선택 항목이 포함되어 있지만, 현재 공식 DSH의 `LocaleRuntime`은 `zh`와 `en`만 제공합니다. 기본 DSH에서 `ja` 또는 `ko`를 선택하면 `locale "<id>" is not registered` 오류가 발생하여 전환되지 않습니다. 공식 DSH가 해당 locale ID를 추가할 때까지 이 언어는 사용할 수 없습니다. 고급 사용자는 DSH를 fork하여 `packages/client/locale/src/locale-settings.ts`의 `LOCALE_IDS`와 `packages/client/locale/src/client/index.ts`의 `LOCALES` 라벨을 수정하고, 관련 핵심 사전과 테스트를 추가한 뒤 fork 버전을 다시 빌드하여 실행할 수 있습니다. 이 플러그인만 수정해서는 DSH 전역 locale 목록을 확장할 수 없습니다.
 
 ## 왜 필요한가요?
 
@@ -59,7 +59,7 @@ profile은 공식 DSH CLI로 관리하세요. 일반 `npm install`은 DSH profil
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 특정 버전 설치
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.8
 
 # 업데이트
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -88,7 +88,7 @@ profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](
 
 7. Composer로 돌아가 설정한 모델을 선택하고 추론 선택기를 사용합니다.
 
-설정 페이지 오른쪽 아래에는 `v0.1.7`과 같은 작은 버전 표시가 나타납니다.
+설정 페이지 오른쪽 아래에는 `v0.1.8`과 같은 작은 버전 표시가 나타납니다.
 
 ### 설정 페이지 구성
 

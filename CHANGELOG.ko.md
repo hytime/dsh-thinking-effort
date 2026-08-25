@@ -8,6 +8,14 @@
 
 버전 번호는 [Semantic Versioning](https://semver.org/)을 따릅니다.
 
+## [0.1.8] - Subagent 추론 강도 주입 수정
+
+### 수정
+
+- `agent/request`를 전역 리스너로 등록하여 Subagent 요청을 확실히 처리하도록 수정했습니다.
+- `llm-pi-ai` 설정 namespace가 늦게 등록될 때 `subagentEffort`가 오래된 캐시로 남는 문제를 수정하고 요청마다 현재 값을 읽도록 변경했습니다.
+- 전역 이벤트 등록과 설정 실시간 읽기를 검증하는 Host 회귀 테스트를 추가했습니다.
+
 ## [0.1.7] - 일본어 및 한국어 현지화
 
 ### 추가

@@ -117,7 +117,7 @@ test('keeps the multilingual release version consistent', () => {
     'CHANGELOG.md', 'CHANGELOG.ja.md', 'CHANGELOG.ko.md',
   ]
 
-  assert.equal(pkg.version, '0.1.7')
+  assert.equal(pkg.version, '0.1.8')
   assert.ok(source.includes(`const PLUGIN_VERSION = '${pkg.version}'`))
   for (const name of documents) {
     const path = fileURLToPath(new URL(`../${name}`, import.meta.url))
