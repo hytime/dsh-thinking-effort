@@ -106,10 +106,9 @@ export function apply(ctx) {
   }
   ctx.timeout(() => { void tryOnce() }, 500)
 
-  // 设置变更时，新增模型自动补齐，并同步子 agent 档位缓存。
+  // 设置变更时，新增模型自动补齐。
   ctx.on('settings/updated', (ns) => {
     if (ns !== NS) return
-    readSubagentEffort()
     void fillDefaults().catch((error) => {
       log('watch fill error:', error && error.message ? error.message : String(error))
     })
@@ -120,23 +119,22 @@ export function apply(ctx) {
   // 暴露；键不在 pi-ai schema 中，schema 解析会忽略它但原样持久化，因此
   // 从 describe 的 user 层读取）。自注册命名空间不可行——api-proxy 的
   // exposedNamespaces() 门控只有模型提供方与白名单，插件无法开放新命名空间。
-  let subagentEffort = undefined
   const readSubagentEffort = () => {
     try {
       const desc = ctx.settings.describe().find(d => d.ns === NS)
       const raw = desc && desc.user && typeof desc.user === 'object' ? desc.user : {}
-      subagentEffort = typeof raw.subagentEffort === 'string' && raw.subagentEffort.length > 0
+      return typeof raw.subagentEffort === 'string' && raw.subagentEffort.length > 0
         ? raw.subagentEffort
         : undefined
     } catch (error) {
       log('read subagent effort error:', error && error.message ? error.message : String(error))
-      subagentEffort = undefined
+      return undefined
     }
   }
-  readSubagentEffort()
 
   /** 将子 agent 配置中的线上值还原为 DSH 标准档位 ID。 */
   const resolveSubagentEffort = (config) => {
+    const subagentEffort = readSubagentEffort()
     if (typeof subagentEffort !== 'string' || subagentEffort.length === 0) return undefined
     const standard = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
     if (standard.includes(subagentEffort)) return subagentEffort
@@ -172,5 +170,5 @@ export function apply(ctx) {
       log('agent/request override error:', error && error.message ? error.message : String(error))
       return config
     }
-  })
+  }, { global: true })
 }
