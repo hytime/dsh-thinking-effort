@@ -39,7 +39,7 @@ function find(tree, predicate) {
   return result
 }
 
-function createHarness() {
+function createHarness(settingsMode = 'legacy') {
   assert.ok(clientSource.includes(testMarker))
   const instrumented = clientSource.replace(
     testMarker,
@@ -49,6 +49,7 @@ function createHarness() {
   let initialized = false
   let describeCalls = 0
   let mutateCalls = 0
+  let modernMutateArgs
   const key = 'provider/model-a'
   const raw = {
     id: 'model-a',
@@ -76,7 +77,15 @@ function createHarness() {
     value: { providers: { provider: { models: [savedRaw] } } },
     user: {},
   }
-  const connection = {
+  const modernSettings = {
+    describe: () => Promise.resolve({ ok: true, value: { namespaces: [namespace] } }),
+    mutate: (ns, ops, expectedRevision) => {
+      modernMutateArgs = { ns, ops, expectedRevision }
+      mutateCalls += 1
+      return Promise.resolve({ ok: true, value: namespace })
+    },
+  }
+  const connection = settingsMode === 'modern' ? {} : {
     api: {
       settings: {
         describe: () => {
@@ -116,11 +125,15 @@ function createHarness() {
   }
   new Function('window', 'document', instrumented)(fakeWindow, fakeWindow.document)
   const plugin = captured.descriptor.factory((name) => name === 'react' ? React : {})
-  const render = () => plugin.__test.SectionEditor({ __connection: connection })
+  const render = () => plugin.__test.SectionEditor({
+    __connection: connection,
+    ...(settingsMode === 'modern' ? { __settings: modernSettings } : {}),
+  })
   return {
     key,
     render,
     getState: () => state,
+    modernMutateArgs: () => modernMutateArgs,
     counts: () => ({ describeCalls, mutateCalls }),
   }
 }
@@ -173,3 +186,34 @@ test('keeps drafts and scroll-safe in-place save state', async () => {
   assert.equal(harness.getState().dirty[harness.key], undefined)
   assert.ok(textOf(harness.render()).includes('模型设置已保存'))
 })
+
+test('uses the current direct Settings Remote contract', async () => {
+  const harness = createHarness('modern')
+  let tree = openModel(harness)
+  find(tree, (node) => node.type === 'button'
+    && node.props.role === 'switch'
+    && node.props['aria-label'] === 'minimal 档位').props.onClick()
+  tree = harness.render()
+  const save = find(tree, (node) => node.type === 'button' && textOf(node).includes('保存更改'))
+  assert.ok(save)
+  save.props.onClick()
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.deepEqual(harness.modernMutateArgs(), {
+    ns: 'llm-pi-ai',
+    expectedRevision: 0,
+    ops: [{
+      op: 'set',
+      path: ['providers', 'provider', 'models'],
+      value: [savedModelForTest()],
+    }],
+  })
+  assert.ok(textOf(harness.render()).includes('模型设置已保存'))
+})
+
+function savedModelForTest() {
+  return {
+    id: 'model-a',
+    reasoningEfforts: { off: null, minimal: 'minimal' },
+    input: ['text'],
+  }
+}

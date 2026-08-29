@@ -8,6 +8,14 @@
 
 버전 번호는 [Semantic Versioning](https://semver.org/)을 따릅니다.
 
+## [0.1.9] - 새 DSH Remote 호환성 대응
+
+### 수정
+
+- DSH `0.1.2-alpha.1`의 `ctx.remote.settings`에 대응하고 이전 `connection.api.settings`도 fallback으로 유지합니다.
+- 새 직접 `ClientResult`와 이전 RPC 래퍼 응답의 Settings 읽기 및 쓰기를 통합합니다.
+- DSH language-pack 동적 등록에 맞춰 일본어 및 한국어 지원 설명을 갱신합니다.
+
 ## [0.1.8] - Subagent 추론 강도 주입 수정
 
 ### 수정

@@ -12,6 +12,17 @@ This file records the features, fixes, and user-facing impact of every published
 
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.9] - 兼容新版 DSH Remote / Support current DSH Remotes
+
+### 修复 / Fixed
+
+- 适配 DSH `0.1.2-alpha.1` 的 `ctx.remote.settings`，并保留旧版 `connection.api.settings` 回退。
+- Adapt to DSH `0.1.2-alpha.1` `ctx.remote.settings` while retaining a legacy `connection.api.settings` fallback.
+- 统一新版直接 `ClientResult` 与旧版 RPC 包装响应的读取和写入处理。
+- Normalize current direct `ClientResult` responses and legacy RPC-wrapped settings responses.
+- 更新日语和韩语 locale 说明，反映 DSH language-pack 动态注册支持。
+- Update Japanese and Korean locale documentation for DSH language-pack registration.
+
 ## [0.1.8] - 修复子 agent 默认档位注入 / Fix subagent default effort injection
 
 ### 修复 / Fixed

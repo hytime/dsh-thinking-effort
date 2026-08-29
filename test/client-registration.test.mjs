@@ -67,6 +67,13 @@ test('keeps the client version and watermark style tied to package version', () 
   assert.ok(source.includes("pointerEvents: 'none'"))
 })
 
+test('declares the remote settings services used by the client plugin', () => {
+  const descriptor = loadDescriptor()
+  const plugin = descriptor.factory(() => ({}))
+
+  assert.deepEqual(plugin.inject, ['slots', 'connection', 'locale', 'remote', 'remote.settings'])
+})
+
 test('registers balanced Chinese, English, Japanese, and Korean dictionaries', () => {
   const source = readFileSync(clientPath, 'utf8')
   const locales = readLocales()
@@ -78,6 +85,8 @@ test('registers balanced Chinese, English, Japanese, and Korean dictionaries', (
   }
   assert.ok(source.includes("const LOCALE_NS = 'settings.thinkingEffort'"))
   assert.ok(source.includes('locale.register(LOCALE_NS, { zh, en, ja, ko })'))
+  assert.ok(source.includes("locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en' })"))
+  assert.ok(source.includes("locale.addLanguage({ id: 'ko', label: '한국어', fallback: 'en' })"))
   assert.ok(source.includes("value: 'ja'"))
   assert.ok(source.includes("value: 'ko'"))
   assert.ok(source.includes('languageJapanese'))
@@ -117,7 +126,7 @@ test('keeps the multilingual release version consistent', () => {
     'CHANGELOG.md', 'CHANGELOG.ja.md', 'CHANGELOG.ko.md',
   ]
 
-  assert.equal(pkg.version, '0.1.8')
+  assert.equal(pkg.version, '0.1.9')
   assert.ok(source.includes(`const PLUGIN_VERSION = '${pkg.version}'`))
   for (const name of documents) {
     const path = fileURLToPath(new URL(`../${name}`, import.meta.url))

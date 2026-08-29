@@ -17,7 +17,7 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 - [日本語 changelog](./CHANGELOG.ja.md)
 - [한국어 changelog](./CHANGELOG.ko.md)
 
-> **Compatibility note:** Version `0.1.8` includes Japanese (`ja`) and Korean (`ko`) dictionaries and selector entries, but the current official DSH releases expose only `zh` and `en` through `LocaleRuntime`. On stock DSH, selecting `ja` or `ko` fails with `locale "<id>" is not registered`. These languages will work after official DSH adds the locale IDs. Advanced users can use a DSH fork that updates `packages/client/locale/src/locale-settings.ts` (`LOCALE_IDS`) and `packages/client/locale/src/client/index.ts` (`LOCALES` labels), together with the corresponding core dictionaries and tests, then rebuild and run the forked DSH. Changing this plugin alone cannot extend DSH's global locale list.
+> **Compatibility note:** DSH `0.1.2-alpha.1` and later accept language-pack locale IDs through `LocaleRuntime`. This plugin registers `ja` and `ko` dynamically, so no DSH core fork is required. Older DSH builds that only expose built-in locale IDs support `zh` and `en` only.
 
 ## Why use it?
 
@@ -50,7 +50,7 @@ These identifiers have different responsibilities:
 | Per-model editor | Select levels and configure their gateway values from Settings |
 | Gateway mapping | Send `ultra` when the user selects DSH `high` |
 | Subagent default | Apply a default effort only when a subagent request has no explicit value |
-| Multilingual settings | Includes Chinese, English, Japanese, and Korean dictionaries; Japanese/Korean switching requires DSH core locale support |
+| Multilingual settings | Includes Chinese, English, Japanese, and Korean dictionaries; Japanese/Korean switching uses DSH language-pack support |
 | Version watermark | Show the installed plugin version in the bottom-right corner |
 
 ## Install, upgrade, and remove
@@ -62,7 +62,7 @@ Use the official DSH CLI to manage the plugin profile. A plain `npm install` doe
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # Install a specific version
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.8
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.9
 
 # Upgrade
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -77,7 +77,7 @@ See [INSTALL.md](./INSTALL.md) for profile discovery, migration, validation, and
 ## Quick use
 
 1. Open DSH **Settings → Model capabilities and effort**.
-2. On stock DSH, use the **Page language** selector at the top to choose `中文` or `English`. The `日本語` and `한국어` entries require the DSH core locale changes described above. DSH uses the persisted locale first, then the browser language, then Chinese as the fallback.
+2. Use the **Page language** selector at the top to choose `中文`, `English`, `日本語`, or `한국어`. DSH uses the persisted locale first, then the browser language, then English as the fallback.
 3. Choose a subagent default from the **Subagent default effort** card, then click **Apply**.
 4. Use **Quick settings** to apply the official DeepSeek or generic preset to all models, or expand a provider and model for detailed configuration.
 5. Use the search field to filter models by name or ID. Model rows show text/image input capability badges, a context-window badge when declared, and a settings button for per-model editing.
@@ -91,7 +91,7 @@ See [INSTALL.md](./INSTALL.md) for profile discovery, migration, validation, and
 
 7. Return to Composer and select the model to use its reasoning selector.
 
-The settings page shows the installed version as a small watermark such as `v0.1.8` in the bottom-right corner.
+The settings page shows the installed version as a small watermark such as `v0.1.9` in the bottom-right corner.
 
 ### Settings page layout
 
@@ -103,7 +103,7 @@ The page header contains the language selector. Below it, the Subagent default e
 ## How it works
 
 - **Host:** Scans `llm-pi-ai` `models` and `modelOverrides` on startup and settings changes, adding defaults only where `reasoningEfforts` is missing.
-- **Client:** Registers a settings page through the standard DSH settings API and the official DSH locale service. Chinese, English, Japanese, and Korean dictionaries are maintained separately in `src/locales/zh.json`, `src/locales/en.json`, `src/locales/ja.json`, and `src/locales/ko.json`, then generated into the client bundle before publishing.
+- **Client:** Registers a settings page through the DSH Settings Remote (`ctx.remote.settings`) and the official DSH locale service. Chinese, English, Japanese, and Korean dictionaries are maintained separately in `src/locales/zh.json`, `src/locales/en.json`, `src/locales/ja.json`, and `src/locales/ko.json`, then generated into the client bundle before publishing.
 - **Subagents:** Stores the default in the `llm-pi-ai` user layer as `subagentEffort`. The `agent/request` waterfall only fills requests that do not already specify an effort.
 - **No configured default:** The plugin does not automatically choose `off`, `high`, or `max`; the request omits `reasoning` and the gateway decides its own default behavior.
 

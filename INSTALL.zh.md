@@ -52,7 +52,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.8
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.9
 ```
 
 官方 CLI 会自动完成以下工作：
@@ -82,7 +82,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 升级到指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.8
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.9
 ```
 
 升级后重新执行验证步骤。宿主侧代码需要重启 DSH；浏览器侧代码需要刷新 Web 页面。
@@ -102,7 +102,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.8
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.9
 ```
 
 ### 3.2 旧依赖已被移除，但旧 bundle 残留
@@ -131,7 +131,7 @@ grep -n "dsh-thinking-effort" \
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.8
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.9
 ```
 
 这一步的目的不是继续使用旧插件，而是让官方 CLI 识别旧依赖并自动删除残留 bundle。不要手工把旧包名重新写入新的 bundle 列表。
@@ -166,15 +166,8 @@ grep -n "dsh-thinking-effort" \
 
 ### 4.2 日语和韩语支持状态
 
-插件已经包含 `ja` 和 `ko` 字典，但当前官方 DSH 的 `LocaleRuntime` 只公开 `zh` 和 `en`。在原版 DSH 中选择日语或韩语会失败，并提示 `locale "<id>" is not registered`。
+DSH `0.1.2-alpha.1` 及更高版本通过 `LocaleRuntime` 支持语言包注册外部 locale ID。本插件会动态注册 `ja` 和 `ko`，无需维护 DSH fork。只支持固定内置 locale ID 的旧版 DSH 仍只能使用 `zh` 和 `en`。
 
-在官方支持发布前，如需使用这两种语言，可以维护 DSH fork 并修改：
-
-- `packages/client/locale/src/locale-settings.ts`：将 `ja` 和 `ko` 加入 `LOCALE_IDS`，Host preference schema 会从该列表派生。
-- `packages/client/locale/src/client/index.ts`：在 `LOCALES` 中加入 `{ id: 'ja', label: '日本語' }` 和 `{ id: 'ko', label: '한국어' }`。
-- 补充对应的核心字典和测试，然后重新构建并运行 fork 版 DSH。
-
-仅修改本插件无法扩展 DSH 的全局 locale 列表。请遵循 fork 版本自身的构建说明，并继续使用官方 profile 命令；不要手工编辑 profile manifest。
 
 ### 4.3 检查官方组合树
 
@@ -226,7 +219,7 @@ curl -s http://127.0.0.1:3080/ \
 
 ## 5. 功能验证
 
-1. **语言选择：** 原版 DSH 设置页顶部只能选择中文和 English；日本語、한국어需要先完成上方所述的 DSH 核心 locale 修改。默认优先使用 DSH 已保存的语言，其次使用浏览器语言，最后回退中文。
+1. **语言选择：** 在 DSH `0.1.2-alpha.1` 及更高版本中，设置页顶部可以选择中文、English、日本語和한국어。旧版只支持固定内置 locale ID 时仍只能选择中文和 English。默认优先使用 DSH 已保存的语言，其次使用浏览器语言，最后回退 English。
 2. **宿主自动补齐：** 手工声明模型缺少 `reasoningEfforts` 时，设置中应出现 `off: null / high: high / max: max`。
 3. **设置页：** Web 界面 → 设置 → 「模型能力与档位」。页面包含顶部语言选择器、「子 agent 默认档位」卡片、「一键设置」、模型搜索、供应商/模型列表、输入能力/上下文标识和单模型设置按钮，可以编辑模型档位和线上值。
 4. **子 agent 思考强度：** 设置页配置后，`llm-pi-ai` 用户层出现 `subagentEffort`，未显式指定档位的子 agent 请求会使用它。
