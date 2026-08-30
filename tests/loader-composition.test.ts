@@ -188,6 +188,172 @@ async function probeOfficialClientRuntime(
   return results
 }
 
+async function probeOfficialAgentRuntime(
+  cliRoot: string,
+  hostEntry: string,
+): Promise<{ requestCount: number; reasoningEffort: unknown; origin: unknown; turnEnd: string | undefined }> {
+  const importOfficial = (relativePath: string): Promise<Record<string, unknown>> => import(
+    pathToFileURL(join(cliRoot, relativePath)).href,
+  ) as Promise<Record<string, unknown>>
+  const cordis = await importOfficial('vendor/cordis/lib/index.js')
+  const llm = await importOfficial('packages/llm/llm/lib/index.js')
+  const session = await importOfficial('packages/core/session/lib/index.js')
+  const systemPrompt = await importOfficial('packages/core/system-prompt/lib/index.js')
+  const tools = await importOfficial('packages/core/tools/lib/index.js')
+  const agents = await importOfficial('packages/core/agent/lib/index.js')
+  const agentLoop = await importOfficial('packages/core/agent-loop/lib/index.js')
+  const timer = await importOfficial('vendor/timer/lib/index.js')
+  const Context = cordis.Context as new () => {
+    plugin: (plugin: unknown, config?: unknown) => { await: () => Promise<unknown> }
+    provide: (name: string, value: unknown) => void
+    on: (event: string, callback: (...args: unknown[]) => unknown, options?: unknown) => () => void
+    fiber: { dispose: () => Promise<void> }
+    agents: {
+      create: (options: Record<string, unknown>) => Promise<{ agent: {
+        session: { header: Record<string, unknown>; events: readonly { type: string }[] }
+        followup: (message: unknown) => void
+        whenIdle: () => Promise<void>
+      }; dispose: () => Promise<void> }>
+    }
+    llm: { registerAdapter: (providers: string[], adapter: unknown) => unknown }
+  }
+  const ctx = new Context()
+  await ctx.plugin(timer.default).await()
+  const LlmAdapter = llm.LlmAdapter as new () => {
+    resolveModel: (provider: string, model: string) => Promise<Record<string, unknown>>
+    stream: (options: Record<string, unknown>) => AsyncIterable<Record<string, unknown>>
+  }
+  const requests: Record<string, unknown>[] = []
+  const highEffort = llm.ReasoningEffortId('high') as unknown
+  class ProbeAdapter extends LlmAdapter {
+    override resolveModel(provider: string, model: string): Promise<Record<string, unknown>> {
+      return Promise.resolve({
+        provider,
+        id: model,
+        name: model,
+        reasoning: { efforts: [{ id: highEffort, name: 'High' }], defaultEffort: highEffort },
+      })
+    }
+
+    override async * stream(options: Record<string, unknown>): AsyncIterable<Record<string, unknown>> {
+      requests.push(options)
+      const text = 'real agent runtime probe'
+      yield { type: 'block-start', index: 0, blockType: 'text' }
+      yield { type: 'text-delta', index: 0, text }
+      yield { type: 'block-end', index: 0, block: { type: 'text', text } }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    }
+  }
+
+  const settings = {
+    writable: false,
+    describe: () => [{ ns: 'llm-pi-ai', user: { subagentEffort: 'high' } }],
+    get: () => undefined,
+    update: async () => undefined,
+  }
+  ctx.provide('settings', settings)
+  await ctx.plugin(llm.default).await()
+  await ctx.plugin(session.default).await()
+  await ctx.plugin(systemPrompt.default, {}).await()
+  await ctx.plugin(tools.default, {}).await()
+  await ctx.plugin(agents.default).await()
+  await ctx.plugin(agentLoop.default, { agents: [] }).await()
+  ctx.llm.registerAdapter(['probe'], new ProbeAdapter())
+  const host = await import(pathToFileURL(hostEntry).href) as { apply: (context: unknown) => void }
+  host.apply(ctx)
+
+  try {
+    const handle = await ctx.agents.create({
+      sessionId: `agent-probe-${Date.now()}`,
+      meta: { origin: 'subagent' },
+      agentOptions: { provider: 'probe', model: 'probe-model' },
+    })
+    try {
+      const message = llm.createUserMessage({
+        content: [{ type: 'text', text: 'run the real agent request probe' }],
+        source: { kind: 'user' },
+      })
+      handle.agent.followup(message)
+      await handle.agent.whenIdle()
+      const turnEnd = handle.agent.session.events.findLast(event => event.type === 'turn/end')
+      return {
+        requestCount: requests.length,
+        reasoningEffort: requests[0]?.reasoningEffort,
+        origin: handle.agent.session.header.origin,
+        turnEnd: turnEnd?.type,
+      }
+    } finally {
+      await handle.dispose()
+    }
+  } finally {
+    await ctx.fiber.dispose()
+  }
+}
+
+type BrowserPage = {
+  goto: (url: string, options?: Record<string, unknown>) => Promise<unknown>
+  locator: (selector: string) => {
+    allTextContents: () => Promise<string[]>
+    innerText: () => Promise<string>
+  }
+  getByRole: (role: string, options: { name: string }) => { click: () => Promise<void> }
+  waitForTimeout: (timeout: number) => Promise<void>
+  on: (event: string, listener: (value: unknown) => void) => BrowserPage
+}
+
+type BrowserContext = {
+  addCookies: (cookies: readonly Record<string, string>[]) => Promise<void>
+  newPage: () => Promise<BrowserPage>
+}
+
+async function probeOfficialSettingsDom(web: RunningWeb): Promise<{ bodyText: string; buttons: string[]; settingsText: string; errors: string[] }> {
+  const playwrightPath = '/Volumes/hydisk/deepseek-harness/node_modules/.pnpm/playwright@1.61.1/node_modules/playwright/index.mjs'
+  const playwright = await import(playwrightPath) as unknown as {
+    chromium: { launch: (options: Record<string, unknown>) => Promise<{ newContext: () => Promise<BrowserContext>; close: () => Promise<void> }> }
+  }
+  const browser = await playwright.chromium.launch({
+    headless: true,
+    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  })
+  try {
+    const context = await browser.newContext()
+    if (web.cookie !== '') {
+      const separator = web.cookie.indexOf('=')
+      await context.addCookies([{
+        name: web.cookie.slice(0, separator),
+        value: web.cookie.slice(separator + 1),
+        domain: '127.0.0.1',
+        path: '/',
+      }])
+    }
+    const page = await context.newPage()
+    const errors: string[] = []
+    page.on('pageerror', value => { errors.push(String(value)) })
+    await page.goto(web.url, { waitUntil: 'domcontentloaded', timeout: 20000 })
+    const bodyText = await page.locator('body').innerText()
+    const buttons = await page.locator('button').allTextContents()
+    await page.getByRole('button', { name: '继续' }).click()
+    await page.waitForTimeout(500)
+    await page.getByRole('button', { name: '稍后配置' }).click()
+    await page.waitForTimeout(500)
+    await page.getByRole('button', { name: '选择工作区' }).click()
+    await page.waitForTimeout(500)
+    await page.getByRole('button', { name: '设置' }).click()
+    await page.waitForTimeout(500)
+    await page.getByRole('button', { name: '插件' }).click()
+    await page.waitForTimeout(3000)
+    const settingsText = await page.locator('body').innerText()
+    return {
+      bodyText,
+      buttons,
+      settingsText,
+      errors,
+    }
+  } finally {
+    await browser.close()
+  }
+}
+
 function extractBundleUrl(html: string, packageName: string): string {
   const prefixes = [
     '<script>globalThis["__DSH_BOOT__"] = ',
@@ -629,6 +795,9 @@ integrationDescribe('official DSH loader composition', () => {
             },
           },
         })
+        const domProbe = await probeOfficialSettingsDom(web)
+        expect(domProbe.settingsText).toContain('插件')
+        expect(domProbe.errors).toEqual([])
       } finally {
         await web.stop()
       }
@@ -647,6 +816,13 @@ integrationDescribe('official DSH loader composition', () => {
       }
     })
     const runtimeProbe = await probeOfficialClientRuntime(cliRoot, packagedClient)
+    const agentProbe = await probeOfficialAgentRuntime(cliRoot, hostEntry)
+    expect(agentProbe).toMatchObject({
+      requestCount: 1,
+      reasoningEffort: 'high',
+      origin: 'subagent',
+      turnEnd: 'turn/end',
+    })
     if (runtimeProbe.modern.supportsExternalLanguages) {
       expect(runtimeProbe.modern.languages).toEqual(expect.arrayContaining(['ja', 'ko']))
     } else {
