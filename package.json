@@ -4,12 +4,14 @@
   "description": "为 DSH 的 pi-ai 第三方模型补充可配置的思考强度档位，并设置子 agent 默认思考强度。",
   "private": false,
   "scripts": {
-    "build": "node scripts/build-client.mjs",
-    "prepublishOnly": "npm run build",
-    "test": "node --test"
+    "build": "node scripts/check-locales.mjs && tsc -p tsconfig.json && tsdown -c tsdown.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
   },
   "type": "module",
-  "main": "./src/host.mjs",
+  "main": "./lib/index.js",
   "homepage": "https://github.com/hytime/dsh-thinking-effort#readme",
   "repository": {
     "type": "git",
@@ -22,8 +24,9 @@
     "access": "public"
   },
   "files": [
+    "lib/",
     "src/",
-    "scripts/build-client.mjs",
+    "scripts/check-locales.mjs",
     "cordis.patch.yml",
     "README.md",
     "README.zh.md",
@@ -48,8 +51,8 @@
     }
   },
   "exports": {
-    ".": "./src/host.mjs",
-    "./client": "./src/client.js",
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
     "./package.json": "./package.json"
   },
   "peerDependencies": {
@@ -63,5 +66,10 @@
     "thinking",
     "llm-pi-ai"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "tsdown": "^0.13.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
 }
