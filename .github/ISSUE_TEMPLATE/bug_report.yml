@@ -1,0 +1,91 @@
+name: Bug Report / 错误报告
+description: Report a reproducible problem / 报告一个可复现的问题
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: problem-summary
+    attributes:
+      label: 问题概述 / Problem summary
+      description: 简明描述可观察到的问题。Describe the observed problem briefly.
+      placeholder: 设置页保存成功，但后续请求没有使用新配置。 / The setting is saved, but later requests do not use it.
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境信息 / Environment
+      description: |
+        请填写以下信息。Please provide the following information.
+        - DSH version / DSH 版本:
+        - Plugin version / 插件版本:
+        - Operating system / 操作系统:
+        - Node.js version / Node.js 版本:
+        - Model or API type / 模型或 API 类型:
+        - Installation method / 安装方式:
+      placeholder: |
+        DSH version / DSH 版本:
+        Plugin version / 插件版本:
+        Operating system / 操作系统:
+        Node.js version / Node.js 版本:
+        Model or API type / 模型或 API 类型:
+        Installation method / 安装方式:
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      description: 提供最小且可执行的复现步骤，并附上相关命令或配置。Provide minimal, executable reproduction steps, including relevant commands or configuration.
+      placeholder: |
+        1. Configure ... / 配置...
+        2. Run ... / 执行...
+        3. Observe ... / 观察...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: 期望行为 / Expected behavior
+      description: 描述正常情况下应该发生什么。What should have happened?
+      placeholder: 修改设置后，后续请求应使用新的配置。 / Later requests should use the updated configuration.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: 实际行为 / Actual behavior
+      description: 描述实际发生了什么。What happened instead?
+      placeholder: 设置页显示已保存，但后续请求仍使用旧配置。 / The setting appears saved, but later requests still use the old configuration.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: reproduction-rate
+    attributes:
+      label: 复现概率 / Reproduction rate
+      description: 选择问题出现的频率。How often does the problem occur?
+      options:
+        - 必现 / Always
+        - 偶现 / Intermittent
+        - 低概率 / Rare
+        - 无法确认 / Unknown
+
+  - type: textarea
+    id: logs-and-screenshots
+    attributes:
+      label: 日志和截图 / Logs and screenshots
+      description: |
+        请先删除 API Key、Token、Cookie、Authorization 请求头、凭据和其他敏感信息。
+        Remove API keys, tokens, cookies, authorization headers, credentials, and other secrets before posting.
+      render: text
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: 临时解决方法 / Workaround
+      description: 如果有临时解决方法，请在此说明。Describe any available workaround.填写“无”或“None”也可以。 / You may enter “无” or “None” if there is none.
+      placeholder: 删除旧配置后重启 DSH。 / Remove the old configuration and restart DSH.
