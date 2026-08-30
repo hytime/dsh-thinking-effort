@@ -62,7 +62,7 @@ Use the official DSH CLI to manage the plugin profile. A plain `npm install` doe
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # Install a specific version
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.9
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
 
 # Upgrade
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -91,7 +91,7 @@ See [INSTALL.md](./INSTALL.md) for profile discovery, migration, validation, and
 
 7. Return to Composer and select the model to use its reasoning selector.
 
-The settings page shows the installed version as a small watermark such as `v0.1.9` in the bottom-right corner.
+The settings page shows the installed version as a small watermark such as `v0.1.10` in the bottom-right corner.
 
 ### Settings page layout
 

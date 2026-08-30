@@ -85,7 +85,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.9
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
 ```
 
 官方 CLI 会同时更新 profile 依赖、锁文件和 `dsh.profile.bundles`，无需手工追加 YAML。
@@ -120,7 +120,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.9
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
 ```
 
 如果旧依赖已经被其他工具移除，但 profile 的 bundle 列表仍残留旧名称，先从旧 profile 的 `pnpm-lock.yaml` 找到旧 GitHub commit，再使用官方命令恢复并移除：
@@ -128,7 +128,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.9
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.9
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
 ```
 
 不要把 `dsh-thinking-effort` 添加到新的 `dsh.profile.bundles` 中。
@@ -150,7 +150,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.9
 
 7. 回到 Composer，选择对应模型后即可使用「推理等级」。
 
-设置页右下角会显示当前安装版本，例如 `v0.1.9`。
+设置页右下角会显示当前安装版本，例如 `v0.1.10`。
 
 ### 设置页界面
 
@@ -164,7 +164,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.9
 - **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位。
 - **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页，并使用 DSH 官方 locale 服务切换和持久化中文、English、日本語、한국어。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
 - **子 agent：** 默认值存储在 `llm-pi-ai` 用户层的 `subagentEffort`；`agent/request` waterfall 只对未显式指定档位的子 agent 请求进行补全。
-- **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.9`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
+- **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.10`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
 
 ## 安装验证
 

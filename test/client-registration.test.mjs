@@ -67,11 +67,15 @@ test('keeps the client version and watermark style tied to package version', () 
   assert.ok(source.includes("pointerEvents: 'none'"))
 })
 
-test('declares the remote settings services used by the client plugin', () => {
+test('keeps optional Remote services out of the hard client injection list', () => {
   const descriptor = loadDescriptor()
   const plugin = descriptor.factory(() => ({}))
+  const source = readFileSync(clientPath, 'utf8')
 
-  assert.deepEqual(plugin.inject, ['slots', 'connection', 'locale', 'remote', 'remote.settings'])
+  assert.deepEqual(plugin.inject, ['slots', 'connection', 'locale'])
+  assert.ok(source.includes("ctx.inject(['remote.settings']"))
+  assert.ok(source.includes("remoteCtx.get('remote.settings')"))
+  assert.ok(!source.includes("ctx.inject(['remote'],"))
 })
 
 test('registers balanced Chinese, English, Japanese, and Korean dictionaries', () => {
@@ -87,8 +91,8 @@ test('registers balanced Chinese, English, Japanese, and Korean dictionaries', (
   assert.ok(source.includes('locale.register(LOCALE_NS, { zh, en, ja, ko })'))
   assert.ok(source.includes("locale.addLanguage({ id: 'ja', label: '日本語', fallback: 'en' })"))
   assert.ok(source.includes("locale.addLanguage({ id: 'ko', label: '한국어', fallback: 'en' })"))
-  assert.ok(source.includes("value: 'ja'"))
-  assert.ok(source.includes("value: 'ko'"))
+  assert.ok(source.includes("localeOption('ja', 'languageJapanese')"))
+  assert.ok(source.includes("localeOption('ko', 'languageKorean')"))
   assert.ok(source.includes('languageJapanese'))
   assert.ok(source.includes('languageKorean'))
   for (const code of LOCALE_CODES) assert.ok(source.includes(`"${code}"`), `generated locale missing: ${code}`)
@@ -126,7 +130,7 @@ test('keeps the multilingual release version consistent', () => {
     'CHANGELOG.md', 'CHANGELOG.ja.md', 'CHANGELOG.ko.md',
   ]
 
-  assert.equal(pkg.version, '0.1.9')
+  assert.equal(pkg.version, '0.1.10')
   assert.ok(source.includes(`const PLUGIN_VERSION = '${pkg.version}'`))
   for (const name of documents) {
     const path = fileURLToPath(new URL(`../${name}`, import.meta.url))

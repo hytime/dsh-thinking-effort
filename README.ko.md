@@ -59,7 +59,7 @@ profile은 공식 DSH CLI로 관리하세요. 일반 `npm install`은 DSH profil
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 특정 버전 설치
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.9
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
 
 # 업데이트
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -88,7 +88,7 @@ profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](
 
 7. Composer로 돌아가 설정한 모델을 선택하고 추론 선택기를 사용합니다.
 
-설정 페이지 오른쪽 아래에는 `v0.1.9`과 같은 작은 버전 표시가 나타납니다.
+설정 페이지 오른쪽 아래에는 `v0.1.10`과 같은 작은 버전 표시가 나타납니다.
 
 ### 설정 페이지 구성
 

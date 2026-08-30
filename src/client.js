@@ -23,7 +23,7 @@ window.__ModuleLoader__.load({
     ];
     const NS = 'llm-pi-ai';
     const LOCALE_NS = 'settings.thinkingEffort';
-    const PLUGIN_VERSION = '0.1.9';
+    const PLUGIN_VERSION = '0.1.10';
     const DEFAULT_LEVELS = { off: null, high: 'high', max: 'max' };
     const LEVEL_LABEL_KEYS = {
       off: 'levelOff', minimal: 'levelMinimal', low: 'levelLow', medium: 'levelMedium',
@@ -38,11 +38,7 @@ window.__ModuleLoader__.load({
     }
 
     /** 将 DSH 新旧客户端的 Settings 调用收敛为插件内部接口。 */
-    function settingsBridge(context, connection, injected) {
-      const modern = injected || (context && typeof context.get === 'function'
-        ? context.get('remote')
-        : undefined);
-      const modernSettings = modern && modern.settings;
+    function settingsBridge(connection, modernSettings) {
       if (modernSettings && typeof modernSettings.describe === 'function'
         && typeof modernSettings.mutate === 'function') {
         return {
@@ -397,7 +393,7 @@ window.__ModuleLoader__.load({
 
     function SectionEditor(props) {
       const connection = props.__connection;
-      const settings = props.__settings || settingsBridge(null, connection);
+      const settings = props.__settings || settingsBridge(connection, undefined);
       const locale = props.__locale || { getSnapshot: () => ({ active: 'zh' }), setLocale: () => {} };
       const t = typeof props.t === 'function'
         ? props.t
@@ -713,6 +709,12 @@ window.__ModuleLoader__.load({
       const expandedCount = visible.filter(item => state.expanded[keyOf(item)] === true && (query !== '' || (state.expandedProviders && state.expandedProviders[item.route] === true))).length;
 
       const localeSnapshot = locale.getSnapshot();
+      const availableLocales = Array.isArray(localeSnapshot && localeSnapshot.locales)
+        ? new Set(localeSnapshot.locales.map(entry => entry && entry.id))
+        : new Set(['zh', 'en', 'ja', 'ko']);
+      const localeOption = (id, key) => availableLocales.has(id)
+        ? React.createElement('option', { value: id }, t(key))
+        : null;
       const levelLabel = (level) => t(LEVEL_LABEL_KEYS[level] || level);
       const subagentOptions = [['default', t('providerDefault')]]
         .concat(ALL_LEVELS.map(level => [level, levelLabel(level)]))
@@ -740,7 +742,7 @@ window.__ModuleLoader__.load({
             value: localeSnapshot.active,
             onChange: (e) => locale.setLocale(e.target.value),
             style: { height: '26px', padding: '0 7px', border: '1px solid ' + theme.border, borderRadius: '7px', backgroundColor: theme.field, color: theme.text, fontSize: '12px' },
-          }, React.createElement('option', { value: 'zh' }, t('languageChinese')), React.createElement('option', { value: 'en' }, t('languageEnglish')), React.createElement('option', { value: 'ja' }, t('languageJapanese')), React.createElement('option', { value: 'ko' }, t('languageKorean'))),
+          }, localeOption('zh', 'languageChinese'), localeOption('en', 'languageEnglish'), localeOption('ja', 'languageJapanese'), localeOption('ko', 'languageKorean')),
         ),
         React.createElement('h3', { style: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: '8px', rowGap: '4px', fontSize: '18px', lineHeight: '24px', fontWeight: 700, letterSpacing: 0, margin: '0 0 7px' } },
           svgIcon('sliders', 19), React.createElement('span', null, t('pageTitle')),
@@ -931,18 +933,16 @@ window.__ModuleLoader__.load({
 
     module.exports = {
       name: '@hytime/dsh-thinking-effort',
-      inject: ['slots', 'connection', 'locale', 'remote', 'remote.settings'],
+      // Remote is optional: modern hosts are resolved lazily; older hosts use the connection API fallback.
+      inject: ['slots', 'connection', 'locale'],
       apply(ctx) {
         const slots = ctx.get('slots');
         if (slots === undefined) return;
         const connection = ctx.get('connection');
         const locale = ctx.get('locale');
-        if (locale === undefined) return;
         let mounted = false;
-        const mount = (scope) => {
-          if (mounted) return;
-          const settings = settingsBridge(scope, connection);
-          if (settings === undefined) return;
+        const mount = (settings) => {
+          if (mounted || settings === undefined) return;
           mounted = true;
           ctx.effect(() => {
             const disposeLanguages = [];
@@ -975,8 +975,11 @@ window.__ModuleLoader__.load({
             (props) => React.createElement(SectionEditor, Object.assign({}, props, { __connection: connection, __settings: settings, __locale: locale })),
           ));
         };
-        mount(ctx);
-        if (!mounted) ctx.inject(['remote'], (remoteCtx) => mount(remoteCtx));
+        mount(settingsBridge(connection, undefined));
+        ctx.inject(['remote.settings'], (remoteCtx) => {
+          const modernSettings = remoteCtx.get('remote.settings');
+          mount(settingsBridge(connection, modernSettings));
+        });
       },
     };
 

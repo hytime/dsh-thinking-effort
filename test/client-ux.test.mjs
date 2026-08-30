@@ -6,6 +6,10 @@ import { fileURLToPath } from 'node:url'
 const clientPath = fileURLToPath(new URL('../src/client.js', import.meta.url))
 const clientSource = readFileSync(clientPath, 'utf8')
 const testMarker = 'return module.exports;'
+const instrumented = clientSource.replace(
+  testMarker,
+  "const apply = module.exports.apply;\n    module.exports.__test = { SectionEditor, settingsBridge, apply };\n    " + testMarker,
+)
 
 function walk(node, visit) {
   if (node === null || node === undefined || node === false) return
@@ -39,12 +43,7 @@ function find(tree, predicate) {
   return result
 }
 
-function createHarness(settingsMode = 'legacy') {
-  assert.ok(clientSource.includes(testMarker))
-  const instrumented = clientSource.replace(
-    testMarker,
-    "module.exports.__test = { SectionEditor };\n    " + testMarker,
-  )
+function createHarness(settingsMode = 'legacy', locale = undefined) {
   let state
   let initialized = false
   let describeCalls = 0
@@ -128,6 +127,7 @@ function createHarness(settingsMode = 'legacy') {
   const render = () => plugin.__test.SectionEditor({
     __connection: connection,
     ...(settingsMode === 'modern' ? { __settings: modernSettings } : {}),
+    ...(locale === undefined ? {} : { __locale: locale }),
   })
   return {
     key,
@@ -138,6 +138,110 @@ function createHarness(settingsMode = 'legacy') {
   }
 }
 
+function createApplyHarness(mode) {
+  const injected = []
+  const sections = []
+  let registered = 0
+  let legacyDescribeCalls = 0
+  let modernDescribeArgs
+  let modernMutateArgs
+  const modernSettings = {
+    describe: (...args) => {
+      modernDescribeArgs = args
+      return Promise.resolve({ ok: true, value: { namespaces: [] } })
+    },
+    mutate: (ns, ops, expectedRevision) => {
+      modernMutateArgs = { ns, ops, expectedRevision }
+      return Promise.resolve({ ok: true, value: { namespaces: [] } })
+    },
+  }
+  const remoteProxy = new Proxy({}, {
+    get: () => {
+      throw new Error('cannot get property "remote.settings" without inject')
+    },
+  })
+  const child = {
+    get(name) {
+      if (name === 'remote.settings') return modernSettings
+      if (name === 'remote') return remoteProxy
+      return undefined
+    },
+  }
+  const legacyApplySettings = {
+    describe: () => {
+      throw new Error('legacy apply must not read Settings')
+    },
+    mutate: () => Promise.resolve({ result: { ok: true, value: { namespaces: [] } } }),
+  }
+  const legacySettings = {
+    describe: () => {
+      legacyDescribeCalls += 1
+      return Promise.resolve({ result: { ok: true, value: { namespaces: [] } } })
+    },
+    mutate: () => Promise.resolve({ result: { ok: true, value: { namespaces: [] } } }),
+  }
+  const connection = mode === 'modern' ? {} : {
+    api: { settings: mode === 'legacy-settings' ? legacySettings : legacyApplySettings },
+  }
+  const locale = {
+    register: () => () => {},
+    bind: () => (key) => key,
+    getSnapshot: () => ({ active: 'zh', locales: [{ id: 'zh' }] }),
+  }
+  const slots = {
+    inject: (_name, callback) => callback(),
+    register: (descriptor, render) => {
+      registered += 1
+      sections.push({ descriptor, render })
+    },
+  }
+  const React = {
+    createElement: (type, props, ...children) => ({
+      type,
+      props: { ...(props || {}), children },
+      children,
+    }),
+  }
+  let descriptor
+  const fakeWindow = {
+    __ModuleLoader__: { load: (value) => { descriptor = value } },
+  }
+  new Function('window', 'document', instrumented)(fakeWindow, {})
+  const plugin = descriptor.factory((name) => name === 'react' ? React : {})
+  const harness = {
+    get(name) {
+      if (name === 'slots') return slots
+      if (name === 'connection') return connection
+      if (name === 'locale') return locale
+      if (name === 'remote.settings') {
+        throw new Error('cannot get property "remote.settings" without inject')
+      }
+      return undefined
+    },
+    effect: (callback) => callback(),
+    inject(names, callback) {
+      injected.push(names.slice())
+      if (mode !== 'modern') return
+      if (names.length === 1 && names[0] === 'remote.settings') {
+        callback(child)
+        return
+      }
+      throw new Error('unsupported injection: ' + JSON.stringify(names))
+    },
+    slots,
+    locale,
+    modernSettings,
+    modernDescribeArgs: () => modernDescribeArgs,
+    modernMutateArgs: () => modernMutateArgs,
+    apply: () => plugin.__test.apply(harness),
+    renderedSection: () => sections[0].render({}),
+    injected,
+    get registered() { return registered },
+    get legacyDescribeCalls() { return legacyDescribeCalls },
+  }
+  return harness
+}
+
 function openModel(harness) {
   let tree = harness.render()
   find(tree, (node) => node.type === 'button' && node.props['aria-label'] === '展开供应商').props.onClick()
@@ -145,6 +249,50 @@ function openModel(harness) {
   find(tree, (node) => node.type === 'button' && node.props['aria-label'] === '打开模型设置').props.onClick()
   return harness.render()
 }
+
+test('keeps the top-level client active on legacy DSH without Remote', () => {
+  const harness = createApplyHarness('legacy')
+  assert.doesNotThrow(() => harness.apply())
+  assert.deepEqual(harness.injected, [['remote.settings']])
+  assert.equal(harness.registered, 1)
+  assert.equal(harness.legacyDescribeCalls, 0)
+})
+
+test('uses legacy Settings API when Remote namespace is absent', async () => {
+  const harness = createApplyHarness('legacy-settings')
+  harness.apply()
+  const section = harness.renderedSection()
+  section.props.__settings.describe()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(harness.legacyDescribeCalls, 1)
+})
+
+test('wraps remote.settings in a direct-result bridge', async () => {
+  const harness = createApplyHarness('modern')
+  assert.doesNotThrow(() => harness.apply())
+  assert.deepEqual(harness.injected, [['remote.settings']])
+  assert.equal(harness.registered, 1)
+  const section = harness.renderedSection()
+  const bridge = section.props.__settings
+  assert.notEqual(bridge, harness.modernSettings)
+  assert.equal(typeof bridge.describe, 'function')
+  assert.equal(typeof bridge.mutate, 'function')
+
+  const describeResult = await bridge.describe()
+  assert.deepEqual(harness.modernDescribeArgs(), [])
+  assert.deepEqual(describeResult, { ok: true, value: { namespaces: [] } })
+  assert.equal(describeResult.result, undefined)
+
+  const ops = [{ op: 'set', path: ['providers'], value: {} }]
+  const mutateResult = await bridge.mutate('llm-pi-ai', ops, 3)
+  assert.deepEqual(harness.modernMutateArgs(), {
+    ns: 'llm-pi-ai',
+    ops,
+    expectedRevision: 3,
+  })
+  assert.deepEqual(mutateResult, { ok: true, value: { namespaces: [] } })
+  assert.equal(mutateResult.result, undefined)
+})
 
 test('automatically fills a selected effort wire value', () => {
   const harness = createHarness()
@@ -217,3 +365,14 @@ function savedModelForTest() {
     input: ['text'],
   }
 }
+
+test('hides external locale options on legacy DSH', () => {
+  const legacyLocale = {
+    getSnapshot: () => ({ active: 'zh', locales: [{ id: 'zh' }, { id: 'en' }] }),
+    setLocale: () => {},
+  }
+  const tree = createHarness('legacy', legacyLocale).render()
+  const select = find(tree, (node) => node.type === 'select')
+  assert.ok(select)
+  assert.deepEqual(select.children.filter(Boolean).map((node) => node.props.value), ['zh', 'en'])
+})

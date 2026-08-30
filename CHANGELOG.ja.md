@@ -8,6 +8,14 @@
 
 バージョン番号は [Semantic Versioning](https://semver.org/) に従います。
 
+## [0.1.10] - オプション Remote のハード依存を修正
+
+### 修正
+
+- クライアントのトップレベルではバージョン間で安定したサービス（`slots`、`connection`、`locale`）だけをハード注入し、新しい DSH ではオプションのネストされた `remote.settings` 注入から Settings service を取得し、旧版では引き続き `connection.api.settings` にフォールバックします。
+- Remote provider のない旧版でも、オプション依存の `remote.settings` によって pending にはなりません。
+- 外部 locale catalog を持たない古い DSH では、未登録エラーを避けるため設定ページで利用できない `ja/ko` を非表示にします。
+
 ## [0.1.9] - 新しい DSH Remote への互換対応
 
 ### 修正
