@@ -35,6 +35,10 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 选择正在运行的 profile。一般部署使用 `web`，但应以实际启动命令中的 `--profile` 为准。
 
+发布包使用 `lib/index.js` 作为 Host 入口，使用 `lib/client.js` 作为 Client 入口。从 TypeScript 或 locale 源码开发时，启动 DSH 或打包前必须先运行 `npm run build`。
+
+兼容适配器优先读取 DSH 版本 metadata，缺失时回退到能力探测，同时支持新版 `remote.settings` 和旧版 `connection.api.settings`。未知版本只要具备所需能力就继续运行，否则相关功能保持不可用。
+
 校验点：目标目录存在：
 
 ```bash
@@ -52,7 +56,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
 ```
 
 官方 CLI 会自动完成以下工作：
@@ -82,7 +86,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 升级到指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
 ```
 
 升级后重新执行验证步骤。宿主侧代码需要重启 DSH；浏览器侧代码需要刷新 Web 页面。
@@ -102,7 +106,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
 ```
 
 ### 3.2 旧依赖已被移除，但旧 bundle 残留
@@ -131,7 +135,7 @@ grep -n "dsh-thinking-effort" \
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
 ```
 
 这一步的目的不是继续使用旧插件，而是让官方 CLI 识别旧依赖并自动删除残留 bundle。不要手工把旧包名重新写入新的 bundle 列表。

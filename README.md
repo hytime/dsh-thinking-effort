@@ -18,6 +18,8 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 - [한국어 changelog](./CHANGELOG.ko.md)
 
 > **Compatibility note:** DSH `0.1.2-alpha.1` and later accept language-pack locale IDs through `LocaleRuntime`. This plugin registers `ja` and `ko` dynamically, so no DSH core fork is required. Older DSH builds that only expose built-in locale IDs support `zh` and `en` only.
+>
+> The published runtime entries are `lib/index.js` (Host) and `lib/client.js` (Client). After changing TypeScript or locale sources, run `npm run build` before running DSH or packing the plugin. The compatibility adapter prefers DSH version metadata, then falls back to capability detection. It supports both modern `remote.settings` and legacy `connection.api.settings`; an unknown version continues when the required capabilities are present and otherwise remains unavailable.
 
 ## Why use it?
 
@@ -62,7 +64,7 @@ Use the official DSH CLI to manage the plugin profile. A plain `npm install` doe
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # Install a specific version
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
 
 # Upgrade
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -91,7 +93,7 @@ See [INSTALL.md](./INSTALL.md) for profile discovery, migration, validation, and
 
 7. Return to Composer and select the model to use its reasoning selector.
 
-The settings page shows the installed version as a small watermark such as `v0.1.10` in the bottom-right corner.
+The settings page shows the installed version as a small watermark such as `v0.1.11` in the bottom-right corner.
 
 ### Settings page layout
 

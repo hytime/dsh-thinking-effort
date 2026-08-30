@@ -8,7 +8,14 @@
 
 버전 번호는 [Semantic Versioning](https://semver.org/)을 따릅니다.
 
-## [0.1.10] - 선택적 Remote 하드 의존성 회귀 수정
+## [0.1.11] - TypeScript 빌드 마이그레이션 및 버전 호환성
+
+### 변경
+
+- Host와 Client 런타임 코드를 TypeScript로 마이그레이션하고 빌드된 `lib/index.js`, `lib/client.js` 및 선언 파일을 게시합니다. 동작과 Settings 데이터 형식은 호환됩니다.
+- 호환성 어댑터는 DSH 버전 metadata를 우선하고, 없으면 capability detection으로 fallback합니다. 최신 `remote.settings`와 이전 `connection.api.settings`를 모두 지원합니다.
+- 알 수 없는 버전도 필요한 capability가 있으면 계속 실행합니다. capability가 부족하면 관련 기능을 사용할 수 없는 상태로 두며 지원되지 않는 `ja/ko` locale 항목도 숨깁니다.
+
 
 ### 수정
 

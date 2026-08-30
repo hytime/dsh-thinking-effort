@@ -8,7 +8,14 @@
 
 バージョン番号は [Semantic Versioning](https://semver.org/) に従います。
 
-## [0.1.10] - オプション Remote のハード依存を修正
+## [0.1.11] - TypeScript ビルド移行とバージョン互換性
+
+### 変更
+
+- Host と Client のランタイムコードを TypeScript に移行し、ビルド済みの `lib/index.js`、`lib/client.js` と宣言ファイルを公開します。動作と Settings データ形式は互換です。
+- 互換アダプターは DSH のバージョン metadata を優先し、利用できない場合は capability detection にフォールバックします。新しい `remote.settings` と旧来の `connection.api.settings` の両方に対応します。
+- 未知のバージョンでも必要な capability があれば動作を継続します。能力が不足する場合は関連機能を利用不可のままにし、対応していない `ja/ko` locale も非表示にします。
+
 
 ### 修正
 

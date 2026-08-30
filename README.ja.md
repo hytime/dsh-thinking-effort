@@ -17,6 +17,8 @@
 - [Changelog](./CHANGELOG.md) · [日本語](./CHANGELOG.ja.md) · [한국어](./CHANGELOG.ko.md)
 
 > **互換性に関する注意：** DSH `0.1.2-alpha.1` 以降は `LocaleRuntime` の language-pack 拡張をサポートします。このプラグインは `ja` と `ko` を動的に登録するため、DSH の fork は不要です。組み込み locale ID だけを受け付ける古い DSH では `zh` と `en` のみ使用できます。
+>
+> 公開パッケージの実行入口は `lib/index.js`（Host）と `lib/client.js`（Client）です。TypeScript または locale のソースを変更した後は、DSH を起動またはパッケージを作成する前に `npm run build` を実行してください。互換アダプターは DSH のバージョン metadata を優先し、利用できない場合は capability detection にフォールバックします。新しい `remote.settings` と旧来の `connection.api.settings` の両方に対応し、未知のバージョンでも必要な能力があれば動作を継続します。能力がなければ利用不可のままです。
 
 ## なぜ使うのか
 
@@ -59,7 +61,7 @@ profile の管理には公式 DSH CLI を使用してください。通常の `n
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 特定バージョンをインストール
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
 
 # 更新
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -88,7 +90,7 @@ profile の確認、移行、検証、トラブルシューティングについ
 
 7. Composer に戻り、設定したモデルを選択して推論セレクターを使用します。
 
-設定ページ右下には `v0.1.10` のような小さなバージョン表示が出ます。
+設定ページ右下には `v0.1.11` のような小さなバージョン表示が出ます。
 
 ### 設定ページの構成
 

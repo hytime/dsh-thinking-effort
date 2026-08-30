@@ -12,7 +12,17 @@ This file records the features, fixes, and user-facing impact of every published
 
 Versions follow [Semantic Versioning](https://semver.org/).
 
-## [0.1.10] - 修复可选 Remote 硬依赖回归 / Fix optional Remote dependency regression
+## [0.1.11] - TypeScript 构建迁移与跨版本兼容 / TypeScript build migration and cross-version compatibility
+
+### 变更 / Changed
+
+- 将 Host 和 Client 运行时代码迁移到 TypeScript，并发布构建后的 `lib/index.js`、`lib/client.js` 及声明文件；行为和设置数据格式保持兼容。
+- Migrate Host and Client runtime code to TypeScript and publish the built `lib/index.js`, `lib/client.js`, and declaration files; behavior and settings data formats remain compatible.
+- 兼容适配器优先使用 DSH 版本 metadata，缺失时回退到能力探测；同时支持新版 `remote.settings` 和旧版 `connection.api.settings`。
+- The compatibility adapter prefers DSH version metadata and falls back to capability detection; it supports both modern `remote.settings` and legacy `connection.api.settings`.
+- 未知版本在所需能力满足时继续运行；能力不足时保持不可用，并继续隐藏不受支持的 `ja/ko` locale 选项。
+- Unknown versions continue when required capabilities are present; otherwise the related feature remains unavailable, including hiding unsupported `ja/ko` locale options.
+
 
 ### 修复 / Fixed
 
