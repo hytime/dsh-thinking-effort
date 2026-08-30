@@ -1,6 +1,6 @@
 {
   "name": "@hytime/dsh-thinking-effort",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "为 DSH 的 pi-ai 第三方模型补充可配置的思考强度档位，并设置子 agent 默认思考强度。",
   "private": false,
   "scripts": {
@@ -11,7 +11,8 @@
     "prepublishOnly": "npm run build"
   },
   "type": "module",
-  "main": "./src/host.mjs",
+  "main": "./lib/index.js",
+  "types": "./lib/types/index.d.ts",
   "homepage": "https://github.com/hytime/dsh-thinking-effort#readme",
   "repository": {
     "type": "git",
@@ -24,9 +25,9 @@
     "access": "public"
   },
   "files": [
-    "lib/",
-    "src/",
-    "scripts/check-locales.mjs",
+    "lib/index.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts",
     "cordis.patch.yml",
     "README.md",
     "README.zh.md",
@@ -51,8 +52,14 @@
     }
   },
   "exports": {
-    ".": "./src/host.mjs",
-    "./client": "./src/client.js",
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
     "./package.json": "./package.json"
   },
   "peerDependencies": {
@@ -68,8 +75,12 @@
   ],
   "license": "MIT",
   "devDependencies": {
-    "tsdown": "^0.13.1",
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@types/node": "^22.15.21",
+    "@types/react": "^18.3.3",
+    "react": "^18.3.1",
+    "tsdown": "^0.22.14",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.7"
   }
 }

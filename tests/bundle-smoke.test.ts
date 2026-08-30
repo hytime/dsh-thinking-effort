@@ -6,6 +6,23 @@ import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
 
+type Descriptor = {
+  readonly id: string
+  readonly factory: (require: (specifier: string) => unknown) => ClientPlugin
+}
+
+type ClientPlugin = {
+  readonly name: string
+  readonly inject: readonly string[]
+  readonly apply: (context: ClientContext) => void
+}
+
+type ClientContext = {
+  get(name: string): unknown
+  inject(names: readonly string[], callback: (context: { get(name: string): unknown }) => void): unknown
+  effect(callback: () => void | (() => void), label?: string): unknown
+}
+
 function readArtifact(relativePath: string): string {
   try {
     return readFileSync(resolve(root, relativePath), 'utf8')
@@ -15,32 +32,106 @@ function readArtifact(relativePath: string): string {
   }
 }
 
-describe('build artifacts', () => {
-  it('emits a lazy client descriptor with the Client entry contract', () => {
-    const source = readArtifact('lib/client.js')
-    let descriptor: Record<string, unknown> | undefined
-    const context = {
-      window: {
-        __ModuleLoader__: {
-          load(value: Record<string, unknown>) {
-            descriptor = value
-          },
+function loadDescriptor(source: string): Descriptor {
+  let descriptor: Descriptor | undefined
+  vm.runInNewContext(source, {
+    window: {
+      __ModuleLoader__: {
+        load(value: Descriptor) {
+          descriptor = value
         },
+      },
+    },
+  })
+  if (descriptor === undefined) throw new Error('Client bundle did not register a descriptor')
+  return descriptor
+}
+
+function createReactPlatform(): Record<string, unknown> {
+  return {
+    createElement: () => ({}),
+    Fragment: Symbol.for('react.fragment'),
+    useEffect: () => undefined,
+    useMemo: (value: () => unknown) => value(),
+    useState: (value: unknown) => [value, () => undefined],
+  }
+}
+
+describe('build artifacts', () => {
+  it('emits and executes the lazy client descriptor contract', () => {
+    const source = readArtifact('lib/client.js')
+    expect(source).toContain('window.__ModuleLoader__.load')
+    expect(source).toContain("id: '@hytime/dsh-thinking-effort'")
+    expect(source).toContain('return module.exports;')
+    expect(source).not.toContain("ctx.inject(['remote',")
+
+    const descriptor = loadDescriptor(source)
+    const required: string[] = []
+    const React = createReactPlatform()
+    const factory = descriptor.factory((specifier) => {
+      required.push(specifier)
+      if (specifier === 'react') return React
+      if (specifier === 'react/jsx-runtime') return { jsx: () => ({}), jsxs: () => ({}) }
+      throw new Error(`Unexpected external dependency: ${specifier}`)
+    })
+
+    expect(descriptor.id).toBe('@hytime/dsh-thinking-effort')
+    expect(factory.name).toBe('@hytime/dsh-thinking-effort')
+    expect(factory.inject).toEqual(['slots', 'connection', 'locale'])
+    expect(typeof factory.apply).toBe('function')
+    expect(required).toContain('react')
+    expect(required).toContain('react/jsx-runtime')
+  })
+
+  it('reads remote.settings only from the lazy injection callback', () => {
+    const descriptor = loadDescriptor(readArtifact('lib/client.js'))
+    const React = createReactPlatform()
+    const plugin = descriptor.factory((specifier) => {
+      if (specifier === 'react') return React
+      if (specifier === 'react/jsx-runtime') return { jsx: () => ({}), jsxs: () => ({}) }
+      throw new Error(`Unexpected external dependency: ${specifier}`)
+    })
+
+    let callbackRemoteReads = 0
+    let injectionCalls = 0
+    const remoteSettings = { describe: async () => ({ ok: true }), mutate: async () => ({ ok: true }) }
+    const context: ClientContext = {
+      get(name) {
+        if (name === 'slots') {
+          return {
+            inject: (_slot: string, callback: () => void) => callback(),
+            register: () => undefined,
+          }
+        }
+        if (name === 'connection') return undefined
+        if (name === 'locale') {
+          return {
+            register: () => () => undefined,
+            bind: () => (key: string) => key,
+            getSnapshot: () => ({ locales: [] }),
+          }
+        }
+        throw new Error(`Unexpected eager context read: ${name}`)
+      },
+      inject(names, callback) {
+        injectionCalls += 1
+        expect(names).toEqual(['remote.settings'])
+        callback({
+          get(name) {
+            callbackRemoteReads += 1
+            expect(name).toBe('remote.settings')
+            return remoteSettings
+          },
+        })
+      },
+      effect(callback) {
+        callback()
       },
     }
 
-    vm.runInNewContext(source, context)
-
-    expect(descriptor?.id).toBe('@hytime/dsh-thinking-effort')
-    expect(typeof descriptor?.factory).toBe('function')
-    const factory = descriptor?.factory as (require: (specifier: string) => unknown) => Record<string, unknown>
-    const client = factory(() => undefined)
-
-    expect(client).toMatchObject({
-      name: '@hytime/dsh-thinking-effort',
-      inject: ['slots', 'connection', 'locale'],
-    })
-    expect(typeof client.apply).toBe('function')
+    plugin.apply(context)
+    expect(injectionCalls).toBe(1)
+    expect(callbackRemoteReads).toBe(1)
   })
 
   it('exports the Host entry contract', async () => {
