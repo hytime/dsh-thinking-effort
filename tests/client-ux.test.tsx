@@ -155,6 +155,16 @@ describe('SectionEditor user behavior', () => {
     view.unmount()
   })
 
+  it('shows the provider default when the namespace exists without an effort', async () => {
+    const view = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [namespace({ user: { subagentEffort: null } })] } }),
+    })
+    await settle()
+    expect(view.container.textContent).toContain(text('currentDefault', { effort: text('providerDefault') }))
+    expect(view.container.textContent).not.toContain(text('unconfiguredSubagent'))
+    view.unmount()
+  })
+
   it('filters models by search and expands the matching provider and model', async () => {
     const view = renderEditor()
     await settle()
