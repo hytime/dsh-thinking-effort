@@ -24,6 +24,7 @@ export function settingsBridge(
       mutate: (ns: string, ops: readonly SettingsOp[], expectedRevision: number) => Promise<unknown>
     }
     return {
+      externalLanguages: compatibility.profile === 'modern',
       describe: () => modern.describe().then((response) => directResult<ClientResult<SettingsDescribeValue>>(response)),
       mutate: (ns, ops, expectedRevision) => modern
         .mutate(ns, ops, expectedRevision)
@@ -37,6 +38,7 @@ export function settingsBridge(
       mutate: (input: { ns: string; ops: readonly SettingsOp[]; expectedRevision: number }) => Promise<unknown>
     }
     return {
+      externalLanguages: false,
       describe: () => legacy.describe({}).then((response) => directResult<ClientResult<SettingsDescribeValue>>(response)),
       mutate: (ns, ops, expectedRevision) => legacy
         .mutate({ ns, ops, expectedRevision })

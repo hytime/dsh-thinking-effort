@@ -65,6 +65,7 @@ export type ClientResult<T> =
   | { readonly ok: false; readonly error: ClientError }
 
 export interface SettingsApi {
+  readonly externalLanguages: boolean
   describe(): Promise<ClientResult<SettingsDescribeValue>>
   mutate(ns: string, ops: readonly SettingsOp[], expectedRevision: number): Promise<ClientResult<SettingsNamespace>>
 }

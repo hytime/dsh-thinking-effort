@@ -2,6 +2,7 @@ import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
+import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { settingsBridge } from '../src/client/settings-bridge.js'
@@ -60,6 +61,7 @@ type RunningWeb = {
 type WebStartOptions = {
   readonly command?: string
   readonly args?: readonly string[]
+  readonly stopTimeoutMs?: number
 }
 
 type OfficialRpcResponse = {
@@ -95,6 +97,97 @@ async function callOfficialRpc(
   }
 }
 
+function loadBrowserBundle(bundlePath: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  let factory: ((require: (specifier: string) => unknown) => Record<string, unknown>) | undefined
+  runInNewContext(readFileSync(bundlePath, 'utf8'), {
+    window: { __ModuleLoader__: { load: (entry: { factory?: typeof factory }) => { factory = entry.factory } } },
+    navigator: { languages: ['en'], language: 'en' },
+  })
+  if (factory === undefined) throw new Error(`bundle did not register a factory: ${bundlePath}`)
+  const localRequire = createRequire(bundlePath)
+  return factory((specifier) => overrides[specifier] ?? localRequire(specifier))
+}
+
+async function probeOfficialClientRuntime(
+  cliRoot: string,
+  packagedClient: Record<string, unknown>,
+): Promise<{
+  modern: { languages: string[]; sectionIds: string[]; supportsExternalLanguages: boolean }
+  legacy: { languages: string[]; sectionIds: string[]; supportsExternalLanguages: boolean }
+}> {
+  const importOfficial = (relativePath: string): Promise<Record<string, unknown>> => import(
+    pathToFileURL(join(cliRoot, relativePath)).href,
+  ) as Promise<Record<string, unknown>>
+  const cordis = await importOfficial('vendor/cordis/lib/index.js')
+  const slotsModule = await importOfficial('packages/client/ui-slots/lib/index.js')
+  const runtimePath = join(cliRoot, 'packages/client/runtime/lib/client.js')
+  const renderer = existsSync(runtimePath)
+    ? loadBrowserBundle(runtimePath, { '@deepseek-ai/dsh-client-ui-slots': slotsModule })
+    : loadBrowserBundle(join(cliRoot, 'packages/client/ui-renderer/lib/client.js'), {
+      '@deepseek-ai/dsh-client-ui-slots': slotsModule,
+    })
+  const locale = loadBrowserBundle(join(cliRoot, 'packages/client/locale/lib/client.js'), {
+    '@deepseek-ai/dsh-client-ui-primitives': {},
+    '@deepseek-ai/dsh-client-store': { defineStore: () => ({}) },
+    '@deepseek-ai/dsh-client-runtime/client': renderer,
+  })
+  const Context = cordis.Context as new () => {
+    plugin: (plugin: unknown, config?: unknown) => { await: () => Promise<unknown> }
+    provide: (name: string, value: unknown) => void
+    get: (name: string) => unknown
+  }
+  const SlotRegistry = renderer.SlotRegistry as new (ctx: unknown) => unknown
+  const LocaleRuntime = locale.LocaleRuntime as new (ctx: unknown) => {
+    getSnapshot: () => { locales: readonly { id: string }[] }
+  }
+  const apply = packagedClient.apply as (ctx: unknown) => void
+  const results = {} as {
+    modern: { languages: string[]; sectionIds: string[]; supportsExternalLanguages: boolean }
+    legacy: { languages: string[]; sectionIds: string[]; supportsExternalLanguages: boolean }
+  }
+
+  for (const mode of ['modern', 'legacy'] as const) {
+    const ctx = new Context()
+    await ctx.plugin(SlotRegistry).await()
+    const slots = ctx.get('slots') as {
+      register: (options: unknown, component: unknown) => () => void
+      entries: (name: string) => readonly { options?: { id?: string } }[]
+    }
+    slots.register({
+      name: 'root',
+      children: { 'settings.section': { kind: 'list', scope: 'root' } },
+    }, () => null)
+    const runtimeLocale = new LocaleRuntime(ctx)
+    ctx.provide('locale', runtimeLocale)
+    if (mode === 'modern') {
+      ctx.provide('connection', { isLoopback: true })
+      ctx.provide('remote.settings', {
+        describe: () => Promise.resolve({ ok: true, value: { namespaces: [] } }),
+        mutate: () => Promise.resolve({ ok: true, value: {} }),
+      })
+    } else {
+      ctx.provide('remote.settings', {})
+      ctx.provide('connection', {
+        isLoopback: true,
+        api: {
+          settings: {
+            describe: () => Promise.resolve({ result: { ok: true, value: { namespaces: [] } } }),
+            mutate: () => Promise.resolve({ result: { ok: true, value: {} } }),
+          },
+        },
+      })
+    }
+    apply(ctx)
+    await new Promise<void>((resolveWait) => setImmediate(resolveWait))
+    results[mode] = {
+      languages: runtimeLocale.getSnapshot().locales.map(({ id }) => id),
+      sectionIds: slots.entries('settings.section').flatMap(({ options }) => options?.id === undefined ? [] : [options.id]),
+      supportsExternalLanguages: typeof (runtimeLocale as { addLanguage?: unknown }).addLanguage === 'function',
+    }
+  }
+  return results
+}
+
 function extractBundleUrl(html: string, packageName: string): string {
   const prefixes = [
     '<script>globalThis["__DSH_BOOT__"] = ',
@@ -120,24 +213,70 @@ async function startOfficialWeb(cliRoot: string, home: string, options: WebStart
     env: { ...process.env, DSH_HOME: home, DSH_TELEMETRY_DISABLED: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
+  const stopTimeoutMs = options.stopTimeoutMs ?? 5000
   let output = ''
   let timer: NodeJS.Timeout | undefined
   let resolveUrl: ((url: string) => void) | undefined
   let rejectUrl: ((error: Error) => void) | undefined
-  let stopped = false
-  const stop = async (): Promise<void> => {
-    if (stopped) return
-    stopped = true
-    if (child.exitCode !== null || child.signalCode !== null) return
-    await new Promise<void>((resolveExit) => {
-      const onExit = (): void => {
-        child.removeListener('exit', onExit)
-        resolveExit()
+  let childErrored = false
+  let childClosed = false
+  let stopPromise: Promise<void> | undefined
+  let resolveChildSettled: (() => void) | undefined
+  const childSettled = new Promise<void>((resolve) => {
+    resolveChildSettled = resolve
+  })
+  const settleChild = (): void => {
+    resolveChildSettled?.()
+    resolveChildSettled = undefined
+  }
+  child.once('error', (error) => {
+    childErrored = true
+    settleChild()
+    rejectUrl?.(error)
+  })
+  child.once('exit', (code, signal) => {
+    if (resolveUrl === undefined) return
+    rejectUrl?.(new Error(`DSH web exited before announcing a URL (code=${code}, signal=${signal})\n${output}`))
+  })
+  child.once('close', () => {
+    childClosed = true
+    settleChild()
+  })
+  const waitForChild = async (): Promise<boolean> => {
+    if (childErrored || childClosed) return true
+    let waitTimer: NodeJS.Timeout | undefined
+    try {
+      return await Promise.race([
+        childSettled.then(() => true),
+        new Promise<boolean>((resolveWait) => {
+          waitTimer = setTimeout(() => resolveWait(false), stopTimeoutMs)
+        }),
+      ])
+    } finally {
+      if (waitTimer !== undefined) clearTimeout(waitTimer)
+    }
+  }
+  const stop = (): Promise<void> => {
+    if (stopPromise !== undefined) return stopPromise
+    stopPromise = (async () => {
+      if (!childErrored && !childClosed && child.exitCode === null && child.signalCode === null) {
+        try {
+          child.kill('SIGTERM')
+        } catch {
+          // The error/close event or the bounded fallback handles a raced exit.
+        }
       }
-      child.once('exit', onExit)
-      child.kill('SIGTERM')
-      if (child.exitCode !== null || child.signalCode !== null) onExit()
-    })
+      if (await waitForChild()) return
+      if (!childErrored && !childClosed && child.exitCode === null && child.signalCode === null) {
+        try {
+          child.kill('SIGKILL')
+        } catch {
+          // A concurrent exit is already being observed through close/error.
+        }
+      }
+      await waitForChild()
+    })()
+    return stopPromise
   }
   const url = new Promise<string>((resolveUrlPromise, rejectUrlPromise) => {
     resolveUrl = resolveUrlPromise
@@ -153,11 +292,6 @@ async function startOfficialWeb(cliRoot: string, home: string, options: WebStart
   }
   child.stdout?.on('data', consume)
   child.stderr?.on('data', consume)
-  child.once('error', (error) => rejectUrl?.(error))
-  child.once('exit', (code, signal) => {
-    if (resolveUrl === undefined) return
-    rejectUrl?.(new Error(`DSH web exited before announcing a URL (code=${code}, signal=${signal})\n${output}`))
-  })
   timer = setTimeout(() => rejectUrl?.(new Error(`timed out waiting for DSH web URL\n${output}`)), 30000)
 
   try {
@@ -192,6 +326,20 @@ async function startOfficialWeb(cliRoot: string, home: string, options: WebStart
   }
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`test timeout after ${timeoutMs}ms`)), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
 describe('official DSH web startup cleanup', () => {
   it('stops and waits for the child when token exchange fails', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-cleanup-'))
@@ -212,6 +360,93 @@ describe('official DSH web startup cleanup', () => {
       })).rejects.toThrow()
       expect(readFileSync(markerPath, 'utf8')).toBe('stopped')
     } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('waits for close after exit when a descendant keeps stdio open', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-close-'))
+    const donePath = join(directory, 'grandchild-done')
+    const markerPath = join(directory, 'grandchild-pid')
+    const grandchildScript = `import { writeFileSync } from 'node:fs'; setTimeout(() => writeFileSync(${JSON.stringify(donePath)}, 'done'), 150)`
+    const script = [
+      "import { spawn } from 'node:child_process'",
+      "import { writeFileSync } from 'node:fs'",
+      `const marker = ${JSON.stringify(markerPath)}`,
+      "process.on('SIGTERM', () => process.exit(0))",
+      `const grandchild = spawn(process.execPath, ['--input-type=module', '-e', ${JSON.stringify(grandchildScript)}], { stdio: ['ignore', 'inherit', 'inherit'] })`,
+      'writeFileSync(marker, String(grandchild.pid))',
+      "process.stdout.write('http://127.0.0.1:1/\\n')",
+      'setInterval(() => {}, 1000)',
+    ].join(';')
+    let grandchildPid: number | undefined
+
+    try {
+      const web = await startOfficialWeb('/tmp', directory, {
+        command: process.execPath,
+        args: ['--input-type=module', '-e', script],
+        stopTimeoutMs: 300,
+      })
+      grandchildPid = Number(readFileSync(markerPath, 'utf8'))
+      const startedAt = Date.now()
+      const firstStop = web.stop()
+      expect(web.stop()).toBe(firstStop)
+      await withTimeout(firstStop, 1000)
+      expect(Date.now() - startedAt).toBeGreaterThanOrEqual(150)
+      expect(readFileSync(donePath, 'utf8')).toBe('done')
+    } finally {
+      if (grandchildPid !== undefined) {
+        try {
+          process.kill(grandchildPid, 'SIGKILL')
+        } catch {
+          // The close assertion normally proves it already exited.
+        }
+      }
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects promptly on spawn error and does not wait for exit forever', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-spawn-error-'))
+    try {
+      await expect(withTimeout(startOfficialWeb('/tmp', directory, {
+        command: join(directory, 'missing-dsh-command'),
+        stopTimeoutMs: 50,
+      }), 1000)).rejects.toThrow(/ENOENT|spawn/)
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('uses SIGKILL when the child ignores SIGTERM after token failure', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-kill-'))
+    const markerPath = join(directory, 'child-pid')
+    const script = [
+      "import { writeFileSync } from 'node:fs'",
+      `const marker = ${JSON.stringify(markerPath)}`,
+      'writeFileSync(marker, String(process.pid))',
+      "process.on('SIGTERM', () => {})",
+      "process.stdout.write('http://127.0.0.1:1/?token=broken\\n')",
+      'setInterval(() => {}, 1000)',
+    ].join(';')
+    let childPid: number | undefined
+
+    try {
+      await expect(withTimeout(startOfficialWeb('/tmp', directory, {
+        command: process.execPath,
+        args: ['--input-type=module', '-e', script],
+        stopTimeoutMs: 50,
+      }), 1000)).rejects.toThrow()
+      childPid = Number(readFileSync(markerPath, 'utf8'))
+      expect(() => process.kill(childPid!, 0)).toThrow()
+    } finally {
+      if (childPid !== undefined) {
+        try {
+          process.kill(childPid, 'SIGKILL')
+        } catch {
+          // The process should already be gone after the bounded cleanup.
+        }
+      }
       rmSync(directory, { recursive: true, force: true })
     }
   })
@@ -305,7 +540,10 @@ integrationDescribe('official DSH loader composition', () => {
     expect(marker.pid).toEqual(expect.any(Number))
 
     const clientCode = readFileSync(clientEntry, 'utf8')
-    const registered: Array<{ id?: string; factory?: unknown }> = []
+    const registered: Array<{
+       id?: string
+       factory?: (require: (specifier: string) => unknown) => Record<string, unknown>
+     }> = []
     const webHome = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-web-'))
     try {
       runOfficialDsh(cliRoot, webHome, ['plugin', '--profile', 'web', 'add', tarball])
@@ -385,7 +623,7 @@ integrationDescribe('official DSH loader composition', () => {
         runInNewContext(servedCode, {
           window: {
             __ModuleLoader__: {
-              load(entry: { id?: string; factory?: unknown }) {
+              load(entry: { id?: string; factory?: typeof registered[number]['factory'] }) {
                 registered.push(entry)
               },
             },
@@ -397,6 +635,28 @@ integrationDescribe('official DSH loader composition', () => {
     } finally {
       rmSync(webHome, { recursive: true, force: true })
     }
+    const packagedFactory = registered[0]?.factory
+    if (packagedFactory === undefined) throw new Error('served client bundle did not expose a factory')
+    const packagedRequire = createRequire(clientEntry)
+    const officialWebRequire = createRequire(join(cliRoot, 'apps/web/package.json'))
+    const packagedClient = packagedFactory((specifier) => {
+      try {
+        return packagedRequire(specifier)
+      } catch {
+        return officialWebRequire(specifier)
+      }
+    })
+    const runtimeProbe = await probeOfficialClientRuntime(cliRoot, packagedClient)
+    if (runtimeProbe.modern.supportsExternalLanguages) {
+      expect(runtimeProbe.modern.languages).toEqual(expect.arrayContaining(['ja', 'ko']))
+    } else {
+      expect(runtimeProbe.modern.languages).not.toContain('ja')
+      expect(runtimeProbe.modern.languages).not.toContain('ko')
+    }
+    expect(runtimeProbe.modern.sectionIds).toContain('thinking-effort')
+    expect(runtimeProbe.legacy.languages).not.toContain('ja')
+    expect(runtimeProbe.legacy.languages).not.toContain('ko')
+    expect(runtimeProbe.legacy.sectionIds).toContain('thinking-effort')
     expect(registered).toHaveLength(1)
     expect(registered[0]?.id).toBe('@hytime/dsh-thinking-effort')
     expect(typeof registered[0]?.factory).toBe('function')
