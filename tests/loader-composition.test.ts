@@ -1,8 +1,7 @@
-import { createServer } from 'node:http'
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -36,6 +35,98 @@ function runOfficialDsh(cliRoot: string, home: string, args: readonly string[]):
     throw new Error(`official dsh command failed (${result.status ?? 'no status'}): pnpm dsh ${args.join(' ')}\n${output}`)
   }
   return output
+}
+
+function packLocalPackage(destination: string): string {
+  const packed = JSON.parse(execFileSync('npm', [
+    'pack', '--json', '--pack-destination', destination,
+  ], {
+    cwd: root,
+    env: { ...process.env, npm_config_cache: '/tmp/dsh-pi-effort-npm-cache' },
+    encoding: 'utf8',
+  })) as Array<{ filename: string }>
+  const tarball = packed[0]?.filename
+  if (tarball === undefined) throw new Error('npm pack did not report a tarball filename')
+  return join(destination, basename(tarball))
+}
+
+type RunningWeb = {
+  readonly url: string
+  readonly cookie: string
+  readonly stop: () => Promise<void>
+}
+
+function extractBundleUrl(html: string, packageName: string): string {
+  const prefix = '<script>globalThis["__DSH_BOOT__"] = '
+  const start = html.indexOf(prefix)
+  if (start === -1) throw new Error('DSH Web page did not inject __DSH_BOOT__')
+  const valueStart = start + prefix.length
+  const end = html.indexOf('</script>', valueStart)
+  if (end === -1) throw new Error('DSH Web page has an unterminated __DSH_BOOT__ injection')
+  const graph = JSON.parse(html.slice(valueStart, end)) as {
+    entries?: Array<{ id?: string; url?: string }>
+  }
+  const entry = graph.entries?.find((candidate) => candidate.id === packageName)
+  if (entry?.url === undefined) throw new Error(`DSH Web graph did not advertise ${packageName}`)
+  return entry.url
+}
+
+async function startOfficialWeb(cliRoot: string, home: string): Promise<RunningWeb> {
+  const child = spawn('pnpm', ['dsh', '--profile', 'web', '--no-open', '--port', '0'], {
+    cwd: cliRoot,
+    env: { ...process.env, DSH_HOME: home, DSH_TELEMETRY_DISABLED: '1' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let output = ''
+  let timer: NodeJS.Timeout | undefined
+  let resolveUrl: ((url: string) => void) | undefined
+  let rejectUrl: ((error: Error) => void) | undefined
+  const url = new Promise<string>((resolveUrlPromise, rejectUrlPromise) => {
+    resolveUrl = resolveUrlPromise
+    rejectUrl = rejectUrlPromise
+  })
+  const consume = (chunk: Buffer): void => {
+    output += chunk.toString()
+    const match = output.match(/https?:\/\/127\.0\.0\.1:\d+(?:\/\?token=[^\s]+)?/)
+    if (match !== null) {
+      if (timer !== undefined) clearTimeout(timer)
+      resolveUrl?.(match[0])
+    }
+  }
+  child.stdout?.on('data', consume)
+  child.stderr?.on('data', consume)
+  child.once('error', (error) => rejectUrl?.(error))
+  child.once('exit', (code, signal) => {
+    if (resolveUrl === undefined) return
+    rejectUrl?.(new Error(`DSH web exited before announcing a URL (code=${code}, signal=${signal})\n${output}`))
+  })
+  timer = setTimeout(() => rejectUrl?.(new Error(`timed out waiting for DSH web URL\n${output}`)), 30000)
+
+  const launchUrl = await url
+  const baseUrl = new URL(launchUrl)
+  let cookie = ''
+  if (baseUrl.searchParams.has('token')) {
+    const launchResponse = await fetch(launchUrl, { redirect: 'manual' })
+    if (launchResponse.status !== 303) {
+      throw new Error(`DSH Web token exchange failed with HTTP ${String(launchResponse.status)}`)
+    }
+    const setCookie = launchResponse.headers.get('set-cookie')
+    if (setCookie === null) throw new Error('DSH Web token exchange did not set a session cookie')
+    cookie = setCookie.split(';', 1)[0]!
+    baseUrl.search = ''
+  }
+
+  console.log(`[DSH loader integration] ${cliRoot} ${baseUrl.href}`)
+
+  return {
+    url: baseUrl.href,
+    cookie,
+    stop: async () => {
+      if (child.exitCode !== null || child.signalCode !== null) return
+      child.kill('SIGTERM')
+      await new Promise<void>((resolveExit) => child.once('exit', () => resolveExit()))
+    },
+  }
 }
 
 describe('published package composition', () => {
@@ -76,23 +167,15 @@ integrationDescribe('official DSH loader composition', () => {
     rmSync(packDestination, { recursive: true, force: true })
   })
 
-  it('installs the local tarball through official dsh and composes both faces', async () => {
+  it('installs the local tarball through official dsh and serves the actual Web bundle route', { timeout: 60000 }, async () => {
     if (cliRoot === undefined || cliRoot === '') {
       throw new Error('DSH_CLI_ROOT must point to an official DSH checkout when DSH_LOADER_INTEGRATION=1')
     }
 
     expect(existsSync(profile)).toBe(false)
-    const packed = JSON.parse(execFileSync('npm', [
-      'pack', '--json', '--pack-destination', packDestination,
-    ], {
-      cwd: root,
-      env: { ...process.env, npm_config_cache: '/tmp/dsh-pi-effort-npm-cache' },
-      encoding: 'utf8',
-    })) as Array<{ filename: string }>
-    const tarball = packed[0]?.filename
-    if (tarball === undefined) throw new Error('npm pack did not report a tarball filename')
+    const tarball = packLocalPackage(packDestination)
 
-    runOfficialDsh(cliRoot, home, ['plugin', '--profile', 'compat', 'add', join(packDestination, tarball)])
+    runOfficialDsh(cliRoot, home, ['plugin', '--profile', 'compat', 'add', tarball])
 
     const profileManifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8')) as {
       dependencies?: Record<string, string>
@@ -123,40 +206,40 @@ integrationDescribe('official DSH loader composition', () => {
       env: { ...process.env, DSH_HOME: home },
       encoding: 'utf8',
     })
-    const marker = JSON.parse(readFileSync(join(home, 'thinking-effort-loaded.json'), 'utf8')) as { event?: string }
-    expect(marker.event).toBe('apply')
+    const marker = JSON.parse(readFileSync(join(home, 'thinking-effort-loaded.json'), 'utf8')) as { event?: string; name?: string }
+    expect(marker).toMatchObject({ event: 'apply', name: '@hytime/dsh-thinking-effort' })
 
     const clientCode = readFileSync(clientEntry, 'utf8')
     const registered: Array<{ id?: string; factory?: unknown }> = []
-    const server = createServer((request, response) => {
-      if (request.url !== '/plugins/@hytime/dsh-thinking-effort/client.js') {
-        response.writeHead(404).end()
-        return
-      }
-      response.writeHead(200, { 'content-type': 'text/javascript' }).end(clientCode)
-    })
-    await new Promise<void>((resolveListen, rejectListen) => {
-      server.once('error', rejectListen)
-      server.listen(0, '127.0.0.1', resolveListen)
-    })
+    const webHome = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-web-'))
     try {
-      const address = server.address()
-      if (address === null || typeof address === 'string') throw new Error('temporary bundle server did not expose a port')
-      const response = await fetch(`http://127.0.0.1:${address.port}/plugins/@hytime/dsh-thinking-effort/client.js`)
-      expect(response.status).toBe(200)
-      const servedCode = await response.text()
-      expect(servedCode).toBe(clientCode)
-      runInNewContext(servedCode, {
-        window: {
-          __ModuleLoader__: {
-            load(entry: { id?: string; factory?: unknown }) {
-              registered.push(entry)
+      runOfficialDsh(cliRoot, webHome, ['plugin', '--profile', 'web', 'add', tarball])
+      const web = await startOfficialWeb(cliRoot, webHome)
+      try {
+        const headers = web.cookie === '' ? {} : { cookie: web.cookie }
+        const indexResponse = await fetch(web.url, { headers })
+        expect(indexResponse.status).toBe(200)
+        const bundleUrl = extractBundleUrl(await indexResponse.text(), '@hytime/dsh-thinking-effort')
+        expect(bundleUrl).toMatch(/\/plugins\/(?:\?\?@hytime\/dsh-thinking-effort\/client\.js&rev=|@hytime\/dsh-thinking-effort\/client\.js\?rev=)/)
+        const response = await fetch(new URL(bundleUrl, web.url), { headers })
+        expect(response.status).toBe(200)
+        const servedCode = await response.text()
+        expect(servedCode).toContain(clientCode)
+        expect(servedCode).toContain("id: '@hytime/dsh-thinking-effort'")
+        runInNewContext(servedCode, {
+          window: {
+            __ModuleLoader__: {
+              load(entry: { id?: string; factory?: unknown }) {
+                registered.push(entry)
+              },
             },
           },
-        },
-      })
+        })
+      } finally {
+        await web.stop()
+      }
     } finally {
-      await new Promise<void>((resolveClose) => { server.close(() => resolveClose()) })
+      rmSync(webHome, { recursive: true, force: true })
     }
     expect(registered).toHaveLength(1)
     expect(registered[0]?.id).toBe('@hytime/dsh-thinking-effort')

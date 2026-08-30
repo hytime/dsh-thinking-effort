@@ -7,6 +7,7 @@ export function mark(event: string): void {
   try {
     writeFileSync(MARKER, JSON.stringify({
       event,
+      name: '@hytime/dsh-thinking-effort',
       at: new Date().toISOString(),
       pid: process.pid,
     }, null, 2))
