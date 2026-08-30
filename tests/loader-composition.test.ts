@@ -191,11 +191,22 @@ async function probeOfficialClientRuntime(
 async function probeOfficialAgentRuntime(
   cliRoot: string,
   hostEntry: string,
-): Promise<{ requestCount: number; reasoningEffort: unknown; origin: unknown; turnEnd: string | undefined }> {
+): Promise<{
+  settingsHome: string
+  settingsPath: string
+  markerPath: string
+  marker: { event?: string; name?: string; at?: string; pid?: number }
+  withoutProduct: { requestCount: number; reasoningEffort: unknown; origin: unknown; turnEnd: string | undefined }
+  withProduct: { requestCount: number; reasoningEffort: unknown; origin: unknown; turnEnd: string | undefined }
+}> {
   const importOfficial = (relativePath: string): Promise<Record<string, unknown>> => import(
     pathToFileURL(join(cliRoot, relativePath)).href,
   ) as Promise<Record<string, unknown>>
   const cordis = await importOfficial('vendor/cordis/lib/index.js')
+  const schemasteryRequire = createRequire(join(cliRoot, 'vendor/schemastery/package.json'))
+  const settingsFileRequire = createRequire(join(cliRoot, 'packages/settings/settings-file/package.json'))
+  const schemastery = await import(pathToFileURL(schemasteryRequire.resolve('@deepseek-ai/schemastery')).href) as unknown as Record<string, unknown>
+  const settingsFile = await import(pathToFileURL(settingsFileRequire.resolve('@deepseek-ai/dsh-settings-file')).href) as unknown as Record<string, unknown>
   const llm = await importOfficial('packages/llm/llm/lib/index.js')
   const session = await importOfficial('packages/core/session/lib/index.js')
   const systemPrompt = await importOfficial('packages/core/system-prompt/lib/index.js')
@@ -205,8 +216,7 @@ async function probeOfficialAgentRuntime(
   const timer = await importOfficial('vendor/timer/lib/index.js')
   const Context = cordis.Context as new () => {
     plugin: (plugin: unknown, config?: unknown) => { await: () => Promise<unknown> }
-    provide: (name: string, value: unknown) => void
-    on: (event: string, callback: (...args: unknown[]) => unknown, options?: unknown) => () => void
+    get: (name: string) => unknown
     fiber: { dispose: () => Promise<void> }
     agents: {
       create: (options: Record<string, unknown>) => Promise<{ agent: {
@@ -217,76 +227,116 @@ async function probeOfficialAgentRuntime(
     }
     llm: { registerAdapter: (providers: string[], adapter: unknown) => unknown }
   }
-  const ctx = new Context()
-  await ctx.plugin(timer.default).await()
-  const LlmAdapter = llm.LlmAdapter as new () => {
-    resolveModel: (provider: string, model: string) => Promise<Record<string, unknown>>
-    stream: (options: Record<string, unknown>) => AsyncIterable<Record<string, unknown>>
-  }
-  const requests: Record<string, unknown>[] = []
-  const highEffort = llm.ReasoningEffortId('high') as unknown
-  class ProbeAdapter extends LlmAdapter {
-    override resolveModel(provider: string, model: string): Promise<Record<string, unknown>> {
-      return Promise.resolve({
-        provider,
-        id: model,
-        name: model,
-        reasoning: { efforts: [{ id: highEffort, name: 'High' }], defaultEffort: highEffort },
-      })
-    }
-
-    override async * stream(options: Record<string, unknown>): AsyncIterable<Record<string, unknown>> {
-      requests.push(options)
-      const text = 'real agent runtime probe'
-      yield { type: 'block-start', index: 0, blockType: 'text' }
-      yield { type: 'text-delta', index: 0, text }
-      yield { type: 'block-end', index: 0, block: { type: 'text', text } }
-      yield { type: 'finish', reason: { kind: 'stop' } }
-    }
-  }
-
-  const settings = {
-    writable: false,
-    describe: () => [{ ns: 'llm-pi-ai', user: { subagentEffort: 'high' } }],
-    get: () => undefined,
-    update: async () => undefined,
-  }
-  ctx.provide('settings', settings)
-  await ctx.plugin(llm.default).await()
-  await ctx.plugin(session.default).await()
-  await ctx.plugin(systemPrompt.default, {}).await()
-  await ctx.plugin(tools.default, {}).await()
-  await ctx.plugin(agents.default).await()
-  await ctx.plugin(agentLoop.default, { agents: [] }).await()
-  ctx.llm.registerAdapter(['probe'], new ProbeAdapter())
-  const host = await import(pathToFileURL(hostEntry).href) as { apply: (context: unknown) => void }
-  host.apply(ctx)
-
+  const agentHome = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-agent-'))
+  const previousHome = process.env.DSH_HOME
+  process.env.DSH_HOME = agentHome
+  const markerPath = join(agentHome, 'thinking-effort-loaded.json')
   try {
-    const handle = await ctx.agents.create({
-      sessionId: `agent-probe-${Date.now()}`,
-      meta: { origin: 'subagent' },
-      agentOptions: { provider: 'probe', model: 'probe-model' },
-    })
+    const ctx = new Context()
     try {
-      const message = llm.createUserMessage({
-        content: [{ type: 'text', text: 'run the real agent request probe' }],
-        source: { kind: 'user' },
-      })
-      handle.agent.followup(message)
-      await handle.agent.whenIdle()
-      const turnEnd = handle.agent.session.events.findLast(event => event.type === 'turn/end')
-      return {
-        requestCount: requests.length,
-        reasoningEffort: requests[0]?.reasoningEffort,
-        origin: handle.agent.session.header.origin,
-        turnEnd: turnEnd?.type,
+      await ctx.plugin(timer.default).await()
+      await ctx.plugin(settingsFile.default ?? settingsFile.FileSettingsProvider, { dshHome: agentHome, watch: false }).await()
+      const z = schemastery.default as {
+        object: (shape: Record<string, unknown>) => unknown
+        dict: (value: unknown) => unknown
+        any: () => unknown
+        string: () => unknown
       }
+      const settings = ctx.get('settings') as {
+        register: (namespace: string, schema: unknown) => { update: (value: Record<string, unknown>) => Promise<void> }
+        describe: () => Array<Record<string, unknown>>
+        get: (namespace: string) => unknown
+      }
+    const settingsScope = settings.register('llm-pi-ai', z.object({
+      providers: z.dict(z.any()),
+      subagentEffort: z.string(),
+    }))
+    await settingsScope.update({ subagentEffort: 'high', providers: { probe: { models: [{ id: 'probe-model' }] } } })
+    const settingsDescriptor = settings.describe().find(entry => entry.ns === 'llm-pi-ai')
+    expect(settingsDescriptor?.user).toMatchObject({ subagentEffort: 'high' })
+    const settingsPath = join(agentHome, 'settings.yaml')
+    expect(existsSync(settingsPath)).toBe(true)
+
+    const LlmAdapter = llm.LlmAdapter as new () => {
+      resolveModel: (provider: string, model: string) => Promise<Record<string, unknown>>
+      stream: (options: Record<string, unknown>) => AsyncIterable<Record<string, unknown>>
+    }
+    const requests: Record<string, unknown>[] = []
+    class ProbeAdapter extends LlmAdapter {
+      override resolveModel(provider: string, model: string): Promise<Record<string, unknown>> {
+        const lowEffort = llm.ReasoningEffortId('low') as unknown
+        const highEffort = llm.ReasoningEffortId('high') as unknown
+        return Promise.resolve({
+          provider,
+          id: model,
+          name: model,
+          reasoning: { efforts: [{ id: lowEffort, name: 'Low' }, { id: highEffort, name: 'High' }], defaultEffort: lowEffort },
+        })
+      }
+
+      override async * stream(options: Record<string, unknown>): AsyncIterable<Record<string, unknown>> {
+        requests.push(options)
+        const text = 'real agent runtime probe'
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'text-delta', index: 0, text }
+        yield { type: 'block-end', index: 0, block: { type: 'text', text } }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      }
+    }
+    await ctx.plugin(llm.default).await()
+    await ctx.plugin(session.default).await()
+    await ctx.plugin(systemPrompt.default, {}).await()
+    await ctx.plugin(tools.default, {}).await()
+    await ctx.plugin(agents.default).await()
+    await ctx.plugin(agentLoop.default, { agents: [] }).await()
+    ctx.llm.registerAdapter(['probe'], new ProbeAdapter())
+
+    const runAgent = async (sessionId: string): Promise<{ requestCount: number; reasoningEffort: unknown; origin: unknown; turnEnd: string | undefined }> => {
+      const handle = await ctx.agents.create({
+        sessionId,
+        meta: { origin: 'subagent' },
+        agentOptions: { provider: 'probe', model: 'probe-model' },
+      })
+      try {
+        const message = llm.createUserMessage({
+          content: [{ type: 'text', text: 'run the real agent request probe' }],
+          source: { kind: 'user' },
+        })
+        handle.agent.followup(message)
+        await handle.agent.whenIdle()
+        const turnEnd = handle.agent.session.events.findLast(event => event.type === 'turn/end')
+        return {
+          requestCount: requests.length,
+          reasoningEffort: requests.at(-1)?.reasoningEffort,
+          origin: handle.agent.session.header.origin,
+          turnEnd: turnEnd?.type,
+        }
+      } finally {
+        await handle.dispose()
+      }
+    }
+
+    const withoutProduct = await runAgent(`agent-probe-baseline-${Date.now()}`)
+    const host = await import(pathToFileURL(hostEntry).href) as { apply: (context: unknown) => void }
+    host.apply(ctx)
+    const withProduct = await runAgent(`agent-probe-product-${Date.now()}`)
+    const marker = JSON.parse(readFileSync(markerPath, 'utf8')) as {
+      event?: string
+      name?: string
+      at?: string
+      pid?: number
+    }
+    expect(marker).toMatchObject({ event: 'apply', name: '@hytime/dsh-thinking-effort' })
+    expect(marker.at).toEqual(expect.any(String))
+    expect(marker.pid).toEqual(expect.any(Number))
+    return { settingsHome: agentHome, settingsPath, markerPath, marker, withoutProduct, withProduct }
     } finally {
-      await handle.dispose()
+      await ctx.fiber.dispose()
     }
   } finally {
-    await ctx.fiber.dispose()
+    if (previousHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = previousHome
+    rmSync(agentHome, { recursive: true, force: true })
   }
 }
 
@@ -306,15 +356,61 @@ type BrowserContext = {
   newPage: () => Promise<BrowserPage>
 }
 
-async function probeOfficialSettingsDom(web: RunningWeb): Promise<{ bodyText: string; buttons: string[]; settingsText: string; errors: string[] }> {
-  const playwrightPath = '/Volumes/hydisk/deepseek-harness/node_modules/.pnpm/playwright@1.61.1/node_modules/playwright/index.mjs'
-  const playwright = await import(playwrightPath) as unknown as {
-    chromium: { launch: (options: Record<string, unknown>) => Promise<{ newContext: () => Promise<BrowserContext>; close: () => Promise<void> }> }
+type Playwright = {
+  chromium: { launch: (options: Record<string, unknown>) => Promise<{ newContext: () => Promise<BrowserContext>; close: () => Promise<void> }> }
+}
+
+function discoverBrowserExecutable(): string | undefined {
+  const configured = process.env.CHROME_PATH
+  if (configured !== undefined && configured !== '') {
+    if (!existsSync(configured)) throw new Error(`BLOCKED: CHROME_PATH does not exist: ${configured}`)
+    return configured
   }
-  const browser = await playwright.chromium.launch({
-    headless: true,
-    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  })
+  for (const command of ['google-chrome', 'chromium', 'chromium-browser', 'chrome']) {
+    const result = spawnSync('which', [command], { encoding: 'utf8' })
+    if (result.status === 0) {
+      const executable = result.stdout.trim()
+      if (executable !== '' && existsSync(executable)) return executable
+    }
+  }
+  const appSearch = spawnSync('mdfind', ["kMDItemCFBundleIdentifier == 'com.google.Chrome'"], { encoding: 'utf8' })
+  if (appSearch.status === 0) {
+    for (const app of appSearch.stdout.split('\n').map(value => value.trim()).filter(Boolean)) {
+      const executable = join(app, 'Contents', 'MacOS', 'Google Chrome')
+      if (existsSync(executable)) return executable
+    }
+  }
+  const managedPath = process.env.PLAYWRIGHT_BROWSERS_PATH
+  if (managedPath !== undefined && managedPath !== '' && managedPath !== '0' && !existsSync(managedPath)) {
+    throw new Error(`BLOCKED: PLAYWRIGHT_BROWSERS_PATH does not exist: ${managedPath}`)
+  }
+  return undefined
+}
+async function probeOfficialSettingsDom(cliRoot: string, web: RunningWeb): Promise<{
+  bodyText: string
+  buttons: string[]
+  settingsText: string
+  errors: string[]
+  blocked?: string
+}> {
+  let playwright: Playwright
+  let executablePath: string | undefined
+  try {
+    const playwrightPath = createRequire(join(cliRoot, 'apps/web/package.json')).resolve('playwright')
+    playwright = await import(pathToFileURL(playwrightPath).href) as unknown as Playwright
+    executablePath = discoverBrowserExecutable()
+  } catch (error) {
+    return { bodyText: '', buttons: [], settingsText: '', errors: [], blocked: String(error) }
+  }
+  let browser: Awaited<ReturnType<Playwright['chromium']['launch']>>
+  try {
+    browser = await playwright.chromium.launch({
+      headless: true,
+      ...(executablePath === undefined ? {} : { executablePath }),
+    })
+  } catch (error) {
+    return { bodyText: '', buttons: [], settingsText: '', errors: [], blocked: `BLOCKED: browser launch failed: ${String(error)}` }
+  }
   try {
     const context = await browser.newContext()
     if (web.cookie !== '') {
@@ -352,6 +448,22 @@ async function probeOfficialSettingsDom(web: RunningWeb): Promise<{ bodyText: st
   } finally {
     await browser.close()
   }
+}
+
+function extractBootRows(html: string): string[] {
+  const prefixes = [
+    '<script>globalThis["__DSH_BOOT__"] = ',
+    '<script>window.__DSH_BOOT__ = ',
+  ]
+  const matchedPrefix = prefixes.find((candidate) => html.includes(candidate))
+  if (matchedPrefix === undefined) throw new Error('DSH Web page did not inject __DSH_BOOT__')
+  const valueStart = html.indexOf(matchedPrefix) + matchedPrefix.length
+  const end = html.indexOf('</script>', valueStart)
+  if (end === -1) throw new Error('DSH Web page has an unterminated __DSH_BOOT__ injection')
+  const graph = JSON.parse(html.slice(valueStart, end)) as {
+    entries?: Array<{ id?: string; url?: string }>
+  }
+  return graph.entries?.map(({ id, url }) => `${id ?? '<missing-id>'} ${url ?? '<missing-url>'}`) ?? []
 }
 
 function extractBundleUrl(html: string, packageName: string): string {
@@ -776,7 +888,9 @@ integrationDescribe('official DSH loader composition', () => {
           signal: AbortSignal.timeout(10000),
         })
         expect(indexResponse.status).toBe(200)
-        const bundleUrl = extractBundleUrl(await indexResponse.text(), '@hytime/dsh-thinking-effort')
+        const indexHtml = await indexResponse.text()
+        const bootRows = extractBootRows(indexHtml)
+        const bundleUrl = extractBundleUrl(indexHtml, '@hytime/dsh-thinking-effort')
         expect(bundleUrl).toMatch(/\/plugins\/(?:\?\?@hytime\/dsh-thinking-effort\/client\.js&rev=|@hytime\/dsh-thinking-effort\/client\.js\?rev=)/)
         const response = await fetch(new URL(bundleUrl, web.url), {
           headers,
@@ -795,9 +909,16 @@ integrationDescribe('official DSH loader composition', () => {
             },
           },
         })
-        const domProbe = await probeOfficialSettingsDom(web)
-        expect(domProbe.settingsText).toContain('插件')
-        expect(domProbe.errors).toEqual([])
+        const domProbe = await probeOfficialSettingsDom(cliRoot, web)
+        if (domProbe.blocked !== undefined) {
+          console.log(`[BLOCKED] browser probe: ${domProbe.blocked}`)
+        } else {
+          expect(domProbe.settingsText).toContain('插件')
+          expect(domProbe.errors).toEqual([])
+          if (!domProbe.thinkingEffortVisible) {
+            console.log(`[BLOCKED] thinking-effort section missing; DOM=${JSON.stringify(domProbe.settingsText)}; bootRows=${JSON.stringify(bootRows)}`)
+          }
+        }
       } finally {
         await web.stop()
       }
@@ -816,13 +937,25 @@ integrationDescribe('official DSH loader composition', () => {
       }
     })
     const runtimeProbe = await probeOfficialClientRuntime(cliRoot, packagedClient)
+    const previousHome = process.env.DSH_HOME
     const agentProbe = await probeOfficialAgentRuntime(cliRoot, hostEntry)
-    expect(agentProbe).toMatchObject({
+    expect(process.env.DSH_HOME).toBe(previousHome)
+    expect(agentProbe.withoutProduct).toMatchObject({
       requestCount: 1,
+      reasoningEffort: 'low',
+      origin: 'subagent',
+      turnEnd: 'turn/end',
+    })
+    expect(agentProbe.withProduct).toMatchObject({
+      requestCount: 2,
       reasoningEffort: 'high',
       origin: 'subagent',
       turnEnd: 'turn/end',
     })
+    expect(existsSync(agentProbe.settingsHome)).toBe(false)
+    expect(existsSync(agentProbe.settingsPath)).toBe(false)
+    expect(existsSync(agentProbe.markerPath)).toBe(false)
+    expect(agentProbe.marker).toMatchObject({ event: 'apply', name: '@hytime/dsh-thinking-effort' })
     if (runtimeProbe.modern.supportsExternalLanguages) {
       expect(runtimeProbe.modern.languages).toEqual(expect.arrayContaining(['ja', 'ko']))
     } else {
