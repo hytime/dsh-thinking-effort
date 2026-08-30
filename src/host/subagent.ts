@@ -49,6 +49,7 @@ function findModel(settings: HostSettings, config: AgentRequestConfig): unknown 
   if (!isUnknownRecord(section) || !isUnknownRecord(section.providers)) return undefined
   if (typeof config.provider !== 'string' || typeof config.model !== 'string') return undefined
 
+  if (!Object.prototype.hasOwnProperty.call(section.providers, config.provider)) return undefined
   const profile = section.providers[config.provider]
   if (!isUnknownRecord(profile)) return undefined
   if (Array.isArray(profile.models)) {
@@ -57,7 +58,12 @@ function findModel(settings: HostSettings, config: AgentRequestConfig): unknown 
     ))
     if (model !== undefined) return model
   }
-  if (isUnknownRecord(profile.modelOverrides)) return profile.modelOverrides[config.model]
+  if (
+    isUnknownRecord(profile.modelOverrides)
+    && Object.prototype.hasOwnProperty.call(profile.modelOverrides, config.model)
+  ) {
+    return profile.modelOverrides[config.model]
+  }
   return undefined
 }
 

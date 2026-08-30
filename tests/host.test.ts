@@ -160,6 +160,39 @@ describe('Host composition', () => {
     })
   })
 
+  it('preserves a "__proto__" provider key while filling defaults', async () => {
+    const section = JSON.parse('{"providers":{"__proto__":{"models":[{"id":"model"}]}}}') as SettingsSection
+    const harness = createHarness({ section })
+
+    await runInitial(harness)
+
+    expect(harness.updates).toHaveLength(1)
+    const providers = harness.updates[0]?.value.providers as Record<string, any>
+    expect(Object.keys(providers)).toEqual(['__proto__'])
+    expect(Object.prototype.hasOwnProperty.call(providers, '__proto__')).toBe(true)
+    expect(Object.getPrototypeOf(providers)).toBe(Object.prototype)
+    expect(providers.__proto__).toEqual({
+      models: [{ id: 'model', reasoningEfforts: defaults }],
+    })
+  })
+
+  it('preserves a "__proto__" model override key while filling defaults', async () => {
+    const section = JSON.parse(
+      '{"providers":{"route":{"modelOverrides":{"__proto__":{"id":"model"}}}}}',
+    ) as SettingsSection
+    const harness = createHarness({ section })
+
+    await runInitial(harness)
+
+    expect(harness.updates).toHaveLength(1)
+    const providers = harness.updates[0]?.value.providers as Record<string, any>
+    const overrides = providers.route.modelOverrides as Record<string, any>
+    expect(Object.keys(overrides)).toEqual(['__proto__'])
+    expect(Object.prototype.hasOwnProperty.call(overrides, '__proto__')).toBe(true)
+    expect(Object.getPrototypeOf(overrides)).toBe(Object.prototype)
+    expect(overrides.__proto__).toEqual({ id: 'model', reasoningEfforts: defaults })
+  })
+
   it('is idempotent after defaults have been filled', async () => {
     const harness = createHarness({
       section: { providers: { route: { models: [{ id: 'model' }] } } },
@@ -220,6 +253,44 @@ describe('Host composition', () => {
 })
 
 describe('subagent request hook', () => {
+  it('ignores inherited provider configuration', async () => {
+    const inheritedProviders = Object.create({
+      route: { models: [{ id: 'model', reasoningEfforts: { high: 'ultra' } }] },
+    }) as Record<string, unknown>
+    const harness = createHarness({
+      writable: false,
+      section: { providers: inheritedProviders },
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'ultra' } }],
+    })
+    const config = { provider: 'route', model: 'model' }
+
+    const result = await harness.listener('agent/request')?.callback(
+      { agent: { session: { header: { origin: 'subagent' } } } },
+      async () => config,
+    )
+
+    expect(result).toBe(config)
+  })
+
+  it('ignores inherited model override configuration', async () => {
+    const inheritedOverrides = Object.create({
+      model: { reasoningEfforts: { high: 'ultra' } },
+    }) as Record<string, unknown>
+    const harness = createHarness({
+      writable: false,
+      section: { providers: { route: { modelOverrides: inheritedOverrides } } },
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'ultra' } }],
+    })
+    const config = { provider: 'route', model: 'model' }
+
+    const result = await harness.listener('agent/request')?.callback(
+      { agent: { session: { header: { origin: 'subagent' } } } },
+      async () => config,
+    )
+
+    expect(result).toBe(config)
+  })
+
   it('maps standard levels directly and custom wire values back to levels', async () => {
     const standard = createHarness({
       writable: false,

@@ -24,51 +24,48 @@ function log(...args: unknown[]): void {
 export function fillProviderDefaults(providers: unknown): ProviderDefaultsResult {
   if (!isUnknownRecord(providers)) return { providers, filled: 0 }
 
-  const nextProviders: UnknownRecord = {}
   let filled = 0
+  const nextProviders: UnknownRecord = Object.fromEntries(
+    Object.entries(providers).map(([route, rawProfile]) => {
+      if (!isProviderProfile(rawProfile)) return [route, rawProfile]
 
-  for (const [route, rawProfile] of Object.entries(providers)) {
-    if (!isProviderProfile(rawProfile)) {
-      nextProviders[route] = rawProfile
-      continue
-    }
-
-    let nextProfile: UnknownRecord = rawProfile
-    let dirty = false
-    const models = rawProfile.models
-    if (Array.isArray(models)) {
-      const nextModels = models.map((entry) => {
-        if (!isUnknownRecord(entry) || entry.reasoningEfforts !== undefined) return entry
-        dirty = true
-        filled += 1
-        return { ...entry, reasoningEfforts: DEFAULT_LEVELS }
-      })
-      if (dirty) {
-        nextProfile = { ...nextProfile, models: nextModels }
-      }
-    }
-
-    const overrides = rawProfile.modelOverrides
-    if (isUnknownRecord(overrides)) {
-      let overridesDirty = false
-      const nextOverrides: UnknownRecord = {}
-      for (const [id, rawEntry] of Object.entries(overrides)) {
-        if (!isUnknownRecord(rawEntry) || rawEntry.reasoningEfforts !== undefined) {
-          nextOverrides[id] = rawEntry
-          continue
+      let nextProfile: UnknownRecord = rawProfile
+      let dirty = false
+      const models = rawProfile.models
+      if (Array.isArray(models)) {
+        const nextModels = models.map((entry) => {
+          if (!isUnknownRecord(entry) || entry.reasoningEfforts !== undefined) return entry
+          dirty = true
+          filled += 1
+          return { ...entry, reasoningEfforts: DEFAULT_LEVELS }
+        })
+        if (dirty) {
+          nextProfile = { ...nextProfile, models: nextModels }
         }
-        overridesDirty = true
-        filled += 1
-        nextOverrides[id] = { ...rawEntry, reasoningEfforts: DEFAULT_LEVELS }
       }
-      if (overridesDirty) {
-        nextProfile = { ...nextProfile, modelOverrides: nextOverrides }
-        dirty = true
-      }
-    }
 
-    nextProviders[route] = dirty ? nextProfile : rawProfile
-  }
+      const overrides = rawProfile.modelOverrides
+      if (isUnknownRecord(overrides)) {
+        let overridesDirty = false
+        const nextOverrides: UnknownRecord = Object.fromEntries(
+          Object.entries(overrides).map(([id, rawEntry]) => {
+            if (!isUnknownRecord(rawEntry) || rawEntry.reasoningEfforts !== undefined) {
+              return [id, rawEntry]
+            }
+            overridesDirty = true
+            filled += 1
+            return [id, { ...rawEntry, reasoningEfforts: DEFAULT_LEVELS }]
+          }),
+        )
+        if (overridesDirty) {
+          nextProfile = { ...nextProfile, modelOverrides: nextOverrides }
+          dirty = true
+        }
+      }
+
+      return [route, dirty ? nextProfile : rawProfile]
+    }),
+  )
 
   return { providers: nextProviders, filled }
 }
