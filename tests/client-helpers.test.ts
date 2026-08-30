@@ -150,6 +150,34 @@ describe('model inventory and operations', () => {
       },
     ])
   })
+
+  it('preserves special model IDs in override operations', () => {
+    const namespace = JSON.parse(
+      '{"value":{"providers":{"provider":{"modelOverrides":{"__proto__":{"id":"__proto__","keep":"proto"},"constructor":{"id":"constructor","keep":"constructor"},"toString":{"id":"toString","keep":"toString"}}}}}}',
+    ) as Record<string, any>
+    const overrides = namespace.value.providers.provider.modelOverrides as Record<string, any>
+    Object.setPrototypeOf(overrides, { inherited: { id: 'inherited' } })
+
+    const inventory = inventoryFrom(namespace)
+    expect(inventory.map((entry) => entry.model)).toEqual(['__proto__', 'constructor', 'toString'])
+    const proto = inventory.find((entry) => entry.model === '__proto__')
+    const constructor = inventory.find((entry) => entry.model === 'constructor')
+    const toString = inventory.find((entry) => entry.model === 'toString')
+    expect(proto && constructor && toString).toBeTruthy()
+
+    const operations = setOps(inventory, [
+      { item: proto!, levels: { off: null, high: 'proto-high' } },
+      { item: constructor!, levels: { off: null, high: 'constructor-high' } },
+      { item: toString!, levels: { off: null, high: 'to-string-high' } },
+    ])
+    const result = operations[0]?.value as Record<string, Record<string, unknown>>
+
+    expect(Object.keys(result)).toEqual(['__proto__', 'constructor', 'toString'])
+    expect(Object.getPrototypeOf(result)).toBe(Object.prototype)
+    expect(result['__proto__']).toEqual({ id: '__proto__', keep: 'proto', reasoningEfforts: { off: null, high: 'proto-high' } })
+    expect(result.constructor).toEqual({ id: 'constructor', keep: 'constructor', reasoningEfforts: { off: null, high: 'constructor-high' } })
+    expect(result.toString).toEqual({ id: 'toString', keep: 'toString', reasoningEfforts: { off: null, high: 'to-string-high' } })
+  })
 })
 
 describe('draft and validation helpers', () => {

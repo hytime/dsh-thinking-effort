@@ -36,10 +36,18 @@ export function setOps(inventory: readonly InventoryItem[], updates: readonly Mo
     const candidates = inventory.filter((candidate) => candidate.route === group.route
       && (group.type === 'modelOverrides' ? candidate.inOverrides : !candidate.inOverrides))
     if (group.type === 'modelOverrides') {
-      const overrides: Record<string, Record<string, unknown>> = {}
-      for (const candidate of candidates) overrides[candidate.model] = { ...candidate.raw }
+      const overrides = Object.fromEntries(
+        candidates.map((candidate) => [candidate.model, { ...candidate.raw }]),
+      ) as Record<string, Record<string, unknown>>
       for (const update of group.updates) {
-        overrides[update.item.model] = mergeModelUpdate(overrides[update.item.model] ?? {}, update)
+        const model = update.item.model
+        const current = Object.prototype.hasOwnProperty.call(overrides, model) ? overrides[model] : {}
+        Object.defineProperty(overrides, model, {
+          configurable: true,
+          enumerable: true,
+          value: mergeModelUpdate(current, update),
+          writable: true,
+        })
       }
       return { op: 'set', path: ['providers', group.route, 'modelOverrides'], value: overrides }
     }
