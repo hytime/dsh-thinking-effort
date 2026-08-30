@@ -1,7 +1,9 @@
+import { createElement } from 'react'
 import { clientCapabilities } from '../compat/capabilities.js'
 import { LOCALE_DATA } from './locales.js'
 import { settingsBridge } from './settings-bridge.js'
 import { LOCALE_NS } from './constants.js'
+import { SectionEditor } from './SectionEditor.js'
 import type { ClientContext, ClientLocale, ClientSlots } from './types.js'
 
 export const name = '@hytime/dsh-thinking-effort'
@@ -26,16 +28,17 @@ export function apply(context: ClientContext): void {
   const mount = (settings: ReturnType<typeof settingsBridge>): void => {
     if (mounted || settings === undefined) return
     mounted = true
+    const translate = locale.bind(LOCALE_NS)
     context.effect(() => {
       const languageDisposers: Array<() => void> = []
       const disposeDictionaries = locale.register(LOCALE_NS, LOCALE_DATA)
       const capabilities = clientCapabilities({ addLanguage: locale.addLanguage })
       try {
         if (capabilities.externalLanguages && !hasLanguage(locale, 'ja')) {
-          languageDisposers.push(locale.addLanguage!({ id: 'ja', label: '日本語', fallback: 'en' }))
+          languageDisposers.push(locale.addLanguage!({ id: 'ja', label: translate('languageJapanese'), fallback: 'en' }))
         }
         if (capabilities.externalLanguages && !hasLanguage(locale, 'ko')) {
-          languageDisposers.push(locale.addLanguage!({ id: 'ko', label: '한국어', fallback: 'en' }))
+          languageDisposers.push(locale.addLanguage!({ id: 'ko', label: translate('languageKorean'), fallback: 'en' }))
         }
       } catch (error) {
         for (const dispose of languageDisposers.reverse()) dispose()
@@ -48,7 +51,6 @@ export function apply(context: ClientContext): void {
       }
     }, 'dsh-thinking-effort: language pack dictionaries')
 
-    const translate = locale.bind(LOCALE_NS)
     slots.inject(SLOT_NAME, () => slots.register(
       {
         name: SLOT_NAME,
@@ -57,7 +59,7 @@ export function apply(context: ClientContext): void {
         locale: LOCALE_NS,
         label: () => translate('pageTitle'),
       },
-      () => null,
+      () => createElement(SectionEditor, { settings, locale, t: translate }),
     ))
   }
 

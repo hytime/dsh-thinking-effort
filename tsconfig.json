@@ -8,6 +8,7 @@
     "declaration": true,
     "sourceMap": true,
     "resolveJsonModule": true,
+    "jsx": "react-jsx",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
@@ -15,6 +16,6 @@
     "outDir": "lib/types",
     "noEmitOnError": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules", "lib", "tests"]
 }
