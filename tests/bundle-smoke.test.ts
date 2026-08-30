@@ -16,7 +16,7 @@ function readArtifact(relativePath: string): string {
 }
 
 describe('build artifacts', () => {
-  it('emits a lazy client descriptor with the scoped plugin id', () => {
+  it('emits a lazy client descriptor with the Client entry contract', () => {
     const source = readArtifact('lib/client.js')
     let descriptor: Record<string, unknown> | undefined
     const context = {
@@ -32,6 +32,15 @@ describe('build artifacts', () => {
     vm.runInNewContext(source, context)
 
     expect(descriptor?.id).toBe('@hytime/dsh-thinking-effort')
+    expect(typeof descriptor?.factory).toBe('function')
+    const factory = descriptor?.factory as (require: (specifier: string) => unknown) => Record<string, unknown>
+    const client = factory(() => undefined)
+
+    expect(client).toMatchObject({
+      name: '@hytime/dsh-thinking-effort',
+      inject: ['slots', 'connection', 'locale'],
+    })
+    expect(typeof client.apply).toBe('function')
   })
 
   it('exports the Host entry contract', async () => {

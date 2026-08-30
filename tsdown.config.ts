@@ -2,25 +2,27 @@ import { defineConfig } from 'tsdown'
 
 export default defineConfig([
   {
-    entry: { index: 'src/index.ts' },
+    entry: { index: 'lib/types/index.js' },
     outDir: 'lib',
-    format: 'esm',
-    dts: true,
-    sourcemap: true,
-    clean: true,
+    format: ['esm'],
+    platform: 'node',
+    clean: false,
   },
   {
-    entry: { client: 'src/client/index.ts' },
+    entry: { client: 'lib/types/client/index.js' },
     outDir: 'lib',
-    format: 'iife',
+    format: ['cjs'],
     platform: 'browser',
-    globalName: 'DSHThinkingEffort',
-    dts: false,
-    sourcemap: true,
     clean: false,
+    deps: {
+      neverBundle: (specifier) => specifier === 'react' || specifier === 'react/jsx-runtime',
+      alwaysBundle: (specifier) => specifier !== 'react' && specifier !== 'react/jsx-runtime',
+    },
     outputOptions: {
-      entryFileNames: '[name].js',
-      chunkFileNames: '[name]-[hash].js',
+      entryFileNames: 'client.js',
+      banner: "window.__ModuleLoader__.load({ id: '@hytime/dsh-thinking-effort', factory: (require) => {",
+      intro: 'var module = { exports: {} }; var exports = module.exports;',
+      footer: 'return module.exports; } });',
     },
   },
 ])

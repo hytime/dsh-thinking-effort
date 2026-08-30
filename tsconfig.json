@@ -12,7 +12,7 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "rootDir": "src",
-    "outDir": "lib",
+    "outDir": "lib/types",
     "noEmitOnError": true
   },
   "include": ["src/**/*.ts"],

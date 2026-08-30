@@ -11,7 +11,7 @@
     "prepublishOnly": "npm run build"
   },
   "type": "module",
-  "main": "./lib/index.js",
+  "main": "./src/host.mjs",
   "homepage": "https://github.com/hytime/dsh-thinking-effort#readme",
   "repository": {
     "type": "git",
@@ -51,8 +51,8 @@
     }
   },
   "exports": {
-    ".": "./lib/index.js",
-    "./client": "./lib/client.js",
+    ".": "./src/host.mjs",
+    "./client": "./src/client.js",
     "./package.json": "./package.json"
   },
   "peerDependencies": {
