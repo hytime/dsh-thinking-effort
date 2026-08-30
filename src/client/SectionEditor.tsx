@@ -1,4 +1,5 @@
 import React from 'react'
+import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
 import { DEFAULT_LEVELS, INPUT_MODALITIES, LEVEL_LABEL_KEYS, NS, PRESETS, ALL_LEVELS, CONTEXT_1M } from './constants.js'
 import { inventoryFrom } from './model-inventory.js'
 import { setOps } from './model-ops.js'
@@ -10,7 +11,7 @@ import { ActionButton, Icon } from './components/Controls.js'
 import { ModelRow } from './components/ModelRow.js'
 import { SubagentSettings } from './components/SubagentSettings.js'
 
-const PLUGIN_VERSION = '0.1.10'
+const PLUGIN_VERSION = packageJson.version
 
 type DirtyFields = { levels?: boolean; context?: boolean; input?: boolean }
 interface SubagentState { effort: string | null; revision: number }

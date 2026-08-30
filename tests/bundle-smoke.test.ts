@@ -32,6 +32,11 @@ function readArtifact(relativePath: string): string {
   }
 }
 
+function readPackageVersion(): string {
+  const packageJson = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as { version: string }
+  return packageJson.version
+}
+
 function loadDescriptor(source: string): Descriptor {
   let descriptor: Descriptor | undefined
   vm.runInNewContext(source, {
@@ -62,6 +67,7 @@ describe('build artifacts', () => {
     const source = readArtifact('lib/client.js')
     expect(source).toContain('window.__ModuleLoader__.load')
     expect(source).toContain("id: '@hytime/dsh-thinking-effort'")
+    expect(source).toContain(JSON.stringify(readPackageVersion()))
     expect(source).toContain('return module.exports;')
     expect(source).not.toContain("ctx.inject(['remote',")
 

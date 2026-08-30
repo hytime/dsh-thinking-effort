@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import React, { act } from 'react'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SectionEditor } from '../src/client/SectionEditor.js'
@@ -13,6 +15,8 @@ import type {
   SettingsOp,
   Translation,
 } from '../src/client/types.js'
+
+const packageManifest = JSON.parse(readFileSync(resolve(import.meta.dirname, '..', 'package.json'), 'utf8')) as { version: string }
 
 const text = (key: string, params?: Record<string, unknown>): string => {
   const value = zh[key] ?? key
@@ -267,7 +271,7 @@ describe('SectionEditor user behavior', () => {
     await settle()
     const language = view.container.querySelector('select') as HTMLSelectElement
     expect([...language.options].map((option) => option.value)).toEqual(['zh', 'en'])
-    expect(view.container.textContent).toContain('v0.1.10')
+    expect(view.container.textContent).toContain(`v${packageManifest.version}`)
 
     act(() => button(view.container, text('quickSettings')).click())
     act(() => button(view.container, text('presetOfficial')).click())
