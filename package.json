@@ -8,7 +8,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
-    "test:release": "node --test scripts/verify-release.test.mjs",
+    "test:release": "node --test scripts/verify-release.test.mjs scripts/verify-workflows.test.mjs",
     "test:watch": "vitest",
     "prepublishOnly": "npm run build"
   },

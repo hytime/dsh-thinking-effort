@@ -117,6 +117,12 @@ The page header contains the language selector. Below it, the Subagent default e
 - `off` and an unset effort may both omit `reasoning`; whether this disables thinking depends on the gateway protocol.
 - Host changes require a DSH restart. Settings and locale changes are applied in the browser, with a refresh available when needed.
 
+## CI and release maintenance
+
+- Pull requests and pushes to `main` run the quality matrix on Node `22.19.0` and `24.x`.
+- The workflow uses `npm ci`; maintainers must commit `package-lock.json` when dependencies change.
+- The ordinary CI workflow does not publish to npm. Publishing is triggered only by the version-tag workflow.
+
 ## License
 
 [MIT](./LICENSE)

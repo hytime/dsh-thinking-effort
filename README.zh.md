@@ -203,6 +203,12 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 - `off` 和未设置都可能表现为不发送 `reasoning` 参数，是否真正关闭思考取决于第三方网关的协议语义。
 - 宿主逻辑修改需要重启 DSH；设置页修改通常只需刷新浏览器页面。
 
+## CI 与发布维护
+
+- Pull Request 和推送到 `main` 会在 Node `22.19.0` 与 `24.x` 上运行质量矩阵。
+- workflow 使用 `npm ci`；依赖变更时，维护者必须提交 `package-lock.json`。
+- 普通 CI workflow 不会发布 npm。发布只由版本 tag workflow 触发。
+
 ## 排查
 
 - **官方组合配置失败：** 执行 `dsh --profile <profile> --dump-default-config`，检查是否仍有旧的 `name: dsh-thinking-effort`。

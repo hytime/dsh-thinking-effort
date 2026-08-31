@@ -114,6 +114,12 @@ profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](
 - `off`와 설정되지 않은 추론 강도가 모두 `reasoning`을 생략할 수 있으며, 실제로 사고를 비활성화하는지는 게이트웨이 프로토콜에 달려 있습니다.
 - Host 변경에는 DSH 재시작이 필요합니다. 설정과 언어 변경은 브라우저에서 적용됩니다.
 
+## CI 및 릴리스 유지 관리
+
+- Pull Request와 `main` 푸시에서는 Node `22.19.0` 및 `24.x` 품질 매트릭스를 실행합니다.
+- workflow는 `npm ci`를 사용하므로 의존성을 변경할 때 유지 관리자는 `package-lock.json`을 커밋해야 합니다.
+- 일반 CI workflow는 npm에 게시하지 않습니다. 게시 작업은 버전 tag workflow에서만 실행됩니다.
+
 ## 라이선스
 
 [MIT](./LICENSE)
