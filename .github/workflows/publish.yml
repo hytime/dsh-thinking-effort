@@ -1,0 +1,199 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: npm
+
+      - name: Verify release tag and package
+        run: node scripts/verify-release.mjs "$GITHUB_REF_NAME"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Typecheck source
+        run: npm run typecheck
+
+      - name: Typecheck tests
+        run: npm run typecheck:test
+
+      - name: Run release tests
+        run: npm run test:release
+
+      - name: Run tests
+        run: npm test
+
+      - name: Check compiled Host entry
+        run: node --check lib/index.js
+
+      - name: Check compiled Client entry
+        run: node --check lib/client.js
+
+      - name: Check package contents
+        run: npm pack --dry-run
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
+      - name: Check diff whitespace
+        run: git diff --check
+
+  compatibility:
+    needs: quality
+    runs-on: ubuntu-latest
+    env:
+      RUN_ROOT: ${{ runner.temp }}/dsh-thinking-effort-compat-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: npm
+
+      - name: Install package dependencies
+        run: npm ci
+
+      - name: Build current package
+        run: npm run build
+
+      - name: Install Chromium
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes chromium
+          CHROME_PATH="$(command -v chromium)"
+          test -x "$CHROME_PATH"
+          echo "CHROME_PATH=$CHROME_PATH" >> "$GITHUB_ENV"
+
+      - name: Build three official DSH checkouts and run integration tests
+        run: |
+          set -Eeuo pipefail
+
+          cleanup() {
+            if [[ -n "${DSH_TEST_PID:-}" ]] && kill -0 "$DSH_TEST_PID" 2>/dev/null; then
+              kill "$DSH_TEST_PID" 2>/dev/null || true
+              wait "$DSH_TEST_PID" 2>/dev/null || true
+            fi
+            rm -rf "$RUN_ROOT"
+          }
+          trap cleanup EXIT INT TERM
+
+          mkdir -p "$RUN_ROOT" "$RUN_ROOT/homes"
+          ALPHA_ROOT="$RUN_ROOT/dsh-v0.1.2-alpha.1"
+          RC2_ROOT="$RUN_ROOT/dsh-v0.1.1-rc.2"
+          RC7_ROOT="$RUN_ROOT/dsh-v0.1.0-rc.7"
+
+          git clone --depth 1 --branch dsh-v0.1.2-alpha.1 https://github.com/deepseek-ai/deepseek-harness.git "$ALPHA_ROOT"
+          git clone --depth 1 --branch dsh-v0.1.1-rc.2 https://github.com/deepseek-ai/deepseek-harness.git "$RC2_ROOT"
+          git clone --depth 1 --branch dsh-v0.1.0-rc.7 https://github.com/deepseek-ai/deepseek-harness.git "$RC7_ROOT"
+
+          corepack enable
+          for root in "$ALPHA_ROOT" "$RC2_ROOT" "$RC7_ROOT"; do
+            (cd "$root" && corepack enable && pnpm install --frozen-lockfile --ignore-scripts && pnpm run build)
+          done
+
+          npm pack --json --pack-destination "$RUN_ROOT" > "$RUN_ROOT/pack.json"
+          tarball_name="$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))[0].filename)" "$RUN_ROOT/pack.json")"
+          TARBALL="$RUN_ROOT/$tarball_name"
+          test -f "$TARBALL"
+
+          for spec in \
+            "alpha:$ALPHA_ROOT:$RUN_ROOT/homes/alpha" \
+            "rc2:$RC2_ROOT:$RUN_ROOT/homes/rc2" \
+            "rc7:$RC7_ROOT:$RUN_ROOT/homes/rc7"; do
+            IFS=: read -r label root home <<< "$spec"
+            mkdir -p "$home"
+            (cd "$root" && DSH_HOME="$home" pnpm dsh plugin --profile compat add "$TARBALL")
+          done
+
+          export CHROME_PATH="${CHROME_PATH:?Chromium was not installed}"
+          export XDG_CACHE_HOME="$RUN_ROOT/chromium-cache"
+          mkdir -p "$XDG_CACHE_HOME"
+          DSH_HOME="$RUN_ROOT/homes/integration" \
+          DSH_LOADER_INTEGRATION=1 \
+          DSH_CLI_ROOTS="$ALPHA_ROOT,$RC2_ROOT,$RC7_ROOT" \
+          DSH_REQUIRE_THINKING_EFFORT_DOM=1 \
+          npm test -- tests/loader-composition.test.ts
+
+      - name: Cleanup temporary compatibility resources
+        if: ${{ always() }}
+        run: |
+          rm -rf "${RUN_ROOT:-${{ runner.temp }}/dsh-thinking-effort-compat-${{ github.run_id }}-${{ github.run_attempt }}"
+
+  publish:
+    needs: [quality, compatibility]
+    if: ${{ needs.quality.result == 'success' && needs.compatibility.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: npm-publish-${{ github.ref_name }}
+      cancel-in-progress: false
+    env:
+      NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/dsh-thinking-effort-npmrc
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js for npm Trusted Publishing
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          registry-url: https://registry.npmjs.org
+
+      - name: Verify tag points to main
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - name: Reject an already published version
+        run: |
+          set -Eeuo pipefail
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          query_output="$RUNNER_TEMP/dsh-thinking-effort-npm-view.txt"
+          set +e
+          npm view @hytime/dsh-thinking-effort@${PACKAGE_VERSION} version --json > "$query_output" 2>&1
+          query_status=$?
+          set -e
+          if [ "$query_status" -eq 0 ]; then
+            echo "npm version ${PACKAGE_VERSION} already exists" >&2
+            exit 1
+          fi
+          if ! grep -Eiq '(^|[^0-9])404([^0-9]|$)|E404|not found' "$query_output"; then
+            cat "$query_output" >&2
+            exit "$query_status"
+          fi
+
+      - name: Publish package with provenance
+        run: npm publish --provenance --access public

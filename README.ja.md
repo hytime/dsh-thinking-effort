@@ -118,7 +118,11 @@ profile の確認、移行、検証、トラブルシューティングについ
 
 - Pull Request と `main` への push では、Node `22.19.0` と `24.x` の品質マトリックスを実行します。
 - workflow は `npm ci` を使用するため、依存関係を変更した場合はメンテナーが `package-lock.json` をコミットしてください。
-- 通常の CI workflow は npm に公開しません。公開はバージョン tag workflow からだけ実行します。
+- 通常の CI workflow は npm に公開しません。`publish.yml` は `v<version>` tag によってのみ公開を開始します。
+- リリース tag を作成する前に、メンテナーは `package.json` の version と各言語の `CHANGELOG` を更新してコミットし、一致する `v<version>` tag を作成します。tag の指す commit は `main` の履歴に含まれている必要があります。
+- npm パッケージには GitHub Trusted Publisher を設定してください。リポジトリは `hytime/dsh-thinking-effort`、workflow は `publish.yml` です。公開は GitHub OIDC による provenance を含み、`NPM_TOKEN` は必要ありません。
+- 公開前に workflow は公式の `dsh plugin` コマンドで DSH `dsh-v0.1.2-alpha.1`（`0.1.2-alpha.1`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）、`dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）を構築・インストールし、実際の互換性テストを実行します。
+- workflow は version や `CHANGELOG` を自動変更しません。npm に同じ version が既にある場合も公開を停止します。
 
 ## ライセンス
 

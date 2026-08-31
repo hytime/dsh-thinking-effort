@@ -7,6 +7,7 @@ import { parse } from 'yaml';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workflowPath = path.join(repositoryRoot, '.github', 'workflows', 'ci.yml');
+const publishWorkflowPath = path.join(repositoryRoot, '.github', 'workflows', 'publish.yml');
 const requiredCommands = [
   'npm ci',
   'npm run build',
@@ -285,4 +286,84 @@ test('each malformed workflow fixture fails at its broken structural constraint'
     mutate(fixture);
     assert.throws(() => assertWorkflowStructure(fixture), new RegExp(message), name);
   }
+});
+
+async function readPublishWorkflow() {
+  return parse(await readFile(publishWorkflowPath, 'utf8'));
+}
+
+const publishQualityCommands = [
+  'node scripts/verify-release.mjs "$GITHUB_REF_NAME"',
+  'npm ci',
+  'npm run build',
+  'npm run typecheck',
+  'npm run typecheck:test',
+  'npm run test:release',
+  'npm test',
+  'node --check lib/index.js',
+  'node --check lib/client.js',
+  'npm pack --dry-run',
+  'npm audit --audit-level=high',
+  'git diff --check',
+];
+
+function publishRunCommands(job) {
+  return job.steps.filter((step) => Object.hasOwn(step, 'run')).map((step) => step.run);
+}
+
+function assertPublishWorkflowStructure(workflow) {
+  assert.ok(workflow && typeof workflow === 'object', 'publish workflow must parse to an object');
+  assert.deepEqual(Object.keys(workflow.on ?? {}), ['push'], 'publish workflow must only define push trigger');
+  assert.deepEqual(workflow.on.push?.tags, ['v*.*.*'], 'publish workflow must trigger v*.*.* tags');
+  assert.equal(workflow.permissions?.contents, 'read', 'publish workflow contents permission must be read');
+
+  const quality = workflow.jobs?.quality;
+  const compatibility = workflow.jobs?.compatibility;
+  const publish = workflow.jobs?.publish;
+  assert.ok(quality && typeof quality === 'object', 'publish workflow must define jobs.quality');
+  assert.ok(compatibility && typeof compatibility === 'object', 'publish workflow must define jobs.compatibility');
+  assert.ok(publish && typeof publish === 'object', 'publish workflow must define jobs.publish');
+  assert.deepEqual(publishRunCommands(quality), publishQualityCommands, 'publish quality commands must run in order');
+  assert.equal(quality.steps.find((step) => step.uses === 'actions/checkout@v4')?.with?.['fetch-depth'], 0);
+  assert.equal(quality.steps.find((step) => step.uses === 'actions/setup-node@v4')?.with?.['node-version'], '22.19.0');
+  assert.deepEqual(compatibility.needs, 'quality', 'compatibility must need quality');
+  assert.deepEqual(publish.needs, ['quality', 'compatibility'], 'publish must need quality and compatibility');
+  assert.equal(publish.permissions?.contents, 'read', 'publish contents permission must be read');
+  assert.equal(publish.permissions?.['id-token'], 'write', 'publish must have OIDC id-token write permission');
+  assert.equal(publish.concurrency?.group, 'npm-publish-${{ github.ref_name }}');
+  assert.equal(publish.concurrency?.['cancel-in-progress'], false);
+
+  const allCommands = scalarValues(workflow).filter((value) => value.includes('\n') || value.includes(' '));
+  const compatibilityText = allCommands.join('\n');
+  for (const required of [
+    'dsh-v0.1.2-alpha.1',
+    'dsh-v0.1.1-rc.2',
+    'dsh-v0.1.0-rc.7',
+    'DSH_CLI_ROOTS="$ALPHA_ROOT,$RC2_ROOT,$RC7_ROOT"',
+    'corepack enable',
+    'pnpm install --frozen-lockfile --ignore-scripts',
+    'pnpm run build',
+    'CHROME_PATH',
+    'dsh plugin',
+    'DSH_LOADER_INTEGRATION=1',
+    'DSH_REQUIRE_THINKING_EFFORT_DOM=1',
+    'npm test -- tests/loader-composition.test.ts',
+    'trap',
+  ]) {
+    assert.ok(compatibilityText.includes(required), `publish workflow must include ${required}`);
+  }
+  assert.match(compatibilityText, /ALPHA_ROOT=.*dsh-v0\.1\.2-alpha\.1/);
+  assert.match(compatibilityText, /RC2_ROOT=.*dsh-v0\.1\.1-rc\.2/);
+  assert.match(compatibilityText, /RC7_ROOT=.*dsh-v0\.1\.0-rc\.7/);
+
+  const publishCommands = publishRunCommands(publish).join('\n');
+  assert.match(publishCommands, /git fetch --no-tags origin main/);
+  assert.match(publishCommands, /git merge-base --is-ancestor "\$GITHUB_SHA" origin\/main/);
+  assert.match(publishCommands, /npm view @hytime\/dsh-thinking-effort@\$\{PACKAGE_VERSION\} version --json/);
+  assert.match(publishCommands, /npm publish --provenance --access public/);
+  assert.equal(scalarValues(workflow).some((value) => value.includes('NPM_TOKEN')), false, 'publish workflow must not use NPM_TOKEN');
+}
+
+test('publish workflow declares tag guards, dependencies, OIDC, and compatibility matrix', async () => {
+  assertPublishWorkflowStructure(await readPublishWorkflow());
 });

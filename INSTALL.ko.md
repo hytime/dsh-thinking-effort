@@ -161,6 +161,20 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 | 추론 강도 쓰기 실패 | `off`가 아닌 모든 단계에는 게이트웨이 값이 필요합니다. |
 | `UNSUPPORTED_REASONING_EFFORT` 반환 | 대상 모델이 지원하는 강도를 선택하거나 제공자 기본값으로 복원하세요. |
 
+## 릴리스 유지 관리
+
+유지 관리자는 `package.json` 버전과 해당하는 모든 `CHANGELOG`를 업데이트하여 커밋한 뒤 일치하는 `v<version>` tag를 만듭니다. tag가 가리키는 커밋은 `main` 기록에 포함되어야 합니다. `publish.yml` workflow는 버전이나 CHANGELOG를 자동으로 변경하지 않습니다.
+
+npm 패키지에 GitHub Trusted Publishing을 설정하세요. 저장소는 `hytime/dsh-thinking-effort`, workflow는 `publish.yml`입니다. 게시에는 GitHub OIDC와 provenance를 사용하고 `npm publish --provenance --access public`을 실행합니다. `NPM_TOKEN`이나 장기 token은 사용하지 않습니다. npm에 같은 버전이 이미 있으면 게시가 중단됩니다.
+
+게시 전에 workflow는 세 개의 임시 공식 DSH checkout을 만들고 공식 `dsh plugin` 명령으로 현재 tarball을 설치한 뒤 실제 호환성 테스트를 실행합니다.
+
+- `dsh-v0.1.2-alpha.1` (`0.1.2-alpha.1`)
+- `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`)
+- `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`)
+
+일반 CI는 테스트 전용이며 Pull Request와 `main` 푸시에서 실행됩니다. `npm ci`를 사용하므로 의존성 변경 시 `package-lock.json`을 커밋하세요.
+
 ## 7. 제거
 
 공식 명령을 사용합니다.

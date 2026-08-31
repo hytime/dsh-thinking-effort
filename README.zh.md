@@ -207,7 +207,11 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 
 - Pull Request 和推送到 `main` 会在 Node `22.19.0` 与 `24.x` 上运行质量矩阵。
 - workflow 使用 `npm ci`；依赖变更时，维护者必须提交 `package-lock.json`。
-- 普通 CI workflow 不会发布 npm。发布只由版本 tag workflow 触发。
+- 普通 CI workflow 不会发布 npm；发布只由 `publish.yml` 接收匹配的 `v<version>` tag 后执行。
+- 创建发布 tag 前，维护者先更新 `package.json` 版本和各语言 `CHANGELOG`，提交这些变更，再创建匹配的 `v<version>` tag。tag 指向的提交必须位于 `main` 历史中。
+- npm 包必须配置 GitHub Trusted Publisher：仓库为 `hytime/dsh-thinking-effort`，workflow 为 `publish.yml`。发布使用 GitHub OIDC 生成 provenance，不需要 `NPM_TOKEN`。
+- 发布前 workflow 会构建并使用官方 `dsh plugin` 命令安装、测试 DSH `dsh-v0.1.2-alpha.1`（`0.1.2-alpha.1`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）和 `dsh-v0.1.0-rc.7`（`0.1.0-rc.7`），执行真实兼容检查。
+- workflow 不会自动修改版本或任何 `CHANGELOG`；如果 npm 中已经存在相同版本，发布也会被阻止。
 
 ## 排查
 

@@ -161,6 +161,20 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 | 推論強度の書き込みに失敗する | `off` 以外のすべてのレベルにゲートウェイ値が必要です。 |
 | `UNSUPPORTED_REASONING_EFFORT` が返る | 対象モデルが対応するレベルを選ぶか、プロバイダーの既定値へ戻します。 |
 
+## リリースのメンテナンス
+
+メンテナーは `package.json` の version と該当する `CHANGELOG` を更新してコミットし、一致する `v<version>` tag を作成します。tag の指す commit は `main` の履歴に含まれている必要があります。`publish.yml` workflow は version や CHANGELOG を自動変更しません。
+
+npm パッケージには GitHub Trusted Publishing を設定してください。リポジトリは `hytime/dsh-thinking-effort`、workflow は `publish.yml` です。公開は GitHub OIDC と provenance を使い、`npm publish --provenance --access public` を実行します。`NPM_TOKEN` や長期 token は使用しません。npm に同じ version が存在する場合、公開は停止します。
+
+公開前に workflow は三つの一時的な公式 DSH checkout を作成し、公式 `dsh plugin` コマンドで現在の tarball をインストールしてから実際の互換性テストを実行します。
+
+- `dsh-v0.1.2-alpha.1`（`0.1.2-alpha.1`）
+- `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）
+- `dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）
+
+通常の CI はテスト専用で、Pull Request と `main` への push で実行されます。`npm ci` を使うため、依存関係変更時は `package-lock.json` をコミットしてください。
+
 ## 7. 削除
 
 公式コマンドを使用します。

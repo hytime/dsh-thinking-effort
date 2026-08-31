@@ -241,6 +241,20 @@ curl -s http://127.0.0.1:3080/ \
 | 写入档位失败 | 检查非 `off` 档位是否填写线上值 |
 | 子 agent 报 `UNSUPPORTED_REASONING_EFFORT` | 改用目标模型支持的档位，或恢复为「提供方默认」 |
 
+## 发布维护
+
+维护者先更新 `package.json` 版本和所有适用的 `CHANGELOG`，提交这些变更，再创建匹配的 `v<version>` tag。tag 指向的提交必须位于 `main` 历史中。`publish.yml` workflow 不会自动修改版本或 CHANGELOG。
+
+请为 npm 包配置 GitHub Trusted Publisher：仓库为 `hytime/dsh-thinking-effort`，workflow 为 `publish.yml`。发布使用 GitHub OIDC 和 provenance，命令为 `npm publish --provenance --access public`，不使用 `NPM_TOKEN` 或长期 token。如果 npm 中已存在相同版本，发布会被阻止。
+
+发布前 workflow 会创建三个临时的官方 DSH checkout，并使用官方 `dsh plugin` 命令安装当前 tarball，再运行真实兼容测试：
+
+- `dsh-v0.1.2-alpha.1`（`0.1.2-alpha.1`）
+- `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）
+- `dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）
+
+普通 CI 仍然只做测试，会在 Pull Request 和推送到 `main` 时运行。它使用 `npm ci`，依赖变更时请保持 `package-lock.json` 已提交。
+
 ## 7. 卸载
 
 使用官方命令：

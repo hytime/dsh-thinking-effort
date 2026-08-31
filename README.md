@@ -121,7 +121,11 @@ The page header contains the language selector. Below it, the Subagent default e
 
 - Pull requests and pushes to `main` run the quality matrix on Node `22.19.0` and `24.x`.
 - The workflow uses `npm ci`; maintainers must commit `package-lock.json` when dependencies change.
-- The ordinary CI workflow does not publish to npm. Publishing is triggered only by the version-tag workflow.
+- The ordinary CI workflow does not publish to npm. Publishing is triggered only by a `v<version>` tag through `publish.yml`.
+- Before creating a release tag, update `package.json` version and `CHANGELOG.md` files, commit those changes, and create the matching `v<version>` tag. The tag must point to a commit in the `main` history.
+- npm Trusted Publishing must be configured for repository `hytime/dsh-thinking-effort` and workflow `publish.yml`. The workflow publishes provenance through GitHub OIDC and does not require `NPM_TOKEN`.
+- Before publishing, the workflow builds and tests DSH `dsh-v0.1.2-alpha.1` (`0.1.2-alpha.1`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), and `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`) with the official `dsh plugin` command and real compatibility checks.
+- The workflow never changes the package version or any `CHANGELOG` file automatically; an existing npm version also blocks publishing.
 
 ## License
 
