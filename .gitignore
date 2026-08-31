@@ -5,3 +5,9 @@ node_modules/
 AGENTS.md
 docs/superpowers/
 .worktrees/
+
+# Local runtime and manual-test artifacts.
+thinking-effort-loaded.json
+pnpm-lock.yaml
+docs/68d52d9f-5742-4164-9685-6b9e7f5a86e9.png
+docs/94d15cfd-3ff0-4695-ac9f-c10cb578b500.png
