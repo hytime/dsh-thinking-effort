@@ -15,7 +15,7 @@ type PackageManifest = {
   readonly types?: string
   readonly exports: Record<string, string | { readonly types?: string; readonly default?: string }>
   readonly files: readonly string[]
-  readonly dsh?: { readonly client?: { readonly platform?: string; readonly external?: readonly string[] } }
+  readonly dsh?: { readonly client?: { readonly inject?: readonly string[]; readonly platform?: string; readonly external?: readonly string[] } }
 }
 
 const root = resolve(import.meta.dirname, '..')
@@ -390,6 +390,7 @@ async function probeOfficialSettingsDom(cliRoot: string, web: RunningWeb): Promi
   bodyText: string
   buttons: string[]
   settingsText: string
+  thinkingEffortVisible: boolean
   errors: string[]
   blocked?: string
 }> {
@@ -443,6 +444,12 @@ async function probeOfficialSettingsDom(cliRoot: string, web: RunningWeb): Promi
       bodyText,
       buttons,
       settingsText,
+      thinkingEffortVisible: [
+        '模型能力与档位',
+        'Model capabilities and effort',
+        'モデルの能力と推論強度',
+        '모델 기능 및 추론 강도',
+      ].some((title) => settingsText.includes(title)),
       errors,
     }
   } finally {
@@ -745,7 +752,15 @@ describe('published package composition', () => {
       types: './lib/types/client/index.d.ts',
       default: './lib/client.js',
     })
-    expect(manifest.dsh?.client).toEqual({ platform: 'web' })
+    expect(manifest.dsh?.client).toEqual({
+      inject: [
+        '@deepseek-ai/dsh-client-connection',
+        '@deepseek-ai/dsh-client-locale',
+        '@deepseek-ai/dsh-client-ui-settings',
+        '@deepseek-ai/dsh-api-remotes',
+      ],
+      platform: 'web',
+    })
     expect(manifest.files).toContain('lib/index.js')
     expect(manifest.files).toContain('lib/client.js')
     expect(manifest.files).toContain('lib/types/**/*.d.ts')
@@ -916,6 +931,9 @@ integrationDescribe('official DSH loader composition', () => {
           expect(domProbe.settingsText).toContain('插件')
           expect(domProbe.errors).toEqual([])
           if (!domProbe.thinkingEffortVisible) {
+             if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
+               throw new Error('thinking-effort settings section is absent from the real DSH Web DOM')
+             }
             console.log(`[BLOCKED] thinking-effort section missing; DOM=${JSON.stringify(domProbe.settingsText)}; bootRows=${JSON.stringify(bootRows)}`)
           }
         }
