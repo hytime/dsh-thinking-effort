@@ -56,7 +56,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.12
 ```
 
 官方 CLI 会自动完成以下工作：
@@ -86,7 +86,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 升级到指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.12
 ```
 
 升级后重新执行验证步骤。宿主侧代码需要重启 DSH；浏览器侧代码需要刷新 Web 页面。
@@ -106,7 +106,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.12
 ```
 
 ### 3.2 旧依赖已被移除，但旧 bundle 残留
@@ -135,7 +135,7 @@ grep -n "dsh-thinking-effort" \
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.12
 ```
 
 这一步的目的不是继续使用旧插件，而是让官方 CLI 识别旧依赖并自动删除残留 bundle。不要手工把旧包名重新写入新的 bundle 列表。
@@ -249,7 +249,7 @@ curl -s http://127.0.0.1:3080/ \
 
 发布前 workflow 会创建三个临时的官方 DSH checkout，并使用官方 `dsh plugin` 命令安装当前 tarball，再运行真实兼容测试：
 
-- `dsh-v0.1.2-alpha.1`（`0.1.2-alpha.1`）
+- `dsh-v0.1.2-alpha.3`（`0.1.2-alpha.3`）
 - `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）
 - `dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）
 

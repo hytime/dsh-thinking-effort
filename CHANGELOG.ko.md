@@ -8,6 +8,12 @@
 
 버전 번호는 [Semantic Versioning](https://semver.org/)을 따릅니다.
 
+## [0.1.12] - 공식 alpha.3 호환성 검증
+
+### 변경
+
+- 공식 DSH 호환성 검증 기준을 `dsh-v0.1.2-alpha.3`로 업데이트하고 이전 rc7 tag를 공식 `dsh-v0.1.0-rc.7`로 수정했습니다. Host/Client 런타임 동작은 변경되지 않았습니다.
+
 ## [0.1.11] - TypeScript 빌드 마이그레이션 및 버전 호환성
 
 ### 변경

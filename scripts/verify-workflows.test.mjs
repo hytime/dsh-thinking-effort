@@ -521,7 +521,7 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
   assert.ok(compatibilityBuild, 'compatibility job must define its build and integration step');
   assert.equal(typeof compatibilityBuild.run, 'string', 'compatibility build step must have a run script');
   for (const required of [
-    'dsh-v0.1.2-alpha.1',
+    'dsh-v0.1.2-alpha.3',
     'dsh-v0.1.1-rc.2',
     'dsh-v0.1.0-rc.7',
     'DSH_CLI_ROOTS="$ALPHA_ROOT,$RC2_ROOT,$RC7_ROOT"',
@@ -541,7 +541,7 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
   ]) {
     assert.ok(compatibilityBuild.run.includes(required), `compatibility build step must include ${required}`);
   }
-  assert.match(compatibilityBuild.run, /ALPHA_ROOT=.*dsh-v0\.1\.2-alpha\.1/);
+  assert.match(compatibilityBuild.run, /ALPHA_ROOT=.*dsh-v0\.1\.2-alpha\.3/);
   assert.match(compatibilityBuild.run, /RC2_ROOT=.*dsh-v0\.1\.1-rc\.2/);
   assert.match(compatibilityBuild.run, /RC7_ROOT=.*dsh-v0\.1\.0-rc\.7/);
   assert.match(compatibilityBuild.run, /npm test -- tests\/loader-composition\.test\.ts\s*&/);

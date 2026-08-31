@@ -8,6 +8,12 @@
 
 バージョン番号は [Semantic Versioning](https://semver.org/) に従います。
 
+## [0.1.12] - 公式 alpha.3 互換性検証
+
+### 変更
+
+- 公式 DSH の互換性検証基準を `dsh-v0.1.2-alpha.3` に更新し、旧 rc7 tag を公式の `dsh-v0.1.0-rc.7` に修正しました。Host/Client の実行動作は変更ありません。
+
 ## [0.1.11] - TypeScript ビルド移行とバージョン互換性
 
 ### 変更

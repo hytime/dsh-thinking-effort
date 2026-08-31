@@ -43,7 +43,7 @@ function readOfficialDshVersion(cliRoot: string): string {
 }
 
 const expectedOfficialDshVersions = [
-  '0.1.2-alpha.1',
+  '0.1.2-alpha.3',
   '0.1.1-rc.2',
   '0.1.0-rc.7',
 ] as const
@@ -809,7 +809,7 @@ describe('published package composition', () => {
   it('exposes built Host and Client artifacts with declarations', () => {
     const manifest = readPackage()
 
-    expect(manifest.version).toBe('0.1.11')
+    expect(manifest.version).toBe('0.1.12')
     expect(manifest.main).toBe('./lib/index.js')
     expect(manifest.types).toBe('./lib/types/index.d.ts')
     expect(manifest.exports['.']).toEqual({
@@ -875,7 +875,7 @@ integrationDescribe('official DSH loader composition', () => {
     const installedDir = join(profile, 'node_modules', '@hytime', 'dsh-thinking-effort')
     const installedManifest = JSON.parse(readFileSync(join(installedDir, 'package.json'), 'utf8')) as PackageManifest
     expect(installedManifest.name).toBe('@hytime/dsh-thinking-effort')
-    expect(installedManifest.version).toBe('0.1.11')
+    expect(installedManifest.version).toBe('0.1.12')
 
     const hostEntry = join(installedDir, 'lib', 'index.js')
     const clientEntry = join(installedDir, 'lib', 'client.js')

@@ -29,8 +29,10 @@ const semverPattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:(?:
 
 const verifiedProfiles: Readonly<Record<string, Exclude<CompatibilityProfile, 'unknown'>>> = {
   '0.1.1-rc.2': 'legacy',
-  '0.1.1-rc.7': 'legacy',
+  '0.1.0-rc.7': 'legacy',
   '0.1.2-alpha.1': 'modern',
+  '0.1.2-alpha.2': 'modern',
+  '0.1.2-alpha.3': 'modern',
 }
 
 function parseVersion(value: unknown): ParsedVersion | undefined {

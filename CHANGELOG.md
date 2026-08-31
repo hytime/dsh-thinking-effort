@@ -12,6 +12,13 @@ This file records the features, fixes, and user-facing impact of every published
 
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.12] - 官方 alpha.3 兼容验证 / Official alpha.3 compatibility verification
+
+### 变更 / Changed
+
+- 将官方 DSH 兼容验证基线更新至 `dsh-v0.1.2-alpha.3`，并修正旧版 rc7 标签为官方实际的 `dsh-v0.1.0-rc.7`；Host/Client 运行逻辑保持不变。
+- Update the official DSH compatibility baseline to `dsh-v0.1.2-alpha.3` and correct the legacy rc7 tag to the actual official `dsh-v0.1.0-rc.7`; Host and Client runtime behavior is unchanged.
+
 ## [0.1.11] - TypeScript 构建迁移与跨版本兼容 / TypeScript build migration and cross-version compatibility
 
 ### 变更 / Changed

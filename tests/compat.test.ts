@@ -9,8 +9,10 @@ const noSettings = { settings: 'none', externalLanguages: false } as const
 describe('compatibility profiles', () => {
   it('classifies the verified legacy and modern versions', () => {
     expect(resolveCompatibility({ version: '0.1.1-rc.2', capabilities: legacy }).profile).toBe('legacy')
-    expect(resolveCompatibility({ version: '0.1.1-rc.7', capabilities: legacy }).profile).toBe('legacy')
+    expect(resolveCompatibility({ version: '0.1.0-rc.7', capabilities: legacy }).profile).toBe('legacy')
     expect(resolveCompatibility({ version: '0.1.2-alpha.1', capabilities: modern }).profile).toBe('modern')
+    expect(resolveCompatibility({ version: '0.1.2-alpha.2', capabilities: modern }).profile).toBe('modern')
+    expect(resolveCompatibility({ version: '0.1.2-alpha.3', capabilities: modern }).profile).toBe('modern')
   })
 
   it('uses detected capabilities when version metadata is absent', () => {
@@ -60,7 +62,7 @@ describe('compatibility profiles', () => {
   })
 
   it('uses actual capabilities and reports a legacy-version mismatch', () => {
-    const report = resolveCompatibility({ version: '0.1.1-rc.7', capabilities: modern })
+    const report = resolveCompatibility({ version: '0.1.0-rc.7', capabilities: modern })
 
     expect(report.profile).toBe('modern')
     expect(report.expected).toBe('legacy')
