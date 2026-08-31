@@ -29,7 +29,9 @@ dsh --version
 ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 ```
 
-Use the profile named by your running DSH process. `web` is common, but the active `--profile` argument is authoritative.
+Use the built package entries `lib/index.js` for Host and `lib/client.js` for Client. When developing from TypeScript or locale sources, run `npm run build` before starting DSH or packing the package.
+
+Current DSH does not expose a public semver metadata contract, so runtime capability detection is authoritative. An optional version is used only when explicit metadata or test input supplies it; unknown valid versions still use the detected capabilities. Both modern `remote.settings` and legacy `connection.api.settings` are supported.
 
 ## 1. Official installation
 
@@ -42,7 +44,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 Install the current release explicitly:
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
 ```
 
 The official CLI updates the profile dependency, lockfile, and `dsh.profile.bundles` automatically. Do not add a manual YAML row.
@@ -58,7 +60,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 Upgrade to a specific version:
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
 ```
 
 Restart DSH for host changes and refresh the Web page for client changes.
@@ -76,7 +78,7 @@ If the old dependency still exists, use the official commands:
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
 ```
 
 If the dependency was removed by another tool but the old bundle remains, inspect the composed profile:
@@ -90,7 +92,7 @@ If it still contains `name: dsh-thinking-effort`, find the old GitHub commit in 
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
 ```
 
 Do not add the old package name to a new bundle list.
@@ -105,7 +107,7 @@ grep -n "@hytime/dsh-thinking-effort" \
 node -p "require('${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/node_modules/@hytime/dsh-thinking-effort/package.json').version"
 ```
 
-The version must be `0.1.10` for this release.
+The version must be `0.1.11` for this release.
 
 ## Japanese and Korean support status
 
@@ -138,7 +140,7 @@ Restart DSH, then refresh the Web page. Open **Settings → Model capabilities a
 2. The **Subagent default effort** card shows the current default and provides **Apply**.
 3. **Quick settings** offers the official DeepSeek and generic batch presets.
 4. The provider/model list supports search, expand/collapse, input-capability badges, context badges, and per-model settings controls.
-5. The bottom-right watermark shows `v0.1.10`.
+5. The bottom-right watermark shows `v0.1.11`.
 
 The host marker can be checked with:
 

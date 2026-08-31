@@ -1,15 +1,19 @@
 {
   "name": "@hytime/dsh-thinking-effort",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "为 DSH 的 pi-ai 第三方模型补充可配置的思考强度档位，并设置子 agent 默认思考强度。",
   "private": false,
   "scripts": {
-    "build": "node scripts/build-client.mjs",
-    "prepublishOnly": "npm run build",
-    "test": "node --test"
+    "build": "node scripts/check-locales.mjs && tsc -p tsconfig.json && tsdown -c tsdown.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
   },
   "type": "module",
-  "main": "./src/host.mjs",
+  "main": "./lib/index.js",
+  "types": "./lib/types/index.d.ts",
   "homepage": "https://github.com/hytime/dsh-thinking-effort#readme",
   "repository": {
     "type": "git",
@@ -22,8 +26,9 @@
     "access": "public"
   },
   "files": [
-    "src/",
-    "scripts/build-client.mjs",
+    "lib/index.js",
+    "lib/client.js",
+    "lib/types/**/*.d.ts",
     "cordis.patch.yml",
     "README.md",
     "README.zh.md",
@@ -44,12 +49,24 @@
       "patch": "./cordis.patch.yml"
     },
     "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
       "platform": "web"
     }
   },
   "exports": {
-    ".": "./src/host.mjs",
-    "./client": "./src/client.js",
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
     "./package.json": "./package.json"
   },
   "peerDependencies": {
@@ -63,5 +80,14 @@
     "thinking",
     "llm-pi-ai"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@types/node": "^22.15.21",
+    "@types/react": "^18.3.3",
+    "react": "^18.3.1",
+    "tsdown": "^0.22.14",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
 }

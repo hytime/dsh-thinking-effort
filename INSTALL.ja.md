@@ -29,6 +29,10 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 実行中の DSH プロセスが使用する profile を選択してください。`web` が一般的ですが、実際の `--profile` 引数が正式な指定です。
 
+公開パッケージの Host 入口は `lib/index.js`、Client 入口は `lib/client.js` です。TypeScript または locale のソースから開発する場合は、DSH の起動やパッケージ作成の前に `npm run build` を実行してください。
+
+現在の DSH には公開された semver metadata 契約がないため、実行時の capability detection を権威あるソースとします。任意のバージョンは明示的な metadata またはテスト入力がある場合だけ使用し、未知の有効なバージョンでも検出した能力に従って動作します。新しい `remote.settings` と旧来の `connection.api.settings` の両方に対応します。
+
 ## 1. 公式インストール
 
 最新版をインストールします。
@@ -40,7 +44,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 今回のリリースを明示してインストールします。
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
 ```
 
 公式 CLI は profile の依存関係、lockfile、`dsh.profile.bundles` を自動的に更新します。YAML の行を手動で追加しないでください。
@@ -56,7 +60,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 特定バージョンへ更新する場合：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
 ```
 
 Host の変更には DSH を再起動し、Client の変更には Web ページを更新してください。
@@ -74,7 +78,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
 ```
 
 依存関係は別のツールで削除済みですが、古い bundle が残っている場合は次で composition を確認します。
@@ -88,7 +92,7 @@ dsh --profile <profile> --dump-default-config
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.11
 ```
 
 新しい bundle リストに旧パッケージ名を追加しないでください。
@@ -103,7 +107,7 @@ grep -n "@hytime/dsh-thinking-effort" \
 node -p "require('${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/node_modules/@hytime/dsh-thinking-effort/package.json').version"
 ```
 
-このリリースではバージョンが `0.1.10` である必要があります。
+このリリースではバージョンが `0.1.11` である必要があります。
 
 ## 日本語と韓国語の対応状況
 
@@ -137,7 +141,7 @@ DSH を再起動し、Web ページを更新してから **Settings → Model ca
 2. **Subagent default effort** カードに現在の既定値と **Apply** が表示されます。
 3. **Quick settings** から公式 DeepSeek 形式または汎用プリセットを一括適用できます。
 4. プロバイダー/モデル一覧では検索、展開/折りたたみ、入力能力、コンテキスト長、モデル設定ボタンを確認できます。
-5. 右下のバージョン表示が `v0.1.10` になります。
+5. 右下のバージョン表示が `v0.1.11` になります。
 
 Host のロードマーカーは次で確認できます。
 
