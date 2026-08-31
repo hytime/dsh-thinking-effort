@@ -63,7 +63,7 @@ export function apply(context: ClientContext): void {
   }
 
   const mountFromRemote = (): void => {
-    mount(settingsBridge(connection, context.get('remote.settings')))
+    mount(settingsBridge(connection, context.get('remote.settings'), locale.addLanguage))
   }
   mountFromRemote()
   context.on('internal/service', (serviceName) => {

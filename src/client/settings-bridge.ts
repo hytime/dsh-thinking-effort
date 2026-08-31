@@ -13,9 +13,25 @@ export function directResult<T>(response: unknown): T {
 export function settingsBridge(
   connection: ClientConnection | undefined,
   remoteSettings?: unknown,
+  addLanguage?: unknown,
 ): SettingsApi | undefined {
   const legacySettings = connection?.api?.settings
-  const capabilities = clientCapabilities({ remoteSettings, legacySettings })
+  const legacyCapabilities = clientCapabilities({ legacySettings, addLanguage })
+  if (legacyCapabilities.settings === 'legacy' && legacySettings !== undefined) {
+    const legacy = legacySettings as {
+      describe: (input: Record<string, never>) => Promise<unknown>
+      mutate: (input: { ns: string; ops: readonly SettingsOp[]; expectedRevision: number }) => Promise<unknown>
+    }
+    return {
+      externalLanguages: legacyCapabilities.externalLanguages,
+      describe: () => legacy.describe({}).then((response) => directResult<ClientResult<SettingsDescribeValue>>(response)),
+      mutate: (ns, ops, expectedRevision) => legacy
+        .mutate({ ns, ops, expectedRevision })
+        .then((response) => directResult<ClientResult<SettingsNamespace>>(response)),
+    }
+  }
+
+  const capabilities = clientCapabilities({ remoteSettings, legacySettings, addLanguage })
   const compatibility = resolveCompatibility({ capabilities })
 
   if (compatibility.profile === 'modern' && remoteSettings !== undefined) {
@@ -24,24 +40,10 @@ export function settingsBridge(
       mutate: (ns: string, ops: readonly SettingsOp[], expectedRevision: number) => Promise<unknown>
     }
     return {
-      externalLanguages: compatibility.profile === 'modern',
+      externalLanguages: capabilities.externalLanguages,
       describe: () => modern.describe().then((response) => directResult<ClientResult<SettingsDescribeValue>>(response)),
       mutate: (ns, ops, expectedRevision) => modern
         .mutate(ns, ops, expectedRevision)
-        .then((response) => directResult<ClientResult<SettingsNamespace>>(response)),
-    }
-  }
-
-  if (compatibility.profile === 'legacy' && legacySettings !== undefined) {
-    const legacy = legacySettings as {
-      describe: (input: Record<string, never>) => Promise<unknown>
-      mutate: (input: { ns: string; ops: readonly SettingsOp[]; expectedRevision: number }) => Promise<unknown>
-    }
-    return {
-      externalLanguages: false,
-      describe: () => legacy.describe({}).then((response) => directResult<ClientResult<SettingsDescribeValue>>(response)),
-      mutate: (ns, ops, expectedRevision) => legacy
-        .mutate({ ns, ops, expectedRevision })
         .then((response) => directResult<ClientResult<SettingsNamespace>>(response)),
     }
   }

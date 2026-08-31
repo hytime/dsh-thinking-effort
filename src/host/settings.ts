@@ -102,25 +102,44 @@ export function installSettingsWatcher(ctx: HostContext): void {
     return
   }
 
-  let retries = 0
-  const tryOnce = async (): Promise<void> => {
-    try {
-      if ((await fillDefaults(settings)) > 0) return
-    } catch (error) {
-      log('fill error:', error instanceof Error ? error.message : String(error))
+  ctx.effect(() => {
+    let alive = true
+    let retries = 0
+    const timerDisposers: Array<() => void> = []
+    const schedule = (delay: number): void => {
+      if (!alive) return
+      const disposer = ctx.timeout(() => {
+        if (!alive) return
+        void tryOnce()
+      }, delay)
+      if (typeof disposer === 'function') timerDisposers.push(() => { disposer() })
+    }
+    const tryOnce = async (): Promise<void> => {
+      if (!alive) return
+      try {
+        if ((await fillDefaults(settings)) > 0) return
+      } catch (error) {
+        if (!alive) return
+        log('fill error:', error instanceof Error ? error.message : String(error))
+      }
+
+      if (!alive) return
+      retries += 1
+      if (retries <= 5) schedule(2000)
     }
 
-    retries += 1
-    if (retries <= 5) {
-      ctx.timeout(() => { void tryOnce() }, 2000)
-    }
-  }
-
-  ctx.timeout(() => { void tryOnce() }, 500)
-  ctx.on('settings/updated', (...args: unknown[]) => {
-    if (args[0] !== SETTINGS_NAMESPACE) return
-    void fillDefaults(settings).catch((error: unknown) => {
-      log('watch fill error:', error instanceof Error ? error.message : String(error))
+    schedule(500)
+    const listenerDisposer = ctx.on('settings/updated', (...args: unknown[]) => {
+      if (!alive || args[0] !== SETTINGS_NAMESPACE) return
+      void fillDefaults(settings).catch((error: unknown) => {
+        if (alive) log('watch fill error:', error instanceof Error ? error.message : String(error))
+      })
     })
-  })
+
+    return () => {
+      alive = false
+      for (const dispose of timerDisposers.splice(0)) dispose()
+      if (typeof listenerDisposer === 'function') listenerDisposer()
+    }
+  }, 'dsh-thinking-effort: settings watcher')
 }

@@ -13,7 +13,7 @@
 ### 変更
 
 - Host と Client のランタイムコードを TypeScript に移行し、ビルド済みの `lib/index.js`、`lib/client.js` と宣言ファイルを公開します。動作と Settings データ形式は互換です。
-- 互換アダプターは DSH のバージョン metadata を優先し、利用できない場合は capability detection にフォールバックします。新しい `remote.settings` と旧来の `connection.api.settings` の両方に対応します。
+- 互換アダプターは明示的なバージョン metadata またはテスト入力に対応しますが、現在の DSH には公開された semver metadata 契約がないため、実行時の capability detection を権威あるソースとします。未知の有効なバージョンは検出した能力に従って動作し、新旧の Settings API をサポートします。
 - 未知のバージョンでも必要な capability があれば動作を継続します。能力が不足する場合は関連機能を利用不可のままにし、対応していない `ja/ko` locale も非表示にします。
 
 

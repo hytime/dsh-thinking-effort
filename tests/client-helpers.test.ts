@@ -75,6 +75,26 @@ describe('client constants and bridge', () => {
     expect(mutate).toHaveBeenCalledWith(NS, [], 4)
   })
 
+  it('prefers legacy settings when both settings APIs are available', async () => {
+    const legacyDescribe = vi.fn().mockResolvedValue({ result: { ok: true, value: { namespaces: [] } } })
+    const legacyMutate = vi.fn().mockResolvedValue({ result: { ok: true, value: { ns: NS } } })
+    const modernDescribe = vi.fn().mockResolvedValue({ ok: true, value: { namespaces: [] } })
+    const modernMutate = vi.fn().mockResolvedValue({ ok: true, value: { ns: NS } })
+    const api = settingsBridge(
+      { api: { settings: { describe: legacyDescribe, mutate: legacyMutate } } },
+      { describe: modernDescribe, mutate: modernMutate },
+      () => undefined,
+    )
+
+    expect(api).toBeDefined()
+    expect(api?.externalLanguages).toBe(true)
+    await api?.describe()
+    await api?.mutate(NS, [], 9)
+    expect(legacyDescribe).toHaveBeenCalledWith({})
+    expect(legacyMutate).toHaveBeenCalledWith({ ns: NS, ops: [], expectedRevision: 9 })
+    expect(modernDescribe).not.toHaveBeenCalled()
+    expect(modernMutate).not.toHaveBeenCalled()
+  })
   it('uses legacy wrapped settings calls when modern settings are absent', async () => {
     const describe = vi.fn().mockResolvedValue({ result: { ok: true, value: { namespaces: [] } } })
     const mutate = vi.fn().mockResolvedValue({ result: { ok: true, value: { ns: NS } } })

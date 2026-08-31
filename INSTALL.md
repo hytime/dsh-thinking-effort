@@ -31,7 +31,7 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 Use the built package entries `lib/index.js` for Host and `lib/client.js` for Client. When developing from TypeScript or locale sources, run `npm run build` before starting DSH or packing the package.
 
-The compatibility adapter uses DSH version metadata first and capability detection as a fallback. Both modern `remote.settings` and legacy `connection.api.settings` are supported. An unknown DSH version continues when the required capabilities are available; otherwise the related feature remains unavailable.
+Current DSH does not expose a public semver metadata contract, so runtime capability detection is authoritative. An optional version is used only when explicit metadata or test input supplies it; unknown valid versions still use the detected capabilities. Both modern `remote.settings` and legacy `connection.api.settings` are supported.
 
 ## 1. Official installation
 

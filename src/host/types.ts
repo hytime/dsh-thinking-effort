@@ -40,6 +40,7 @@ export interface HostContext {
     callback: (...args: unknown[]) => unknown,
     options?: UnknownRecord,
   ) => unknown
+  readonly effect: (callback: () => void | (() => void), label?: string) => unknown
 }
 
 export function isUnknownRecord(value: unknown): value is UnknownRecord {

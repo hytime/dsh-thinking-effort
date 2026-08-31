@@ -99,7 +99,7 @@ export function resolveCompatibility(input: {
   const expected = verifiedProfiles[parsed.value]
   if (expected === undefined) {
     return {
-      profile: 'unknown',
+      profile: actualProfile,
       version: parsed.value,
       capabilities,
       diagnostics,

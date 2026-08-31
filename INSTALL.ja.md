@@ -31,7 +31,7 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 公開パッケージの Host 入口は `lib/index.js`、Client 入口は `lib/client.js` です。TypeScript または locale のソースから開発する場合は、DSH の起動やパッケージ作成の前に `npm run build` を実行してください。
 
-互換アダプターは DSH のバージョン metadata を優先し、利用できない場合は capability detection にフォールバックします。新しい `remote.settings` と旧来の `connection.api.settings` の両方に対応します。未知の DSH バージョンでも必要な能力があれば動作を継続し、能力がなければ関連機能を利用不可のままにします。
+現在の DSH には公開された semver metadata 契約がないため、実行時の capability detection を権威あるソースとします。任意のバージョンは明示的な metadata またはテスト入力がある場合だけ使用し、未知の有効なバージョンでも検出した能力に従って動作します。新しい `remote.settings` と旧来の `connection.api.settings` の両方に対応します。
 
 ## 1. 公式インストール
 

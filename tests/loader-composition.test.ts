@@ -20,6 +20,10 @@ type PackageManifest = {
 
 const root = resolve(import.meta.dirname, '..')
 const integrationEnabled = process.env.DSH_LOADER_INTEGRATION === '1'
+const cliRoots = (process.env.DSH_CLI_ROOTS ?? '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter((value) => value !== '')
 const integrationDescribe = integrationEnabled ? describe : describe.skip
 
 function readPackage(): PackageManifest {
@@ -258,14 +262,15 @@ async function probeOfficialAgentRuntime(
     expect(existsSync(settingsPath)).toBe(true)
 
     const LlmAdapter = llm.LlmAdapter as new () => {
-      resolveModel: (provider: string, model: string) => Promise<Record<string, unknown>>
-      stream: (options: Record<string, unknown>) => AsyncIterable<Record<string, unknown>>
+      resolveModel(provider: string, model: string): Promise<Record<string, unknown>>
+      stream(options: Record<string, unknown>): AsyncIterable<Record<string, unknown>>
     }
+    const ReasoningEffortId = llm.ReasoningEffortId as (value: string) => unknown
     const requests: Record<string, unknown>[] = []
     class ProbeAdapter extends LlmAdapter {
       override resolveModel(provider: string, model: string): Promise<Record<string, unknown>> {
-        const lowEffort = llm.ReasoningEffortId('low') as unknown
-        const highEffort = llm.ReasoningEffortId('high') as unknown
+        const lowEffort = ReasoningEffortId('low')
+        const highEffort = ReasoningEffortId('high')
         return Promise.resolve({
           provider,
           id: model,
@@ -298,13 +303,13 @@ async function probeOfficialAgentRuntime(
         agentOptions: { provider: 'probe', model: 'probe-model' },
       })
       try {
-        const message = llm.createUserMessage({
+        const message = (llm.createUserMessage as (input: Record<string, unknown>) => unknown)({
           content: [{ type: 'text', text: 'run the real agent request probe' }],
           source: { kind: 'user' },
         })
         handle.agent.followup(message)
         await handle.agent.whenIdle()
-        const turnEnd = handle.agent.session.events.findLast(event => event.type === 'turn/end')
+        const turnEnd = [...handle.agent.session.events].reverse().find((event: { type: string }) => event.type === 'turn/end')
         return {
           requestCount: requests.length,
           reasoningEffort: requests.at(-1)?.reasoningEffort,
@@ -401,7 +406,7 @@ async function probeOfficialSettingsDom(cliRoot: string, web: RunningWeb): Promi
     playwright = await import(pathToFileURL(playwrightPath).href) as unknown as Playwright
     executablePath = discoverBrowserExecutable()
   } catch (error) {
-    return { bodyText: '', buttons: [], settingsText: '', errors: [], blocked: String(error) }
+    return { bodyText: '', buttons: [], settingsText: '', thinkingEffortVisible: false, errors: [], blocked: String(error) }
   }
   let browser: Awaited<ReturnType<Playwright['chromium']['launch']>>
   try {
@@ -410,7 +415,7 @@ async function probeOfficialSettingsDom(cliRoot: string, web: RunningWeb): Promi
       ...(executablePath === undefined ? {} : { executablePath }),
     })
   } catch (error) {
-    return { bodyText: '', buttons: [], settingsText: '', errors: [], blocked: `BLOCKED: browser launch failed: ${String(error)}` }
+    return { bodyText: '', buttons: [], settingsText: '', thinkingEffortVisible: false, errors: [], blocked: `BLOCKED: browser launch failed: ${String(error)}` }
   }
   try {
     const context = await browser.newContext()
@@ -773,22 +778,17 @@ describe('published package composition', () => {
 })
 
 integrationDescribe('official DSH loader composition', () => {
-  const cliRoot = process.env.DSH_CLI_ROOT
-  const home = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-loader-'))
-  const packDestination = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-pack-'))
-  const profile = join(home, 'profiles', 'compat')
-
-  afterAll(() => {
-    rmSync(home, { recursive: true, force: true })
-    rmSync(packDestination, { recursive: true, force: true })
-  })
-
-  it('installs the local tarball through official dsh and serves the actual Web bundle route', { timeout: 60000 }, async () => {
-    if (cliRoot === undefined || cliRoot === '') {
-      throw new Error('DSH_CLI_ROOT must point to an official DSH checkout when DSH_LOADER_INTEGRATION=1')
+  it('requires and verifies alpha, rc2, and rc7 roots independently', { timeout: 180000 }, async () => {
+    if (cliRoots.length !== 3) {
+      throw new Error('DSH_CLI_ROOTS must contain exactly three comma-separated roots: alpha, rc2, rc7')
     }
 
-    expect(existsSync(profile)).toBe(false)
+    for (const cliRoot of cliRoots) {
+      const home = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-loader-'))
+      const packDestination = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-pack-'))
+      const profile = join(home, 'profiles', 'compat')
+      try {
+        expect(existsSync(profile)).toBe(false)
     const tarball = packLocalPackage(packDestination)
 
     runOfficialDsh(cliRoot, home, ['plugin', '--profile', 'compat', 'add', tarball])
@@ -846,7 +846,7 @@ integrationDescribe('official DSH loader composition', () => {
           : ['dsh', '--profile', 'web', '--no-open', '--port', '0'],
       })
       try {
-        const headers = web.cookie === '' ? {} : { cookie: web.cookie }
+        const headers: Record<string, string> = web.cookie === '' ? {} : { cookie: web.cookie }
         const legacyRpc = cliRoot.includes('dsh-v0.1.1-rc.2') || cliRoot.includes('dsh-v0.1.0-rc.7')
         const describeEndpoint = legacyRpc ? 'settings.describe' : 'settings/describe'
         const mutateEndpoint = legacyRpc ? 'settings.mutate' : 'settings/mutate'
@@ -882,11 +882,11 @@ integrationDescribe('official DSH loader composition', () => {
         const settings = legacyRpc
           ? settingsBridge({ api: { settings: {
             describe: () => liveResult(describeEndpoint, {}),
-            mutate: (args) => liveResult(mutateEndpoint, args),
+            mutate: (args: { ns: string; ops: readonly import('../src/client/types.js').SettingsOp[]; expectedRevision: number }) => liveResult(mutateEndpoint, args),
           } } })
           : settingsBridge(undefined, {
             describe: () => liveResult(describeEndpoint, {}),
-            mutate: (ns, ops, expectedRevision) => liveResult(mutateEndpoint, { ns, ops, expectedRevision }),
+            mutate: (ns: string, ops: readonly import('../src/client/types.js').SettingsOp[], expectedRevision: number) => liveResult(mutateEndpoint, { ns, ops, expectedRevision }),
           })
         expect(settings).toBeDefined()
         const bridgedDescription = await settings!.describe()
@@ -981,11 +981,20 @@ integrationDescribe('official DSH loader composition', () => {
       expect(runtimeProbe.modern.languages).not.toContain('ko')
     }
     expect(runtimeProbe.modern.sectionIds).toContain('thinking-effort')
-    expect(runtimeProbe.legacy.languages).not.toContain('ja')
-    expect(runtimeProbe.legacy.languages).not.toContain('ko')
+    if (runtimeProbe.legacy.supportsExternalLanguages) {
+      expect(runtimeProbe.legacy.languages).toEqual(expect.arrayContaining(['ja', 'ko']))
+    } else {
+      expect(runtimeProbe.legacy.languages).not.toContain('ja')
+      expect(runtimeProbe.legacy.languages).not.toContain('ko')
+    }
     expect(runtimeProbe.legacy.sectionIds).toContain('thinking-effort')
     expect(registered).toHaveLength(1)
     expect(registered[0]?.id).toBe('@hytime/dsh-thinking-effort')
-    expect(typeof registered[0]?.factory).toBe('function')
+      expect(typeof registered[0]?.factory).toBe('function')
+      } finally {
+        rmSync(home, { recursive: true, force: true })
+        rmSync(packDestination, { recursive: true, force: true })
+      }
+    }
   })
 })

@@ -19,11 +19,11 @@ import type {
 const packageManifest = JSON.parse(readFileSync(resolve(import.meta.dirname, '..', 'package.json'), 'utf8')) as { version: string }
 
 const text = (key: string, params?: Record<string, unknown>): string => {
-  const value = zh[key] ?? key
-  return value.replace(/\{(\w+)\}/g, (_match, name: string) => String(params?.[name] ?? `{${name}}`))
+  const value = (zh as Record<string, string>)[key] ?? key
+  return value.replace(/\{(\w+)\}/g, (_match: string, name: string) => String(params?.[name] ?? `{${name}}`))
 }
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true
+;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const namespace = (overrides: Partial<SettingsNamespace> = {}): SettingsNamespace => ({
   ns: 'llm-pi-ai',
@@ -61,6 +61,8 @@ const namespace = (overrides: Partial<SettingsNamespace> = {}): SettingsNamespac
 
 function localeSnapshot(locales: readonly string[] = ['zh', 'en', 'ja']): ClientLocale {
   return {
+    register: () => () => undefined,
+    bind: () => text,
     getSnapshot: () => ({ active: 'zh', locales: locales.map((id) => ({ id })) }),
     setLocale: vi.fn(),
   }
@@ -80,8 +82,9 @@ function renderEditor(options: {
   const container = document.createElement('div')
   document.body.append(container)
   const locale = localeSnapshot(options.locales)
-  const mutate = vi.fn(options.mutate ?? (async (_ns, _ops, _revision) => ({ ok: true, value: namespace() })))
+  const mutate = vi.fn<SettingsApi['mutate']>(options.mutate ?? (async (_ns, _ops, _revision) => ({ ok: true as const, value: namespace() })))
   const settings: SettingsApi = {
+    externalLanguages: false,
     describe: options.describe ?? (async () => ({ ok: true, value: { namespaces: [namespace()] } })),
     mutate,
   }
@@ -188,7 +191,7 @@ describe('SectionEditor user behavior', () => {
   it('updates an effort wire value, context mode, and input modalities before saving', async () => {
     const saved = namespace({ revision: 3 })
     const view = renderEditor({
-      mutate: vi.fn(async (_ns, _ops, _revision) => ({ ok: true, value: saved })),
+      mutate: async (_ns, _ops, _revision) => ({ ok: true as const, value: saved }),
     })
     await settle()
     openFirstModel(view.container)

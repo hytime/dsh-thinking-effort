@@ -6,6 +6,7 @@
   "scripts": {
     "build": "node scripts/check-locales.mjs && tsc -p tsconfig.json && tsdown -c tsdown.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepublishOnly": "npm run build"

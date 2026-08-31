@@ -9,26 +9,37 @@ type HarnessOptions = {
   section?: SettingsSection
   descriptors?: Array<Record<string, unknown>>
   rejectUpdates?: number
+  pendingUpdate?: boolean
 }
 
 function createHarness(options: HarnessOptions = {}) {
   let section = options.section
   let descriptors = options.descriptors ?? []
   let rejectsLeft = options.rejectUpdates ?? 0
+  let pendingUpdateResolve: (() => void) | undefined
+  let pendingUpdateReject: ((error: Error) => void) | undefined
   const updates: Array<{ ns: string; value: Record<string, unknown> }> = []
   const scheduled: Array<{ callback: () => void; delay: number }> = []
   const listeners: Array<{ name: string; callback: (...args: any[]) => unknown; options?: unknown }> = []
+  let effectCleanup: (() => void) | undefined
   const ctx = {
     settings: {
       writable: options.writable ?? true,
       get: (_ns: string) => section,
       update: async (ns: string, value: Record<string, unknown>) => {
         updates.push({ ns, value })
+        if (options.pendingUpdate === true) {
+          await new Promise<void>((resolve, reject) => {
+            pendingUpdateResolve = resolve
+            pendingUpdateReject = reject
+          })
+        }
         if (rejectsLeft > 0) {
           rejectsLeft -= 1
           throw new Error('update unavailable')
         }
-        section = { ...(section ?? {}), ...value }
+        section = { ...(section ?? {}), ...value
+        }
       },
       describe: () => descriptors,
     },
@@ -39,6 +50,10 @@ function createHarness(options: HarnessOptions = {}) {
     on: (name: string, callback: (...args: any[]) => unknown, options?: unknown) => {
       listeners.push({ name, callback, options })
       return () => {}
+    },
+    effect: (callback: () => void | (() => void)) => {
+      effectCleanup = callback() as (() => void) | undefined
+      return effectCleanup
     },
   }
 
@@ -57,6 +72,15 @@ function createHarness(options: HarnessOptions = {}) {
     },
     updates,
     scheduled,
+    dispose() {
+      effectCleanup?.()
+    },
+    resolvePendingUpdate() {
+      pendingUpdateResolve?.()
+    },
+    rejectPendingUpdate(error: Error) {
+      pendingUpdateReject?.(error)
+    },
     async runScheduled(index = 0) {
       const task = scheduled[index]
       if (!task) throw new Error(`missing scheduled task ${index}`)
@@ -233,6 +257,22 @@ describe('Host composition', () => {
     expect(harness.updates).toHaveLength(1)
   })
 
+  it('does not retry or surface a rejected update after disposal', async () => {
+    const harness = createHarness({
+      pendingUpdate: true,
+      section: { providers: { route: { models: [{ id: 'model' }] } } },
+    })
+
+    await harness.runScheduled(0)
+    expect(harness.updates).toHaveLength(1)
+    harness.dispose()
+    harness.rejectPendingUpdate(new Error('disposed update'))
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(harness.scheduled.filter((task) => task.delay === 2000)).toHaveLength(0)
+  })
   it('logs rejected updates and continues retrying', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     const harness = createHarness({
@@ -300,7 +340,7 @@ describe('subagent request hook', () => {
       { agent: { session: { header: { origin: 'subagent' } } } },
       async () => ({ provider: 'route', model: 'model' }),
     )
-    expect(standardResult?.reasoningEffort).toBe('xhigh')
+    expect((standardResult as Record<string, unknown>)?.reasoningEffort).toBe('xhigh')
 
     const custom = createHarness({
       writable: false,
@@ -313,7 +353,7 @@ describe('subagent request hook', () => {
       { agent: { session: { header: { origin: 'subagent' } } } },
       async () => ({ provider: 'route', model: 'model' }),
     )
-    expect(customResult?.reasoningEffort).toBe('high')
+    expect((customResult as Record<string, unknown>)?.reasoningEffort).toBe('high')
   })
 
   it('leaves the config unchanged for main agents, missing headers, or explicit effort', async () => {

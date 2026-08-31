@@ -31,7 +31,7 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 게시 패키지의 Host 진입점은 `lib/index.js`, Client 진입점은 `lib/client.js`입니다. TypeScript 또는 locale 소스에서 개발할 때는 DSH를 실행하거나 패키지를 만들기 전에 `npm run build`를 실행하세요.
 
-호환성 어댑터는 DSH 버전 metadata를 우선하고, 없으면 capability detection으로 fallback합니다. 최신 `remote.settings`와 이전 `connection.api.settings`를 모두 지원합니다. 알 수 없는 DSH 버전도 필요한 capability가 있으면 계속 실행하며, 없으면 관련 기능을 사용할 수 없는 상태로 둡니다.
+현재 DSH에는 공개된 semver metadata 계약이 없으므로 런타임 capability detection이 권위 있는 출처입니다. 선택적 버전은 명시적인 metadata 또는 테스트 입력이 있을 때만 사용하며, 알 수 없는 유효한 버전도 감지된 capability에 따라 계속 실행합니다. 최신 `remote.settings`와 이전 `connection.api.settings`를 모두 지원합니다.
 
 ## 1. 공식 설치
 

@@ -19,15 +19,22 @@ describe('compatibility profiles', () => {
     expect(resolveCompatibility({ version: undefined, capabilities: noSettings }).profile).toBe('unknown')
   })
 
-  it('keeps unknown valid versions unknown while exposing no expected profile', () => {
+  it('uses actual capabilities for an unknown valid modern version', () => {
     const report = resolveCompatibility({ version: '9.9.9', capabilities: modern })
 
-    expect(report.profile).toBe('unknown')
+    expect(report.profile).toBe('modern')
     expect(report.expected).toBeUndefined()
     expect(report.capabilities).toEqual(modern)
     expect(report.diagnostics).toHaveLength(0)
   })
 
+  it('uses actual capabilities for an unknown valid legacy version', () => {
+    const report = resolveCompatibility({ version: '9.9.9', capabilities: legacy })
+
+    expect(report.profile).toBe('legacy')
+    expect(report.expected).toBeUndefined()
+    expect(report.diagnostics).toHaveLength(0)
+  })
   it('treats malformed version metadata as unknown without throwing', () => {
     const report = resolveCompatibility({ version: '0.1', capabilities: legacy })
 

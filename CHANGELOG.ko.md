@@ -13,7 +13,7 @@
 ### 변경
 
 - Host와 Client 런타임 코드를 TypeScript로 마이그레이션하고 빌드된 `lib/index.js`, `lib/client.js` 및 선언 파일을 게시합니다. 동작과 Settings 데이터 형식은 호환됩니다.
-- 호환성 어댑터는 DSH 버전 metadata를 우선하고, 없으면 capability detection으로 fallback합니다. 최신 `remote.settings`와 이전 `connection.api.settings`를 모두 지원합니다.
+- 호환성 어댑터는 명시적인 버전 metadata 또는 테스트 입력을 지원하지만, 현재 DSH에는 공개된 semver metadata 계약이 없으므로 런타임 capability detection이 권위 있는 출처입니다. 알 수 없는 유효한 버전은 감지된 capability에 따라 실행하며 최신 및 이전 Settings API를 지원합니다.
 - 알 수 없는 버전도 필요한 capability가 있으면 계속 실행합니다. capability가 부족하면 관련 기능을 사용할 수 없는 상태로 두며 지원되지 않는 `ja/ko` locale 항목도 숨깁니다.
 
 

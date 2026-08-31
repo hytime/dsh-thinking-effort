@@ -37,7 +37,7 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 发布包使用 `lib/index.js` 作为 Host 入口，使用 `lib/client.js` 作为 Client 入口。从 TypeScript 或 locale 源码开发时，启动 DSH 或打包前必须先运行 `npm run build`。
 
-兼容适配器优先读取 DSH 版本 metadata，缺失时回退到能力探测，同时支持新版 `remote.settings` 和旧版 `connection.api.settings`。未知版本只要具备所需能力就继续运行，否则相关功能保持不可用。
+当前 DSH 没有公开的 semver metadata 契约，因此运行时能力探测是权威来源。只有显式 metadata 或测试输入提供时才使用可选版本；未知合法版本仍按实际能力运行。插件同时支持新版 `remote.settings` 和旧版 `connection.api.settings`。
 
 校验点：目标目录存在：
 

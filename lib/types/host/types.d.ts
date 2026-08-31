@@ -29,6 +29,7 @@ export interface HostContext {
     readonly settings?: HostSettings;
     readonly timeout: (callback: () => void, delay: number) => unknown;
     readonly on: (event: string, callback: (...args: unknown[]) => unknown, options?: UnknownRecord) => unknown;
+    readonly effect: (callback: () => void | (() => void), label?: string) => unknown;
 }
 export declare function isUnknownRecord(value: unknown): value is UnknownRecord;
 export declare function isModelEntry(value: unknown): value is ModelEntry;
