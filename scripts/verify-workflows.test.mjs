@@ -111,7 +111,7 @@ function assertNoPublishAuthTokens(workflow) {
 }
 
 const expectedCompatibilityCleanup =
-  'rm -rf "${RUN_ROOT:-${{ runner.temp }}/dsh-thinking-effort-compat-${{ github.run_id }}-${{ github.run_attempt }}}"';
+  'rm -rf "${RUN_ROOT:-$RUNNER_TEMP/dsh-thinking-effort-compat-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}}"';
 
 function assertCompatibilityCleanupStructure(compatibility) {
   assert.ok(Array.isArray(compatibility?.steps), 'compatibility job must define steps');
@@ -552,6 +552,15 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
   assert.equal(publishPackage.run, 'npm publish --provenance --access public');
 
 }
+
+test('publish workflow does not use runner context in job-level env', async () => {
+  const workflow = await readPublishWorkflow();
+  const compatibilityEnv = workflow.jobs.compatibility?.env ?? {};
+
+  for (const value of Object.values(compatibilityEnv)) {
+    assert.doesNotMatch(String(value), /\$\{\{\s*runner\./);
+  }
+});
 
 test('publish workflow declares tag guards, dependencies, OIDC, and compatibility matrix', async () => {
   assertPublishWorkflowStructure(await readPublishWorkflow());
