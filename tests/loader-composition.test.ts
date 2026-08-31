@@ -250,6 +250,9 @@ async function probeOfficialAgentRuntime(
   const tools = await importOfficial('packages/core/tools/lib/index.js')
   const agents = await importOfficial('packages/core/agent/lib/index.js')
   const agentLoop = await importOfficial('packages/core/agent-loop/lib/index.js')
+  const sessionProjection = existsSync(join(cliRoot, 'packages/session/session-projection/lib/index.js'))
+    ? await importOfficial('packages/session/session-projection/lib/index.js')
+    : undefined
   const timer = await importOfficial('vendor/timer/lib/index.js')
   const Context = cordis.Context as new () => {
     plugin: (plugin: unknown, config?: unknown) => { await: () => Promise<unknown> }
@@ -323,6 +326,7 @@ async function probeOfficialAgentRuntime(
     }
     await ctx.plugin(llm.default).await()
     await ctx.plugin(session.default).await()
+    if (sessionProjection !== undefined) await ctx.plugin(sessionProjection.default).await()
     await ctx.plugin(systemPrompt.default, {}).await()
     await ctx.plugin(tools.default, {}).await()
     await ctx.plugin(agents.default).await()
