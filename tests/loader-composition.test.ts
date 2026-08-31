@@ -1,5 +1,5 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
@@ -20,10 +20,35 @@ type PackageManifest = {
 
 const root = resolve(import.meta.dirname, '..')
 const integrationEnabled = process.env.DSH_LOADER_INTEGRATION === '1'
-const cliRoots = (process.env.DSH_CLI_ROOTS ?? '')
-  .split(',')
-  .map((value) => value.trim())
-  .filter((value) => value !== '')
+
+function parseCliRoots(raw: string): string[] {
+  const values = raw.split(',').map((value) => value.trim())
+  if (values.length !== 3 || values.some((value) => value === '')) {
+    throw new Error('DSH_CLI_ROOTS must contain exactly three non-empty comma-separated roots: alpha, rc2, rc7')
+  }
+  const roots = values.map((value) => realpathSync(value))
+  if (new Set(roots).size !== 3) {
+    throw new Error('DSH_CLI_ROOTS must contain three distinct roots')
+  }
+  return roots
+}
+
+function readOfficialDshVersion(cliRoot: string): string {
+  const manifestPath = resolve(cliRoot, 'package.json')
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { version?: unknown }
+  if (typeof manifest.version !== 'string' || manifest.version === '') {
+    throw new Error(`official DSH root manifest has no version: ${manifestPath}`)
+  }
+  return manifest.version
+}
+
+const expectedOfficialDshVersions = [
+  '0.1.2-alpha.1',
+  '0.1.1-rc.2',
+  '0.1.0-rc.7',
+] as const
+
+const cliRoots = integrationEnabled ? parseCliRoots(process.env.DSH_CLI_ROOTS ?? '') : []
 const integrationDescribe = integrationEnabled ? describe : describe.skip
 
 function readPackage(): PackageManifest {
@@ -742,6 +767,27 @@ describe('official DSH web startup cleanup', () => {
   })
 })
 
+describe('compatibility documentation and root validation', () => {
+  it('documents capability detection as authoritative across published docs', () => {
+    const documentationFiles = [
+      'README.md', 'README.zh.md', 'README.ja.md', 'README.ko.md',
+      'INSTALL.md', 'INSTALL.zh.md', 'INSTALL.ja.md', 'INSTALL.ko.md',
+      'CHANGELOG.md', 'CHANGELOG.ja.md', 'CHANGELOG.ko.md',
+    ]
+    const documents = documentationFiles.map((file) => readFileSync(join(root, file), 'utf8'))
+
+    expect(documents.every((document) => !/prefers DSH version metadata/i.test(document))).toBe(true)
+    expect(documents.every((document) => !/优先使用 DSH version metadata/i.test(document))).toBe(true)
+    expect(documents[8]).toContain('Runtime capability detection is authoritative')
+  })
+
+  it('rejects duplicate normalized DSH CLI roots', () => {
+    const duplicateRoots = `${root},${join(root, '.')},${root}`
+
+    expect(() => parseCliRoots(duplicateRoots)).toThrow(/distinct|unique/i)
+  })
+})
+
 describe('published package composition', () => {
   it('exposes built Host and Client artifacts with declarations', () => {
     const manifest = readPackage()
@@ -779,11 +825,16 @@ describe('published package composition', () => {
 
 integrationDescribe('official DSH loader composition', () => {
   it('requires and verifies alpha, rc2, and rc7 roots independently', { timeout: 180000 }, async () => {
-    if (cliRoots.length !== 3) {
-      throw new Error('DSH_CLI_ROOTS must contain exactly three comma-separated roots: alpha, rc2, rc7')
-    }
+    expect(cliRoots).toHaveLength(3)
+    expect(cliRoots.every((cliRoot) => cliRoot === resolve(cliRoot))).toBe(true)
+    expect(new Set(cliRoots).size).toBe(3)
+    const verifiedRoots = cliRoots.map((cliRoot) => ({
+      cliRoot,
+      version: readOfficialDshVersion(cliRoot),
+    }))
+    expect(verifiedRoots.map(({ version }) => version)).toEqual(expectedOfficialDshVersions)
 
-    for (const cliRoot of cliRoots) {
+    for (const { cliRoot, version } of verifiedRoots) {
       const home = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-loader-'))
       const packDestination = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-pack-'))
       const profile = join(home, 'profiles', 'compat')
@@ -841,13 +892,13 @@ integrationDescribe('official DSH loader composition', () => {
     try {
       runOfficialDsh(cliRoot, webHome, ['plugin', '--profile', 'web', 'add', tarball])
       const web = await startOfficialWeb(cliRoot, webHome, {
-        args: cliRoot.includes('dsh-v0.1.0-rc.7')
+        args: version === '0.1.0-rc.7'
           ? ['dsh', '--profile', 'web', '--port', '0']
           : ['dsh', '--profile', 'web', '--no-open', '--port', '0'],
       })
       try {
         const headers: Record<string, string> = web.cookie === '' ? {} : { cookie: web.cookie }
-        const legacyRpc = cliRoot.includes('dsh-v0.1.1-rc.2') || cliRoot.includes('dsh-v0.1.0-rc.7')
+        const legacyRpc = version === '0.1.1-rc.2' || version === '0.1.0-rc.7'
         const describeEndpoint = legacyRpc ? 'settings.describe' : 'settings/describe'
         const mutateEndpoint = legacyRpc ? 'settings.mutate' : 'settings/mutate'
         const settingsDescribe = await callOfficialRpc(web.url, headers, describeEndpoint, {}, !legacyRpc)
