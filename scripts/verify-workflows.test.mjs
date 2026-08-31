@@ -32,6 +32,7 @@ function scalarValues(value) {
 
 function assertWorkflowStructure(workflow) {
   assert.ok(workflow && typeof workflow === 'object', 'CI workflow must parse to an object');
+  assert.ok(workflow.on && typeof workflow.on === 'object', 'workflow must define triggers');
   assert.ok(Object.hasOwn(workflow.on, 'pull_request'), 'workflow must declare pull_request trigger');
   assert.ok(Object.hasOwn(workflow.on, 'push'), 'workflow must declare push trigger');
   assert.ok(
@@ -47,11 +48,12 @@ function assertWorkflowStructure(workflow) {
     ['22.19.0', '24.x'],
     'quality job must use the supported Node matrix',
   );
+  assert.ok(Array.isArray(quality.steps), 'quality job must define steps');
 
   const setupNode = quality.steps.find((step) => step.uses === 'actions/setup-node@v4');
   assert.ok(
     quality.steps.some((step) => step.uses === 'actions/checkout@v4'),
-    'quality job must check out the repository',
+    'quality job must use actions/checkout@v4',
   );
   assert.ok(setupNode, 'quality job must use actions/setup-node@v4');
   assert.equal(
@@ -156,9 +158,56 @@ const malformedWorkflowCases = [
     message: 'workflow must push only from main',
   },
   {
+    name: 'push trigger',
+    mutate: (workflow) => delete workflow.on.push,
+    message: 'workflow must declare push trigger',
+  },
+  {
     name: 'workflow_dispatch trigger',
     mutate: (workflow) => delete workflow.on.workflow_dispatch,
     message: 'workflow must declare workflow_dispatch trigger',
+  },
+  {
+    name: 'quality job',
+    mutate: (workflow) => delete workflow.jobs.quality,
+    message: 'CI workflow must define jobs.quality',
+  },
+  {
+    name: 'quality steps',
+    mutate: (workflow) => delete workflow.jobs.quality.steps,
+    message: 'quality job must define steps',
+  },
+  {
+    name: 'checkout action',
+    mutate: (workflow) => {
+      workflow.jobs.quality.steps = workflow.jobs.quality.steps.filter(
+        (step) => step.uses !== 'actions/checkout@v4',
+      );
+    },
+    message: 'quality job must use actions/checkout@v4',
+  },
+  {
+    name: 'setup-node action',
+    mutate: (workflow) => {
+      workflow.jobs.quality.steps = workflow.jobs.quality.steps.filter(
+        (step) => step.uses !== 'actions/setup-node@v4',
+      );
+    },
+    message: 'quality job must use actions/setup-node@v4',
+  },
+  {
+    name: 'job contents permission',
+    mutate: (workflow) => {
+      workflow.jobs.quality.permissions = { contents: 'write' };
+    },
+    message: 'quality contents permission must be read',
+  },
+  {
+    name: 'job id-token permission',
+    mutate: (workflow) => {
+      workflow.jobs.quality.permissions = { 'id-token': 'write' };
+    },
+    message: 'quality must not grant id-token write',
   },
   {
     name: 'Node matrix',
