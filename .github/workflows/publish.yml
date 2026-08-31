@@ -34,6 +34,24 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Reject an already published version
+        run: |
+          set -Eeuo pipefail
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          query_output="$RUNNER_TEMP/dsh-thinking-effort-npm-view.txt"
+          set +e
+          npm view @hytime/dsh-thinking-effort@${PACKAGE_VERSION} version --json > "$query_output" 2>&1
+          query_status=$?
+          set -e
+          if [ "$query_status" -eq 0 ]; then
+            echo "npm version ${PACKAGE_VERSION} already exists" >&2
+            exit 1
+          fi
+          if ! grep -Eiq 'E404|HTTP[[:space:]]+404' "$query_output"; then
+            cat "$query_output" >&2
+            exit "$query_status"
+          fi
+
       - name: Typecheck source
         run: npm run typecheck
 
@@ -97,7 +115,7 @@ jobs:
           set -Eeuo pipefail
 
           cleanup() {
-            if [[ -n "${DSH_TEST_PID:-}" ]] && kill -0 "$DSH_TEST_PID" 2>/dev/null; then
+            if [[ -n "${DSH_TEST_PID:-}" ]]; then
               kill "$DSH_TEST_PID" 2>/dev/null || true
               wait "$DSH_TEST_PID" 2>/dev/null || true
             fi
@@ -140,7 +158,9 @@ jobs:
           DSH_LOADER_INTEGRATION=1 \
           DSH_CLI_ROOTS="$ALPHA_ROOT,$RC2_ROOT,$RC7_ROOT" \
           DSH_REQUIRE_THINKING_EFFORT_DOM=1 \
-          npm test -- tests/loader-composition.test.ts
+          npm test -- tests/loader-composition.test.ts &
+          DSH_TEST_PID=$!
+          wait "$DSH_TEST_PID"
 
       - name: Cleanup temporary compatibility resources
         if: ${{ always() }}
@@ -168,7 +188,7 @@ jobs:
       - name: Set up Node.js for npm Trusted Publishing
         uses: actions/setup-node@v4
         with:
-          node-version: 22.19.0
+          node-version: 24.x
           registry-url: https://registry.npmjs.org
 
       - name: Verify tag points to main
@@ -177,23 +197,11 @@ jobs:
           git fetch --no-tags origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
-      - name: Reject an already published version
-        run: |
-          set -Eeuo pipefail
-          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
-          query_output="$RUNNER_TEMP/dsh-thinking-effort-npm-view.txt"
-          set +e
-          npm view @hytime/dsh-thinking-effort@${PACKAGE_VERSION} version --json > "$query_output" 2>&1
-          query_status=$?
-          set -e
-          if [ "$query_status" -eq 0 ]; then
-            echo "npm version ${PACKAGE_VERSION} already exists" >&2
-            exit 1
-          fi
-          if ! grep -Eiq '(^|[^0-9])404([^0-9]|$)|E404|not found' "$query_output"; then
-            cat "$query_output" >&2
-            exit "$query_status"
-          fi
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
 
       - name: Publish package with provenance
         run: npm publish --provenance --access public

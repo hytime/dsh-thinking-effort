@@ -296,6 +296,22 @@ const publishQualityCommands = [
   'node scripts/verify-release.mjs "$GITHUB_REF_NAME"',
   'npm ci',
   'npm run build',
+  `set -Eeuo pipefail
+PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+query_output="$RUNNER_TEMP/dsh-thinking-effort-npm-view.txt"
+set +e
+npm view @hytime/dsh-thinking-effort@\${PACKAGE_VERSION} version --json > "$query_output" 2>&1
+query_status=$?
+set -e
+if [ "$query_status" -eq 0 ]; then
+  echo "npm version \${PACKAGE_VERSION} already exists" >&2
+  exit 1
+fi
+if ! grep -Eiq 'E404|HTTP[[:space:]]+404' "$query_output"; then
+  cat "$query_output" >&2
+  exit "$query_status"
+fi
+`,
   'npm run typecheck',
   'npm run typecheck:test',
   'npm run test:release',
@@ -324,8 +340,45 @@ function assertPublishWorkflowStructure(workflow) {
   assert.ok(compatibility && typeof compatibility === 'object', 'publish workflow must define jobs.compatibility');
   assert.ok(publish && typeof publish === 'object', 'publish workflow must define jobs.publish');
   assert.deepEqual(publishRunCommands(quality), publishQualityCommands, 'publish quality commands must run in order');
-  assert.equal(quality.steps.find((step) => step.uses === 'actions/checkout@v4')?.with?.['fetch-depth'], 0);
-  assert.equal(quality.steps.find((step) => step.uses === 'actions/setup-node@v4')?.with?.['node-version'], '22.19.0');
+  assert.equal(
+    quality.steps.find((step) => step.uses === 'actions/checkout@v4')?.with?.['fetch-depth'],
+    0,
+    'quality job must check out full history',
+  );
+  assert.equal(
+    quality.steps.find((step) => step.uses === 'actions/setup-node@v4')?.with?.['node-version'],
+    '22.19.0',
+    'quality job must use Node 22.19.0',
+  );
+  const duplicateCheck = publishRunCommands(quality).find((command) =>
+    command.includes('npm view @hytime/dsh-thinking-effort@${PACKAGE_VERSION} version --json'),
+  );
+  assert.ok(duplicateCheck, 'quality job must check whether the package version already exists');
+  assert.match(duplicateCheck, /PACKAGE_VERSION="\$\(node -p/);
+  assert.match(duplicateCheck, /grep -Eiq 'E404\|HTTP\[\[:space:\]\]\+404'/);
+  assert.doesNotMatch(duplicateCheck, /not found/i);
+  assert.deepEqual(publishRunCommands(publish), [
+    `set -Eeuo pipefail
+git fetch --no-tags origin main
+git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+`,
+    'npm ci',
+    'npm run build',
+    'npm publish --provenance --access public',
+  ], 'publish job must install, build, and publish in order');
+  assert.equal(
+    publish.steps.find((step) => step.uses === 'actions/setup-node@v4')?.with?.['node-version'],
+    '24.x',
+    'publish job must use Node 24.x',
+  );
+  assert.equal(
+    publish.steps.find((step) => step.uses === 'actions/setup-node@v4')?.with?.['registry-url'],
+    'https://registry.npmjs.org',
+    'publish job must configure the npm registry',
+  );
+  assert.equal(publishRunCommands(publish).some((command) => command.includes('npm view ')), false);
+  assert.equal(publishRunCommands(publish).includes('npm ci'), true, 'publish job must run npm ci');
+  assert.equal(publishRunCommands(publish).includes('npm run build'), true, 'publish job must run npm run build');
   assert.deepEqual(compatibility.needs, 'quality', 'compatibility must need quality');
   assert.deepEqual(publish.needs, ['quality', 'compatibility'], 'publish must need quality and compatibility');
   assert.equal(publish.permissions?.contents, 'read', 'publish contents permission must be read');
@@ -333,8 +386,7 @@ function assertPublishWorkflowStructure(workflow) {
   assert.equal(publish.concurrency?.group, 'npm-publish-${{ github.ref_name }}');
   assert.equal(publish.concurrency?.['cancel-in-progress'], false);
 
-  const allCommands = scalarValues(workflow).filter((value) => value.includes('\n') || value.includes(' '));
-  const compatibilityText = allCommands.join('\n');
+  const compatibilityText = publishRunCommands(compatibility).join('\n');
   for (const required of [
     'dsh-v0.1.2-alpha.1',
     'dsh-v0.1.1-rc.2',
@@ -349,17 +401,22 @@ function assertPublishWorkflowStructure(workflow) {
     'DSH_REQUIRE_THINKING_EFFORT_DOM=1',
     'npm test -- tests/loader-composition.test.ts',
     'trap',
+    'DSH_TEST_PID=$!',
+    'kill "$DSH_TEST_PID"',
+    'wait "$DSH_TEST_PID"',
+    'rm -rf "$RUN_ROOT"',
   ]) {
     assert.ok(compatibilityText.includes(required), `publish workflow must include ${required}`);
   }
   assert.match(compatibilityText, /ALPHA_ROOT=.*dsh-v0\.1\.2-alpha\.1/);
   assert.match(compatibilityText, /RC2_ROOT=.*dsh-v0\.1\.1-rc\.2/);
   assert.match(compatibilityText, /RC7_ROOT=.*dsh-v0\.1\.0-rc\.7/);
+  assert.match(compatibilityText, /npm test -- tests\/loader-composition\.test\.ts\s*&/);
 
   const publishCommands = publishRunCommands(publish).join('\n');
   assert.match(publishCommands, /git fetch --no-tags origin main/);
   assert.match(publishCommands, /git merge-base --is-ancestor "\$GITHUB_SHA" origin\/main/);
-  assert.match(publishCommands, /npm view @hytime\/dsh-thinking-effort@\$\{PACKAGE_VERSION\} version --json/);
+  assert.doesNotMatch(publishCommands, /npm view @hytime\/dsh-thinking-effort@\$\{PACKAGE_VERSION\} version --json/);
   assert.match(publishCommands, /npm publish --provenance --access public/);
   assert.equal(scalarValues(workflow).some((value) => value.includes('NPM_TOKEN')), false, 'publish workflow must not use NPM_TOKEN');
 }
