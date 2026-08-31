@@ -74,12 +74,13 @@ async function workflowFiles(directory) {
   }
 }
 
-async function assertWorkflowDoesNotUseNpmToken(root) {
+async function assertWorkflowDoesNotUseNpmAuthToken(root) {
   const files = await workflowFiles(path.join(root, '.github', 'workflows'));
   for (const file of files) {
     const content = await readFile(file, 'utf8');
-    if (/NPM_TOKEN/.test(content)) {
-      throw new Error(`workflow must not use NPM_TOKEN: ${path.relative(root, file)}`);
+    const authToken = content.match(/NPM_TOKEN|NODE_AUTH_TOKEN/)?.[0];
+    if (authToken) {
+      throw new Error(`workflow must not use ${authToken}: ${path.relative(root, file)}`);
     }
   }
 }
@@ -123,11 +124,12 @@ export async function runGuard(root = scriptRoot, tag) {
   if (typeof manifest.dsh?.bundle?.patch !== 'string' || manifest.dsh.bundle.patch.length === 0) {
     throw new Error('dsh.bundle.patch must be present');
   }
+  await assertFile(root, manifest.dsh.bundle.patch, 'dsh.bundle.patch');
   if (manifest.dsh?.client?.platform !== 'web') {
     throw new Error('dsh.client.platform must be web');
   }
 
-  await assertWorkflowDoesNotUseNpmToken(root);
+  await assertWorkflowDoesNotUseNpmAuthToken(root);
   return 0;
 }
 

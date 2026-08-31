@@ -55,6 +55,61 @@ function assertNoNpmTokenEnv(value, location = 'workflow') {
   }
 }
 
+function assertNoNodeAuthTokenEnv(value, location = 'workflow') {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertNoNodeAuthTokenEnv(item, `${location}[${index}]`));
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+
+  if (
+    value.env &&
+    typeof value.env === 'object' &&
+    !Array.isArray(value.env) &&
+    Object.hasOwn(value.env, 'NODE_AUTH_TOKEN')
+  ) {
+    assert.fail(`publish workflow must not define NODE_AUTH_TOKEN in ${location}.env`);
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    assertNoNodeAuthTokenEnv(child, `${location}.${key}`);
+  }
+}
+
+function assertNoNpmConfigUserconfig(value, location = 'workflow') {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertNoNpmConfigUserconfig(item, `${location}[${index}]`));
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+
+  if (Object.hasOwn(value, 'NPM_CONFIG_USERCONFIG')) {
+    assert.fail(`publish workflow must not define NPM_CONFIG_USERCONFIG in ${location}`);
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    assertNoNpmConfigUserconfig(child, `${location}.${key}`);
+  }
+}
+
+function assertNoPublishAuthTokens(workflow) {
+  assertNoNpmTokenEnv(workflow);
+  assertNoNodeAuthTokenEnv(workflow);
+  assertNoNpmConfigUserconfig(workflow);
+
+  const scalarValuesInWorkflow = scalarValues(workflow);
+  assert.equal(
+    scalarValuesInWorkflow.some((value) => /\bNPM_TOKEN\b/.test(value)),
+    false,
+    'publish workflow must not reference NPM_TOKEN',
+  );
+  assert.equal(
+    scalarValuesInWorkflow.some((value) => /\bNODE_AUTH_TOKEN\b/.test(value)),
+    false,
+    'publish workflow must not reference NODE_AUTH_TOKEN',
+  );
+}
+
 const expectedCompatibilityCleanup =
   'rm -rf "${RUN_ROOT:-${{ runner.temp }}/dsh-thinking-effort-compat-${{ github.run_id }}-${{ github.run_attempt }}}"';
 
@@ -333,6 +388,13 @@ async function readPublishWorkflow() {
   return parse(await readFile(publishWorkflowPath, 'utf8'));
 }
 
+const publishAuthCleanupCommand = 'npm config delete //registry.npmjs.org/:_authToken';
+const publishNpmVersionCommand = `set -Eeuo pipefail
+npm_version="$(npm --version)"
+printf 'npm %s\\n' "$npm_version"
+node -e 'const [major, minor, patch] = process.argv[1].split(".").map(Number); if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) throw new Error("npm >= 11.5.1 is required")' "$npm_version"
+`;
+
 const publishQualityCommands = [
   'node scripts/verify-release.mjs "$GITHUB_REF_NAME"',
   'npm ci',
@@ -398,15 +460,38 @@ function assertPublishWorkflowStructure(workflow) {
   assert.match(duplicateCheck, /PACKAGE_VERSION="\$\(node -p/);
   assert.match(duplicateCheck, /grep -Eiq 'E404\|HTTP\[\[:space:\]\]\+404'/);
   assert.doesNotMatch(duplicateCheck, /not found/i);
-  assert.deepEqual(publishRunCommands(publish), [
+  const publishTagGuard = publish.steps.find((step) => step.name === 'Verify tag points to main');
+  assert.equal(
+    publishTagGuard?.run,
     `set -Eeuo pipefail
 git fetch --no-tags origin main
 git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 `,
-    'npm ci',
-    'npm run build',
-    'npm publish --provenance --access public',
-  ], 'publish job must install, build, and publish in order');
+    'publish job must verify that the tag points to main',
+  );
+  const publishAuthCleanup = publish.steps.find((step) => step.name === 'Remove setup-node npm auth');
+  assert.equal(
+    publishAuthCleanup?.run,
+    publishAuthCleanupCommand,
+    'publish job must remove setup-node auth without changing registry configuration',
+  );
+  const publishNpmVersion = publish.steps.find((step) => step.name === 'Verify npm version for Trusted Publishing');
+  assert.equal(
+    publishNpmVersion?.run,
+    publishNpmVersionCommand,
+    'publish job must assert the npm Trusted Publishing minimum version',
+  );
+  const publishInstall = publish.steps.find((step) => step.name === 'Install dependencies');
+  assert.equal(publishInstall?.run, 'npm ci');
+  const publishBuild = publish.steps.find((step) => step.name === 'Build');
+  assert.equal(publishBuild?.run, 'npm run build');
+  const publishPackage = publish.steps.find((step) => step.name === 'Publish package with provenance');
+  assert.equal(publishPackage?.run, 'npm publish --provenance --access public');
+  assert.deepEqual(
+    publishRunCommands(publish),
+    [publishTagGuard?.run, publishAuthCleanup?.run, publishNpmVersion?.run, publishInstall?.run, publishBuild?.run, publishPackage?.run],
+    'publish job must verify, isolate auth, check npm, install, build, and publish in order',
+  );
   assert.equal(
     publish.steps.find((step) => step.uses === 'actions/setup-node@v4')?.with?.['node-version'],
     '24.x',
@@ -417,9 +502,10 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
     'https://registry.npmjs.org',
     'publish job must configure the npm registry',
   );
+  assertNoPublishAuthTokens(workflow);
   assert.equal(publishRunCommands(publish).some((command) => command.includes('npm view ')), false);
-  assert.equal(publishRunCommands(publish).includes('npm ci'), true, 'publish job must run npm ci');
-  assert.equal(publishRunCommands(publish).includes('npm run build'), true, 'publish job must run npm run build');
+  assert.ok(publishRunCommands(publish).includes('npm ci'), 'publish job must run npm ci');
+  assert.ok(publishRunCommands(publish).includes('npm run build'), 'publish job must run npm run build');
   assert.ok(Array.isArray(compatibility.steps), 'compatibility job must define steps');
   assertCompatibilityCleanupStructure(compatibility);
   assert.deepEqual(compatibility.needs, 'quality', 'compatibility must need quality');
@@ -429,7 +515,11 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
   assert.equal(publish.concurrency?.group, 'npm-publish-${{ github.ref_name }}');
   assert.equal(publish.concurrency?.['cancel-in-progress'], false);
 
-  const compatibilityText = publishRunCommands(compatibility).join('\n');
+  const compatibilityBuild = compatibility.steps.find(
+    (step) => step.name === 'Build three official DSH checkouts and run integration tests',
+  );
+  assert.ok(compatibilityBuild, 'compatibility job must define its build and integration step');
+  assert.equal(typeof compatibilityBuild.run, 'string', 'compatibility build step must have a run script');
   for (const required of [
     'dsh-v0.1.2-alpha.1',
     'dsh-v0.1.1-rc.2',
@@ -449,19 +539,18 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
     'wait "$DSH_TEST_PID"',
     'rm -rf "$RUN_ROOT"',
   ]) {
-    assert.ok(compatibilityText.includes(required), `publish workflow must include ${required}`);
+    assert.ok(compatibilityBuild.run.includes(required), `compatibility build step must include ${required}`);
   }
-  assert.match(compatibilityText, /ALPHA_ROOT=.*dsh-v0\.1\.2-alpha\.1/);
-  assert.match(compatibilityText, /RC2_ROOT=.*dsh-v0\.1\.1-rc\.2/);
-  assert.match(compatibilityText, /RC7_ROOT=.*dsh-v0\.1\.0-rc\.7/);
-  assert.match(compatibilityText, /npm test -- tests\/loader-composition\.test\.ts\s*&/);
+  assert.match(compatibilityBuild.run, /ALPHA_ROOT=.*dsh-v0\.1\.2-alpha\.1/);
+  assert.match(compatibilityBuild.run, /RC2_ROOT=.*dsh-v0\.1\.1-rc\.2/);
+  assert.match(compatibilityBuild.run, /RC7_ROOT=.*dsh-v0\.1\.0-rc\.7/);
+  assert.match(compatibilityBuild.run, /npm test -- tests\/loader-composition\.test\.ts\s*&/);
 
-  const publishCommands = publishRunCommands(publish).join('\n');
-  assert.match(publishCommands, /git fetch --no-tags origin main/);
-  assert.match(publishCommands, /git merge-base --is-ancestor "\$GITHUB_SHA" origin\/main/);
-  assert.doesNotMatch(publishCommands, /npm view @hytime\/dsh-thinking-effort@\$\{PACKAGE_VERSION\} version --json/);
-  assert.match(publishCommands, /npm publish --provenance --access public/);
-  assertNoNpmTokenEnv(workflow);
+  assert.match(publishTagGuard.run, /git fetch --no-tags origin main/);
+  assert.match(publishTagGuard.run, /git merge-base --is-ancestor "\$GITHUB_SHA" origin\/main/);
+  assert.doesNotMatch(publishRunCommands(publish).join('\n'), /npm view @hytime\/dsh-thinking-effort@\$\{PACKAGE_VERSION\} version --json/);
+  assert.equal(publishPackage.run, 'npm publish --provenance --access public');
+
 }
 
 test('publish workflow declares tag guards, dependencies, OIDC, and compatibility matrix', async () => {

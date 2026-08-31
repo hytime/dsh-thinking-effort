@@ -177,8 +177,6 @@ jobs:
     concurrency:
       group: npm-publish-${{ github.ref_name }}
       cancel-in-progress: false
-    env:
-      NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/dsh-thinking-effort-npmrc
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -196,6 +194,16 @@ jobs:
           set -Eeuo pipefail
           git fetch --no-tags origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - name: Remove setup-node npm auth
+        run: npm config delete //registry.npmjs.org/:_authToken
+
+      - name: Verify npm version for Trusted Publishing
+        run: |
+          set -Eeuo pipefail
+          npm_version="$(npm --version)"
+          printf 'npm %s\n' "$npm_version"
+          node -e 'const [major, minor, patch] = process.argv[1].split(".").map(Number); if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) throw new Error("npm >= 11.5.1 is required")' "$npm_version"
 
       - name: Install dependencies
         run: npm ci

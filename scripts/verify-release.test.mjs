@@ -149,14 +149,48 @@ test('rejects a missing dsh bundle patch', async () => {
   });
 });
 
+test('rejects a missing dsh bundle patch file', async () => {
+  await withFixture({ dsh: { bundle: { patch: './missing.patch.yml' } } }, {}, async (fixture) => {
+    await assert.rejects(() => runGuard(fixture, 'v0.1.11'), /dsh\.bundle\.patch/);
+  });
+});
+
+test('rejects a directory used as the dsh bundle patch', async () => {
+  await withFixture({ dsh: { bundle: { patch: './patch-directory' } } }, {}, async (fixture) => {
+    await mkdir(path.join(fixture, 'patch-directory'));
+    await assert.rejects(() => runGuard(fixture, 'v0.1.11'), /dsh\.bundle\.patch/);
+  });
+});
+
+test('rejects a path traversal dsh bundle patch target', async () => {
+  await withFixture({ dsh: { bundle: { patch: '../outside.patch.yml' } } }, {}, async (fixture) => {
+    await assert.rejects(() => runGuard(fixture, 'v0.1.11'), /dsh\.bundle\.patch/);
+  });
+});
+
+test('rejects a dsh bundle patch symlink that resolves outside the fixture root', async () => {
+  await withFixture({}, {}, async (fixture) => {
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'dsh-release-patch-outside-'));
+    try {
+      const outsidePatch = path.join(outside, 'cordis.patch.yml');
+      await writeFile(outsidePatch, 'packages: {}\n');
+      const patch = path.join(fixture, 'cordis.patch.yml');
+      await unlink(patch);
+      await symlink(outsidePatch, patch);
+      await assert.rejects(() => runGuard(fixture, 'v0.1.11'), /dsh\.bundle\.patch/);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+});
 test('rejects a non-web dsh client platform', async () => {
   await withFixture({ dsh: { client: { platform: 'node' } } }, {}, async (fixture) => {
     await assert.rejects(() => runGuard(fixture, 'v0.1.11'), /dsh\.client\.platform/);
   });
 });
 
-test('rejects a workflow that uses NPM_TOKEN', async () => {
-  await withFixture({}, { workflow: 'env:\n  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}\n' }, async (fixture) => {
-    await assert.rejects(() => runGuard(fixture, 'v0.1.11'), /NPM_TOKEN/);
+test('rejects a workflow that uses NODE_AUTH_TOKEN', async () => {
+  await withFixture({}, { workflow: 'env:\n  NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}\n' }, async (fixture) => {
+    await assert.rejects(() => runGuard(fixture, 'v0.1.11'), /NODE_AUTH_TOKEN/);
   });
 });
