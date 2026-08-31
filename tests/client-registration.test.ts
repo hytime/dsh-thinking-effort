@@ -4,7 +4,7 @@ import { apply, inject, name } from '../src/client/index.js'
 import { LOCALE_NS } from '../src/client/constants.js'
 
 function createHarness(mode: 'modern' | 'legacy') {
-  const injected: string[][] = []
+  const listeners: Array<(name: string) => void> = []
   const registrations: Array<{ descriptor: Record<string, unknown>; render: unknown }> = []
   const disposed: string[] = []
   const addLanguage = vi.fn((entry: { id: string }) => () => disposed.push(entry.id))
@@ -33,19 +33,72 @@ function createHarness(mode: 'modern' | 'legacy') {
   const connection = mode === 'legacy' ? { api: { settings: legacySettings } } : {}
   let effectDisposer: (() => void) | undefined
   const context = {
-    get: vi.fn((key: string) => ({ slots, connection, locale }[key as 'slots' | 'connection' | 'locale'])),
+    get: vi.fn((key: string) => key === 'remote.settings'
+      ? mode === 'modern' ? remoteSettings : undefined
+      : ({ slots, connection, locale }[key as 'slots' | 'connection' | 'locale'])),
+    on: vi.fn((event: string, callback: (name: string) => void) => {
+      expect(event).toBe('internal/service')
+      listeners.push(callback)
+      return () => undefined
+    }),
     effect: vi.fn((callback: () => void | (() => void)) => {
       effectDisposer = callback() as (() => void) | undefined
       return effectDisposer
     }),
-    inject: vi.fn((names: string[], callback: (remoteContext: { get: (key: string) => unknown }) => void) => {
-      injected.push(names)
-      if (mode === 'modern') callback({ get: (key) => key === 'remote.settings' ? remoteSettings : undefined })
-    }),
   }
 
-  return { context, slots, locale, injected, registrations, disposed, addLanguage, register, remoteSettings, legacySettings, disposeEffect: () => effectDisposer?.() }
+  return { context, slots, locale, listeners, registrations, disposed, addLanguage, register, remoteSettings, legacySettings, disposeEffect: () => effectDisposer?.() }
 }
+
+
+describe('client registration through the guarded context', () => {
+  it('mounts after the remote.settings service is announced without context.inject', () => {
+    const registrations: Array<{ descriptor: Record<string, unknown>; render: unknown }> = []
+    const listeners: Array<(name: string) => void> = []
+    let remoteSettings: unknown
+    const slots = {
+      inject: vi.fn((_name: string, callback: () => void) => callback()),
+      register: vi.fn((descriptor: Record<string, unknown>, render: unknown) => {
+        registrations.push({ descriptor, render })
+        return () => undefined
+      }),
+    }
+    const locale = {
+      register: vi.fn(() => () => undefined),
+      bind: () => (key: string) => key,
+      getSnapshot: () => ({ locales: [{ id: 'zh' }] }),
+    }
+    const services: Record<string, unknown> = {
+      slots,
+      connection: {},
+      locale,
+    }
+    const context = {
+      get: vi.fn((key: string) => key === 'remote.settings' ? remoteSettings : services[key]),
+      on: vi.fn((event: string, callback: (name: string) => void) => {
+        expect(event).toBe('internal/service')
+        listeners.push(callback)
+        return () => undefined
+      }),
+      effect: vi.fn((callback: () => void | (() => void)) => callback()),
+    }
+
+    apply(context as Parameters<typeof apply>[0])
+    expect(registrations).toHaveLength(0)
+
+    remoteSettings = {
+      describe: vi.fn(),
+      mutate: vi.fn(),
+    }
+    for (const listener of listeners) listener('remote.settings')
+
+    expect(registrations).toHaveLength(1)
+    expect(registrations[0]?.descriptor).toMatchObject({
+      name: 'settings.section',
+      id: 'thinking-effort',
+    })
+  })
+})
 
 describe('client registration', () => {
   it('exports the scoped identity and exact hard injection list', () => {
@@ -53,11 +106,12 @@ describe('client registration', () => {
     expect(inject).toEqual(['slots', 'connection', 'locale'])
   })
 
-  it('lazily requests remote.settings and registers the expected settings slot', () => {
+  it('reads remote.settings and registers the expected settings slot', () => {
     const harness = createHarness('modern')
     apply(harness.context)
 
-    expect(harness.context.inject).toHaveBeenCalledWith(['remote.settings'], expect.any(Function))
+    expect(harness.context.get).toHaveBeenCalledWith('remote.settings')
+    expect(harness.context.on).toHaveBeenCalledWith('internal/service', expect.any(Function))
     expect(harness.slots.inject).toHaveBeenCalledWith('settings.section', expect.any(Function))
     expect(harness.registrations).toHaveLength(1)
     expect(harness.registrations[0]?.descriptor).toMatchObject({
@@ -73,7 +127,7 @@ describe('client registration', () => {
     const harness = createHarness('legacy')
     apply(harness.context)
 
-    expect(harness.context.inject).toHaveBeenCalledWith(['remote.settings'], expect.any(Function))
+    expect(harness.context.on).toHaveBeenCalledWith('internal/service', expect.any(Function))
     expect(harness.registrations).toHaveLength(1)
     expect(harness.legacySettings.describe).not.toHaveBeenCalled()
   })

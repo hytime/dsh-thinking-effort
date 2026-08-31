@@ -62,8 +62,11 @@ export function apply(context: ClientContext): void {
     ))
   }
 
-  mount(settingsBridge(connection, undefined))
-  context.inject(['remote.settings'], (remoteContext) => {
-    mount(settingsBridge(connection, remoteContext.get('remote.settings')))
+  const mountFromRemote = (): void => {
+    mount(settingsBridge(connection, context.get('remote.settings')))
+  }
+  mountFromRemote()
+  context.on('internal/service', (serviceName) => {
+    if (serviceName === 'remote.settings' || serviceName === 'remote') mountFromRemote()
   })
 }

@@ -14,8 +14,13 @@ function hasMethods(value: unknown, methods: readonly MethodName[]): boolean {
     let current: object | null = value
     while (current !== null) {
       const descriptor = Object.getOwnPropertyDescriptor(current, method)
-      if (descriptor !== undefined) return typeof descriptor.value === 'function'
-      current = Object.getPrototypeOf(current)
+      if (descriptor === undefined) {
+        current = Object.getPrototypeOf(current)
+        continue
+      }
+      return 'value' in descriptor
+        ? typeof descriptor.value === 'function'
+        : typeof Reflect.get(value, method) === 'function'
     }
     return false
   })

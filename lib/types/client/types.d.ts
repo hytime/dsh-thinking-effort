@@ -107,8 +107,8 @@ export interface ClientSlots {
     register(descriptor: Record<string, unknown>, render: unknown): unknown;
 }
 export interface ClientContext {
-    get(name: 'slots' | 'connection' | 'locale'): unknown;
-    inject(names: readonly string[], callback: (context: RemoteContext) => void): unknown;
+    get(name: string): unknown;
+    on(event: 'internal/service', callback: (name: string) => void): unknown;
     effect(callback: () => void | (() => void), label?: string): unknown;
 }
 export interface ModelUpdate {

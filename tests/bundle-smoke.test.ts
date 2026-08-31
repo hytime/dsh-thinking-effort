@@ -19,7 +19,7 @@ type ClientPlugin = {
 
 type ClientContext = {
   get(name: string): unknown
-  inject(names: readonly string[], callback: (context: { get(name: string): unknown }) => void): unknown
+  on(event: 'internal/service', callback: (name: string) => void): unknown
   effect(callback: () => void | (() => void), label?: string): unknown
 }
 
@@ -89,7 +89,7 @@ describe('build artifacts', () => {
     expect(required).toContain('react/jsx-runtime')
   })
 
-  it('reads remote.settings only from the lazy injection callback', () => {
+  it('reads remote.settings through get and subscribes to service availability', () => {
     const descriptor = loadDescriptor(readArtifact('lib/client.js'))
     const React = createReactPlatform()
     const plugin = descriptor.factory((specifier) => {
@@ -98,8 +98,7 @@ describe('build artifacts', () => {
       throw new Error(`Unexpected external dependency: ${specifier}`)
     })
 
-    let callbackRemoteReads = 0
-    let injectionCalls = 0
+    let remoteReads = 0
     const remoteSettings = { describe: async () => ({ ok: true }), mutate: async () => ({ ok: true }) }
     const context: ClientContext = {
       get(name) {
@@ -117,18 +116,16 @@ describe('build artifacts', () => {
             getSnapshot: () => ({ locales: [] }),
           }
         }
-        throw new Error(`Unexpected eager context read: ${name}`)
+        if (name === 'remote.settings') {
+          remoteReads += 1
+          return remoteSettings
+        }
+        throw new Error(`Unexpected context read: ${name}`)
       },
-      inject(names, callback) {
-        injectionCalls += 1
-        expect(names).toEqual(['remote.settings'])
-        callback({
-          get(name) {
-            callbackRemoteReads += 1
-            expect(name).toBe('remote.settings')
-            return remoteSettings
-          },
-        })
+      on(event, callback) {
+        expect(event).toBe('internal/service')
+        expect(callback).toBeTypeOf('function')
+        return () => undefined
       },
       effect(callback) {
         callback()
@@ -136,8 +133,7 @@ describe('build artifacts', () => {
     }
 
     plugin.apply(context)
-    expect(injectionCalls).toBe(1)
-    expect(callbackRemoteReads).toBe(1)
+    expect(remoteReads).toBe(1)
   })
 
   it('exports the Host entry contract', async () => {

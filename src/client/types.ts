@@ -120,8 +120,8 @@ export interface ClientSlots {
 }
 
 export interface ClientContext {
-  get(name: 'slots' | 'connection' | 'locale'): unknown
-  inject(names: readonly string[], callback: (context: RemoteContext) => void): unknown
+  get(name: string): unknown
+  on(event: 'internal/service', callback: (name: string) => void): unknown
   effect(callback: () => void | (() => void), label?: string): unknown
 }
 

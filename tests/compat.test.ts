@@ -96,6 +96,15 @@ describe('client capability reader', () => {
     expect(calls).toBe(0)
   })
 
+  it('recognizes Remote settings methods exposed through accessors', () => {
+    const remoteSettings = {}
+    Object.defineProperties(remoteSettings, {
+      describe: { enumerable: true, get: () => () => undefined },
+      mutate: { enumerable: true, get: () => () => undefined },
+    })
+
+    expect(clientCapabilities({ remoteSettings })).toEqual({ settings: 'remote', externalLanguages: false })
+  })
   it('falls back to complete legacy settings when Remote is unavailable', () => {
     expect(clientCapabilities({
       remoteSettings: { describe() {} },
