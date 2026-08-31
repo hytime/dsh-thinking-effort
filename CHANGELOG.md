@@ -26,10 +26,10 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### 修复 / Fixed
 
-- 客户端顶层只硬注入跨版本稳定服务（`slots`、`connection`、`locale`）；新版通过可选的嵌套 `remote.settings` 注入获取 Settings service，旧版继续回退 `connection.api.settings`。
-- The client hard-injects only cross-version stable services (`slots`, `connection`, and `locale`); newer DSH hosts obtain the Settings service through optional nested `remote.settings` injection, while older hosts continue using the `connection.api.settings` fallback.
-- 没有 Remote provider 的旧版不会因可选的 `remote.settings` 依赖进入 pending。
-- Older profiles without a Remote provider do not enter pending because `remote.settings` is optional.
+- 客户端顶层只硬注入跨版本稳定服务（`slots`、`connection`、`locale`）；新版通过可选 Remote 服务探测（使用 `ctx.get` 并监听 `internal/service`）获取 Settings service，旧版继续回退 `connection.api.settings`。
+- The client hard-injects only cross-version stable services (`slots`, `connection`, and `locale`); newer DSH hosts discover the optional Remote Settings service through `ctx.get` and `internal/service`, while older hosts continue using the `connection.api.settings` fallback.
+- 没有 Remote provider 的旧版不会因可选 Remote 探测进入 pending。
+- Older profiles without a Remote provider do not enter pending because Remote discovery is optional.
 - 旧版 DSH 没有外部 locale catalog 时，设置页现在隐藏不可用的 `ja/ko` 选项，避免点击后触发未注册错误。
 - On older DSH builds without an external locale catalog, the settings page now hides unavailable `ja/ko` options instead of allowing an unregistered-locale error.
 

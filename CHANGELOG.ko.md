@@ -19,8 +19,8 @@
 
 ### 수정
 
-- 클라이언트 최상위에는 버전 간 안정적인 서비스(`slots`, `connection`, `locale`)만 하드 주입하고, 새 DSH에서는 선택적인 중첩 `remote.settings` 주입으로 Settings service를 가져오며, 이전 버전에서는 계속 `connection.api.settings`로 fallback합니다.
-- Remote provider가 없는 이전 버전도 선택적인 `remote.settings` 의존성 때문에 pending 상태에 들어가지 않습니다.
+- 클라이언트 최상위에는 버전 간 안정적인 서비스(`slots`, `connection`, `locale`)만 하드 주입하고, 새 DSH에서는 `ctx.get`과 `internal/service`를 사용해 선택적인 Remote Settings service를 검색하며, 이전 버전에서는 계속 `connection.api.settings`로 fallback합니다.
+- Remote provider가 없는 이전 버전도 선택적인 Remote 검색 때문에 pending 상태에 들어가지 않습니다.
 - 외부 locale catalog가 없는 이전 DSH에서는 미등록 오류를 피하기 위해 설정 페이지에서 사용할 수 없는 `ja/ko` 항목을 숨깁니다.
 
 ## [0.1.9] - 새 DSH Remote 호환성 대응
