@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -112,6 +112,21 @@ test('rejects a missing client export target', async () => {
   });
 });
 
+test('rejects an export target symlink that resolves outside the fixture root', async () => {
+  await withFixture({}, {}, async (fixture) => {
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'dsh-release-outside-'));
+    try {
+      const outsideClient = path.join(outside, 'client.js');
+      await writeFile(outsideClient, 'export {}\n');
+      const client = path.join(fixture, 'lib/client.js');
+      await unlink(client);
+      await symlink(outsideClient, client);
+      await assert.rejects(() => runGuard(fixture, 'v0.1.11'), /client export/);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+});
 test('rejects a missing conditional package export target', async () => {
   await withFixture(
     { exports: { '.': { types: './lib/types/missing.d.ts', default: './lib/index.js' } } },

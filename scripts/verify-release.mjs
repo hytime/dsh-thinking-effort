@@ -1,4 +1,4 @@
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readFile, readdir, realpath, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -7,8 +7,9 @@ const tagPattern = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:0|[1-9]\d*|
 
 function localTarget(root, target) {
   if (typeof target !== 'string' || target.length === 0 || path.isAbsolute(target)) return undefined;
-  const resolved = path.resolve(root, target);
-  const relative = path.relative(root, resolved);
+  const rootPath = path.resolve(root);
+  const resolved = path.resolve(rootPath, target);
+  const relative = path.relative(rootPath, resolved);
   if (relative === '' || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     return undefined;
   }
@@ -16,10 +17,17 @@ function localTarget(root, target) {
 }
 
 async function fileExists(root, target) {
-  const resolved = localTarget(root, target);
+  const rootPath = path.resolve(root);
+  const resolved = localTarget(rootPath, target);
   if (!resolved) return false;
   try {
-    return (await stat(resolved)).isFile();
+    const canonicalRoot = await realpath(rootPath);
+    const canonicalTarget = await realpath(resolved);
+    const relative = path.relative(canonicalRoot, canonicalTarget);
+    if (relative === '' || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      return false;
+    }
+    return (await stat(canonicalTarget)).isFile();
   } catch {
     return false;
   }
