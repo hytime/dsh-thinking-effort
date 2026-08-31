@@ -378,13 +378,19 @@ async function probeOfficialAgentRuntime(
   }
 }
 
+type BrowserLocator = {
+  click: () => Promise<void>
+  waitFor: (options?: Record<string, unknown>) => Promise<void>
+  getByRole: (role: string, options: { name: string | RegExp }) => BrowserLocator
+}
+
 type BrowserPage = {
   goto: (url: string, options?: Record<string, unknown>) => Promise<unknown>
   locator: (selector: string) => {
     allTextContents: () => Promise<string[]>
     innerText: () => Promise<string>
   }
-  getByRole: (role: string, options: { name: string | RegExp }) => { click: () => Promise<void> }
+  getByRole: (role: string, options: { name: string | RegExp }) => BrowserLocator
   waitForTimeout: (timeout: number) => Promise<void>
   on: (event: string, listener: (value: unknown) => void) => BrowserPage
 }
@@ -472,7 +478,10 @@ async function probeOfficialSettingsDom(cliRoot: string, web: RunningWeb): Promi
     await page.getByRole('button', { name: localizedNavigationLabels.configureLater }).click()
     await page.waitForTimeout(500)
     await page.getByRole('button', { name: localizedNavigationLabels.chooseWorkspace }).click()
-    await page.waitForTimeout(500)
+    const workspaceDialog = page.getByRole('dialog', { name: /^(选择工作区目录|Select Workspace Directory)$/ })
+    await workspaceDialog.waitFor({ state: 'visible', timeout: 10000 })
+    await workspaceDialog.getByRole('button', { name: /^(取消|Cancel)$/ }).click()
+    await workspaceDialog.waitFor({ state: 'hidden', timeout: 10000 })
     await page.getByRole('button', { name: localizedNavigationLabels.settings }).click()
     await page.waitForTimeout(500)
     await page.getByRole('button', { name: localizedNavigationLabels.plugins }).click()
