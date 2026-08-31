@@ -48,6 +48,14 @@ const expectedOfficialDshVersions = [
   '0.1.0-rc.7',
 ] as const
 
+const localizedNavigationLabels = {
+  continue: /^(继续|Continue)$/,
+  configureLater: /^(稍后配置|Configure later)$/,
+  chooseWorkspace: /^(选择工作区|Choose workspace)$/,
+  settings: /^(设置|Settings)$/,
+  plugins: /^(插件|Plugins)$/,
+} as const
+
 const cliRoots = integrationEnabled ? parseCliRoots(process.env.DSH_CLI_ROOTS ?? '') : []
 const integrationDescribe = integrationEnabled ? describe : describe.skip
 
@@ -376,7 +384,7 @@ type BrowserPage = {
     allTextContents: () => Promise<string[]>
     innerText: () => Promise<string>
   }
-  getByRole: (role: string, options: { name: string }) => { click: () => Promise<void> }
+  getByRole: (role: string, options: { name: string | RegExp }) => { click: () => Promise<void> }
   waitForTimeout: (timeout: number) => Promise<void>
   on: (event: string, listener: (value: unknown) => void) => BrowserPage
 }
@@ -459,15 +467,15 @@ async function probeOfficialSettingsDom(cliRoot: string, web: RunningWeb): Promi
     await page.goto(web.url, { waitUntil: 'domcontentloaded', timeout: 20000 })
     const bodyText = await page.locator('body').innerText()
     const buttons = await page.locator('button').allTextContents()
-    await page.getByRole('button', { name: '继续' }).click()
+    await page.getByRole('button', { name: localizedNavigationLabels.continue }).click()
     await page.waitForTimeout(500)
-    await page.getByRole('button', { name: '稍后配置' }).click()
+    await page.getByRole('button', { name: localizedNavigationLabels.configureLater }).click()
     await page.waitForTimeout(500)
-    await page.getByRole('button', { name: '选择工作区' }).click()
+    await page.getByRole('button', { name: localizedNavigationLabels.chooseWorkspace }).click()
     await page.waitForTimeout(500)
-    await page.getByRole('button', { name: '设置' }).click()
+    await page.getByRole('button', { name: localizedNavigationLabels.settings }).click()
     await page.waitForTimeout(500)
-    await page.getByRole('button', { name: '插件' }).click()
+    await page.getByRole('button', { name: localizedNavigationLabels.plugins }).click()
     await page.waitForTimeout(3000)
     const settingsText = await page.locator('body').innerText()
     return {
@@ -979,7 +987,7 @@ integrationDescribe('official DSH loader composition', () => {
         if (domProbe.blocked !== undefined) {
           console.log(`[BLOCKED] browser probe: ${domProbe.blocked}`)
         } else {
-          expect(domProbe.settingsText).toContain('插件')
+          expect(domProbe.settingsText).toMatch(/插件|Plugins/)
           expect(domProbe.errors).toEqual([])
           if (!domProbe.thinkingEffortVisible) {
              if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
