@@ -8,6 +8,9 @@ import { parse } from 'yaml';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workflowPath = path.join(repositoryRoot, '.github', 'workflows', 'ci.yml');
 const publishWorkflowPath = path.join(repositoryRoot, '.github', 'workflows', 'publish.yml');
+const publishFixtureRoot = path.join(repositoryRoot, 'scripts', 'fixtures');
+const publishCleanupFixturePath = path.join(publishFixtureRoot, 'publish-invalid-cleanup.yml');
+const publishNpmTokenFixturePath = path.join(publishFixtureRoot, 'publish-invalid-npm-token.yml');
 const requiredCommands = [
   'npm ci',
   'npm run build',
@@ -29,6 +32,44 @@ function scalarValues(value) {
   if (Array.isArray(value)) return value.flatMap(scalarValues);
   if (value && typeof value === 'object') return Object.values(value).flatMap(scalarValues);
   return typeof value === 'string' ? [value] : [];
+}
+
+function assertNoNpmTokenEnv(value, location = 'workflow') {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertNoNpmTokenEnv(item, `${location}[${index}]`));
+    return;
+  }
+  if (!value || typeof value !== 'object') return;
+
+  if (
+    value.env &&
+    typeof value.env === 'object' &&
+    !Array.isArray(value.env) &&
+    Object.hasOwn(value.env, 'NPM_TOKEN')
+  ) {
+    assert.fail(`publish workflow must not define NPM_TOKEN in ${location}.env`);
+  }
+
+  for (const [key, child] of Object.entries(value)) {
+    assertNoNpmTokenEnv(child, `${location}.${key}`);
+  }
+}
+
+const expectedCompatibilityCleanup =
+  'rm -rf "${RUN_ROOT:-${{ runner.temp }}/dsh-thinking-effort-compat-${{ github.run_id }}-${{ github.run_attempt }}}"';
+
+function assertCompatibilityCleanupStructure(compatibility) {
+  assert.ok(Array.isArray(compatibility?.steps), 'compatibility job must define steps');
+  const cleanup = compatibility.steps.find(
+    (step) => step.name === 'Cleanup temporary compatibility resources',
+  );
+  assert.ok(cleanup, 'compatibility job must define the temporary resources cleanup step');
+  assert.equal(cleanup.if, '${{ always() }}', 'compatibility cleanup must run with always()');
+  assert.equal(
+    cleanup.run?.trim(),
+    expectedCompatibilityCleanup,
+    'compatibility cleanup must use a syntactically valid RUN_ROOT fallback expression',
+  );
 }
 
 function assertWorkflowStructure(workflow) {
@@ -379,6 +420,8 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
   assert.equal(publishRunCommands(publish).some((command) => command.includes('npm view ')), false);
   assert.equal(publishRunCommands(publish).includes('npm ci'), true, 'publish job must run npm ci');
   assert.equal(publishRunCommands(publish).includes('npm run build'), true, 'publish job must run npm run build');
+  assert.ok(Array.isArray(compatibility.steps), 'compatibility job must define steps');
+  assertCompatibilityCleanupStructure(compatibility);
   assert.deepEqual(compatibility.needs, 'quality', 'compatibility must need quality');
   assert.deepEqual(publish.needs, ['quality', 'compatibility'], 'publish must need quality and compatibility');
   assert.equal(publish.permissions?.contents, 'read', 'publish contents permission must be read');
@@ -418,9 +461,27 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
   assert.match(publishCommands, /git merge-base --is-ancestor "\$GITHUB_SHA" origin\/main/);
   assert.doesNotMatch(publishCommands, /npm view @hytime\/dsh-thinking-effort@\$\{PACKAGE_VERSION\} version --json/);
   assert.match(publishCommands, /npm publish --provenance --access public/);
-  assert.equal(scalarValues(workflow).some((value) => value.includes('NPM_TOKEN')), false, 'publish workflow must not use NPM_TOKEN');
+  assertNoNpmTokenEnv(workflow);
 }
 
 test('publish workflow declares tag guards, dependencies, OIDC, and compatibility matrix', async () => {
   assertPublishWorkflowStructure(await readPublishWorkflow());
+});
+
+test('publish workflow rejects a malformed compatibility cleanup fixture', async () => {
+  const fixture = parse(await readFile(publishCleanupFixturePath, 'utf8'));
+
+  assert.throws(
+    () => assertCompatibilityCleanupStructure(fixture.jobs.compatibility),
+    /compatibility cleanup must use a syntactically valid RUN_ROOT fallback expression/,
+  );
+});
+
+test('publish workflow rejects NPM_TOKEN keys in nested env fixtures', async () => {
+  const fixture = parse(await readFile(publishNpmTokenFixturePath, 'utf8'));
+
+  assert.throws(
+    () => assertNoNpmTokenEnv(fixture),
+    /NPM_TOKEN.*workflow\.jobs\.publish\.steps\[0\]\.with\.options\.env/,
+  );
 });

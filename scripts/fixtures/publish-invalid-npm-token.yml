@@ -1,0 +1,9 @@
+name: Publish token fixture
+jobs:
+  publish:
+    steps:
+      - name: Nested environment fixture
+        with:
+          options:
+            env:
+              NPM_TOKEN: {}

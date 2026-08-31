@@ -165,7 +165,7 @@ jobs:
       - name: Cleanup temporary compatibility resources
         if: ${{ always() }}
         run: |
-          rm -rf "${RUN_ROOT:-${{ runner.temp }}/dsh-thinking-effort-compat-${{ github.run_id }}-${{ github.run_attempt }}"
+          rm -rf "${RUN_ROOT:-${{ runner.temp }}/dsh-thinking-effort-compat-${{ github.run_id }}-${{ github.run_attempt }}}"
 
   publish:
     needs: [quality, compatibility]
