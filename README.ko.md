@@ -114,6 +114,16 @@ profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](
 - `off`와 설정되지 않은 추론 강도가 모두 `reasoning`을 생략할 수 있으며, 실제로 사고를 비활성화하는지는 게이트웨이 프로토콜에 달려 있습니다.
 - Host 변경에는 DSH 재시작이 필요합니다. 설정과 언어 변경은 브라우저에서 적용됩니다.
 
+## CI 및 릴리스 유지 관리
+
+- Pull Request와 `main` 푸시에서는 Node `22.19.0` 및 `24.x` 품질 매트릭스를 실행합니다.
+- workflow는 `npm ci`를 사용하므로 의존성을 변경할 때 유지 관리자는 `package-lock.json`을 커밋해야 합니다.
+- 일반 CI workflow는 npm에 게시하지 않습니다. `publish.yml`은 `v<version>` tag에서만 게시를 시작합니다.
+- 릴리스 tag를 만들기 전에 유지 관리자는 `package.json` 버전과 각 언어의 `CHANGELOG`를 업데이트하여 커밋하고 일치하는 `v<version>` tag를 만듭니다. tag가 가리키는 커밋은 `main` 기록에 포함되어야 합니다.
+- npm 패키지에 GitHub Trusted Publisher를 설정해야 합니다. 저장소는 `hytime/dsh-thinking-effort`, workflow는 `publish.yml`입니다. 게시에는 GitHub OIDC provenance가 포함되며 `NPM_TOKEN`이 필요하지 않습니다.
+- 게시 전에 workflow는 공식 `dsh plugin` 명령으로 DSH `dsh-v0.1.2-alpha.1` (`0.1.2-alpha.1`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`)를 빌드하고 설치한 뒤 실제 호환성 테스트를 실행합니다.
+- workflow는 버전이나 `CHANGELOG`를 자동으로 변경하지 않습니다. npm에 같은 버전이 이미 있으면 게시도 중단됩니다.
+
 ## 라이선스
 
 [MIT](./LICENSE)

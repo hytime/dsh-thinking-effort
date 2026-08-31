@@ -160,6 +160,20 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 | Effort write fails | Every non-`off` level needs a gateway value. |
 | Subagent returns `UNSUPPORTED_REASONING_EFFORT` | Choose an effort supported by the target model or restore the provider default. |
 
+## Release maintenance
+
+Maintainers update the `package.json` version and all applicable `CHANGELOG` files, commit those changes, and create the matching `v<version>` tag. The tag must point to a commit in the `main` history. The `publish.yml` workflow does not change versions or changelogs automatically.
+
+Configure npm GitHub Trusted Publishing for repository `hytime/dsh-thinking-effort` and workflow `publish.yml`. Publishing uses GitHub OIDC and provenance with `npm publish --provenance --access public`; no `NPM_TOKEN` or long-lived token is used. A version that already exists in npm blocks the release.
+
+Before publishing, the workflow builds three temporary official DSH checkouts and runs the real compatibility suite after installing the current tarball with the official `dsh plugin` command:
+
+- `dsh-v0.1.2-alpha.1` (`0.1.2-alpha.1`)
+- `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`)
+- `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`)
+
+The ordinary CI workflow remains test-only and runs on pull requests and `main` pushes. Keep `package-lock.json` committed for its `npm ci` installation.
+
 ## 7. Remove
 
 Use the official command:
