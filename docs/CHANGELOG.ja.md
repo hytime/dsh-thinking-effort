@@ -8,14 +8,19 @@
 
 バージョン番号は [Semantic Versioning](https://semver.org/) に従います。
 
+## [Unreleased] - ゲートウェイ capability mapping と optional takeover
+
+### 変更
+
+- `version-map.ts` で DSH Runtime の transport、Gateway compat フィールド、takeover transport の capability mapping を統一し、rc7 は `supportsDeveloperRole`/`maxTokensField` に非対応、rc8 以降は対応することを明記しました。
+- rc7、rc2、alpha3 の 3 つの capability composition representative を個別にロードし、実際の互換性を検証するテストを追加しました。
+- オプションの `dsh-llm-openai-completions` takeover に対応しました。Gateway compat に対応する runtime で、対象がカスタム OpenAI 互換の思考ゲートウェイであり、transport が有効な場合だけ適用されます。
+
 ## [0.1.13] - 互換性範囲による検証
 
 ### 変更
 
 - 互換アダプターのバージョン診断をリリース単位の列挙から範囲判定へ変更し、公開前 workflow は各範囲から公式代表バージョンを 1 つだけ選ぶようにしました。
-- `version-map.ts` で DSH Runtime の transport、Gateway compat フィールド、takeover transport の capability mapping を統一し、rc7 は `supportsDeveloperRole`/`maxTokensField` に非対応、rc8 以降は対応することを明記しました。
-- rc7、rc2、alpha3 の 3 つの capability composition representative を個別にロードし、実際の互換性を検証するテストを追加しました。
-- オプションの `dsh-llm-openai-completions` takeover に対応しました。Gateway compat に対応する runtime で、対象がカスタム OpenAI 互換の思考ゲートウェイであり、transport が有効な場合だけ適用されます。
 
 ## [0.1.12] - 公式 alpha.3 互換性検証
 

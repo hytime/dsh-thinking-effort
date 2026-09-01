@@ -8,14 +8,19 @@
 
 버전 번호는 [Semantic Versioning](https://semver.org/)을 따릅니다.
 
+## [Unreleased] - 게이트웨이 capability mapping 및 optional takeover
+
+### 변경
+
+- `version-map.ts`에서 DSH Runtime transport, Gateway compat 필드 및 takeover transport의 capability mapping을 통일하고, rc7은 `supportsDeveloperRole`/`maxTokensField`를 지원하지 않으며 rc8+는 지원함을 명시했습니다.
+- rc7, rc2 및 alpha3 세 capability composition representative를 각각 로드하고 실제 호환성을 검증하는 테스트를 추가했습니다.
+- 선택 사항인 `dsh-llm-openai-completions` takeover를 지원합니다. Gateway compat을 지원하는 runtime에서 대상이 사용자 지정 OpenAI 호환 사고 게이트웨이이고 transport가 활성화된 경우에만 적용됩니다.
+
 ## [0.1.13] - 호환성 범위 기반 검증
 
 ### 변경
 
 - 호환성 어댑터의 버전 진단을 릴리스별 열거에서 범위 판정으로 변경하고, 게시 전 workflow가 각 범위에서 공식 대표 버전 하나만 선택하도록 했습니다.
-- `version-map.ts`에서 DSH Runtime transport, Gateway compat 필드 및 takeover transport의 capability mapping을 통일하고, rc7은 `supportsDeveloperRole`/`maxTokensField`를 지원하지 않으며 rc8+는 지원함을 명시했습니다.
-- rc7, rc2 및 alpha3 세 capability composition representative를 각각 로드하고 실제 호환성을 검증하는 테스트를 추가했습니다.
-- 선택 사항인 `dsh-llm-openai-completions` takeover를 지원합니다. Gateway compat을 지원하는 runtime에서 대상이 사용자 지정 OpenAI 호환 사고 게이트웨이이고 transport가 활성화된 경우에만 적용됩니다.
 
 ## [0.1.12] - 공식 alpha.3 호환성 검증
 

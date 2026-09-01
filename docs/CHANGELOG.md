@@ -12,18 +12,23 @@ This file records the features, fixes, and user-facing impact of every published
 
 Versions follow [Semantic Versioning](https://semver.org/).
 
-## [0.1.13] - 按兼容范围验证 / Range-based compatibility verification
+## [Unreleased] - 网关能力映射与可选 takeover / Gateway capability mapping and optional takeover
 
 ### 变更 / Changed
 
-- 将兼容层的版本诊断从逐版本枚举改为范围判断，并让发布 workflow 每个兼容范围只选择一个官方代表版本。
-- Replace per-release compatibility enumeration with range-based version diagnostics, and make the release workflow select one official representative per compatibility range.
 - 统一 `version-map.ts` 对 DSH Runtime transport、Gateway compat 字段和 takeover transport 的能力映射，并明确 rc7 不支持 `supportsDeveloperRole`/`maxTokensField`、rc8+ 支持。
 - Unify capability mapping for DSH Runtime transports, Gateway compat fields, and takeover transport in `version-map.ts`; rc7 does not support `supportsDeveloperRole`/`maxTokensField`, while rc8+ does.
 - 新增 rc7、rc2 和 alpha3 三个能力组合代表的独立加载与真实兼容性验证。
 - Add independent loading and real compatibility checks for the rc7, rc2, and alpha3 capability-composition representatives.
 - 支持可选的 `dsh-llm-openai-completions` takeover：仅在运行时支持 Gateway compat、目标供应商为自定义 OpenAI 兼容思考网关且 transport 已启用时生效。
 - Support optional `dsh-llm-openai-completions` takeover only when the runtime supports Gateway compat, the target provider is a custom OpenAI-compatible thinking gateway, and the transport is enabled.
+
+## [0.1.13] - 按兼容范围验证 / Range-based compatibility verification
+
+### 变更 / Changed
+
+- 将兼容层的版本诊断从逐版本枚举改为范围判断，并让发布 workflow 每个兼容范围只选择一个官方代表版本。
+- Replace per-release compatibility enumeration with range-based version diagnostics, and make the release workflow select one official representative per compatibility range.
 
 ## [0.1.12] - 官方 alpha.3 兼容验证 / Official alpha.3 compatibility verification
 

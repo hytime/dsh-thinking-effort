@@ -798,23 +798,79 @@ describe('official DSH web startup cleanup', () => {
 })
 
 describe('compatibility documentation and root validation', () => {
-  it('documents capability detection as authoritative across published docs', () => {
-    const documentationFiles = [
-      'README.md', 'README.zh.md', 'README.ja.md', 'README.ko.md',
-      'docs/INSTALL.md', 'docs/INSTALL.zh.md', 'docs/INSTALL.ja.md', 'docs/INSTALL.ko.md',
-      'docs/CHANGELOG.md', 'docs/CHANGELOG.ja.md', 'docs/CHANGELOG.ko.md',
-    ]
-    const documents = documentationFiles.map((file) => readFileSync(join(root, file), 'utf8'))
+  const compatibilityDocumentationFiles = [
+    'README.md', 'README.zh.md', 'README.ja.md', 'README.ko.md',
+    'docs/INSTALL.md', 'docs/INSTALL.zh.md', 'docs/INSTALL.ja.md', 'docs/INSTALL.ko.md',
+  ] as const
+  const changelogFiles = [
+    'docs/CHANGELOG.md', 'docs/CHANGELOG.ja.md', 'docs/CHANGELOG.ko.md',
+  ] as const
+  const documentationContract = [
+    { name: 'DSH Runtime compatibility boundary', pattern: /DSH Runtime[^\n]*(?:compatibility|兼容|互換|호환)/i },
+    { name: 'Gateway Protocol compatibility boundary', pattern: /Gateway Protocol[^\n]*(?:compatibility|compat|兼容|互換|호환)/i },
+    { name: 'modern Settings transport', pattern: /remote\.settings/ },
+    { name: 'legacy Settings transport', pattern: /connection\.api\.settings/ },
+    { name: 'supportsDeveloperRole field', pattern: /supportsDeveloperRole/ },
+    { name: 'maxTokensField field', pattern: /maxTokensField/ },
+    { name: 'rc7 capability boundary', pattern: /0\.1\.0-rc\.7/ },
+    { name: 'rc8 and later capability boundary', pattern: /0\.1\.0-rc\.8[^\n]*(?:later|后续|以降|이후)/i },
+    { name: 'Auto reset semantics', pattern: /Auto[^\n]*(?:unset|取消|恢复|復元|복원)/i },
+    {
+      name: 'optional takeover semantics',
+      pattern: /(?=.*dsh-llm-openai-completions)(?=.*(?:optional|可选|オプション|선택))(?=.*(?:takeover|take over|接管))/is,
+    },
+  ] as const
+  const published013Sections = {
+    'docs/CHANGELOG.md': `## [0.1.13] - 按兼容范围验证 / Range-based compatibility verification\n\n### 变更 / Changed\n\n- 将兼容层的版本诊断从逐版本枚举改为范围判断，并让发布 workflow 每个兼容范围只选择一个官方代表版本。\n- Replace per-release compatibility enumeration with range-based version diagnostics, and make the release workflow select one official representative per compatibility range.`,
+    'docs/CHANGELOG.ja.md': `## [0.1.13] - 互換性範囲による検証\n\n### 変更\n\n- 互換アダプターのバージョン診断をリリース単位の列挙から範囲判定へ変更し、公開前 workflow は各範囲から公式代表バージョンを 1 つだけ選ぶようにしました。`,
+    'docs/CHANGELOG.ko.md': `## [0.1.13] - 호환성 범위 기반 검증\n\n### 변경\n\n- 호환성 어댑터의 버전 진단을 릴리스별 열거에서 범위 판정으로 변경하고, 게시 전 workflow가 각 범위에서 공식 대표 버전 하나만 선택하도록 했습니다.`,
+  } as const
 
-    expect(documentationFiles.every((file) => existsSync(join(root, file)))).toBe(true)
-    expect(existsSync(join(root, 'INSTALL.md'))).toBe(false)
-    expect(existsSync(join(root, 'INSTALL.zh.md'))).toBe(false)
-    expect(existsSync(join(root, 'CHANGELOG.md'))).toBe(false)
-    expect(existsSync(join(root, 'CHANGELOG.ja.md'))).toBe(false)
-    expect(existsSync(join(root, 'CHANGELOG.ko.md'))).toBe(false)
-    expect(documents.every((document) => !/prefers DSH version metadata/i.test(document))).toBe(true)
-    expect(documents.every((document) => !/优先使用 DSH version metadata/i.test(document))).toBe(true)
-    expect(documents[8]).toContain('Runtime capability detection is authoritative')
+  const section = (document: string, heading: string): string => {
+    const start = document.indexOf(`## [${heading}]`)
+    if (start === -1) throw new Error(`missing changelog heading: ${heading}`)
+    const next = document.indexOf('\n## [', start + 1)
+    return document.slice(start, next === -1 ? document.length : next).trim()
+  }
+
+  it.each(compatibilityDocumentationFiles)('enforces the compatibility contract in %s', (file) => {
+    const document = readFileSync(join(root, file), 'utf8')
+    expect(existsSync(join(root, file))).toBe(true)
+    for (const { name, pattern } of documentationContract) {
+      expect(document, `${file}: missing ${name}`).toMatch(pattern)
+    }
+  })
+
+  it.each(changelogFiles)('enforces the changelog contract in %s', (file) => {
+    const document = readFileSync(join(root, file), 'utf8')
+    expect(existsSync(join(root, file))).toBe(true)
+    expect(document).toMatch(/version-map(?:\.ts)?/i)
+    expect(document).toMatch(/rc\.?7/i)
+    expect(document).toMatch(/rc\.?2/i)
+    expect(document).toMatch(/alpha\.?3/i)
+    expect(document).toMatch(/(?:optional|可选|オプション|선택)[^\n]*(?:takeover|take over|接管)/is)
+    expect(document).toContain('## [Unreleased]')
+    expect(section(document, 'Unreleased')).toMatch(/version-map/i)
+    expect(section(document, 'Unreleased')).toMatch(/rc\.?7/i)
+    expect(section(document, 'Unreleased')).toMatch(/rc\.?2/i)
+    expect(section(document, 'Unreleased')).toMatch(/alpha\.?3/i)
+    expect(section(document, 'Unreleased')).toMatch(/takeover|take over|接管/i)
+    expect(section(document, '0.1.13')).toBe(published013Sections[file])
+  })
+
+  it.each(['INSTALL.md', 'INSTALL.zh.md', 'CHANGELOG.md', 'CHANGELOG.ja.md', 'CHANGELOG.ko.md'] as const)(
+    'rejects the moved root documentation path %s',
+    (file) => {
+      expect(existsSync(join(root, file))).toBe(false)
+    },
+  )
+
+  it('documents capability detection as authoritative across published docs', () => {
+    for (const file of [...compatibilityDocumentationFiles, ...changelogFiles]) {
+      const document = readFileSync(join(root, file), 'utf8')
+      expect(document, `${file}: stale version-metadata preference`).not.toMatch(/prefers DSH version metadata/i)
+      expect(document, `${file}: stale Chinese version-metadata preference`).not.toMatch(/优先使用 DSH version metadata/i)
+    }
   })
 
   it('rejects duplicate normalized DSH CLI roots', () => {
