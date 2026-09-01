@@ -1,10 +1,39 @@
 import { describe, expect, it } from 'vitest'
 import { clientCapabilities, hostCapabilities } from '../src/compat/capabilities.ts'
+import { capabilitiesForVersion } from '../src/compat/version-map.ts'
 import { resolveCompatibility } from '../src/compat/version-adapter.ts'
 
 const legacy = { settings: 'legacy', externalLanguages: false } as const
 const modern = { settings: 'remote', externalLanguages: true } as const
 const noSettings = { settings: 'none', externalLanguages: false } as const
+
+describe('version capability map', () => {
+  it('maps the rc7 compatibility boundary to its legacy API and fields', () => {
+    expect(capabilitiesForVersion('0.1.0-rc.7')).toMatchObject({
+      settingsApi: 'connection.api.settings',
+      gatewayCompatFields: [],
+    })
+  })
+
+  it('maps rc8 and later legacy releases to complete gateway fields', () => {
+    expect(capabilitiesForVersion('0.1.0-rc.8')).toMatchObject({
+      settingsApi: 'connection.api.settings',
+      gatewayCompatFields: ['supportsDeveloperRole', 'maxTokensField'],
+    })
+  })
+
+  it('maps modern alpha releases as a range without enumerating each alpha', () => {
+    expect(capabilitiesForVersion('0.1.2-alpha.2')).toMatchObject({
+      settingsApi: 'remote.settings',
+      gatewayCompatFields: ['supportsDeveloperRole', 'maxTokensField'],
+    })
+    expect(capabilitiesForVersion('0.1.2-alpha.3')).toMatchObject({
+      settingsApi: 'remote.settings',
+      gatewayCompatFields: ['supportsDeveloperRole', 'maxTokensField'],
+    })
+    expect(capabilitiesForVersion('0.1.3')).toBeUndefined()
+  })
+})
 
 describe('compatibility profiles', () => {
   it('classifies compatibility ranges without enumerating every release', () => {
