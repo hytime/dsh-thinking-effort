@@ -27,6 +27,7 @@ import {
 import { iosPalette } from '../src/client/theme.js'
 import { resolveGatewayCompat, resolveProviderGatewayCompat } from '../src/compat/gateway/resolve.js'
 import { editableProviderCompatFields, validateProviderCompat } from '../src/compat/gateway/validation.js'
+import type { GatewayCompatEditability } from '../src/compat/gateway/types.js'
 import { capabilitiesForVersion } from '../src/compat/version-map.js'
 import type { InventoryItem, Translation } from '../src/client/types.js'
 
@@ -202,10 +203,11 @@ describe('model inventory and operations', () => {
     expect(result.toString).toEqual({ id: 'toString', keep: 'toString', reasoningEfforts: { off: null, high: 'to-string-high' } })
   })
   it('writes provider compat fields independently for supported and unsupported values', () => {
+    const editable: GatewayCompatEditability = { supportsDeveloperRole: true, maxTokensField: true, editableFields: ['supportsDeveloperRole', 'maxTokensField'] }
     expect(opsForProviderCompat('local', {
       supportsDeveloperRole: 'unsupported',
       maxTokensField: 'max_tokens',
-    })).toEqual([
+    }, editable)).toEqual([
       { op: 'set', path: ['providers', 'local', 'compat', 'supportsDeveloperRole'], value: false },
       { op: 'set', path: ['providers', 'local', 'compat', 'maxTokensField'], value: 'max_tokens' },
     ])
@@ -213,14 +215,17 @@ describe('model inventory and operations', () => {
     expect(opsForProviderCompat('local', {
       supportsDeveloperRole: 'auto',
       maxTokensField: 'auto',
-    })).toEqual([
+    }, editable)).toEqual([
       { op: 'unset', path: ['providers', 'local', 'compat', 'supportsDeveloperRole'] },
       { op: 'unset', path: ['providers', 'local', 'compat', 'maxTokensField'] },
     ])
   })
 
   it('does not replace unrelated provider compat fields', () => {
-    expect(opsForProviderCompat('local', { supportsDeveloperRole: 'supported' })).toEqual([
+    expect(opsForProviderCompat('local', { supportsDeveloperRole: 'supported' }, {
+      supportsDeveloperRole: true,
+      maxTokensField: true,
+    })).toEqual([
       { op: 'set', path: ['providers', 'local', 'compat', 'supportsDeveloperRole'], value: true },
     ])
   })
@@ -230,14 +235,15 @@ describe('model inventory and operations', () => {
       model: 'model-a',
       modelCompat: { maxTokensField: 'max_tokens' },
       providerCompat: { supportsDeveloperRole: false },
-      catalogCompat: { thinkingFormat: 'catalog', supportsReasoningEffort: false },
+      catalogCompat: { thinkingFormat: 'deepseek', supportsReasoningEffort: false },
       protocolDefault: { maxTokensField: 'max_completion_tokens' },
-      providerUrl: 'https://api.openai.com/v1',
+      api: 'openai-completions',
+      baseUrl: 'https://api.openai.com/v1',
     })
 
     expect(result.maxTokensField).toEqual({ value: 'max_tokens', source: 'model' })
     expect(result.supportsDeveloperRole).toEqual({ value: false, source: 'provider' })
-    expect(result.thinkingFormat).toEqual({ value: 'catalog', source: 'catalog' })
+    expect(result.thinkingFormat).toEqual({ value: 'deepseek', source: 'catalog' })
     expect(result.supportsReasoningEffort).toEqual({ value: false, source: 'catalog' })
     expect(result.model).toBe('model-a')
   })
@@ -289,11 +295,60 @@ describe('model inventory and operations', () => {
     })
   })
 
-  it('does not emit writes when a field is unavailable', () => {
-    expect(opsForProviderCompat('local', {
-      supportsDeveloperRole: 'supported',
-      maxTokensField: 'max_tokens',
-    }, { supportsDeveloperRole: false, maxTokensField: false })).toEqual([])
+  it('refuses provider compat writes when editability is missing or unclear', () => {
+    const update = { supportsDeveloperRole: 'supported' as const, maxTokensField: 'max_tokens' as const }
+    expect(opsForProviderCompat('local', update)).toEqual([])
+    expect(opsForProviderCompat('local', update, { supportsDeveloperRole: true })).toEqual([
+      { op: 'set', path: ['providers', 'local', 'compat', 'supportsDeveloperRole'], value: true },
+    ])
+  })
+
+  it('checks each schema field independently', () => {
+    const schema = { properties: { maxTokensField: {} } }
+    const result = editableProviderCompatFields(capabilitiesForVersion('0.1.0-rc.8'), schema)
+    expect(result).toEqual({
+      supportsDeveloperRole: false,
+      maxTokensField: true,
+      editableFields: ['maxTokensField'],
+    })
+  })
+
+  it('ignores unsupported thinking formats and does not infer them from Anthropic URLs', () => {
+    expect(resolveGatewayCompat({
+      provider: 'local',
+      modelCompat: { thinkingFormat: 'not-official' },
+      providerCompat: { thinkingFormat: 'anthropic' },
+      catalogCompat: { thinkingFormat: 'deepseek' },
+      api: 'openai-completions',
+      baseUrl: 'https://api.anthropic.com/v1',
+    }).thinkingFormat).toEqual({ value: 'deepseek', source: 'catalog' })
+    expect(resolveGatewayCompat({
+      provider: 'anthropic',
+      api: 'anthropic-messages',
+      baseUrl: 'https://api.anthropic.com',
+    }).thinkingFormat).toEqual({ value: undefined, source: 'unknown' })
+  })
+
+  it('leaves deepseek and unknown URL compat fields unresolved', () => {
+    expect(resolveGatewayCompat({
+      provider: 'deepseek',
+      api: 'openai-completions',
+      baseUrl: 'https://api.deepseek.com/v1',
+    })).toMatchObject({
+      supportsDeveloperRole: { value: undefined, source: 'unknown' },
+      supportsReasoningEffort: { value: undefined, source: 'unknown' },
+      maxTokensField: { value: undefined, source: 'unknown' },
+      thinkingFormat: { value: undefined, source: 'unknown' },
+    })
+    expect(resolveGatewayCompat({
+      provider: 'local',
+      api: 'openai-completions',
+      baseUrl: 'https://example.test/v1',
+    })).toMatchObject({
+      supportsDeveloperRole: { value: undefined, source: 'unknown' },
+      maxTokensField: { value: undefined, source: 'unknown' },
+      thinkingFormat: { value: undefined, source: 'unknown' },
+    })
   })
 })
 

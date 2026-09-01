@@ -3,10 +3,10 @@ import type { ALL_LEVELS } from './constants.js'
 export type {
   GatewayCompat,
   GatewayCompatEditability,
-  GatewayCompatField,
   GatewayCompatMode,
   GatewayCompatResolution,
   GatewayCompatResolveInput,
+  GatewayCompatSchemaField,
   GatewayCompatSource,
   GatewayCompatValidationResult,
   MaxTokensField,
@@ -14,6 +14,7 @@ export type {
   ProviderGatewayCompatUpdate,
   ProviderGatewayCompatView,
 } from '../compat/gateway/types.js'
+export { SUPPORTED_THINKING_FORMATS } from '../compat/gateway/types.js'
 
 export type ReasoningLevel = typeof ALL_LEVELS[number]
 export type ReasoningEffort = string | null

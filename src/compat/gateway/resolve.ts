@@ -1,3 +1,4 @@
+import { SUPPORTED_THINKING_FORMATS } from './types.js'
 import type {
   GatewayCompat,
   GatewayCompatFieldResolution,
@@ -25,11 +26,15 @@ function compatRecord(value: unknown): Record<string, unknown> | undefined {
   return nested ?? input
 }
 
+function isSupportedThinkingFormat(value: unknown): value is typeof SUPPORTED_THINKING_FORMATS[number] {
+  return typeof value === 'string' && SUPPORTED_THINKING_FORMATS.some((entry) => entry === value)
+}
+
 function readCompat(value: unknown): GatewayCompat {
   const input = compatRecord(value)
   if (!input) return {}
   const output: { -readonly [Key in keyof GatewayCompat]?: GatewayCompat[Key] } = {}
-  if (typeof input.thinkingFormat === 'string' && input.thinkingFormat.length > 0) {
+  if (isSupportedThinkingFormat(input.thinkingFormat)) {
     output.thinkingFormat = input.thinkingFormat
   }
   if (typeof input.supportsReasoningEffort === 'boolean') {
@@ -42,39 +47,6 @@ function readCompat(value: unknown): GatewayCompat {
     output.maxTokensField = input.maxTokensField
   }
   return output
-}
-
-function urlCompat(value: string | undefined): GatewayCompat {
-  if (typeof value !== 'string' || value.trim() === '') return {}
-  let pathname = ''
-  let hostname = ''
-  try {
-    const parsed = new URL(value)
-    pathname = parsed.pathname.toLowerCase()
-    hostname = parsed.hostname.toLowerCase()
-  } catch {
-    const lower = value.toLowerCase()
-    pathname = lower
-    hostname = lower
-  }
-
-  if (hostname.includes('anthropic')) {
-    return {
-      thinkingFormat: 'anthropic',
-      supportsDeveloperRole: true,
-      supportsReasoningEffort: false,
-      maxTokensField: 'max_tokens',
-    }
-  }
-  if (hostname.includes('openai') || pathname.includes('/v1')) {
-    return {
-      thinkingFormat: 'openai',
-      supportsDeveloperRole: true,
-      supportsReasoningEffort: true,
-      maxTokensField: 'max_completion_tokens',
-    }
-  }
-  return {}
 }
 
 function sourceFor(field: GatewayField, sources: readonly { value: GatewayCompat; source: GatewayCompatSource }[]): GatewayCompatFieldResolution<never> {
@@ -91,7 +63,6 @@ export function resolveGatewayCompat(input: GatewayCompatResolveInput): GatewayC
     { value: readCompat(input.providerCompat), source: 'provider' as const },
     { value: readCompat(input.catalogCompat), source: 'catalog' as const },
     { value: readCompat(input.protocolDefault), source: 'protocol' as const },
-    { value: urlCompat(input.providerUrl), source: 'url' as const },
   ]
   return {
     provider: input.provider,
@@ -110,7 +81,7 @@ function providerSource(resolution: GatewayCompatResolution): ProviderGatewayCom
     resolution.maxTokensField.source,
   ]
   if (sources.includes('model') || sources.includes('provider')) return 'user'
-  if (sources.includes('protocol') || sources.includes('url')) return 'base'
+  if (sources.includes('protocol')) return 'base'
   if (sources.includes('catalog')) return 'catalog'
   return 'unknown'
 }

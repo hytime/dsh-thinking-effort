@@ -4,7 +4,7 @@ import type {
 } from '../client/types.js'
 
 export type { CompatibilitySettings, DshCompatibilityCapabilities } from '../client/types.js'
-export type { DshVersionCapabilities, GatewayCompatField, SettingsApi } from './version-map.js'
+export type { DshVersionCapabilities, GatewayCompatEditableField, SettingsApi } from './version-map.js'
 
 type MethodName = 'describe' | 'mutate' | 'get' | 'update'
 

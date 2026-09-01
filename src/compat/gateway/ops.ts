@@ -27,17 +27,17 @@ function pushMaxTokensOperation(operations: SettingsOp[], provider: string, valu
 export function opsForProviderCompat(
   provider: string,
   update: Partial<ProviderGatewayCompatUpdate>,
-  editability?: Pick<GatewayCompatEditability, 'supportsDeveloperRole' | 'maxTokensField'>,
+  editability?: Partial<Pick<GatewayCompatEditability, 'supportsDeveloperRole' | 'maxTokensField'>>,
 ): SettingsOp[] {
   if (provider.trim() === '') return []
 
   const operations: SettingsOp[] = []
   if (Object.prototype.hasOwnProperty.call(update, 'supportsDeveloperRole')
-    && editability?.supportsDeveloperRole !== false) {
+    && editability?.supportsDeveloperRole === true) {
     pushModeOperation(operations, provider, 'supportsDeveloperRole', update.supportsDeveloperRole)
   }
   if (Object.prototype.hasOwnProperty.call(update, 'maxTokensField')
-    && editability?.maxTokensField !== false) {
+    && editability?.maxTokensField === true) {
     pushMaxTokensOperation(operations, provider, update.maxTokensField)
   }
   return operations

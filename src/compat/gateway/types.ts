@@ -3,17 +3,32 @@ import type { DshVersionCapabilities } from '../version-map.js'
 export type GatewayCompatMode = 'auto' | 'supported' | 'unsupported'
 export type MaxTokensField = 'max_tokens' | 'max_completion_tokens'
 
-export type GatewayCompatField =
+export type GatewayCompatSchemaField =
   | 'thinkingFormat'
   | 'supportsReasoningEffort'
   | 'supportsDeveloperRole'
   | 'maxTokensField'
 
-export type GatewayCompatSource = 'model' | 'provider' | 'catalog' | 'protocol' | 'url' | 'unknown'
+export const SUPPORTED_THINKING_FORMATS = [
+  'openai',
+  'openrouter',
+  'deepseek',
+  'together',
+  'baseten',
+  'zai',
+  'qwen',
+  'chat-template',
+  'qwen-chat-template',
+  'string-thinking',
+  'ant-ling',
+] as const
+
+export type ThinkingFormat = typeof SUPPORTED_THINKING_FORMATS[number]
+export type GatewayCompatSource = 'model' | 'provider' | 'catalog' | 'protocol' | 'unknown'
 export type ProviderGatewayCompatSource = 'user' | 'base' | 'catalog' | 'unknown'
 
 export interface GatewayCompat {
-  readonly thinkingFormat?: string
+  readonly thinkingFormat?: ThinkingFormat
   readonly supportsReasoningEffort?: boolean
   readonly supportsDeveloperRole?: boolean
   readonly maxTokensField?: MaxTokensField
@@ -36,7 +51,7 @@ export interface GatewayCompatFieldResolution<T> {
 export interface GatewayCompatResolution {
   readonly provider: string
   readonly model?: string
-  readonly thinkingFormat: GatewayCompatFieldResolution<string>
+  readonly thinkingFormat: GatewayCompatFieldResolution<ThinkingFormat>
   readonly supportsReasoningEffort: GatewayCompatFieldResolution<boolean>
   readonly supportsDeveloperRole: GatewayCompatFieldResolution<boolean>
   readonly maxTokensField: GatewayCompatFieldResolution<MaxTokensField>
@@ -50,7 +65,8 @@ export interface GatewayCompatResolveInput {
   readonly providerCompat?: unknown
   readonly catalogCompat?: unknown
   readonly protocolDefault?: unknown
-  readonly providerUrl?: string
+  readonly api?: string
+  readonly baseUrl?: string
   readonly versionCapabilities?: DshVersionCapabilities
 }
 
@@ -69,4 +85,4 @@ export interface GatewayCompatValidationResult extends GatewayCompatEditability 
   readonly available: boolean
 }
 
-export type GatewayCompatSchema = Readonly<Partial<Record<GatewayCompatField, unknown>>>
+export type GatewayCompatSchema = Readonly<Partial<Record<GatewayCompatSchemaField, unknown>>>

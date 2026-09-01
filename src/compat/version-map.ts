@@ -1,11 +1,11 @@
 export type SettingsApi = 'connection.api.settings' | 'remote.settings'
-export type GatewayCompatField = 'supportsDeveloperRole' | 'maxTokensField'
+export type GatewayCompatEditableField = 'supportsDeveloperRole' | 'maxTokensField'
 
 export interface DshVersionCapabilities {
   settingsTransport: 'legacy' | 'modern'
   settingsApi: SettingsApi
   baseModelFields: readonly ('reasoningEfforts' | 'input' | 'contextWindow')[]
-  gatewayCompatFields: readonly GatewayCompatField[]
+  gatewayCompatFields: readonly GatewayCompatEditableField[]
   externalLanguages: boolean
   takeoverTransport: 'unsupported' | 'optional'
 }

@@ -1,8 +1,7 @@
-import type { DshVersionCapabilities, GatewayCompatField } from '../version-map.js'
+import type { DshVersionCapabilities, GatewayCompatEditableField } from '../version-map.js'
 import type { GatewayCompatEditability, GatewayCompatValidationResult } from './types.js'
 
 const editableFields = ['supportsDeveloperRole', 'maxTokensField'] as const
-type EditableGatewayCompatField = typeof editableFields[number]
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -35,7 +34,7 @@ function schemaProperties(value: unknown): Record<string, unknown> | undefined {
 
 function compatProperties(schema: unknown): Record<string, unknown> | undefined {
   const direct = schemaProperties(schema)
-  if (direct && hasProperty(direct, 'supportsDeveloperRole')) return direct
+  if (direct && editableFields.some((field) => hasProperty(direct, field))) return direct
 
   const providers = direct?.providers
   const providerProperties = schemaProperties(providers)
@@ -52,16 +51,16 @@ function compatProperties(schema: unknown): Record<string, unknown> | undefined 
   return undefined
 }
 
-function schemaAllowsField(schema: unknown, field: EditableGatewayCompatField): boolean {
+function schemaAllowsField(schema: unknown, field: GatewayCompatEditableField): boolean {
   const properties = compatProperties(schema)
   return properties !== undefined && hasProperty(properties, field)
 }
 
 function versionAllowsField(
   capabilities: DshVersionCapabilities | undefined,
-  field: EditableGatewayCompatField,
+  field: GatewayCompatEditableField,
 ): boolean {
-  return capabilities !== undefined && capabilities.gatewayCompatFields.includes(field as GatewayCompatField)
+  return capabilities !== undefined && capabilities.gatewayCompatFields.includes(field)
 }
 
 export function editableProviderCompatFields(
@@ -96,7 +95,7 @@ export function validateProviderCompat(
 export function canEditProviderCompatField(
   capabilities: DshVersionCapabilities | undefined,
   descriptorSchema: unknown,
-  field: EditableGatewayCompatField,
+  field: GatewayCompatEditableField,
 ): boolean {
   return editableProviderCompatFields(capabilities, descriptorSchema)[field]
 }
