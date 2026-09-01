@@ -51,34 +51,12 @@ function modelLayerCompat(layer: unknown, provider: string, model: string): Reco
   return undefined
 }
 
-const providerCompatFields = ['supportsDeveloperRole', 'maxTokensField'] as const
-
-type ProviderCompatField = typeof providerCompatFields[number]
-
-function fieldLayer(source: Record<string, unknown> | undefined, field: ProviderCompatField): Record<string, unknown> {
-  if (source === undefined || !Object.prototype.hasOwnProperty.call(source, field)) return {}
-  return { [field]: source[field] }
-}
-
-function catalogField(
-  field: ProviderCompatField,
-  modelValue: Record<string, unknown> | undefined,
-  providerValue: Record<string, unknown> | undefined,
-  higherLayers: readonly (Record<string, unknown> | undefined)[],
-): Record<string, unknown> {
-  if (higherLayers.some((layer) => layer?.[field] !== undefined)) return {}
-  return hasField(modelValue, field) ? fieldLayer(modelValue, field) : fieldLayer(providerValue, field)
-}
-
-function hasField(source: Record<string, unknown> | undefined, field: ProviderCompatField): boolean {
-  return source !== undefined && Object.prototype.hasOwnProperty.call(source, field)
-}
-
 export function modelGatewayCompatViewFrom(
   namespace: SettingsNamespace | unknown,
   provider: string,
   model: string,
   compatibilityProfile: CompatibilityProfile = 'unknown',
+  protocolDefault?: unknown,
 ): ModelGatewayCompatView {
   const descriptor = record(namespace)
   const userModel = modelLayerCompat(descriptor?.user, provider, model)
@@ -93,13 +71,9 @@ export function modelGatewayCompatViewFrom(
     model,
     modelCompat: userModel,
     providerCompat: userProvider,
-    baseCompat: Object.assign({}, baseProvider, baseModel),
-    catalogCompat: Object.assign(
-      {},
-      catalogField('supportsDeveloperRole', valueModel, valueProvider, [userModel, userProvider, baseModel, baseProvider]),
-      catalogField('maxTokensField', valueModel, valueProvider, [userModel, userProvider, baseModel, baseProvider]),
-    ),
-    protocolDefault: undefined,
+    baseCompat: [baseModel, baseProvider],
+    catalogCompat: [valueModel, valueProvider],
+    protocolDefault,
   }, {
     supportsDeveloperRoleAvailable: editability.supportsDeveloperRole,
     maxTokensFieldAvailable: editability.maxTokensField,
@@ -161,13 +135,9 @@ export function providerGatewayCompatViewFrom(
   const value = layerCompat(descriptor?.value, provider)
   const input: GatewayCompatResolveInput = {
     provider,
-    providerCompat: Object.assign({}, fieldLayer(user, 'supportsDeveloperRole'), fieldLayer(user, 'maxTokensField')),
-    baseCompat: Object.assign({}, fieldLayer(base, 'supportsDeveloperRole'), fieldLayer(base, 'maxTokensField')),
-    catalogCompat: Object.assign(
-      {},
-      user?.supportsDeveloperRole === undefined && base?.supportsDeveloperRole === undefined ? fieldLayer(value, 'supportsDeveloperRole') : {},
-      user?.maxTokensField === undefined && base?.maxTokensField === undefined ? fieldLayer(value, 'maxTokensField') : {},
-    ),
+    providerCompat: user,
+    baseCompat: base,
+    catalogCompat: value,
   }
   const resolved = resolveProviderGatewayCompat(input)
   const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema)

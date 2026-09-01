@@ -56,20 +56,23 @@ function isSupportedThinkingFormat(value: unknown): value is typeof SUPPORTED_TH
 }
 
 function readCompat(value: unknown): GatewayCompat {
-  const input = compatRecord(value)
-  if (!input) return {}
+  const candidates = Array.isArray(value) ? value : [value]
   const output: { -readonly [Key in keyof GatewayCompat]?: GatewayCompat[Key] } = {}
-  if (isSupportedThinkingFormat(input.thinkingFormat)) {
-    output.thinkingFormat = input.thinkingFormat
-  }
-  if (typeof input.supportsReasoningEffort === 'boolean') {
-    output.supportsReasoningEffort = input.supportsReasoningEffort
-  }
-  if (typeof input.supportsDeveloperRole === 'boolean') {
-    output.supportsDeveloperRole = input.supportsDeveloperRole
-  }
-  if (input.maxTokensField === 'max_tokens' || input.maxTokensField === 'max_completion_tokens') {
-    output.maxTokensField = input.maxTokensField
+  for (const candidate of candidates) {
+    const input = compatRecord(candidate)
+    if (!input) continue
+    if (output.thinkingFormat === undefined && isSupportedThinkingFormat(input.thinkingFormat)) {
+      output.thinkingFormat = input.thinkingFormat
+    }
+    if (output.supportsReasoningEffort === undefined && typeof input.supportsReasoningEffort === 'boolean') {
+      output.supportsReasoningEffort = input.supportsReasoningEffort
+    }
+    if (output.supportsDeveloperRole === undefined && typeof input.supportsDeveloperRole === 'boolean') {
+      output.supportsDeveloperRole = input.supportsDeveloperRole
+    }
+    if (output.maxTokensField === undefined && (input.maxTokensField === 'max_tokens' || input.maxTokensField === 'max_completion_tokens')) {
+      output.maxTokensField = input.maxTokensField
+    }
   }
   return output
 }
@@ -136,7 +139,7 @@ export function resolveModelGatewayCompat(
   const resolution = resolveGatewayCompat(input)
   return {
     provider: input.provider,
-    model: input.model ?? '',
+    model: input.model,
     supportsDeveloperRole: resolution.supportsDeveloperRole.value === undefined
       ? 'auto'
       : resolution.supportsDeveloperRole.value ? 'supported' : 'unsupported',

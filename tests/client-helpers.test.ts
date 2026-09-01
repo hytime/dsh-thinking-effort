@@ -313,6 +313,100 @@ describe('model inventory and operations', () => {
     })
   })
 
+  it('projects model compat from modelOverrides without changing provider compat', () => {
+    const namespace = {
+      value: {
+        providers: {
+          'qwen-gateway': {
+            compat: { maxTokensField: 'max_completion_tokens' },
+            modelOverrides: { 'qwen-thinking': { compat: { supportsDeveloperRole: true } } },
+          },
+        },
+      },
+      user: {
+        providers: {
+          'qwen-gateway': {
+            compat: { maxTokensField: 'max_completion_tokens' },
+            modelOverrides: { 'qwen-thinking': { compat: { supportsDeveloperRole: true } } },
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    }
+
+    expect(modelGatewayCompatViewFrom(namespace, 'qwen-gateway', 'qwen-thinking', 'modern')).toMatchObject({
+      supportsDeveloperRole: 'supported',
+      supportsDeveloperRoleSource: 'model',
+      maxTokensField: 'max_completion_tokens',
+      maxTokensFieldSource: 'provider',
+    })
+    expect(providerGatewayCompatViewFrom(namespace, 'qwen-gateway', 'modern')).toMatchObject({
+      supportsDeveloperRole: 'auto',
+      maxTokensField: 'max_completion_tokens',
+      maxTokensFieldSource: 'provider',
+    })
+  })
+
+  it('keeps base provider and base model compat as independent resolver layers', () => {
+    const namespace = {
+      value: { providers: { 'qwen-gateway': { models: [{ id: 'qwen-thinking' }] } } },
+      base: {
+        providers: {
+          'qwen-gateway': {
+            compat: { supportsDeveloperRole: true },
+            models: [{ id: 'qwen-thinking', compat: { supportsDeveloperRole: null } }],
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    }
+
+    expect(modelGatewayCompatViewFrom(namespace, 'qwen-gateway', 'qwen-thinking', 'modern')).toMatchObject({
+      supportsDeveloperRole: 'supported',
+      supportsDeveloperRoleSource: 'base',
+    })
+  })
+
+  it('resolves model catalog compat when user and base layers are absent', () => {
+    const namespace = {
+      value: {
+        providers: {
+          'qwen-gateway': {
+            models: [{ id: 'qwen-thinking', compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' } }],
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    }
+
+    expect(modelGatewayCompatViewFrom(namespace, 'qwen-gateway', 'qwen-thinking', 'modern')).toMatchObject({
+      supportsDeveloperRole: 'unsupported',
+      supportsDeveloperRoleSource: 'catalog',
+      maxTokensField: 'max_tokens',
+      maxTokensFieldSource: 'catalog',
+    })
+  })
+
+  it('resolves model compat protocol defaults supplied to the projection', () => {
+    const namespace = {
+      value: { providers: { 'qwen-gateway': { models: [{ id: 'qwen-thinking' }] } } },
+      schema: realGatewaySchema,
+    }
+
+    expect(modelGatewayCompatViewFrom(
+      namespace,
+      'qwen-gateway',
+      'qwen-thinking',
+      'modern',
+      { supportsDeveloperRole: true, maxTokensField: 'max_completion_tokens' },
+    )).toMatchObject({
+      supportsDeveloperRole: 'supported',
+      supportsDeveloperRoleSource: 'protocol',
+      maxTokensField: 'max_completion_tokens',
+      maxTokensFieldSource: 'protocol',
+    })
+  })
+
   it('returns a provider view without applying model-level overrides', () => {
     expect(resolveProviderGatewayCompat({
       provider: 'local',
