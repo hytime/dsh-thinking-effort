@@ -2,10 +2,12 @@ import React from 'react'
 import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
 import { DEFAULT_LEVELS, INPUT_MODALITIES, LEVEL_LABEL_KEYS, NS, PRESETS, ALL_LEVELS, CONTEXT_1M } from './constants.js'
 import { inventoryFrom, providerGatewayCompatViewsFrom } from './model-inventory.js'
+import { emptyTakeoverRuntimeResolution } from './takeover-runtime.js'
 import { opsForProviderCompat, setOps } from './model-ops.js'
 import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, validateContextWindow, validateLevels } from './validation.js'
 import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, ModelUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
 import type { Palette } from './theme.js'
+import type { TakeoverRuntimeStore } from './takeover-runtime.js'
 import { iosPalette } from './theme.js'
 import { ActionButton, Icon } from './components/Controls.js'
 import { ModelRow } from './components/ModelRow.js'
@@ -18,6 +20,7 @@ type DirtyFields = { levels?: boolean; context?: boolean; input?: boolean }
 interface SubagentState { effort: string | null; revision: number }
 interface EditorState {
   loading: boolean
+  namespace: SettingsNamespace | null
   inventory: InventoryItem[]
   providerViews: Record<string, ProviderGatewayCompatView>
   providerDrafts: Record<string, ProviderGatewayCompatView>
@@ -45,10 +48,11 @@ export interface SectionEditorProps {
   readonly locale: ClientLocale
   readonly t: Translation
   readonly palette?: Palette
+  readonly takeoverRuntime?: TakeoverRuntimeStore
 }
 
 const initialState: EditorState = {
-  loading: true, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
+  loading: true, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
 }
 
 function keyOf(item: InventoryItem): string { return `${item.route}/${item.model}` }
@@ -71,12 +75,21 @@ function subagentView(namespace: SettingsNamespace | null): { subagent: Subagent
   return { subagent: { effort, revision }, draft, custom: draft === 'custom' ? effort ?? '' : '', revision }
 }
 
-export function SectionEditor({ settings, locale, t, palette = iosPalette() }: SectionEditorProps): React.ReactElement {
+const noRuntimeSubscribe = (): (() => void) => () => undefined
+const noRuntimeSnapshot = (): typeof emptyTakeoverRuntimeResolution => emptyTakeoverRuntimeResolution
+
+export function SectionEditor({ settings, locale, t, palette = iosPalette(), takeoverRuntime }: SectionEditorProps): React.ReactElement {
   const [state, setState] = React.useState<EditorState>(initialState)
+  const takeoverResolution = React.useSyncExternalStore(
+    takeoverRuntime?.subscribe ?? noRuntimeSubscribe,
+    takeoverRuntime?.getSnapshot ?? noRuntimeSnapshot,
+    takeoverRuntime?.getSnapshot ?? noRuntimeSnapshot,
+  )
 
   const applyNamespaceView = (current: EditorState, nextNamespace: SettingsNamespace, notice: string | null): EditorState => {
     const view = subagentView(nextNamespace)
-    return { ...current, loading: false, busy: false, nsFound: true, inventory: inventoryFrom(nextNamespace), providerViews: providerGatewayCompatViewsFrom(nextNamespace, settings.compatibilityProfile), providerDrafts: providerGatewayCompatViewsFrom(nextNamespace, settings.compatibilityProfile), providerDirty: {}, revision: revisionOf(nextNamespace), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom, notice }
+    const providerViews = providerGatewayCompatViewsFrom(nextNamespace, settings.compatibilityProfile, takeoverResolution)
+    return { ...current, loading: false, namespace: nextNamespace, busy: false, nsFound: true, inventory: inventoryFrom(nextNamespace), providerViews, providerDrafts: providerViews, providerDirty: {}, revision: revisionOf(nextNamespace), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom, notice }
   }
 
   const load = (): void => {
@@ -88,11 +101,12 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette() }: S
       }
       const found = response.value.namespaces.find((entry) => entry.ns === NS)
       if (!found) {
-        setState((current) => ({ ...current, loading: false, busy: false, nsFound: false, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, subagent: null }))
+        setState((current) => ({ ...current, loading: false, busy: false, nsFound: false, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, subagent: null }))
         return
       }
       const view = subagentView(found)
-      setState((current) => ({ ...current, loading: false, busy: false, nsFound: true, inventory: inventoryFrom(found), providerViews: providerGatewayCompatViewsFrom(found, settings.compatibilityProfile), providerDrafts: providerGatewayCompatViewsFrom(found, settings.compatibilityProfile), providerDirty: {}, revision: revisionOf(found), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom }))
+      const providerViews = providerGatewayCompatViewsFrom(found, settings.compatibilityProfile, takeoverResolution)
+      setState((current) => ({ ...current, loading: false, namespace: found, busy: false, nsFound: true, inventory: inventoryFrom(found), providerViews, providerDrafts: providerViews, providerDirty: {}, revision: revisionOf(found), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom }))
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       setState((current) => ({ ...current, loading: false, busy: false, error: t('readSettingsFailed', { message }) }))
@@ -100,6 +114,18 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette() }: S
   }
 
   React.useEffect(() => { load() }, [])
+
+  React.useEffect(() => {
+    setState((current) => {
+      if (current.namespace === null) return current
+      const providerViews = providerGatewayCompatViewsFrom(current.namespace, settings.compatibilityProfile, takeoverResolution)
+      const providerDrafts = { ...current.providerDrafts }
+      for (const [provider, view] of Object.entries(providerViews)) {
+        if (current.providerDirty[provider] !== true) providerDrafts[provider] = view
+      }
+      return { ...current, providerViews, providerDrafts }
+    })
+  }, [takeoverResolution])
 
   const runOps = (ops: readonly SettingsOp[], successMessage: string, onSuccess?: () => void): void => {
     setState((current) => ({ ...current, busy: true, error: null, notice: null }))

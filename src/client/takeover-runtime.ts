@@ -22,6 +22,37 @@ export interface TakeoverRuntimeResolution {
 
 const EMPTY_RESOLUTION: TakeoverRuntimeResolution = { providers: [], compat: [] }
 
+export interface TakeoverRuntimeStore {
+  readonly getSnapshot: () => TakeoverRuntimeResolution
+  readonly subscribe: (listener: () => void) => () => void
+  update(resolution: TakeoverRuntimeResolution): void
+  dispose(): void
+}
+
+export function createTakeoverRuntimeStore(): TakeoverRuntimeStore {
+  let current = EMPTY_RESOLUTION
+  let active = true
+  const listeners = new Set<() => void>()
+  return {
+    getSnapshot: () => current,
+    subscribe: (listener) => {
+      if (!active) return () => undefined
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    update: (resolution) => {
+      if (!active) return
+      current = resolution
+      for (const listener of listeners) listener()
+    },
+    dispose: () => {
+      active = false
+      current = EMPTY_RESOLUTION
+      listeners.clear()
+    },
+  }
+}
+
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -89,20 +120,46 @@ export async function resolveTakeoverSettings(settings: SettingsApi): Promise<Ta
   return resolveTakeoverDescription(settings, await settings.describe())
 }
 
+export interface ObservedSettingsApi extends SettingsApi {
+  dispose(): void
+}
+
 export function observeTakeoverSettings(
   settings: SettingsApi,
   onResolution: (resolution: TakeoverRuntimeResolution) => void,
-): SettingsApi {
+): ObservedSettingsApi {
+  let active = true
+  let sequence = 0
+  const nextSequence = (): number => {
+    sequence += 1
+    return sequence
+  }
+  const publish = (requestSequence: number, response: ClientResult<SettingsDescribeValue>): void => {
+    if (active && requestSequence === sequence) onResolution(resolveTakeoverDescription(settings, response))
+  }
   return {
     ...settings,
-    describe: () => settings.describe().then((response) => {
-      onResolution(resolveTakeoverDescription(settings, response))
+    describe: () => {
+      const requestSequence = nextSequence()
+      return settings.describe().then((response) => {
+        publish(requestSequence, response)
+        return response
+      })
+    },
+    mutate: async (ns, ops, expectedRevision) => {
+      const mutationSequence = nextSequence()
+      const response = await settings.mutate(ns, ops, expectedRevision)
+      if (!response.ok || !active || mutationSequence !== sequence) return response
+      const refreshSequence = nextSequence()
+      void settings.describe().then((description) => {
+        publish(refreshSequence, description)
+      }).catch(() => undefined)
       return response
-    }),
-    mutate: (ns, ops, expectedRevision) => settings.mutate(ns, ops, expectedRevision).then((response) => {
-      void resolveTakeoverSettings(settings).then(onResolution).catch(() => undefined)
-      return response
-    }),
+    },
+    dispose: () => {
+      active = false
+      sequence += 1
+    },
   }
 }
 

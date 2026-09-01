@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { apply, inject, name } from '../src/client/index.js'
 import { LOCALE_NS } from '../src/client/constants.js'
+import { observeTakeoverSettings, resolveTakeoverDescription } from '../src/client/takeover-runtime.js'
 import { resolveTakeoverGatewayCompat, resolveTakeoverProviders } from '../src/compat/gateway/resolve.js'
 
 function createHarness(mode: 'modern' | 'legacy') {
@@ -127,7 +128,9 @@ describe('client registration', () => {
     })
 
     apply(harness.context)
-    await Promise.resolve()
+    const render = harness.registrations[0]?.render
+    const element = (render as () => { props?: { settings?: { describe: () => Promise<unknown> } } })()
+    await element.props?.settings?.describe()
 
     expect(harness.legacySettings.describe).toHaveBeenCalled()
   })
@@ -144,7 +147,139 @@ describe('client registration', () => {
     await observed!.mutate('llm-pi-ai', [], 1)
     await Promise.resolve()
 
-    expect(harness.remoteSettings.describe.mock.calls.length).toBeGreaterThanOrEqual(3)
+    expect(harness.remoteSettings.describe.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('passes the resolved takeover snapshot to the settings consumer', async () => {
+    const harness = createHarness('modern')
+    harness.remoteSettings.describe.mockResolvedValue({
+      ok: true,
+      value: {
+        namespaces: [{
+          ns: 'llm-pi-ai',
+          revision: 1,
+          value: {
+            providers: {
+              local: {
+                api: 'openai-completions',
+                baseURL: 'http://gateway.test/v1',
+                models: [{ id: 'model', reasoningEfforts: { high: 'high' }, compat: { thinkingFormat: 'qwen', supportsReasoningEffort: true } }],
+              },
+            },
+          },
+          schema: { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } },
+        }],
+      },
+    })
+
+    apply(harness.context)
+    const render = harness.registrations[0]?.render
+    const element = (render as () => { props?: Record<string, unknown> })()
+    const observed = element.props?.settings as { describe: () => Promise<unknown> }
+    await observed.describe()
+
+    const runtime = element.props?.takeoverRuntime as { getSnapshot: () => { providers: readonly string[]; compat: readonly unknown[] } }
+    expect(runtime.getSnapshot()).toMatchObject({
+      providers: ['local'],
+      compat: [expect.objectContaining({ provider: 'local', model: 'model' })],
+    })
+  })
+
+  it('clears the runtime snapshot when the mount effect is disposed', () => {
+    const harness = createHarness('modern')
+    apply(harness.context)
+    const render = harness.registrations[0]?.render
+    const element = (render as () => { props?: Record<string, unknown> })()
+    const runtime = element.props?.takeoverRuntime as { getSnapshot: () => { providers: readonly string[]; compat: readonly unknown[] }; update: (resolution: { providers: readonly string[]; compat: readonly unknown[] }) => void }
+    runtime.update({ providers: ['local'], compat: [] })
+
+    harness.disposeEffect()
+
+    expect(runtime.getSnapshot()).toEqual({ providers: [], compat: [] })
+  })
+
+  it.each([
+    ['rc7 remains unsupported', 'legacy' as const, { properties: { providers: { additionalProperties: { properties: { compat: { properties: {} } } } } } }, [], false],
+    ['rc2 accepts the optional takeover', 'legacy' as const, { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } }, ['local'], true],
+    ['alpha3 accepts the optional takeover', 'modern' as const, { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } }, ['local'], true],
+  ])('%s publishes the expected runtime capability result', (_label, profile, schema, expectedProviders, includeTakeover) => {
+    const piAiNamespace = {
+      ns: 'llm-pi-ai',
+      revision: 1,
+      value: {
+        providers: {
+          local: {
+            api: 'openai-completions',
+            baseURL: 'http://gateway.test/v1',
+            models: [{ id: 'model', reasoningEfforts: { high: 'high' }, compat: { thinkingFormat: 'qwen', supportsReasoningEffort: true } }],
+          },
+        },
+      },
+      schema,
+    }
+    const response = {
+      ok: true as const,
+      value: {
+        namespaces: [
+          piAiNamespace,
+          ...(includeTakeover ? [{ ns: 'llm-openai-completions', revision: 1, value: { enabled: true, providers: ['local'] } }] : []),
+        ],
+      },
+    }
+
+    expect(resolveTakeoverDescription({ compatibilityProfile: profile }, response).providers).toEqual(expectedProviders)
+  })
+
+  it('ignores late descriptions after the observer is disposed', async () => {
+    let resolveDescription!: (value: { ok: true; value: { namespaces: [] } }) => void
+    const settings = {
+      externalLanguages: false,
+      compatibilityProfile: 'modern' as const,
+      describe: vi.fn(() => new Promise<{ ok: true; value: { namespaces: [] } }>((resolve) => { resolveDescription = resolve })),
+      mutate: vi.fn(),
+    }
+    const onResolution = vi.fn()
+    const observed = observeTakeoverSettings(settings, onResolution)
+    const pending = observed.describe()
+    observed.dispose()
+    resolveDescription({ ok: true, value: { namespaces: [] } })
+    await pending
+
+    expect(onResolution).not.toHaveBeenCalled()
+  })
+
+  it('publishes only the newest overlapping description', async () => {
+    const resolvers: Array<(value: { ok: true; value: { namespaces: [] } }) => void> = []
+    const settings = {
+      externalLanguages: false,
+      compatibilityProfile: 'modern' as const,
+      describe: vi.fn(() => new Promise<{ ok: true; value: { namespaces: [] } }>((resolve) => { resolvers.push(resolve) })),
+      mutate: vi.fn(),
+    }
+    const onResolution = vi.fn()
+    const observed = observeTakeoverSettings(settings, onResolution)
+    const first = observed.describe()
+    const second = observed.describe()
+    resolvers[1]!({ ok: true, value: { namespaces: [] } })
+    await second
+    resolvers[0]!({ ok: true, value: { namespaces: [] } })
+    await first
+
+    expect(onResolution).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not describe again after a failed mutation', async () => {
+    const settings = {
+      externalLanguages: false,
+      compatibilityProfile: 'modern' as const,
+      describe: vi.fn(),
+      mutate: vi.fn().mockResolvedValue({ ok: false as const, error: { message: 'conflict' } }),
+    }
+    const observed = observeTakeoverSettings(settings, vi.fn())
+
+    await observed.mutate('llm-pi-ai', [], 1)
+
+    expect(settings.describe).not.toHaveBeenCalled()
   })
 
   it('uses runtime profile and descriptor schema to fail closed for takeover capability', () => {
@@ -188,7 +323,6 @@ describe('client registration', () => {
       order: 12,
       locale: LOCALE_NS,
     })
-    expect(harness.remoteSettings.describe).toHaveBeenCalled()
   })
 
   it('registers a render factory for the provider compatibility settings surface', () => {
@@ -201,12 +335,15 @@ describe('client registration', () => {
     expect(element.props).toEqual(expect.objectContaining({ settings: expect.any(Object), locale: expect.any(Object), t: expect.any(Function) }))
   })
 
-  it('keeps legacy fallback active and does not replace the first successful mount', () => {
+  it('keeps legacy fallback active and does not replace the first successful mount', async () => {
     const harness = createHarness('legacy')
     apply(harness.context)
 
     expect(harness.context.on).toHaveBeenCalledWith('internal/service', expect.any(Function))
     expect(harness.registrations).toHaveLength(1)
+    const render = harness.registrations[0]?.render
+    const element = (render as () => { props?: { settings?: { describe: () => Promise<unknown> } } })()
+    await element.props?.settings?.describe()
     expect(harness.legacySettings.describe).toHaveBeenCalled()
   })
 

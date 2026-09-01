@@ -1,4 +1,5 @@
 import type { InventoryItem, InputModality, ProviderGatewayCompatView, ReasoningEfforts, SettingsNamespace, CompatibilityProfile } from './types.js'
+import type { TakeoverRuntimeResolution } from './takeover-runtime.js'
 import { resolveProviderGatewayCompat } from '../compat/gateway/resolve.js'
 import { editableProviderCompatFields } from '../compat/gateway/validation.js'
 import type { GatewayCompatResolveInput } from '../compat/gateway/types.js'
@@ -42,10 +43,46 @@ function fieldLayer(source: Record<string, unknown> | undefined, field: Provider
   return { [field]: source[field] }
 }
 
+function takeoverCompatFor(runtime: TakeoverRuntimeResolution | undefined, provider: string): TakeoverRuntimeResolution['compat'][number] | undefined {
+  if (runtime === undefined || !runtime.providers.includes(provider)) return undefined
+  return runtime.compat.find((resolution) => resolution.provider === provider && resolution.model === undefined)
+    ?? runtime.compat.find((resolution) => resolution.provider === provider)
+}
+
+function runtimeSource(
+  resolution: TakeoverRuntimeResolution['compat'][number],
+  fallback: ProviderGatewayCompatView['source'],
+): ProviderGatewayCompatView['source'] {
+  const sources = [resolution.supportsDeveloperRole.source, resolution.maxTokensField.source]
+  if (sources.includes('model') || sources.includes('provider')) return 'user'
+  if (sources.includes('protocol')) return 'base'
+  if (sources.includes('catalog')) return 'catalog'
+  return fallback
+}
+
+function applyTakeoverCompat(
+  view: ProviderGatewayCompatView,
+  runtime: TakeoverRuntimeResolution | undefined,
+): ProviderGatewayCompatView {
+  const resolution = takeoverCompatFor(runtime, view.provider)
+  if (resolution === undefined) return view
+  const developer = resolution.supportsDeveloperRole.value
+  const maxTokens = resolution.maxTokensField.value
+  return {
+    ...view,
+    supportsDeveloperRole: developer === undefined ? view.supportsDeveloperRole : developer ? 'supported' : 'unsupported',
+    maxTokensField: maxTokens ?? view.maxTokensField,
+    supportsDeveloperRoleAvailable: developer === undefined ? view.supportsDeveloperRoleAvailable : true,
+    maxTokensFieldAvailable: maxTokens === undefined ? view.maxTokensFieldAvailable : true,
+    source: runtimeSource(resolution, view.source),
+  }
+}
+
 export function providerGatewayCompatViewFrom(
   namespace: SettingsNamespace | unknown,
   provider: string,
   compatibilityProfile: CompatibilityProfile = 'unknown',
+  takeoverRuntime?: TakeoverRuntimeResolution,
 ): ProviderGatewayCompatView {
   const descriptor = record(namespace)
   const user = layerCompat(descriptor?.user, provider)
@@ -63,11 +100,11 @@ export function providerGatewayCompatViewFrom(
   }
   const resolved = resolveProviderGatewayCompat(input)
   const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema)
-  return {
+  return applyTakeoverCompat({
     ...resolved,
     supportsDeveloperRoleAvailable: editability.supportsDeveloperRole,
     maxTokensFieldAvailable: editability.maxTokensField,
-  }
+  }, takeoverRuntime)
 }
 
 export const providerCompatViewFrom = providerGatewayCompatViewFrom
@@ -75,12 +112,13 @@ export const providerCompatViewFrom = providerGatewayCompatViewFrom
 export function providerGatewayCompatViewsFrom(
   namespace: SettingsNamespace | unknown,
   compatibilityProfile: CompatibilityProfile = 'unknown',
+  takeoverRuntime?: TakeoverRuntimeResolution,
 ): Record<string, ProviderGatewayCompatView> {
   const descriptor = record(namespace)
   const value = record(descriptor?.value)
   const providers = record(value?.providers)
   if (!providers) return {}
-  return Object.fromEntries(Object.keys(providers).map((provider) => [provider, providerGatewayCompatViewFrom(namespace, provider, compatibilityProfile)]))
+  return Object.fromEntries(Object.keys(providers).map((provider) => [provider, providerGatewayCompatViewFrom(namespace, provider, compatibilityProfile, takeoverRuntime)]))
 }
 
 export const providerCompatViewsFrom = providerGatewayCompatViewsFrom

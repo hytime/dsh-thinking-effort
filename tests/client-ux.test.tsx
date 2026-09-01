@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SectionEditor } from '../src/client/SectionEditor.js'
+import { createTakeoverRuntimeStore, type TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
 import { GatewayCompatControls } from '../src/client/components/GatewayCompatControls.js'
 import { providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
 import { zh } from '../src/client/locales.js'
@@ -88,6 +89,7 @@ function renderEditor(options: {
   mutate?: (ns: string, ops: readonly SettingsOp[], revision: number) => Promise<ClientResult<SettingsNamespace>>
   locales?: readonly string[]
   compatibilityProfile?: 'modern' | 'legacy' | 'unknown'
+  takeoverResolution?: TakeoverRuntimeResolution
 } = {}): {
   container: HTMLDivElement
   root: Root
@@ -106,8 +108,10 @@ function renderEditor(options: {
     mutate,
   }
   const root = createRoot(container)
+  const takeoverRuntime = options.takeoverResolution === undefined ? undefined : createTakeoverRuntimeStore()
+  takeoverRuntime?.update(options.takeoverResolution!)
   act(() => {
-    root.render(<SectionEditor settings={settings} locale={locale} t={text as Translation} />)
+    root.render(<SectionEditor settings={settings} locale={locale} t={text as Translation} takeoverRuntime={takeoverRuntime} />)
   })
   return {
     container,
@@ -243,6 +247,34 @@ describe('SectionEditor user behavior', () => {
     expect(view.mutate).toHaveBeenCalledWith('llm-pi-ai', expect.arrayContaining([
       { op: 'unset', path: ['providers', 'provider', 'compat', 'maxTokensField'] },
     ]), 2)
+    view.unmount()
+  })
+
+  it('renders provider controls from the runtime takeover projection', async () => {
+    const takeoverResolution: TakeoverRuntimeResolution = {
+      providers: ['provider'],
+      compat: [{
+        provider: 'provider',
+        model: 'model-a',
+        thinkingFormat: { value: 'qwen', source: 'model' },
+        supportsReasoningEffort: { value: true, source: 'model' },
+        supportsDeveloperRole: { value: false, source: 'provider' },
+        maxTokensField: { value: 'max_completion_tokens', source: 'provider' },
+      }],
+    }
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      takeoverResolution,
+      describe: async () => ({ ok: true, value: { namespaces: [namespace({
+        value: { providers: { provider: { models: [{ id: 'model-a' }] } } },
+        schema: realGatewaySchema,
+      })] } }),
+    })
+    await settle()
+
+    const selects = [...view.container.querySelectorAll('select')].slice(2) as HTMLSelectElement[]
+    expect(selects[0]?.value).toBe('unsupported')
+    expect(selects[1]?.value).toBe('max_completion_tokens')
     view.unmount()
   })
 
