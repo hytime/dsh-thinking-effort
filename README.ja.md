@@ -10,11 +10,11 @@
 - [中文 README](./README.zh.md)
 - [日本語 README](./README.ja.md)
 - [한국어 README](./README.ko.md)
-- [English installation guide](./INSTALL.md)
-- [中文安装指南](./INSTALL.zh.md)
-- [日本語インストールガイド](./INSTALL.ja.md)
-- [한국어 설치 안내](./INSTALL.ko.md)
-- [Changelog](./CHANGELOG.md) · [日本語](./CHANGELOG.ja.md) · [한국어](./CHANGELOG.ko.md)
+- [English installation guide](./docs/INSTALL.md)
+- [中文安装指南](./docs/INSTALL.zh.md)
+- [日本語インストールガイド](./docs/INSTALL.ja.md)
+- [한국어 설치 안내](./docs/INSTALL.ko.md)
+- [Changelog](./docs/CHANGELOG.md) · [日本語](./docs/CHANGELOG.ja.md) · [한국어](./docs/CHANGELOG.ko.md)
 
 > **互換性に関する注意：** DSH `0.1.2-alpha.1` 以降は `LocaleRuntime` の language-pack 拡張をサポートします。このプラグインは `ja` と `ko` を動的に登録するため、DSH の fork は不要です。組み込み locale ID だけを受け付ける古い DSH では `zh` と `en` のみ使用できます。
 >
@@ -71,7 +71,7 @@ dsh plugin --profile <profile> remove @hytime/dsh-thinking-effort
  rm -f "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 ```
 
-profile の確認、移行、検証、トラブルシューティングについては [INSTALL.ja.md](./INSTALL.ja.md) を参照してください。
+profile の確認、移行、検証、トラブルシューティングについては [INSTALL.ja.md](./docs/INSTALL.ja.md) を参照してください。
 
 ## クイックスタート
 

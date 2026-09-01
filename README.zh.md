@@ -9,13 +9,13 @@
 - [English README](./README.md)
 - [日本語 README](./README.ja.md)
 - [한국어 README](./README.ko.md)
-- [安装指南](./INSTALL.zh.md)
-- [English installation guide](./INSTALL.md)
-- [日本語インストールガイド](./INSTALL.ja.md)
-- [한국어 설치 안내](./INSTALL.ko.md)
-- [版本更新日志](./CHANGELOG.md)
-- [日本語 changelog](./CHANGELOG.ja.md)
-- [한국어 changelog](./CHANGELOG.ko.md)
+- [安装指南](./docs/INSTALL.zh.md)
+- [English installation guide](./docs/INSTALL.md)
+- [日本語インストールガイド](./docs/INSTALL.ja.md)
+- [한국어 설치 안내](./docs/INSTALL.ko.md)
+- [版本更新日志](./docs/CHANGELOG.md)
+- [日本語 changelog](./docs/CHANGELOG.ja.md)
+- [한국어 changelog](./docs/CHANGELOG.ko.md)
 
 > **兼容性说明：** DSH `0.1.2-alpha.1` 及更高版本通过 `LocaleRuntime` 支持语言包注册外部 locale ID。本插件会动态注册 `ja` 和 `ko`，无需维护 DSH fork。只支持固定内置 locale ID 的旧版 DSH 仍只能使用 `zh` 和 `en`。
 >
@@ -107,7 +107,7 @@ rm -f "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 
 宿主侧改动需要重启 DSH；浏览器侧刷新 Web 页面。
 
-完整的迁移、验证和排查步骤请查看 [INSTALL.md](./INSTALL.md)。
+完整的迁移、验证和排查步骤请查看 [INSTALL.md](./docs/INSTALL.md)。
 
 ## 从旧包迁移
 

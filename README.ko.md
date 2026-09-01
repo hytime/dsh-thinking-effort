@@ -10,11 +10,11 @@
 - [中文 README](./README.zh.md)
 - [日本語 README](./README.ja.md)
 - [한국어 README](./README.ko.md)
-- [English installation guide](./INSTALL.md)
-- [中文安装指南](./INSTALL.zh.md)
-- [日本語インストールガイド](./INSTALL.ja.md)
-- [한국어 설치 안내](./INSTALL.ko.md)
-- [Changelog](./CHANGELOG.md) · [日本語](./CHANGELOG.ja.md) · [한국어](./CHANGELOG.ko.md)
+- [English installation guide](./docs/INSTALL.md)
+- [中文安装指南](./docs/INSTALL.zh.md)
+- [日本語インストールガイド](./docs/INSTALL.ja.md)
+- [한국어 설치 안내](./docs/INSTALL.ko.md)
+- [Changelog](./docs/CHANGELOG.md) · [日本語](./docs/CHANGELOG.ja.md) · [한국어](./docs/CHANGELOG.ko.md)
 
 > **호환성 안내:** DSH `0.1.2-alpha.1` 이상은 `LocaleRuntime`의 language-pack 확장을 지원합니다. 이 플러그인은 `ja`와 `ko`를 동적으로 등록하므로 DSH fork가 필요하지 않습니다. 고정된 내장 locale ID만 허용하는 이전 DSH에서는 `zh`와 `en`만 사용할 수 있습니다.
 >
@@ -71,7 +71,7 @@ dsh plugin --profile <profile> remove @hytime/dsh-thinking-effort
 rm -f "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 ```
 
-profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](./INSTALL.ko.md)를 참조하세요.
+profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](./docs/INSTALL.ko.md)를 참조하세요.
 
 ## 빠른 사용
 

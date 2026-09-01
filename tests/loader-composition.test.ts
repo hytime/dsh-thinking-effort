@@ -791,8 +791,8 @@ describe('compatibility documentation and root validation', () => {
   it('documents capability detection as authoritative across published docs', () => {
     const documentationFiles = [
       'README.md', 'README.zh.md', 'README.ja.md', 'README.ko.md',
-      'INSTALL.md', 'INSTALL.zh.md', 'INSTALL.ja.md', 'INSTALL.ko.md',
-      'CHANGELOG.md', 'CHANGELOG.ja.md', 'CHANGELOG.ko.md',
+      'docs/INSTALL.md', 'docs/INSTALL.zh.md', 'docs/INSTALL.ja.md', 'docs/INSTALL.ko.md',
+      'docs/CHANGELOG.md', 'docs/CHANGELOG.ja.md', 'docs/CHANGELOG.ko.md',
     ]
     const documents = documentationFiles.map((file) => readFileSync(join(root, file), 'utf8'))
 
@@ -837,8 +837,8 @@ describe('published package composition', () => {
     expect(manifest.files).toContain('lib/types/**/*.d.ts')
     expect(manifest.files).toContain('cordis.patch.yml')
     expect(manifest.files).toContain('README.md')
-    expect(manifest.files).toContain('INSTALL.md')
-    expect(manifest.files).toContain('CHANGELOG.md')
+    expect(manifest.files).toContain('docs/INSTALL.md')
+    expect(manifest.files).toContain('docs/CHANGELOG.md')
     expect(manifest.files).toContain('docs/assets/')
   })
 })

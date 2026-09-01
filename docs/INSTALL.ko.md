@@ -6,10 +6,10 @@
 - [中文安装指南](./INSTALL.zh.md)
 - [日本語インストールガイド](./INSTALL.ja.md)
 - [한국어 설치 안내](./INSTALL.ko.md)
-- [English README](./README.md)
-- [中文 README](./README.zh.md)
-- [日本語 README](./README.ja.md)
-- [한국어 README](./README.ko.md)
+- [English README](../README.md)
+- [中文 README](../README.zh.md)
+- [日本語 README](../README.ja.md)
+- [한국어 README](../README.ko.md)
 - [Changelog](./CHANGELOG.md) · [日本語](./CHANGELOG.ja.md) · [한국어](./CHANGELOG.ko.md)
 
 이 안내에서 사용하는 placeholder:

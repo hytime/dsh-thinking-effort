@@ -9,13 +9,13 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 - [中文 README](./README.zh.md)
 - [日本語 README](./README.ja.md)
 - [한국어 README](./README.ko.md)
-- [Installation guide](./INSTALL.md)
-- [中文安装指南](./INSTALL.zh.md)
-- [日本語インストールガイド](./INSTALL.ja.md)
-- [한국어 설치 안내](./INSTALL.ko.md)
-- [Changelog](./CHANGELOG.md)
-- [日本語 changelog](./CHANGELOG.ja.md)
-- [한국어 changelog](./CHANGELOG.ko.md)
+- [Installation guide](./docs/INSTALL.md)
+- [中文安装指南](./docs/INSTALL.zh.md)
+- [日本語インストールガイド](./docs/INSTALL.ja.md)
+- [한국어 설치 안내](./docs/INSTALL.ko.md)
+- [Changelog](./docs/CHANGELOG.md)
+- [日本語 changelog](./docs/CHANGELOG.ja.md)
+- [한국어 changelog](./docs/CHANGELOG.ko.md)
 
 > **Compatibility note:** DSH `0.1.2-alpha.1` and later accept language-pack locale IDs through `LocaleRuntime`. This plugin registers `ja` and `ko` dynamically, so no DSH core fork is required. Older DSH builds that only expose built-in locale IDs support `zh` and `en` only.
 >
@@ -74,7 +74,7 @@ dsh plugin --profile <profile> remove @hytime/dsh-thinking-effort
 rm -f "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 ```
 
-See [INSTALL.md](./INSTALL.md) for profile discovery, migration, validation, and troubleshooting.
+See [INSTALL.md](./docs/INSTALL.md) for profile discovery, migration, validation, and troubleshooting.
 
 ## Quick use
 
