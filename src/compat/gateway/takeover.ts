@@ -1,5 +1,11 @@
 /** Read-only interoperability helpers for the optional OpenAI-completions takeover. */
 
+import {
+  capabilitiesForVersion,
+  takeoverSupportedForVersion,
+} from '../version-map.js'
+import type { DshVersionCapabilities } from '../version-map.js'
+
 export const TAKEOVER_NAMESPACE = 'llm-openai-completions'
 export const PI_AI_NAMESPACE = 'llm-pi-ai'
 
@@ -14,6 +20,7 @@ export interface PiAiProviderProfile {
   readonly baseURL?: unknown
   readonly models?: unknown
   readonly modelOverrides?: unknown
+  readonly compat?: unknown
   readonly [key: string]: unknown
 }
 
@@ -24,6 +31,17 @@ export interface PiAiSection {
 export interface TakeoverSection {
   readonly enabled?: unknown
   readonly providers?: unknown
+}
+
+export interface TakeoverProvidersInput {
+  readonly version?: unknown
+  readonly piAi?: PiAiSection
+  readonly takeover?: TakeoverSection
+}
+
+export interface TakeoverGatewayCompatInputs {
+  readonly providerCompat?: unknown
+  readonly modelCompat?: unknown
 }
 
 const OFFICIAL_HOST_RE = /(?:^|\.)(?:deepseek\.com|openai\.com|openrouter\.ai|anthropic\.com|googleapis\.com|ai\.google\.dev|mistral\.ai|x\.ai)$/i
@@ -50,11 +68,13 @@ function modelRows(profile: PiAiProviderProfile | undefined): PiAiModelRow[] {
 
 /** Whether this profile points to a custom OpenAI-compatible endpoint. */
 export function isCustomOpenAiGateway(profile: PiAiProviderProfile | undefined): boolean {
-  if (profile === undefined) return false
-  if (profile.api === 'openai-completions') return true
-  if (typeof profile.baseURL !== 'string' || profile.baseURL.length === 0) return false
+  if (profile?.api !== 'openai-completions' || typeof profile.baseURL !== 'string' || profile.baseURL.trim() === '') {
+    return false
+  }
   try {
-    return !OFFICIAL_HOST_RE.test(new URL(profile.baseURL).hostname)
+    const endpoint = new URL(profile.baseURL)
+    if (endpoint.protocol !== 'http:' && endpoint.protocol !== 'https:') return false
+    return !OFFICIAL_HOST_RE.test(endpoint.hostname)
   } catch {
     return false
   }
@@ -65,8 +85,12 @@ export function declaresThinking(profile: PiAiProviderProfile | undefined): bool
   return modelRows(profile).some((model) => isEffortsTable(model.reasoningEfforts))
 }
 
-/** Identify custom thinking routes without changing either settings namespace. */
-export function identifyTakeoverProviders(section: PiAiSection | undefined): string[] {
+/** Identify custom thinking routes only when the mapped runtime allows takeover. */
+export function identifyTakeoverProviders(
+  section: PiAiSection | undefined,
+  capabilities?: DshVersionCapabilities,
+): string[] {
+  if (capabilities?.takeoverTransport !== 'optional') return []
   const providers = section?.providers
   if (!isRecord(providers)) return []
   return Object.entries(providers)
@@ -82,6 +106,49 @@ export function takeoverProvidersOf(section: TakeoverSection | undefined): strin
   if (section === undefined) return null
   if (section.enabled !== true || !Array.isArray(section.providers)) return []
   return section.providers.filter((provider): provider is string => typeof provider === 'string')
+}
+
+/**
+ * Resolve the providers eligible for the current runtime. Unknown versions and
+ * unsupported mapped versions intentionally produce no takeover candidates.
+ */
+export function resolveTakeoverProviders(input: TakeoverProvidersInput): string[] {
+  if (typeof input.version !== 'string' || !takeoverSupportedForVersion(input.version)) return []
+  const capabilities = capabilitiesForVersion(input.version)
+  if (capabilities === undefined) return []
+  const identified = identifyTakeoverProviders(input.piAi, capabilities)
+  const configured = takeoverProvidersOf(input.takeover)
+  return configured === null
+    ? identified
+    : identified.filter((provider) => configured.includes(provider))
+}
+
+function modelCompatFor(profile: PiAiProviderProfile, model: string | undefined): unknown {
+  if (model === undefined) return undefined
+  if (isRecord(profile.modelOverrides)) {
+    const override = profile.modelOverrides[model]
+    if (isRecord(override)) return override.compat
+  }
+  if (Array.isArray(profile.models)) {
+    const row = profile.models.find((candidate) => isRecord(candidate) && candidate.id === model)
+    if (isRecord(row)) return row.compat
+  }
+  return undefined
+}
+
+/** Project the shared provider/model config without retaining live settings objects. */
+export function takeoverGatewayCompatInputs(
+  section: PiAiSection | undefined,
+  provider: string,
+  model?: string,
+): TakeoverGatewayCompatInputs {
+  const profile = section?.providers?.[provider]
+  if (!profile) return {}
+  const modelCompat = modelCompatFor(profile, model)
+  return {
+    providerCompat: profile.compat,
+    ...(modelCompat === undefined ? {} : { modelCompat }),
+  }
 }
 
 /** The unique provider predicate defined by the takeover settings contract. */

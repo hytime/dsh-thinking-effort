@@ -1,4 +1,10 @@
 import { SUPPORTED_THINKING_FORMATS } from './types.js'
+import { capabilitiesForVersion } from '../version-map.js'
+import {
+  resolveTakeoverProviders,
+  takeoverGatewayCompatInputs,
+} from './takeover.js'
+import type { PiAiSection, TakeoverSection } from './takeover.js'
 import type {
   GatewayCompat,
   GatewayCompatFieldResolution,
@@ -14,9 +20,18 @@ export {
   identifyTakeoverProviders,
   isCustomOpenAiGateway,
   isProviderTakenOver,
+  resolveTakeoverProviders,
+  takeoverGatewayCompatInputs,
   takeoverProvidersOf,
 } from './takeover.js'
-export type { PiAiModelRow, PiAiProviderProfile, PiAiSection, TakeoverSection } from './takeover.js'
+export type {
+  PiAiModelRow,
+  PiAiProviderProfile,
+  PiAiSection,
+  TakeoverGatewayCompatInputs,
+  TakeoverProvidersInput,
+  TakeoverSection,
+} from './takeover.js'
 
 const gatewayFields = ['thinkingFormat', 'supportsReasoningEffort', 'supportsDeveloperRole', 'maxTokensField'] as const
 
@@ -82,6 +97,28 @@ export function resolveGatewayCompat(input: GatewayCompatResolveInput): GatewayC
     maxTokensField: sourceFor('maxTokensField', sources),
     ...(input.versionCapabilities === undefined ? {} : { versionCapabilities: input.versionCapabilities }),
   }
+}
+
+export function resolveTakeoverGatewayCompat(input: {
+  readonly version?: unknown
+  readonly piAi?: PiAiSection
+  readonly takeover?: TakeoverSection
+  readonly provider: string
+  readonly model?: string
+}): GatewayCompatResolution | undefined {
+  const version = input.version
+  if (typeof version !== 'string') return undefined
+  const providers = resolveTakeoverProviders({ version, piAi: input.piAi, takeover: input.takeover })
+  if (!providers.includes(input.provider)) return undefined
+  const capabilities = capabilitiesForVersion(version)
+  if (capabilities === undefined) return undefined
+  const projected = takeoverGatewayCompatInputs(input.piAi, input.provider, input.model)
+  return resolveGatewayCompat({
+    provider: input.provider,
+    ...(input.model === undefined ? {} : { model: input.model }),
+    ...projected,
+    versionCapabilities: capabilities,
+  })
 }
 
 function providerSource(resolution: GatewayCompatResolution): ProviderGatewayCompatView['source'] {

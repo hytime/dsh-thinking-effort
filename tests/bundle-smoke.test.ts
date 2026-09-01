@@ -3,8 +3,12 @@ import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 import vm from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { resolveGatewayCompat } from '../src/compat/gateway/resolve.js'
-import { takeoverProvidersOf } from '../src/compat/gateway/takeover.js'
+import { resolveTakeoverGatewayCompat } from '../src/compat/gateway/resolve.js'
+import {
+  isCustomOpenAiGateway,
+  resolveTakeoverProviders,
+  takeoverProvidersOf,
+} from '../src/compat/gateway/takeover.js'
 
 const root = resolve(import.meta.dirname, '..')
 
@@ -138,16 +142,70 @@ describe('build artifacts', () => {
     expect(remoteReads).toBe(1)
   })
 
-  it('projects shared pi-ai compat fields without requiring takeover', () => {
-    expect(resolveGatewayCompat({
+  it('projects shared pi-ai provider and model compat with precedence without takeover', () => {
+    const piAi = {
+      providers: {
+        local: {
+          api: 'openai-completions',
+          baseURL: 'http://gateway.test/v1',
+          compat: { thinkingFormat: 'deepseek', supportsReasoningEffort: true },
+          models: [{
+            id: 'model',
+            reasoningEfforts: { off: null, high: 'high' },
+            compat: { thinkingFormat: 'qwen', supportsReasoningEffort: false },
+          }],
+          modelOverrides: {
+            override: {
+              compat: { thinkingFormat: 'openai', supportsReasoningEffort: true },
+            },
+          },
+        },
+      },
+    }
+
+    expect(resolveTakeoverProviders({ version: '0.1.1-rc.2', piAi })).toEqual(['local'])
+    expect(resolveTakeoverProviders({ version: '0.1.0-rc.7', piAi })).toEqual([])
+    expect(resolveTakeoverGatewayCompat({
+      version: '0.1.1-rc.2',
+      piAi,
       provider: 'local',
       model: 'model',
-      modelCompat: { thinkingFormat: 'qwen', supportsReasoningEffort: false },
     })).toMatchObject({
       thinkingFormat: { value: 'qwen', source: 'model' },
       supportsReasoningEffort: { value: false, source: 'model' },
     })
+    expect(resolveTakeoverGatewayCompat({
+      version: '0.1.1-rc.2',
+      piAi,
+      provider: 'local',
+      model: 'override',
+    })).toMatchObject({
+      thinkingFormat: { value: 'openai', source: 'model' },
+      supportsReasoningEffort: { value: true, source: 'model' },
+    })
+    expect(resolveTakeoverGatewayCompat({
+      version: '0.1.1-rc.2',
+      piAi,
+      provider: 'local',
+      model: 'missing',
+    })).toMatchObject({
+      thinkingFormat: { value: 'deepseek', source: 'provider' },
+      supportsReasoningEffort: { value: true, source: 'provider' },
+    })
+    expect(resolveTakeoverGatewayCompat({
+      version: '0.1.1-rc.2',
+      piAi,
+      provider: 'local',
+      model: 'model',
+      takeover: { enabled: true, providers: ['other'] },
+    })).toBeUndefined()
     expect(takeoverProvidersOf(undefined)).toBeNull()
+  })
+
+  it('requires a non-official endpoint in addition to the completions api', () => {
+    expect(isCustomOpenAiGateway({ api: 'openai-completions', baseURL: 'https://api.openai.com/v1' })).toBe(false)
+    expect(isCustomOpenAiGateway({ api: 'openai-completions' })).toBe(false)
+    expect(isCustomOpenAiGateway({ api: 'openai-completions', baseURL: 'https://gateway.test/v1' })).toBe(true)
   })
 
   it('reads an enabled takeover list without mutating its fields', () => {

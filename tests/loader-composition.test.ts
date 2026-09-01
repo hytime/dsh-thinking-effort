@@ -10,8 +10,11 @@ import { editableProviderCompatFields } from '../src/compat/gateway/validation.j
 import { capabilitiesForVersion } from '../src/compat/version-map.js'
 import {
   identifyTakeoverProviders,
+  isCustomOpenAiGateway,
+  resolveTakeoverProviders,
   takeoverProvidersOf,
 } from '../src/compat/gateway/takeover.js'
+import { opsForProviderCompat } from '../src/compat/gateway/ops.js'
 import { afterAll, describe, expect, it } from 'vitest'
 
 type PackageManifest = {
@@ -829,11 +832,29 @@ describe('optional openai-completions takeover contract', () => {
           }],
         },
         official: {
-          baseURL: 'https://api.deepseek.com/v1',
+          api: 'openai-completions',
+          baseURL: 'https://api.openai.com/v1',
           models: [{ id: 'model', reasoningEfforts: { high: 'high' } }],
         },
       },
-    })).toEqual(['local'])
+    }, capabilitiesForVersion('0.1.1-rc.2'))).toEqual(['local'])
+    expect(identifyTakeoverProviders({
+      providers: {
+        local: {
+          api: 'openai-completions',
+          baseURL: 'http://gateway.test/v1',
+          models: [{ id: 'model', reasoningEfforts: { high: 'high' } }],
+        },
+      },
+    }, capabilitiesForVersion('0.1.0-rc.7'))).toEqual([])
+    expect(identifyTakeoverProviders({
+      providers: {
+        local: { api: 'openai-completions', baseURL: 'http://gateway.test/v1', models: [{ id: 'model', reasoningEfforts: { high: 'high' } }] },
+      },
+    })).toEqual([])
+    expect(isCustomOpenAiGateway({ api: 'openai-completions', baseURL: 'https://api.openai.com/v1' })).toBe(false)
+    expect(isCustomOpenAiGateway({ api: 'openai-completions' })).toBe(false)
+    expect(isCustomOpenAiGateway({ api: 'openai-completions', baseURL: 'http://gateway.test/v1' })).toBe(true)
   })
 
   it('returns null for an absent takeover namespace and never requires it', () => {
@@ -957,11 +978,10 @@ integrationDescribe('official DSH loader composition', () => {
         const mutateEndpoint = legacyRpc ? 'settings.mutate' : 'settings/mutate'
         const settingsDescribe = await callOfficialRpc(web.url, headers, describeEndpoint, {}, !legacyRpc)
         expect(settingsDescribe.status).toBe(200)
-        expect(settingsDescribe.body).toMatchObject({
-          type: 'server-response',
-          result: { ok: true },
-        })
-        const described = settingsDescribe.body.result as {
+
+
+
+        /* const described = settingsDescribe.body.result as {
           ok: boolean
           value?: { namespaces?: Array<{ ns?: string; revision?: number; schema?: unknown }> }
         }
@@ -979,17 +999,15 @@ integrationDescribe('official DSH loader composition', () => {
          } else {
            expect(editability).toMatchObject({ supportsDeveloperRole: true, maxTokensField: true })
          }
-        const settingsMutate = await callOfficialRpc(web.url, headers, mutateEndpoint, {
-          ns: namespace!.ns,
-          ops: [],
-          expectedRevision: namespace!.revision,
-        }, !legacyRpc)
-        expect(settingsMutate.status).toBe(200)
-        expect(settingsMutate.body).toMatchObject({
-          type: 'server-response',
-          result: { ok: true },
-        })
-        const liveResult = (endpoint: string, args: Record<string, unknown>): Promise<unknown> => (
+
+
+
+
+
+
+
+         */
+         const liveResult = (endpoint: string, args: Record<string, unknown>): Promise<unknown> => (
           callOfficialRpc(web.url, headers, endpoint, args, !legacyRpc).then((response) => (
             legacyRpc ? { result: response.body.result } : response.body.result
           ))
@@ -1002,22 +1020,103 @@ integrationDescribe('official DSH loader composition', () => {
           : settingsBridge(undefined, {
             describe: () => liveResult(describeEndpoint, {}),
             mutate: (ns: string, ops: readonly import('../src/client/types.js').SettingsOp[], expectedRevision: number) => liveResult(mutateEndpoint, { ns, ops, expectedRevision }),
-          })
+           })
+
         expect(settings).toBeDefined()
-        const bridgedDescription = await settings!.describe()
-        expect(bridgedDescription).toMatchObject({
-          ok: true,
-          value: { namespaces: expect.any(Array) },
-        })
-        await expect(settings!.mutate(namespace!.ns!, [], namespace!.revision!)).resolves.toMatchObject({
-          ok: true,
-          value: { ns: namespace!.ns },
-        })
-        const indexResponse = await fetch(web.url, {
+        const liveDescription = await settings!.describe()
+         expect(liveDescription).toMatchObject({ ok: true, value: { namespaces: expect.any(Array) } })
+         if (!liveDescription.ok) throw new Error(liveDescription.error.message)
+         const piAiNamespace = liveDescription.value.namespaces.find(({ ns }) => ns === 'llm-pi-ai')
+         expect(piAiNamespace).toBeDefined()
+         const mapped = capabilitiesForVersion(version)
+         expect(mapped).toBeDefined()
+         const editability = editableProviderCompatFields(mapped, piAiNamespace?.schema)
+         if (version === '0.1.0-rc.7') {
+           expect(editability).toMatchObject({ supportsDeveloperRole: false, maxTokensField: false })
+         } else {
+           expect(editability).toMatchObject({ supportsDeveloperRole: true, maxTokensField: true })
+         }
+         const describePiAi = async (): Promise<{
+           ns: string
+           revision: number
+           value: Record<string, unknown>
+         }> => {
+           const result = await settings!.describe()
+           expect(result).toMatchObject({ ok: true, value: { namespaces: expect.any(Array) } })
+           if (!result.ok) throw new Error(result.error.message)
+           const current = result.value.namespaces.find(({ ns }) => ns === 'llm-pi-ai')
+           expect(current).toBeDefined()
+           expect(current?.revision).toEqual(expect.any(Number))
+           return { ns: current!.ns, revision: current!.revision, value: current!.value }
+         }
+         const current = await describePiAi()
+         if (version === '0.1.0-rc.7') {
+           const blockedOps = opsForProviderCompat('loader-compat', {
+             supportsDeveloperRole: 'supported',
+             maxTokensField: 'max_completion_tokens',
+           }, editability)
+           expect(blockedOps).toEqual([])
+           expect((await describePiAi()).revision).toBe(current.revision)
+         } else {
+           const route = `loader-compat-${version.replaceAll('.', '-')}`
+           const seeded = await settings!.mutate(current.ns, [{
+             op: 'set',
+             path: ['providers', route],
+             value: {
+               api: 'openai-completions',
+               baseURL: 'http://gateway.test/v1',
+               models: [{ id: 'loader-model', reasoningEfforts: { off: null, high: 'high' } }],
+             },
+           }], current.revision)
+           expect(seeded).toMatchObject({ ok: true, value: { ns: 'llm-pi-ai' } })
+           if (!seeded.ok) throw new Error(seeded.error.message)
+           const seededNamespace = await describePiAi()
+           const setOps = opsForProviderCompat(route, {
+             supportsDeveloperRole: 'supported',
+             maxTokensField: 'max_completion_tokens',
+           }, editability)
+           expect(setOps).toEqual([
+             { op: 'set', path: ['providers', route, 'compat', 'supportsDeveloperRole'], value: true },
+             { op: 'set', path: ['providers', route, 'compat', 'maxTokensField'], value: 'max_completion_tokens' },
+           ])
+           const written = await settings!.mutate(seededNamespace.ns, setOps, seededNamespace.revision)
+           expect(written).toMatchObject({ ok: true, value: { ns: 'llm-pi-ai' } })
+           if (!written.ok) throw new Error(written.error.message)
+           const writtenNamespace = await describePiAi()
+           const writtenProviders = writtenNamespace.value.providers as Record<string, Record<string, unknown>>
+           expect(writtenProviders[route]?.compat).toMatchObject({
+             supportsDeveloperRole: true,
+             maxTokensField: 'max_completion_tokens',
+   })
+
+           const unsetOps = opsForProviderCompat(route, {
+             supportsDeveloperRole: 'auto',
+             maxTokensField: 'auto',
+           }, editability)
+           expect(unsetOps).toEqual([
+             { op: 'unset', path: ['providers', route, 'compat', 'supportsDeveloperRole'] },
+             { op: 'unset', path: ['providers', route, 'compat', 'maxTokensField'] },
+           ])
+           const cleared = await settings!.mutate(writtenNamespace.ns, unsetOps, writtenNamespace.revision)
+           expect(cleared).toMatchObject({ ok: true, value: { ns: 'llm-pi-ai' } })
+           if (!cleared.ok) throw new Error(cleared.error.message)
+           const clearedNamespace = await describePiAi()
+           const clearedProviders = clearedNamespace.value.providers as Record<string, Record<string, unknown>>
+           const clearedCompat = clearedProviders[route]?.compat as Record<string, unknown> | undefined
+           expect(clearedCompat?.supportsDeveloperRole).toBeUndefined()
+           expect(clearedCompat?.maxTokensField).toBeUndefined()
+         }
+
+
+
+
+
+         const indexResponse = await fetch(web.url, {
           headers,
           signal: AbortSignal.timeout(10000),
+
         })
-        expect(indexResponse.status).toBe(200)
+         expect(indexResponse.status).toBe(200)
         const indexHtml = await indexResponse.text()
         const bootRows = extractBootRows(indexHtml)
         const bundleUrl = extractBundleUrl(indexHtml, '@hytime/dsh-thinking-effort')
@@ -1025,8 +1124,9 @@ integrationDescribe('official DSH loader composition', () => {
         const response = await fetch(new URL(bundleUrl, web.url), {
           headers,
           signal: AbortSignal.timeout(10000),
+
         })
-        expect(response.status).toBe(200)
+         expect(response.status).toBe(200)
         const servedCode = await response.text()
         expect(servedCode).toContain(clientCode)
         expect(servedCode).toContain("id: '@hytime/dsh-thinking-effort'")
@@ -1038,8 +1138,9 @@ integrationDescribe('official DSH loader composition', () => {
               },
             },
           },
+
         })
-        const domProbe = await probeOfficialSettingsDom(cliRoot, web)
+         const domProbe = await probeOfficialSettingsDom(cliRoot, web)
         if (domProbe.blocked !== undefined) {
           console.log(`[BLOCKED] browser probe: ${domProbe.blocked}`)
         } else {
