@@ -34,6 +34,22 @@ export interface GatewayCompat {
   readonly maxTokensField?: MaxTokensField
 }
 
+export interface ModelGatewayCompatView {
+  readonly provider: string
+  readonly model: string
+  readonly supportsDeveloperRole: GatewayCompatMode
+  readonly maxTokensField: 'auto' | MaxTokensField
+  readonly supportsDeveloperRoleSource: GatewayCompatSource
+  readonly maxTokensFieldSource: GatewayCompatSource
+  readonly supportsDeveloperRoleAvailable: boolean
+  readonly maxTokensFieldAvailable: boolean
+}
+
+export interface ModelGatewayCompatUpdate {
+  readonly supportsDeveloperRole?: GatewayCompatMode
+  readonly maxTokensField?: 'auto' | MaxTokensField
+}
+
 export interface ProviderGatewayCompatView {
   provider: string
   supportsDeveloperRole: GatewayCompatMode

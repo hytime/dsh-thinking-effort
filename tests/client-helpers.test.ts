@@ -13,7 +13,7 @@ import {
 } from '../src/client/constants.js'
 import { directResult, settingsBridge } from '../src/client/settings-bridge.js'
 import { LOCALE_DATA, LOCALE_CODES } from '../src/client/locales.js'
-import { inventoryFrom, providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
+import { inventoryFrom, modelGatewayCompatViewFrom, providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
 import { mergeModelUpdate, opsForProviderCompat, setOps } from '../src/client/model-ops.js'
 import {
   buildInput,
@@ -258,6 +258,59 @@ describe('model inventory and operations', () => {
     expect(result.thinkingFormat).toEqual({ value: 'deepseek', source: 'catalog' })
     expect(result.supportsReasoningEffort).toEqual({ value: false, source: 'catalog' })
     expect(result.model).toBe('model-a')
+  })
+
+  it('resolves model compat before provider compat field by field', () => {
+    const result = resolveGatewayCompat({
+      provider: 'qwen-gateway',
+      model: 'qwen-thinking',
+      modelCompat: { supportsDeveloperRole: true },
+      providerCompat: {
+        supportsDeveloperRole: false,
+        maxTokensField: 'max_tokens',
+      },
+      protocolDefault: { maxTokensField: 'max_completion_tokens' },
+    })
+
+    expect(result.supportsDeveloperRole).toEqual({ value: true, source: 'model' })
+    expect(result.maxTokensField).toEqual({ value: 'max_tokens', source: 'provider' })
+  })
+
+  it('projects model compat while keeping provider compat isolated', () => {
+    const namespace = {
+      value: {
+        providers: {
+          'qwen-gateway': {
+            compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' },
+            models: [{ id: 'qwen-thinking', compat: { supportsDeveloperRole: true } }],
+          },
+        },
+      },
+      user: {
+        providers: {
+          'qwen-gateway': {
+            compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' },
+            models: [{ id: 'qwen-thinking', compat: { supportsDeveloperRole: true } }],
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    }
+
+    expect(modelGatewayCompatViewFrom(namespace, 'qwen-gateway', 'qwen-thinking', 'modern')).toMatchObject({
+      provider: 'qwen-gateway',
+      model: 'qwen-thinking',
+      supportsDeveloperRole: 'supported',
+      supportsDeveloperRoleSource: 'model',
+      maxTokensField: 'max_tokens',
+      maxTokensFieldSource: 'provider',
+    })
+    expect(providerGatewayCompatViewFrom(namespace, 'qwen-gateway', 'modern')).toMatchObject({
+      supportsDeveloperRole: 'unsupported',
+      supportsDeveloperRoleSource: 'provider',
+      maxTokensField: 'max_tokens',
+      maxTokensFieldSource: 'provider',
+    })
   })
 
   it('returns a provider view without applying model-level overrides', () => {

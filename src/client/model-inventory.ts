@@ -1,6 +1,6 @@
-import type { InventoryItem, InputModality, ProviderGatewayCompatView, ReasoningEfforts, SettingsNamespace, CompatibilityProfile } from './types.js'
+import type { InventoryItem, InputModality, ModelGatewayCompatView, ProviderGatewayCompatView, ReasoningEfforts, SettingsNamespace, CompatibilityProfile } from './types.js'
 import type { TakeoverRuntimeResolution } from './takeover-runtime.js'
-import { resolveProviderGatewayCompat } from '../compat/gateway/resolve.js'
+import { resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../compat/gateway/resolve.js'
 import { editableProviderCompatFields } from '../compat/gateway/validation.js'
 import type { GatewayCompatResolveInput } from '../compat/gateway/types.js'
 
@@ -34,6 +34,23 @@ function layerCompat(layer: unknown, provider: string): Record<string, unknown> 
   return record(profile?.compat)
 }
 
+function modelLayerCompat(layer: unknown, provider: string, model: string): Record<string, unknown> | undefined {
+  const root = record(layer)
+  const providers = record(root?.providers)
+  const profile = record(providers?.[provider])
+  if (!profile) return undefined
+
+  const overrides = record(profile.modelOverrides)
+  const override = record(overrides?.[model])
+  if (override !== undefined) return record(override.compat)
+
+  if (Array.isArray(profile.models)) {
+    const row = profile.models.find((entry) => record(entry)?.id === model)
+    return record(record(row)?.compat)
+  }
+  return undefined
+}
+
 const providerCompatFields = ['supportsDeveloperRole', 'maxTokensField'] as const
 
 type ProviderCompatField = typeof providerCompatFields[number]
@@ -42,6 +59,54 @@ function fieldLayer(source: Record<string, unknown> | undefined, field: Provider
   if (source === undefined || !Object.prototype.hasOwnProperty.call(source, field)) return {}
   return { [field]: source[field] }
 }
+
+function catalogField(
+  field: ProviderCompatField,
+  modelValue: Record<string, unknown> | undefined,
+  providerValue: Record<string, unknown> | undefined,
+  higherLayers: readonly (Record<string, unknown> | undefined)[],
+): Record<string, unknown> {
+  if (higherLayers.some((layer) => layer?.[field] !== undefined)) return {}
+  return hasField(modelValue, field) ? fieldLayer(modelValue, field) : fieldLayer(providerValue, field)
+}
+
+function hasField(source: Record<string, unknown> | undefined, field: ProviderCompatField): boolean {
+  return source !== undefined && Object.prototype.hasOwnProperty.call(source, field)
+}
+
+export function modelGatewayCompatViewFrom(
+  namespace: SettingsNamespace | unknown,
+  provider: string,
+  model: string,
+  compatibilityProfile: CompatibilityProfile = 'unknown',
+): ModelGatewayCompatView {
+  const descriptor = record(namespace)
+  const userModel = modelLayerCompat(descriptor?.user, provider, model)
+  const userProvider = layerCompat(descriptor?.user, provider)
+  const baseModel = modelLayerCompat(descriptor?.base, provider, model)
+  const baseProvider = layerCompat(descriptor?.base, provider)
+  const valueModel = modelLayerCompat(descriptor?.value, provider, model)
+  const valueProvider = layerCompat(descriptor?.value, provider)
+  const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema)
+  return resolveModelGatewayCompat({
+    provider,
+    model,
+    modelCompat: userModel,
+    providerCompat: userProvider,
+    baseCompat: Object.assign({}, baseProvider, baseModel),
+    catalogCompat: Object.assign(
+      {},
+      catalogField('supportsDeveloperRole', valueModel, valueProvider, [userModel, userProvider, baseModel, baseProvider]),
+      catalogField('maxTokensField', valueModel, valueProvider, [userModel, userProvider, baseModel, baseProvider]),
+    ),
+    protocolDefault: undefined,
+  }, {
+    supportsDeveloperRoleAvailable: editability.supportsDeveloperRole,
+    maxTokensFieldAvailable: editability.maxTokensField,
+  })
+}
+
+export const modelCompatViewFrom = modelGatewayCompatViewFrom
 
 function takeoverCompatFor(runtime: TakeoverRuntimeResolution | undefined, provider: string): TakeoverRuntimeResolution['compat'][number] | undefined {
   if (runtime === undefined || !runtime.providers.includes(provider)) return undefined

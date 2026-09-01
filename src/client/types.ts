@@ -10,6 +10,8 @@ export type {
   GatewayCompatSource,
   GatewayCompatValidationResult,
   MaxTokensField,
+  ModelGatewayCompatUpdate,
+  ModelGatewayCompatView,
   ProviderGatewayCompatSource,
   ProviderGatewayCompatUpdate,
   ProviderGatewayCompatView,

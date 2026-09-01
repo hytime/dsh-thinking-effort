@@ -12,6 +12,7 @@ import type {
   GatewayCompatResolution,
   GatewayCompatSource,
   MaxTokensField,
+  ModelGatewayCompatView,
   ProviderGatewayCompatView,
 } from './types.js'
 
@@ -126,6 +127,25 @@ export function resolveTakeoverGatewayCompat(input: {
     ...projected,
     ...(capabilities === undefined ? {} : { versionCapabilities: capabilities }),
   })
+}
+
+export function resolveModelGatewayCompat(
+  input: GatewayCompatResolveInput & { readonly model: string },
+  available?: Pick<ModelGatewayCompatView, 'supportsDeveloperRoleAvailable' | 'maxTokensFieldAvailable'>,
+): ModelGatewayCompatView {
+  const resolution = resolveGatewayCompat(input)
+  return {
+    provider: input.provider,
+    model: input.model ?? '',
+    supportsDeveloperRole: resolution.supportsDeveloperRole.value === undefined
+      ? 'auto'
+      : resolution.supportsDeveloperRole.value ? 'supported' : 'unsupported',
+    maxTokensField: resolution.maxTokensField.value ?? 'auto',
+    supportsDeveloperRoleSource: resolution.supportsDeveloperRole.source,
+    maxTokensFieldSource: resolution.maxTokensField.source,
+    supportsDeveloperRoleAvailable: available?.supportsDeveloperRoleAvailable ?? resolution.supportsDeveloperRole.value !== undefined,
+    maxTokensFieldAvailable: available?.maxTokensFieldAvailable ?? resolution.maxTokensField.value !== undefined,
+  }
 }
 
 function providerSource(resolution: GatewayCompatResolution): ProviderGatewayCompatView['source'] {
