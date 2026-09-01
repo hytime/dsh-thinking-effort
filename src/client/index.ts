@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { LOCALE_DATA } from './locales.js'
 import { settingsBridge } from './settings-bridge.js'
+import { observeTakeoverSettings, resolveTakeoverSettings } from './takeover-runtime.js'
 import { LOCALE_NS } from './constants.js'
 import { SectionEditor } from './SectionEditor.js'
 import type { ClientContext, ClientLocale, ClientSlots } from './types.js'
@@ -27,6 +28,8 @@ export function apply(context: ClientContext): void {
   const mount = (settings: ReturnType<typeof settingsBridge>): void => {
     if (mounted || settings === undefined) return
     mounted = true
+    const observedSettings = observeTakeoverSettings(settings, () => undefined)
+    void resolveTakeoverSettings(settings).catch(() => undefined)
     const translate = locale.bind(LOCALE_NS)
     context.effect(() => {
       const languageDisposers: Array<() => void> = []
@@ -58,7 +61,7 @@ export function apply(context: ClientContext): void {
         locale: LOCALE_NS,
         label: () => translate('pageTitle'),
       },
-      () => createElement(SectionEditor, { settings, locale, t: translate }),
+      () => createElement(SectionEditor, { settings: observedSettings, locale, t: translate }),
     ))
   }
 

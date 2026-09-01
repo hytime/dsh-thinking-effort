@@ -101,23 +101,29 @@ export function resolveGatewayCompat(input: GatewayCompatResolveInput): GatewayC
 
 export function resolveTakeoverGatewayCompat(input: {
   readonly version?: unknown
+  readonly runtimeProfile?: 'legacy' | 'modern' | 'unknown'
+  readonly descriptorSchema?: unknown
   readonly piAi?: PiAiSection
   readonly takeover?: TakeoverSection
   readonly provider: string
   readonly model?: string
 }): GatewayCompatResolution | undefined {
   const version = input.version
-  if (typeof version !== 'string') return undefined
-  const providers = resolveTakeoverProviders({ version, piAi: input.piAi, takeover: input.takeover })
+  const providers = resolveTakeoverProviders({
+    version,
+    runtimeProfile: input.runtimeProfile,
+    descriptorSchema: input.descriptorSchema,
+    piAi: input.piAi,
+    takeover: input.takeover,
+  })
   if (!providers.includes(input.provider)) return undefined
-  const capabilities = capabilitiesForVersion(version)
-  if (capabilities === undefined) return undefined
+  const capabilities = typeof version === 'string' ? capabilitiesForVersion(version) : undefined
   const projected = takeoverGatewayCompatInputs(input.piAi, input.provider, input.model)
   return resolveGatewayCompat({
     provider: input.provider,
     ...(input.model === undefined ? {} : { model: input.model }),
     ...projected,
-    versionCapabilities: capabilities,
+    ...(capabilities === undefined ? {} : { versionCapabilities: capabilities }),
   })
 }
 

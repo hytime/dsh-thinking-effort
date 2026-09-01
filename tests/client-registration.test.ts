@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { apply, inject, name } from '../src/client/index.js'
 import { LOCALE_NS } from '../src/client/constants.js'
+import { resolveTakeoverGatewayCompat, resolveTakeoverProviders } from '../src/compat/gateway/resolve.js'
 
 function createHarness(mode: 'modern' | 'legacy') {
   const listeners: Array<(name: string) => void> = []
@@ -101,6 +102,73 @@ describe('client registration through the guarded context', () => {
 })
 
 describe('client registration', () => {
+  it('resolves takeover capabilities from the mounted settings descriptor', async () => {
+    const harness = createHarness('legacy')
+    harness.legacySettings.describe.mockResolvedValue({
+      result: {
+        ok: true,
+        value: {
+          namespaces: [{
+            ns: 'llm-pi-ai',
+            revision: 1,
+            value: {
+              providers: {
+                local: {
+                  api: 'openai-completions',
+                  baseURL: 'http://gateway.test/v1',
+                  models: [{ id: 'model', reasoningEfforts: { high: 'high' }, compat: { thinkingFormat: 'qwen', supportsReasoningEffort: true } }],
+                },
+              },
+            },
+            schema: { properties: { providers: { additionalProperties: { properties: { compat: { properties: {} } } } } } },
+          }],
+        },
+      },
+    })
+
+    apply(harness.context)
+    await Promise.resolve()
+
+    expect(harness.legacySettings.describe).toHaveBeenCalled()
+  })
+
+  it('re-resolves after the observed settings API describes or mutates', async () => {
+    const harness = createHarness('modern')
+    apply(harness.context)
+    const render = harness.registrations[0]?.render
+    const element = (render as () => { props?: { settings?: { describe: () => Promise<unknown>; mutate: (ns: string, ops: readonly unknown[], revision: number) => Promise<unknown> } } })()
+    const observed = element.props?.settings
+    expect(observed).toBeDefined()
+
+    await observed!.describe()
+    await observed!.mutate('llm-pi-ai', [], 1)
+    await Promise.resolve()
+
+    expect(harness.remoteSettings.describe.mock.calls.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('uses runtime profile and descriptor schema to fail closed for takeover capability', () => {
+    const piAi = {
+      providers: {
+        local: {
+          api: 'openai-completions',
+          baseURL: 'http://gateway.test/v1',
+          models: [{ id: 'model', reasoningEfforts: { high: 'high' }, compat: { thinkingFormat: 'qwen', supportsReasoningEffort: true } }],
+        },
+      },
+    }
+    const oldSchema = { properties: { providers: { additionalProperties: { properties: { compat: { properties: {} } } } } } }
+    const fullSchema = { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } }
+
+    expect(resolveTakeoverProviders({ runtimeProfile: 'legacy', descriptorSchema: oldSchema, piAi })).toEqual([])
+    expect(resolveTakeoverProviders({ runtimeProfile: 'legacy', descriptorSchema: fullSchema, piAi })).toEqual(['local'])
+    expect(resolveTakeoverGatewayCompat({ runtimeProfile: 'legacy', descriptorSchema: fullSchema, piAi, provider: 'local', model: 'model' })).toMatchObject({
+      thinkingFormat: { value: 'qwen', source: 'model' },
+      supportsReasoningEffort: { value: true, source: 'model' },
+    })
+    expect(resolveTakeoverProviders({ runtimeProfile: 'unknown', descriptorSchema: fullSchema, piAi })).toEqual([])
+  })
+
   it('exports the scoped identity and exact hard injection list', () => {
     expect(name).toBe('@hytime/dsh-thinking-effort')
     expect(inject).toEqual(['slots', 'connection', 'locale'])
@@ -120,7 +188,7 @@ describe('client registration', () => {
       order: 12,
       locale: LOCALE_NS,
     })
-    expect(harness.remoteSettings.describe).not.toHaveBeenCalled()
+    expect(harness.remoteSettings.describe).toHaveBeenCalled()
   })
 
   it('registers a render factory for the provider compatibility settings surface', () => {
@@ -139,7 +207,7 @@ describe('client registration', () => {
 
     expect(harness.context.on).toHaveBeenCalledWith('internal/service', expect.any(Function))
     expect(harness.registrations).toHaveLength(1)
-    expect(harness.legacySettings.describe).not.toHaveBeenCalled()
+    expect(harness.legacySettings.describe).toHaveBeenCalled()
   })
 
   it('disposes dictionaries and externally registered languages', () => {

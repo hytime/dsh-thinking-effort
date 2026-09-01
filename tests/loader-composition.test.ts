@@ -978,35 +978,6 @@ integrationDescribe('official DSH loader composition', () => {
         const mutateEndpoint = legacyRpc ? 'settings.mutate' : 'settings/mutate'
         const settingsDescribe = await callOfficialRpc(web.url, headers, describeEndpoint, {}, !legacyRpc)
         expect(settingsDescribe.status).toBe(200)
-
-
-
-        /* const described = settingsDescribe.body.result as {
-          ok: boolean
-          value?: { namespaces?: Array<{ ns?: string; revision?: number; schema?: unknown }> }
-        }
-        expect(described.value?.namespaces?.length).toBeGreaterThan(0)
-        const namespace = described.value?.namespaces?.[0]
-        expect(namespace?.ns).toEqual(expect.any(String))
-        expect(namespace?.revision).toEqual(expect.any(Number))
-         const piAiNamespace = described.value?.namespaces?.find(({ ns }) => ns === 'llm-pi-ai')
-         expect(piAiNamespace).toBeDefined()
-         const mapped = capabilitiesForVersion(version)
-         expect(mapped).toBeDefined()
-         const editability = editableProviderCompatFields(mapped, piAiNamespace?.schema)
-         if (version === '0.1.0-rc.7') {
-           expect(editability).toMatchObject({ supportsDeveloperRole: false, maxTokensField: false })
-         } else {
-           expect(editability).toMatchObject({ supportsDeveloperRole: true, maxTokensField: true })
-         }
-
-
-
-
-
-
-
-         */
          const liveResult = (endpoint: string, args: Record<string, unknown>): Promise<unknown> => (
           callOfficialRpc(web.url, headers, endpoint, args, !legacyRpc).then((response) => (
             legacyRpc ? { result: response.body.result } : response.body.result
@@ -1036,6 +1007,7 @@ integrationDescribe('official DSH loader composition', () => {
          } else {
            expect(editability).toMatchObject({ supportsDeveloperRole: true, maxTokensField: true })
          }
+
          const describePiAi = async (): Promise<{
            ns: string
            revision: number

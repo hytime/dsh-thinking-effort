@@ -5,6 +5,7 @@ import {
   takeoverSupportedForVersion,
 } from '../version-map.js'
 import type { DshVersionCapabilities } from '../version-map.js'
+import { editableProviderCompatFields } from './validation.js'
 
 export const TAKEOVER_NAMESPACE = 'llm-openai-completions'
 export const PI_AI_NAMESPACE = 'llm-pi-ai'
@@ -35,8 +36,29 @@ export interface TakeoverSection {
 
 export interface TakeoverProvidersInput {
   readonly version?: unknown
+  readonly runtimeProfile?: 'legacy' | 'modern' | 'unknown'
+  readonly descriptorSchema?: unknown
   readonly piAi?: PiAiSection
   readonly takeover?: TakeoverSection
+}
+
+function runtimeCapabilities(input: TakeoverProvidersInput): DshVersionCapabilities | undefined {
+  if (input.version !== undefined) {
+    if (typeof input.version !== 'string' || !takeoverSupportedForVersion(input.version)) return undefined
+    return capabilitiesForVersion(input.version)
+  }
+
+  if (input.runtimeProfile !== 'legacy' && input.runtimeProfile !== 'modern') return undefined
+  const editability = editableProviderCompatFields(input.runtimeProfile, input.descriptorSchema)
+  if (!editability.supportsDeveloperRole || !editability.maxTokensField) return undefined
+  return {
+    settingsTransport: input.runtimeProfile,
+    settingsApi: input.runtimeProfile === 'modern' ? 'remote.settings' : 'connection.api.settings',
+    baseModelFields: ['reasoningEfforts'],
+    gatewayCompatFields: ['supportsDeveloperRole', 'maxTokensField'],
+    externalLanguages: input.runtimeProfile === 'modern',
+    takeoverTransport: 'optional',
+  }
 }
 
 export interface TakeoverGatewayCompatInputs {
@@ -113,8 +135,7 @@ export function takeoverProvidersOf(section: TakeoverSection | undefined): strin
  * unsupported mapped versions intentionally produce no takeover candidates.
  */
 export function resolveTakeoverProviders(input: TakeoverProvidersInput): string[] {
-  if (typeof input.version !== 'string' || !takeoverSupportedForVersion(input.version)) return []
-  const capabilities = capabilitiesForVersion(input.version)
+  const capabilities = runtimeCapabilities(input)
   if (capabilities === undefined) return []
   const identified = identifyTakeoverProviders(input.piAi, capabilities)
   const configured = takeoverProvidersOf(input.takeover)
