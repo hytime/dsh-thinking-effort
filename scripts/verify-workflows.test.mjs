@@ -396,9 +396,9 @@ node -e 'const [major, minor, patch] = process.argv[1].split(".").map(Number); i
 `;
 
 const publishQualityCommands = [
-  'node scripts/verify-release.mjs "$GITHUB_REF_NAME"',
   'npm ci',
   'npm run build',
+  'node scripts/verify-release.mjs "$GITHUB_REF_NAME"',
   `set -Eeuo pipefail
 PACKAGE_VERSION="$(node -p "require('./package.json').version")"
 query_output="$RUNNER_TEMP/dsh-thinking-effort-npm-view.txt"
