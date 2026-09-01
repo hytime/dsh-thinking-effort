@@ -87,7 +87,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.13
 ```
 
 官方 CLI 会同时更新 profile 依赖、锁文件和 `dsh.profile.bundles`，无需手工追加 YAML。
@@ -122,7 +122,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.13
 ```
 
 如果旧依赖已经被其他工具移除，但 profile 的 bundle 列表仍残留旧名称，先从旧 profile 的 `pnpm-lock.yaml` 找到旧 GitHub commit，再使用官方命令恢复并移除：
@@ -130,7 +130,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.12
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.13
 ```
 
 不要把 `dsh-thinking-effort` 添加到新的 `dsh.profile.bundles` 中。
@@ -152,7 +152,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.12
 
 7. 回到 Composer，选择对应模型后即可使用「推理等级」。
 
-设置页右下角会显示当前安装版本，例如 `v0.1.12`。
+设置页右下角会显示当前安装版本，例如 `v0.1.13`。
 
 ### 设置页界面
 
@@ -166,7 +166,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.12
 - **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位。
 - **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页，并使用 DSH 官方 locale 服务切换和持久化中文、English、日本語、한국어。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
 - **子 agent：** 默认值存储在 `llm-pi-ai` 用户层的 `subagentEffort`；`agent/request` waterfall 只对未显式指定档位的子 agent 请求进行补全。
-- **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.12`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
+- **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.13`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
 
 ## 安装验证
 
@@ -210,7 +210,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 - 普通 CI workflow 不会发布 npm；发布只由 `publish.yml` 接收匹配的 `v<version>` tag 后执行。
 - 创建发布 tag 前，维护者先更新 `package.json` 版本和各语言 `CHANGELOG`，提交这些变更，再创建匹配的 `v<version>` tag。tag 指向的提交必须位于 `main` 历史中。
 - npm 包必须配置 GitHub Trusted Publisher：仓库为 `hytime/dsh-thinking-effort`，workflow 为 `publish.yml`。发布使用 GitHub OIDC 生成 provenance，不需要 `NPM_TOKEN`。
-- 发布前 workflow 会构建并使用官方 `dsh plugin` 命令安装、测试 DSH `dsh-v0.1.2-alpha.3`（`0.1.2-alpha.3`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）和 `dsh-v0.1.0-rc.7`（`0.1.0-rc.7`），执行真实兼容检查。
+- 发布前 workflow 会为每个受支持的 DSH 兼容范围选择一个代表版本：modern 使用 `dsh-v0.1.2-alpha.3`（`0.1.2-alpha.3`），legacy 使用 `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）；通过官方 `dsh plugin` 命令安装并执行真实兼容检查。
 - workflow 不会自动修改版本或任何 `CHANGELOG`；如果 npm 中已经存在相同版本，发布也会被阻止。
 
 ## 排查

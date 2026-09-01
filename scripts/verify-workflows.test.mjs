@@ -516,15 +516,14 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
   assert.equal(publish.concurrency?.['cancel-in-progress'], false);
 
   const compatibilityBuild = compatibility.steps.find(
-    (step) => step.name === 'Build three official DSH checkouts and run integration tests',
+    (step) => step.name === 'Build two official DSH range representatives and run integration tests',
   );
   assert.ok(compatibilityBuild, 'compatibility job must define its build and integration step');
   assert.equal(typeof compatibilityBuild.run, 'string', 'compatibility build step must have a run script');
   for (const required of [
     'dsh-v0.1.2-alpha.3',
     'dsh-v0.1.1-rc.2',
-    'dsh-v0.1.0-rc.7',
-    'DSH_CLI_ROOTS="$ALPHA_ROOT,$RC2_ROOT,$RC7_ROOT"',
+    'DSH_CLI_ROOTS="$ALPHA_ROOT,$RC2_ROOT"',
     'corepack enable',
     'pnpm install --frozen-lockfile --ignore-scripts',
     'pnpm run build',
@@ -543,7 +542,6 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
   }
   assert.match(compatibilityBuild.run, /ALPHA_ROOT=.*dsh-v0\.1\.2-alpha\.3/);
   assert.match(compatibilityBuild.run, /RC2_ROOT=.*dsh-v0\.1\.1-rc\.2/);
-  assert.match(compatibilityBuild.run, /RC7_ROOT=.*dsh-v0\.1\.0-rc\.7/);
   assert.match(compatibilityBuild.run, /npm test -- tests\/loader-composition\.test\.ts\s*&/);
 
   assert.match(publishTagGuard.run, /git fetch --no-tags origin main/);

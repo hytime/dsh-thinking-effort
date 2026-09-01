@@ -61,7 +61,7 @@ profile은 공식 DSH CLI로 관리하세요. 일반 `npm install`은 DSH profil
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 특정 버전 설치
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.13
 
 # 업데이트
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -90,7 +90,7 @@ profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](
 
 7. Composer로 돌아가 설정한 모델을 선택하고 추론 선택기를 사용합니다.
 
-설정 페이지 오른쪽 아래에는 `v0.1.12`과 같은 작은 버전 표시가 나타납니다.
+설정 페이지 오른쪽 아래에는 `v0.1.13`과 같은 작은 버전 표시가 나타납니다.
 
 ### 설정 페이지 구성
 
@@ -121,7 +121,7 @@ profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](
 - 일반 CI workflow는 npm에 게시하지 않습니다. `publish.yml`은 `v<version>` tag에서만 게시를 시작합니다.
 - 릴리스 tag를 만들기 전에 유지 관리자는 `package.json` 버전과 각 언어의 `CHANGELOG`를 업데이트하여 커밋하고 일치하는 `v<version>` tag를 만듭니다. tag가 가리키는 커밋은 `main` 기록에 포함되어야 합니다.
 - npm 패키지에 GitHub Trusted Publisher를 설정해야 합니다. 저장소는 `hytime/dsh-thinking-effort`, workflow는 `publish.yml`입니다. 게시에는 GitHub OIDC provenance가 포함되며 `NPM_TOKEN`이 필요하지 않습니다.
-- 게시 전에 workflow는 공식 `dsh plugin` 명령으로 DSH `dsh-v0.1.2-alpha.3` (`0.1.2-alpha.3`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`)를 빌드하고 설치한 뒤 실제 호환성 테스트를 실행합니다.
+- 게시 전에 workflow는 지원되는 각 DSH 호환성 범위에서 대표 버전 하나씩을 선택합니다. modern은 `dsh-v0.1.2-alpha.3` (`0.1.2-alpha.3`), legacy는 `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`)를 공식 `dsh plugin` 명령으로 빌드하고 설치한 뒤 실제 호환성 테스트를 실행합니다.
 - workflow는 버전이나 `CHANGELOG`를 자동으로 변경하지 않습니다. npm에 같은 버전이 이미 있으면 게시도 중단됩니다.
 
 ## 라이선스

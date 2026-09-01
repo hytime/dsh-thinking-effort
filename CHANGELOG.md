@@ -12,6 +12,13 @@ This file records the features, fixes, and user-facing impact of every published
 
 Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.1.13] - 按兼容范围验证 / Range-based compatibility verification
+
+### 变更 / Changed
+
+- 将兼容层的版本诊断从逐版本枚举改为范围判断，并让发布 workflow 每个兼容范围只选择一个官方代表版本。
+- Replace per-release compatibility enumeration with range-based version diagnostics, and make the release workflow select one official representative per compatibility range.
+
 ## [0.1.12] - 官方 alpha.3 兼容验证 / Official alpha.3 compatibility verification
 
 ### 变更 / Changed

@@ -64,7 +64,7 @@ Use the official DSH CLI to manage the plugin profile. A plain `npm install` doe
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # Install a specific version
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.13
 
 # Upgrade
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -93,7 +93,7 @@ See [INSTALL.md](./INSTALL.md) for profile discovery, migration, validation, and
 
 7. Return to Composer and select the model to use its reasoning selector.
 
-The settings page shows the installed version as a small watermark such as `v0.1.12` in the bottom-right corner.
+The settings page shows the installed version as a small watermark such as `v0.1.13` in the bottom-right corner.
 
 ### Settings page layout
 
@@ -124,7 +124,7 @@ The page header contains the language selector. Below it, the Subagent default e
 - The ordinary CI workflow does not publish to npm. Publishing is triggered only by a `v<version>` tag through `publish.yml`.
 - Before creating a release tag, update `package.json` version and `CHANGELOG.md` files, commit those changes, and create the matching `v<version>` tag. The tag must point to a commit in the `main` history.
 - npm Trusted Publishing must be configured for repository `hytime/dsh-thinking-effort` and workflow `publish.yml`. The workflow publishes provenance through GitHub OIDC and does not require `NPM_TOKEN`.
-- Before publishing, the workflow builds and tests DSH `dsh-v0.1.2-alpha.3` (`0.1.2-alpha.3`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), and `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`) with the official `dsh plugin` command and real compatibility checks.
+- Before publishing, the workflow builds and tests one representative from each supported DSH compatibility range: `dsh-v0.1.2-alpha.3` (`0.1.2-alpha.3`) for modern and `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`) for legacy, using the official `dsh plugin` command and real compatibility checks.
 - The workflow never changes the package version or any `CHANGELOG` file automatically; an existing npm version also blocks publishing.
 
 ## License

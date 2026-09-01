@@ -7,12 +7,18 @@ const modern = { settings: 'remote', externalLanguages: true } as const
 const noSettings = { settings: 'none', externalLanguages: false } as const
 
 describe('compatibility profiles', () => {
-  it('classifies the verified legacy and modern versions', () => {
-    expect(resolveCompatibility({ version: '0.1.1-rc.2', capabilities: legacy }).profile).toBe('legacy')
-    expect(resolveCompatibility({ version: '0.1.0-rc.7', capabilities: legacy }).profile).toBe('legacy')
-    expect(resolveCompatibility({ version: '0.1.2-alpha.1', capabilities: modern }).profile).toBe('modern')
-    expect(resolveCompatibility({ version: '0.1.2-alpha.2', capabilities: modern }).profile).toBe('modern')
-    expect(resolveCompatibility({ version: '0.1.2-alpha.3', capabilities: modern }).profile).toBe('modern')
+  it('classifies compatibility ranges without enumerating every release', () => {
+    const legacyRange = resolveCompatibility({ version: '0.1.1-rc.99', capabilities: modern })
+    expect(legacyRange.profile).toBe('modern')
+    expect(legacyRange.expected).toBe('legacy')
+
+    const modernRange = resolveCompatibility({ version: '0.1.2-alpha.99', capabilities: legacy })
+    expect(modernRange.profile).toBe('legacy')
+    expect(modernRange.expected).toBe('modern')
+
+    const unknownFuture = resolveCompatibility({ version: '0.1.3', capabilities: legacy })
+    expect(unknownFuture.profile).toBe('legacy')
+    expect(unknownFuture.expected).toBeUndefined()
   })
 
   it('uses detected capabilities when version metadata is absent', () => {

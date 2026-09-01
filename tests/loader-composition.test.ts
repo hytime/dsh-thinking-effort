@@ -23,12 +23,12 @@ const integrationEnabled = process.env.DSH_LOADER_INTEGRATION === '1'
 
 function parseCliRoots(raw: string): string[] {
   const values = raw.split(',').map((value) => value.trim())
-  if (values.length !== 3 || values.some((value) => value === '')) {
-    throw new Error('DSH_CLI_ROOTS must contain exactly three non-empty comma-separated roots: alpha, rc2, rc7')
+  if (values.length !== 2 || values.some((value) => value === '')) {
+    throw new Error('DSH_CLI_ROOTS must contain exactly two non-empty comma-separated roots: alpha, rc2')
   }
   const roots = values.map((value) => realpathSync(value))
-  if (new Set(roots).size !== 3) {
-    throw new Error('DSH_CLI_ROOTS must contain three distinct roots')
+  if (new Set(roots).size !== 2) {
+    throw new Error('DSH_CLI_ROOTS must contain two distinct roots')
   }
   return roots
 }
@@ -45,7 +45,6 @@ function readOfficialDshVersion(cliRoot: string): string {
 const expectedOfficialDshVersions = [
   '0.1.2-alpha.3',
   '0.1.1-rc.2',
-  '0.1.0-rc.7',
 ] as const
 
 const localizedNavigationLabels = {
@@ -803,7 +802,7 @@ describe('compatibility documentation and root validation', () => {
   })
 
   it('rejects duplicate normalized DSH CLI roots', () => {
-    const duplicateRoots = `${root},${join(root, '.')},${root}`
+    const duplicateRoots = `${root},${join(root, '.')}`
 
     expect(() => parseCliRoots(duplicateRoots)).toThrow(/distinct|unique/i)
   })
@@ -813,7 +812,7 @@ describe('published package composition', () => {
   it('exposes built Host and Client artifacts with declarations', () => {
     const manifest = readPackage()
 
-    expect(manifest.version).toBe('0.1.12')
+    expect(manifest.version).toBe('0.1.13')
     expect(manifest.main).toBe('./lib/index.js')
     expect(manifest.types).toBe('./lib/types/index.d.ts')
     expect(manifest.exports['.']).toEqual({
@@ -845,10 +844,10 @@ describe('published package composition', () => {
 })
 
 integrationDescribe('official DSH loader composition', () => {
-  it('requires and verifies alpha, rc2, and rc7 roots independently', { timeout: 180000 }, async () => {
-    expect(cliRoots).toHaveLength(3)
+  it('requires and verifies alpha and rc2 range representatives independently', { timeout: 180000 }, async () => {
+    expect(cliRoots).toHaveLength(2)
     expect(cliRoots.every((cliRoot) => cliRoot === resolve(cliRoot))).toBe(true)
-    expect(new Set(cliRoots).size).toBe(3)
+    expect(new Set(cliRoots).size).toBe(2)
     const verifiedRoots = cliRoots.map((cliRoot) => ({
       cliRoot,
       version: readOfficialDshVersion(cliRoot),
@@ -879,7 +878,7 @@ integrationDescribe('official DSH loader composition', () => {
     const installedDir = join(profile, 'node_modules', '@hytime', 'dsh-thinking-effort')
     const installedManifest = JSON.parse(readFileSync(join(installedDir, 'package.json'), 'utf8')) as PackageManifest
     expect(installedManifest.name).toBe('@hytime/dsh-thinking-effort')
-    expect(installedManifest.version).toBe('0.1.12')
+    expect(installedManifest.version).toBe('0.1.13')
 
     const hostEntry = join(installedDir, 'lib', 'index.js')
     const clientEntry = join(installedDir, 'lib', 'client.js')

@@ -61,7 +61,7 @@ profile の管理には公式 DSH CLI を使用してください。通常の `n
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 特定バージョンをインストール
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.13
 
 # 更新
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -90,7 +90,7 @@ profile の確認、移行、検証、トラブルシューティングについ
 
 7. Composer に戻り、設定したモデルを選択して推論セレクターを使用します。
 
-設定ページ右下には `v0.1.12` のような小さなバージョン表示が出ます。
+設定ページ右下には `v0.1.13` のような小さなバージョン表示が出ます。
 
 ### 設定ページの構成
 
@@ -121,7 +121,7 @@ profile の確認、移行、検証、トラブルシューティングについ
 - 通常の CI workflow は npm に公開しません。`publish.yml` は `v<version>` tag によってのみ公開を開始します。
 - リリース tag を作成する前に、メンテナーは `package.json` の version と各言語の `CHANGELOG` を更新してコミットし、一致する `v<version>` tag を作成します。tag の指す commit は `main` の履歴に含まれている必要があります。
 - npm パッケージには GitHub Trusted Publisher を設定してください。リポジトリは `hytime/dsh-thinking-effort`、workflow は `publish.yml` です。公開は GitHub OIDC による provenance を含み、`NPM_TOKEN` は必要ありません。
-- 公開前に workflow は公式の `dsh plugin` コマンドで DSH `dsh-v0.1.2-alpha.3`（`0.1.2-alpha.3`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）、`dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）を構築・インストールし、実際の互換性テストを実行します。
+- 公開前に workflow は、対応する各 DSH 互換性範囲から 1 つずつ代表バージョンを選びます。modern は `dsh-v0.1.2-alpha.3`（`0.1.2-alpha.3`）、legacy は `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）を公式の `dsh plugin` コマンドで構築・インストールし、実際の互換性テストを実行します。
 - workflow は version や `CHANGELOG` を自動変更しません。npm に同じ version が既にある場合も公開を停止します。
 
 ## ライセンス
