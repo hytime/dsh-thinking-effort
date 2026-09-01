@@ -70,7 +70,9 @@ const versionRanges: readonly VersionRange[] = [
 
 function comparableVersion(value: string): ComparableVersion {
   const [withoutBuild] = value.split('+', 2)
-  const [core, prerelease] = withoutBuild.split('-', 2)
+  const separator = withoutBuild.indexOf('-')
+  const core = separator === -1 ? withoutBuild : withoutBuild.slice(0, separator)
+  const prerelease = separator === -1 ? undefined : withoutBuild.slice(separator + 1)
   const [major, minor, patch] = core.split('.').map(Number)
   return {
     major,

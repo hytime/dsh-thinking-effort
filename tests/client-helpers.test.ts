@@ -14,7 +14,7 @@ import {
 import { directResult, settingsBridge } from '../src/client/settings-bridge.js'
 import { LOCALE_DATA, LOCALE_CODES } from '../src/client/locales.js'
 import { inventoryFrom } from '../src/client/model-inventory.js'
-import { mergeModelUpdate, setOps } from '../src/client/model-ops.js'
+import { mergeModelUpdate, opsForProviderCompat, setOps } from '../src/client/model-ops.js'
 import {
   buildInput,
   buildLevels,
@@ -25,6 +25,9 @@ import {
   validateLevels,
 } from '../src/client/validation.js'
 import { iosPalette } from '../src/client/theme.js'
+import { resolveGatewayCompat, resolveProviderGatewayCompat } from '../src/compat/gateway/resolve.js'
+import { editableProviderCompatFields, validateProviderCompat } from '../src/compat/gateway/validation.js'
+import { capabilitiesForVersion } from '../src/compat/version-map.js'
 import type { InventoryItem, Translation } from '../src/client/types.js'
 
 const translate: Translation = (key, params) => `${key}${params?.level ? `:${params.level}` : ''}`
@@ -197,6 +200,100 @@ describe('model inventory and operations', () => {
     expect(result['__proto__']).toEqual({ id: '__proto__', keep: 'proto', reasoningEfforts: { off: null, high: 'proto-high' } })
     expect(result.constructor).toEqual({ id: 'constructor', keep: 'constructor', reasoningEfforts: { off: null, high: 'constructor-high' } })
     expect(result.toString).toEqual({ id: 'toString', keep: 'toString', reasoningEfforts: { off: null, high: 'to-string-high' } })
+  })
+  it('writes provider compat fields independently for supported and unsupported values', () => {
+    expect(opsForProviderCompat('local', {
+      supportsDeveloperRole: 'unsupported',
+      maxTokensField: 'max_tokens',
+    })).toEqual([
+      { op: 'set', path: ['providers', 'local', 'compat', 'supportsDeveloperRole'], value: false },
+      { op: 'set', path: ['providers', 'local', 'compat', 'maxTokensField'], value: 'max_tokens' },
+    ])
+
+    expect(opsForProviderCompat('local', {
+      supportsDeveloperRole: 'auto',
+      maxTokensField: 'auto',
+    })).toEqual([
+      { op: 'unset', path: ['providers', 'local', 'compat', 'supportsDeveloperRole'] },
+      { op: 'unset', path: ['providers', 'local', 'compat', 'maxTokensField'] },
+    ])
+  })
+
+  it('does not replace unrelated provider compat fields', () => {
+    expect(opsForProviderCompat('local', { supportsDeveloperRole: 'supported' })).toEqual([
+      { op: 'set', path: ['providers', 'local', 'compat', 'supportsDeveloperRole'], value: true },
+    ])
+  })
+  it('resolves each compat field from model to provider to catalog to protocol to URL', () => {
+    const result = resolveGatewayCompat({
+      provider: 'local',
+      model: 'model-a',
+      modelCompat: { maxTokensField: 'max_tokens' },
+      providerCompat: { supportsDeveloperRole: false },
+      catalogCompat: { thinkingFormat: 'catalog', supportsReasoningEffort: false },
+      protocolDefault: { maxTokensField: 'max_completion_tokens' },
+      providerUrl: 'https://api.openai.com/v1',
+    })
+
+    expect(result.maxTokensField).toEqual({ value: 'max_tokens', source: 'model' })
+    expect(result.supportsDeveloperRole).toEqual({ value: false, source: 'provider' })
+    expect(result.thinkingFormat).toEqual({ value: 'catalog', source: 'catalog' })
+    expect(result.supportsReasoningEffort).toEqual({ value: false, source: 'catalog' })
+    expect(result.model).toBe('model-a')
+  })
+
+  it('returns a provider view while retaining model override precedence', () => {
+    expect(resolveProviderGatewayCompat({
+      provider: 'local',
+      model: 'model-a',
+      modelCompat: { maxTokensField: 'max_tokens' },
+      providerCompat: { maxTokensField: 'max_completion_tokens', supportsDeveloperRole: true },
+    })).toEqual({
+      provider: 'local',
+      supportsDeveloperRole: 'supported',
+      maxTokensField: 'max_tokens',
+      supportsDeveloperRoleAvailable: true,
+      maxTokensFieldAvailable: true,
+      source: 'user',
+    })
+  })
+
+  it('requires both version capabilities and descriptor schema before allowing edits', () => {
+    const schema = {
+      properties: {
+        providers: {
+          additionalProperties: {
+            properties: {
+              compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } },
+            },
+          },
+        },
+      },
+    }
+    const complete = editableProviderCompatFields(capabilitiesForVersion('0.1.0-rc.8'), schema)
+    expect(complete).toEqual({
+      supportsDeveloperRole: true,
+      maxTokensField: true,
+      editableFields: ['supportsDeveloperRole', 'maxTokensField'],
+    })
+    expect(validateProviderCompat(capabilitiesForVersion('0.1.0-rc.7'), schema)).toMatchObject({
+      supportsDeveloperRole: false,
+      maxTokensField: false,
+      editableFields: [],
+      available: false,
+    })
+    expect(validateProviderCompat(capabilitiesForVersion('0.1.0-rc.8'), {})).toMatchObject({
+      supportsDeveloperRole: false,
+      maxTokensField: false,
+      available: false,
+    })
+  })
+
+  it('does not emit writes when a field is unavailable', () => {
+    expect(opsForProviderCompat('local', {
+      supportsDeveloperRole: 'supported',
+      maxTokensField: 'max_tokens',
+    }, { supportsDeveloperRole: false, maxTokensField: false })).toEqual([])
   })
 })
 

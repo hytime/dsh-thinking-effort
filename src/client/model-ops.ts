@@ -1,5 +1,7 @@
 import type { InventoryItem, ModelUpdate, SettingsOp } from './types.js'
 
+export { opsForProviderCompat } from '../compat/gateway/ops.js'
+
 export function mergeModelUpdate(raw: Record<string, unknown>, update: ModelUpdate): Record<string, unknown> {
   const next = { ...raw }
   if (update.levels !== undefined) next.reasoningEfforts = update.levels

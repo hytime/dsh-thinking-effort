@@ -47,10 +47,15 @@ describe('version capability map', () => {
     expect(capabilitiesForVersion('0.1.2-alpha.3')).toEqual(modernCapabilities)
   })
 
-  it('keeps range boundaries and accepts semver build metadata', () => {
+  it('keeps every half-open boundary and accepts semver build metadata', () => {
     expect(capabilitiesForVersion('0.1.0-rc.6')).toBeUndefined()
-    expect(capabilitiesForVersion('0.1.2-alpha.0')).toEqual(rc8Capabilities)
-    expect(capabilitiesForVersion('0.1.2-alpha.3+build.7')).toEqual(modernCapabilities)
+    expect(capabilitiesForVersion('0.1.0-rc.7+ci.1')).toEqual(rc7Capabilities)
+    expect(capabilitiesForVersion('0.1.0-rc.8+ci.1')).toEqual(rc8Capabilities)
+    expect(capabilitiesForVersion('0.1.2-alpha.0+ci.1')).toEqual(rc8Capabilities)
+    expect(capabilitiesForVersion('0.1.2-alpha.1+ci.1')).toEqual(modernCapabilities)
+    expect(capabilitiesForVersion('0.1.2-alpha.0-foo')).toEqual(modernCapabilities)
+    expect(capabilitiesForVersion('0.1.2+build.7')).toEqual(modernCapabilities)
+    expect(capabilitiesForVersion('0.1.3-0+build.7')).toBeUndefined()
     expect(capabilitiesForVersion('0.1.3-0')).toBeUndefined()
     expect(capabilitiesForVersion('0.1.3')).toBeUndefined()
   })
@@ -91,6 +96,7 @@ describe('compatibility profiles', () => {
 
     expect(report.profile).toBe('modern')
     expect(report.expected).toBeUndefined()
+    expect(report.versionCapabilities).toBeUndefined()
     expect(report.capabilities).toEqual(modern)
     expect(report.diagnostics).toHaveLength(0)
   })
@@ -108,6 +114,7 @@ describe('compatibility profiles', () => {
     expect(report.profile).toBe('unknown')
     expect(report.version).toBe('0.1')
     expect(report.expected).toBeUndefined()
+    expect(report.versionCapabilities).toBeUndefined()
     expect(report.diagnostics).toEqual([
       expect.objectContaining({ code: 'invalid-version', version: '0.1' }),
     ])

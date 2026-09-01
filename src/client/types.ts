@@ -1,5 +1,20 @@
 import type { ALL_LEVELS } from './constants.js'
 
+export type {
+  GatewayCompat,
+  GatewayCompatEditability,
+  GatewayCompatField,
+  GatewayCompatMode,
+  GatewayCompatResolution,
+  GatewayCompatResolveInput,
+  GatewayCompatSource,
+  GatewayCompatValidationResult,
+  MaxTokensField,
+  ProviderGatewayCompatSource,
+  ProviderGatewayCompatUpdate,
+  ProviderGatewayCompatView,
+} from '../compat/gateway/types.js'
+
 export type ReasoningLevel = typeof ALL_LEVELS[number]
 export type ReasoningEffort = string | null
 export type ReasoningEfforts = Partial<Record<ReasoningLevel, ReasoningEffort>> & Record<string, unknown>
