@@ -24,7 +24,7 @@ export const SUPPORTED_THINKING_FORMATS = [
 ] as const
 
 export type ThinkingFormat = typeof SUPPORTED_THINKING_FORMATS[number]
-export type GatewayCompatSource = 'model' | 'provider' | 'catalog' | 'protocol' | 'unknown'
+export type GatewayCompatSource = 'model' | 'provider' | 'base' | 'catalog' | 'protocol' | 'unknown'
 export type ProviderGatewayCompatSource = 'user' | 'base' | 'catalog' | 'unknown'
 
 export interface GatewayCompat {
@@ -38,6 +38,8 @@ export interface ProviderGatewayCompatView {
   provider: string
   supportsDeveloperRole: GatewayCompatMode
   maxTokensField: 'auto' | MaxTokensField
+  supportsDeveloperRoleSource: GatewayCompatSource
+  maxTokensFieldSource: GatewayCompatSource
   supportsDeveloperRoleAvailable: boolean
   maxTokensFieldAvailable: boolean
   source: ProviderGatewayCompatSource
@@ -63,6 +65,7 @@ export interface GatewayCompatResolveInput {
   readonly model?: string
   readonly modelCompat?: unknown
   readonly providerCompat?: unknown
+  readonly baseCompat?: unknown
   readonly catalogCompat?: unknown
   readonly protocolDefault?: unknown
   readonly versionCapabilities?: DshVersionCapabilities

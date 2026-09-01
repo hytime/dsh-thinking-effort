@@ -174,7 +174,9 @@ describe('SectionEditor user behavior', () => {
       maxTokensField: 'max_tokens' as const,
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
-      source: 'unknown' as const,
+      supportsDeveloperRoleSource: 'unknown' as const,
+       maxTokensFieldSource: 'unknown' as const,
+       source: 'unknown' as const,
     }
     const onChange = vi.fn()
     const container = document.createElement('div')
@@ -226,7 +228,7 @@ describe('SectionEditor user behavior', () => {
       base: { providers: { provider: { compat: { maxTokensField: 'max_tokens' } } } },
       schema: realGatewaySchema,
     }, 'provider', 'modern')
-    expect(projected).toMatchObject({ supportsDeveloperRole: 'unsupported', maxTokensField: 'max_tokens', source: 'user' })
+    expect(projected).toMatchObject({ supportsDeveloperRole: 'unsupported', maxTokensField: 'auto', source: 'user' })
 
     const view = renderEditor({
       compatibilityProfile: 'modern',
@@ -241,12 +243,12 @@ describe('SectionEditor user behavior', () => {
     expect(view.container.textContent).toContain(text('gatewayCompatTitle'))
     const selects = [...view.container.querySelectorAll('select')].slice(2) as HTMLSelectElement[]
     expect(selects[0]?.value).toBe('unsupported')
-    act(() => setValue(selects[1]!, 'auto'))
+    act(() => setValue(selects[1]!, 'max_completion_tokens'))
     act(() => button(view.container, text('saveGatewayCompat')).click())
     await settle()
-    expect(view.mutate).toHaveBeenCalledWith('llm-pi-ai', expect.arrayContaining([
-      { op: 'unset', path: ['providers', 'provider', 'compat', 'maxTokensField'] },
-    ]), 2)
+    expect(view.mutate).toHaveBeenCalledWith('llm-pi-ai', [
+      { op: 'set', path: ['providers', 'provider', 'compat', 'maxTokensField'], value: 'max_completion_tokens' },
+    ], 2)
     view.unmount()
   })
 
@@ -273,8 +275,8 @@ describe('SectionEditor user behavior', () => {
     await settle()
 
     const selects = [...view.container.querySelectorAll('select')].slice(2) as HTMLSelectElement[]
-    expect(selects[0]?.value).toBe('unsupported')
-    expect(selects[1]?.value).toBe('max_completion_tokens')
+    expect(selects[0]?.value).toBe('auto')
+    expect(selects[1]?.value).toBe('auto')
     view.unmount()
   })
 

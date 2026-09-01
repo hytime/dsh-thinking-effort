@@ -873,6 +873,11 @@ describe('compatibility documentation and root validation', () => {
     }
   })
 
+  it('requires the English changelog to state that runtime capability detection is authoritative', () => {
+    const document = readFileSync(join(root, 'docs/CHANGELOG.md'), 'utf8')
+    expect(section(document, 'Unreleased')).toMatch(/Runtime capability detection is authoritative/i)
+  })
+
   it('rejects duplicate normalized DSH CLI roots', () => {
     const duplicateRoots = `${root},${join(root, '.')},${root}`
 

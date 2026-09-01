@@ -108,8 +108,11 @@ export function resolveTakeoverDescription(
   const compat: GatewayCompatResolution[] = []
   for (const [provider, value] of Object.entries(profiles)) {
     const profile = record(value) as PiAiProviderProfile | undefined
+    const providerResolution = resolveTakeoverGatewayCompat({ ...input, provider })
+    if (providerResolution !== undefined) compat.push(providerResolution)
     for (const model of modelNames(profile)) {
-      const resolution = resolveTakeoverGatewayCompat({ ...input, provider, ...(model === undefined ? {} : { model }) })
+      if (model === undefined) continue
+      const resolution = resolveTakeoverGatewayCompat({ ...input, provider, model })
       if (resolution !== undefined) compat.push(resolution)
     }
   }
@@ -130,35 +133,54 @@ export function observeTakeoverSettings(
 ): ObservedSettingsApi {
   let active = true
   let sequence = 0
+  let mutationGeneration = 0
+  let pendingRefreshGeneration: number | undefined
   const nextSequence = (): number => {
     sequence += 1
     return sequence
   }
-  const publish = (requestSequence: number, response: ClientResult<SettingsDescribeValue>): void => {
-    if (active && requestSequence === sequence) onResolution(resolveTakeoverDescription(settings, response))
+  const publish = (
+    requestSequence: number,
+    requestGeneration: number,
+    response: ClientResult<SettingsDescribeValue>,
+    refresh: boolean,
+  ): void => {
+    if (!active || requestGeneration !== mutationGeneration) return
+    if (refresh) {
+      if (pendingRefreshGeneration !== requestGeneration) return
+      pendingRefreshGeneration = undefined
+      onResolution(resolveTakeoverDescription(settings, response))
+      return
+    }
+    if (pendingRefreshGeneration === requestGeneration || requestSequence !== sequence) return
+    onResolution(resolveTakeoverDescription(settings, response))
   }
   return {
     ...settings,
     describe: () => {
       const requestSequence = nextSequence()
+      const requestGeneration = mutationGeneration
       return settings.describe().then((response) => {
-        publish(requestSequence, response)
+        publish(requestSequence, requestGeneration, response, false)
         return response
       })
     },
     mutate: async (ns, ops, expectedRevision) => {
-      const mutationSequence = nextSequence()
       const response = await settings.mutate(ns, ops, expectedRevision)
-      if (!response.ok || !active || mutationSequence !== sequence) return response
+      if (!response.ok || !active) return response
+      mutationGeneration += 1
+      const refreshGeneration = mutationGeneration
       const refreshSequence = nextSequence()
+      pendingRefreshGeneration = refreshGeneration
       void settings.describe().then((description) => {
-        publish(refreshSequence, description)
+        publish(refreshSequence, refreshGeneration, description, true)
       }).catch(() => undefined)
       return response
     },
     dispose: () => {
       active = false
       sequence += 1
+      pendingRefreshGeneration = undefined
     },
   }
 }

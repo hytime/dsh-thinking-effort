@@ -85,6 +85,7 @@ export function resolveGatewayCompat(input: GatewayCompatResolveInput): GatewayC
   const sources = [
     { value: readCompat(input.modelCompat), source: 'model' as const },
     { value: readCompat(input.providerCompat), source: 'provider' as const },
+    { value: readCompat(input.baseCompat), source: 'base' as const },
     { value: readCompat(input.catalogCompat), source: 'catalog' as const },
     { value: readCompat(input.protocolDefault), source: 'protocol' as const },
   ]
@@ -133,19 +134,25 @@ function providerSource(resolution: GatewayCompatResolution): ProviderGatewayCom
     resolution.maxTokensField.source,
   ]
   if (sources.includes('model') || sources.includes('provider')) return 'user'
-  if (sources.includes('protocol')) return 'base'
+  if (sources.includes('protocol') || sources.includes('base')) return 'base'
   if (sources.includes('catalog')) return 'catalog'
   return 'unknown'
 }
 
 export function resolveProviderGatewayCompat(input: GatewayCompatResolveInput): ProviderGatewayCompatView {
-  const resolution = resolveGatewayCompat(input)
-  const developer = resolution.supportsDeveloperRole.value
-  const maxTokens = resolution.maxTokensField.value
+  const resolution = resolveGatewayCompat({ ...input, model: undefined, modelCompat: undefined })
+  const developer = resolution.supportsDeveloperRole.source === 'provider'
+    ? resolution.supportsDeveloperRole.value
+    : undefined
+  const maxTokens = resolution.maxTokensField.source === 'provider'
+    ? resolution.maxTokensField.value
+    : undefined
   return {
     provider: input.provider,
     supportsDeveloperRole: developer === undefined ? 'auto' : developer ? 'supported' : 'unsupported',
     maxTokensField: maxTokens ?? 'auto',
+    supportsDeveloperRoleSource: resolution.supportsDeveloperRole.source,
+    maxTokensFieldSource: resolution.maxTokensField.source,
     supportsDeveloperRoleAvailable: developer !== undefined,
     maxTokensFieldAvailable: maxTokens !== undefined,
     source: providerSource(resolution),

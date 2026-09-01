@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { apply, inject, name } from '../src/client/index.js'
 import { LOCALE_NS } from '../src/client/constants.js'
 import { observeTakeoverSettings, resolveTakeoverDescription } from '../src/client/takeover-runtime.js'
+import { providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
 import { resolveTakeoverGatewayCompat, resolveTakeoverProviders } from '../src/compat/gateway/resolve.js'
+import type { SettingsNamespace } from '../src/client/types.js'
 
 function createHarness(mode: 'modern' | 'legacy') {
   const listeners: Array<(name: string) => void> = []
@@ -181,7 +183,7 @@ describe('client registration', () => {
     const runtime = element.props?.takeoverRuntime as { getSnapshot: () => { providers: readonly string[]; compat: readonly unknown[] } }
     expect(runtime.getSnapshot()).toMatchObject({
       providers: ['local'],
-      compat: [expect.objectContaining({ provider: 'local', model: 'model' })],
+      compat: expect.arrayContaining([expect.objectContaining({ provider: 'local', model: 'model' })]),
     })
   })
 
@@ -280,6 +282,81 @@ describe('client registration', () => {
     await observed.mutate('llm-pi-ai', [], 1)
 
     expect(settings.describe).not.toHaveBeenCalled()
+  })
+
+  it('keeps model-level takeover compat separate instead of projecting the first model', () => {
+    const result = resolveTakeoverDescription({ compatibilityProfile: 'modern' }, {
+      ok: true,
+      value: {
+        namespaces: [{
+          ns: 'llm-pi-ai',
+          revision: 1,
+          value: {
+            providers: {
+              local: {
+                api: 'openai-completions',
+                baseURL: 'http://gateway.test/v1',
+                models: [
+                  { id: 'first', reasoningEfforts: { high: 'high' }, compat: { maxTokensField: 'max_tokens' } },
+                  { id: 'second', reasoningEfforts: { high: 'high' }, compat: { maxTokensField: 'max_completion_tokens' } },
+                ],
+              },
+            },
+          },
+          schema: { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } },
+        }],
+      },
+    })
+
+    expect(result.compat).toEqual(expect.arrayContaining([
+      expect.objectContaining({ provider: 'local' }),
+      expect.objectContaining({ provider: 'local', model: 'first', maxTokensField: { value: 'max_tokens', source: 'model' } }),
+      expect.objectContaining({ provider: 'local', model: 'second', maxTokensField: { value: 'max_completion_tokens', source: 'model' } }),
+    ]))
+    const view = providerGatewayCompatViewFrom({
+      value: { providers: { local: { models: [{ id: 'first' }, { id: 'second' }] } } },
+      schema: { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } },
+    }, 'local', 'modern', result)
+    expect(view.maxTokensField).toBe('auto')
+  })
+
+  it('always schedules a post-mutation describe when an older describe overlaps it', async () => {
+    type MutationResult = { ok: true; value: { ns: string; revision: number; value: Record<string, unknown> } }
+    type DescriptionResult = { ok: true; value: { namespaces: SettingsNamespace[] } }
+    const schema = { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } }
+    const description = (provider: string): DescriptionResult => ({
+      ok: true,
+      value: {
+        namespaces: [{
+          ns: 'llm-pi-ai',
+          revision: 1,
+          value: { providers: { [provider]: { api: 'openai-completions', baseURL: 'http://gateway.test/v1', models: [{ id: 'model', reasoningEfforts: { high: 'high' } }] } } },
+          schema,
+        }],
+      },
+    })
+    let resolveMutation!: (value: MutationResult) => void
+    const descriptions: Array<(value: DescriptionResult) => void> = []
+    const settings = {
+      externalLanguages: false,
+      compatibilityProfile: 'modern' as const,
+      describe: vi.fn(() => new Promise<DescriptionResult>((resolve) => { descriptions.push(resolve) })),
+      mutate: vi.fn(() => new Promise<MutationResult>((resolve) => { resolveMutation = resolve })),
+    }
+    const resolutions: Array<{ providers: readonly string[] }> = []
+    const observed = observeTakeoverSettings(settings, (resolution) => resolutions.push(resolution))
+
+    const mutation = observed.mutate('llm-pi-ai', [], 1)
+    const overlappingDescribe = observed.describe()
+    resolveMutation({ ok: true, value: { ns: 'llm-pi-ai', revision: 2, value: {} } })
+    await mutation
+
+    expect(settings.describe).toHaveBeenCalledTimes(2)
+    descriptions[0]!(description('old'))
+    descriptions[1]!(description('new'))
+    await overlappingDescribe
+    await Promise.resolve()
+    expect(resolutions).toEqual([expect.objectContaining({ providers: ['new'] })])
   })
 
   it('uses runtime profile and descriptor schema to fail closed for takeover capability', () => {

@@ -46,7 +46,6 @@ function fieldLayer(source: Record<string, unknown> | undefined, field: Provider
 function takeoverCompatFor(runtime: TakeoverRuntimeResolution | undefined, provider: string): TakeoverRuntimeResolution['compat'][number] | undefined {
   if (runtime === undefined || !runtime.providers.includes(provider)) return undefined
   return runtime.compat.find((resolution) => resolution.provider === provider && resolution.model === undefined)
-    ?? runtime.compat.find((resolution) => resolution.provider === provider)
 }
 
 function runtimeSource(
@@ -60,20 +59,27 @@ function runtimeSource(
   return fallback
 }
 
+function runtimeFieldValue<T>(resolution: TakeoverRuntimeResolution['compat'][number], field: 'supportsDeveloperRole' | 'maxTokensField'): T | undefined {
+  const fieldResolution = resolution[field]
+  return fieldResolution.source === 'provider' ? fieldResolution.value as T | undefined : undefined
+}
+
 function applyTakeoverCompat(
   view: ProviderGatewayCompatView,
   runtime: TakeoverRuntimeResolution | undefined,
 ): ProviderGatewayCompatView {
   const resolution = takeoverCompatFor(runtime, view.provider)
   if (resolution === undefined) return view
-  const developer = resolution.supportsDeveloperRole.value
-  const maxTokens = resolution.maxTokensField.value
+  const developer = runtimeFieldValue<boolean>(resolution, 'supportsDeveloperRole')
+  const maxTokens = runtimeFieldValue<ProviderGatewayCompatView['maxTokensField']>(resolution, 'maxTokensField')
   return {
     ...view,
-    supportsDeveloperRole: developer === undefined ? view.supportsDeveloperRole : developer ? 'supported' : 'unsupported',
-    maxTokensField: maxTokens ?? view.maxTokensField,
-    supportsDeveloperRoleAvailable: developer === undefined ? view.supportsDeveloperRoleAvailable : true,
-    maxTokensFieldAvailable: maxTokens === undefined ? view.maxTokensFieldAvailable : true,
+    supportsDeveloperRole: developer === undefined ? 'auto' : developer ? 'supported' : 'unsupported',
+    maxTokensField: maxTokens ?? 'auto',
+    supportsDeveloperRoleSource: resolution.supportsDeveloperRole.source,
+    maxTokensFieldSource: resolution.maxTokensField.source,
+    supportsDeveloperRoleAvailable: view.supportsDeveloperRoleAvailable,
+    maxTokensFieldAvailable: view.maxTokensFieldAvailable,
     source: runtimeSource(resolution, view.source),
   }
 }
@@ -91,7 +97,7 @@ export function providerGatewayCompatViewFrom(
   const input: GatewayCompatResolveInput = {
     provider,
     providerCompat: Object.assign({}, fieldLayer(user, 'supportsDeveloperRole'), fieldLayer(user, 'maxTokensField')),
-    protocolDefault: Object.assign({}, fieldLayer(base, 'supportsDeveloperRole'), fieldLayer(base, 'maxTokensField')),
+    baseCompat: Object.assign({}, fieldLayer(base, 'supportsDeveloperRole'), fieldLayer(base, 'maxTokensField')),
     catalogCompat: Object.assign(
       {},
       user?.supportsDeveloperRole === undefined && base?.supportsDeveloperRole === undefined ? fieldLayer(value, 'supportsDeveloperRole') : {},

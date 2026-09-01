@@ -206,12 +206,27 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
 
   const applyProviderCompat = (route: string): void => {
     const draft = state.providerDrafts[route]
-    if (!draft) return
-    const ops = opsForProviderCompat(route, draft, {
+    const current = state.providerViews[route]
+    if (!draft || !current) return
+    const update: Partial<ProviderGatewayCompatView> = {}
+    if (draft.supportsDeveloperRole !== current.supportsDeveloperRole) {
+      update.supportsDeveloperRole = draft.supportsDeveloperRole
+    }
+    if (draft.maxTokensField !== current.maxTokensField) {
+      update.maxTokensField = draft.maxTokensField
+    }
+    const ops = opsForProviderCompat(route, update, {
       supportsDeveloperRole: draft.supportsDeveloperRoleAvailable,
       maxTokensField: draft.maxTokensFieldAvailable,
     })
-    if (ops.length === 0) return
+    if (ops.length === 0) {
+      setState((state) => {
+        const providerDirty = { ...state.providerDirty }
+        delete providerDirty[route]
+        return { ...state, providerDirty }
+      })
+      return
+    }
     runOps(ops, t('gatewayCompatSaved'), () => {
       setState((current) => {
         const providerDirty = { ...current.providerDirty }

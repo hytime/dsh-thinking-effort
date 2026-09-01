@@ -22,6 +22,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - Add independent loading and real compatibility checks for the rc7, rc2, and alpha3 capability-composition representatives.
 - 支持可选的 `dsh-llm-openai-completions` takeover：仅在运行时支持 Gateway compat、目标供应商为自定义 OpenAI 兼容思考网关且 transport 已启用时生效。
 - Support optional `dsh-llm-openai-completions` takeover only when the runtime supports Gateway compat, the target provider is a custom OpenAI-compatible thinking gateway, and the transport is enabled.
+- Runtime capability detection is authoritative; optional version metadata never overrides detected runtime capabilities.
 
 ## [0.1.13] - 按兼容范围验证 / Range-based compatibility verification
 

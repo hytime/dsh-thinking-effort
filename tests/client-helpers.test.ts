@@ -260,7 +260,7 @@ describe('model inventory and operations', () => {
     expect(result.model).toBe('model-a')
   })
 
-  it('returns a provider view while retaining model override precedence', () => {
+  it('returns a provider view without applying model-level overrides', () => {
     expect(resolveProviderGatewayCompat({
       provider: 'local',
       model: 'model-a',
@@ -269,7 +269,9 @@ describe('model inventory and operations', () => {
     })).toEqual({
       provider: 'local',
       supportsDeveloperRole: 'supported',
-      maxTokensField: 'max_tokens',
+      maxTokensField: 'max_completion_tokens',
+      supportsDeveloperRoleSource: 'provider',
+      maxTokensFieldSource: 'provider',
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
       source: 'user',
@@ -284,6 +286,99 @@ describe('model inventory and operations', () => {
     })
   })
 
+  it('shows only user overrides as explicit provider values and retains field provenance', () => {
+    const view = providerGatewayCompatViewFrom({
+      value: { providers: { provider: { compat: { supportsDeveloperRole: true, maxTokensField: 'max_tokens' } } } },
+      user: { providers: { provider: { compat: { supportsDeveloperRole: false } } } },
+      base: { providers: { provider: { compat: { maxTokensField: 'max_tokens' } } } },
+      schema: realGatewaySchema,
+    }, 'provider', 'modern')
+
+    expect(view).toMatchObject({
+      supportsDeveloperRole: 'unsupported',
+      supportsDeveloperRoleSource: 'provider',
+      maxTokensField: 'auto',
+      maxTokensFieldSource: 'base',
+    })
+  })
+
+  it('persists one changed field while the other remains inherited, and Auto unsets only that field', async () => {
+    let namespace = {
+      ns: 'llm-pi-ai',
+      revision: 1,
+      value: { providers: { provider: { compat: { supportsDeveloperRole: true, maxTokensField: 'max_tokens' } } } },
+      user: { providers: { provider: { compat: { maxTokensField: 'max_completion_tokens' } } } },
+      base: { providers: { provider: { compat: { supportsDeveloperRole: true, maxTokensField: 'max_tokens' } } } },
+      schema: realGatewaySchema,
+    }
+    const describe = vi.fn(async () => ({ ok: true as const, value: { namespaces: [namespace] } }))
+    const mutate = vi.fn(async (_ns: string, operations: readonly { op: 'set' | 'unset'; path: readonly string[]; value?: unknown }[], expectedRevision: number) => {
+      expect(expectedRevision).toBe(namespace.revision)
+      const userProvider = namespace.user.providers.provider as { compat?: Record<string, unknown> }
+      const userCompat = userProvider.compat ??= {}
+      for (const operation of operations) {
+        const field = operation.path.at(-1)!
+        if (operation.op === 'unset') delete userCompat[field]
+        else userCompat[field] = operation.value
+      }
+      namespace = { ...namespace, revision: namespace.revision + 1 }
+      return { ok: true as const, value: namespace }
+    })
+    const settings = { describe, mutate }
+
+    const first = await settings.describe()
+    const initial = providerGatewayCompatViewFrom(first.value.namespaces[0], 'provider', 'modern')
+    expect(initial).toMatchObject({ supportsDeveloperRole: 'auto', supportsDeveloperRoleSource: 'base', maxTokensField: 'max_completion_tokens' })
+
+    const oneFieldOps = opsForProviderCompat('provider', { maxTokensField: 'max_tokens' }, {
+      supportsDeveloperRole: true,
+      maxTokensField: true,
+    })
+    expect(oneFieldOps).toEqual([{ op: 'set', path: ['providers', 'provider', 'compat', 'maxTokensField'], value: 'max_tokens' }])
+    await settings.mutate('llm-pi-ai', oneFieldOps, namespace.revision)
+
+    const afterOneField = await settings.describe()
+    const inherited = providerGatewayCompatViewFrom(afterOneField.value.namespaces[0], 'provider', 'modern')
+    expect(inherited).toMatchObject({
+      supportsDeveloperRole: 'auto',
+      supportsDeveloperRoleSource: 'base',
+      maxTokensField: 'max_tokens',
+      maxTokensFieldSource: 'provider',
+    })
+
+    const autoOps = opsForProviderCompat('provider', { maxTokensField: 'auto' }, {
+      supportsDeveloperRole: true,
+      maxTokensField: true,
+    })
+    expect(autoOps).toEqual([{ op: 'unset', path: ['providers', 'provider', 'compat', 'maxTokensField'] }])
+    await settings.mutate('llm-pi-ai', autoOps, namespace.revision)
+
+    const afterAuto = await settings.describe()
+    expect(afterAuto.value.namespaces[0].user.providers.provider.compat.maxTokensField).toBeUndefined()
+    expect(providerGatewayCompatViewFrom(afterAuto.value.namespaces[0], 'provider', 'modern')).toMatchObject({
+      supportsDeveloperRole: 'auto',
+      maxTokensField: 'auto',
+      maxTokensFieldSource: 'base',
+    })
+    expect(mutate).toHaveBeenCalledTimes(2)
+    expect(mutate.mock.calls[0]?.[1]).toEqual(oneFieldOps)
+    expect(mutate.mock.calls[1]?.[1]).toEqual(autoOps)
+  })
+
+  it('does not let a model compat override change the provider-level view', () => {
+    expect(resolveProviderGatewayCompat({
+      provider: 'local',
+      model: 'model-a',
+      modelCompat: { maxTokensField: 'max_tokens', supportsDeveloperRole: false },
+      providerCompat: { maxTokensField: 'max_completion_tokens', supportsDeveloperRole: true },
+    })).toMatchObject({
+      supportsDeveloperRole: 'supported',
+      maxTokensField: 'max_completion_tokens',
+      supportsDeveloperRoleSource: 'provider',
+      maxTokensFieldSource: 'provider',
+    })
+  })
+
   it('shows modern gateway fields without versionCapabilities on the Settings wire', () => {
     const view = providerGatewayCompatViewFrom({
       value: { providers: { provider: { compat: { supportsDeveloperRole: true } } } },
@@ -292,7 +387,8 @@ describe('model inventory and operations', () => {
     expect(view).toMatchObject({
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
-      supportsDeveloperRole: 'supported',
+      supportsDeveloperRole: 'auto',
+      supportsDeveloperRoleSource: 'catalog',
     })
   })
 
