@@ -24,6 +24,7 @@ export function settingsBridge(
     }
     return {
       externalLanguages: legacyCapabilities.externalLanguages,
+      compatibilityProfile: resolveCompatibility({ capabilities: legacyCapabilities }).profile,
       describe: () => legacy.describe({}).then((response) => directResult<ClientResult<SettingsDescribeValue>>(response)),
       mutate: (ns, ops, expectedRevision) => legacy
         .mutate({ ns, ops, expectedRevision })
@@ -41,6 +42,7 @@ export function settingsBridge(
     }
     return {
       externalLanguages: capabilities.externalLanguages,
+      compatibilityProfile: compatibility.profile,
       describe: () => modern.describe().then((response) => directResult<ClientResult<SettingsDescribeValue>>(response)),
       mutate: (ns, ops, expectedRevision) => modern
         .mutate(ns, ops, expectedRevision)

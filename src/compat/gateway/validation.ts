@@ -2,6 +2,8 @@ import type { DshVersionCapabilities, GatewayCompatEditableField } from '../vers
 import type { GatewayCompatEditability, GatewayCompatValidationResult } from './types.js'
 
 const editableFields = ['supportsDeveloperRole', 'maxTokensField'] as const
+type RuntimeProfile = 'modern' | 'legacy' | 'unknown'
+type EditabilityCapabilities = DshVersionCapabilities | RuntimeProfile
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -14,10 +16,43 @@ function hasProperty(value: unknown, key: string): boolean {
   return object !== undefined && Object.prototype.hasOwnProperty.call(object, key)
 }
 
+function dereference(value: unknown, refs: Record<string, unknown> | undefined): unknown {
+  let current = value
+  const seen = new Set<string>()
+  while (typeof current === 'number' && refs !== undefined) {
+    const key = String(current)
+    if (seen.has(key) || !Object.prototype.hasOwnProperty.call(refs, key)) return undefined
+    seen.add(key)
+    current = refs[key]
+  }
+  return current
+}
+
+function schemaNodeAtPath(schema: unknown, path: readonly string[]): Record<string, unknown> | undefined {
+  const envelope = record(schema)
+  const refs = record(envelope?.refs)
+  let node: unknown = refs !== undefined && envelope?.uid !== undefined
+    ? refs[String(envelope.uid)]
+    : schema
+
+  for (const key of path) {
+    const object = record(dereference(node, refs))
+    if (object === undefined) return undefined
+    const properties = record(object.dict) ?? record(object.properties)
+    const child = key === '*'
+      ? object.additionalProperties ?? properties?.['*']
+      : properties?.[key]
+    const next = child ?? (object.type === 'dict' || object.type === 'array' ? object.inner : undefined)
+    node = dereference(next, refs)
+  }
+
+  return record(dereference(node, refs))
+}
+
 function schemaProperties(value: unknown): Record<string, unknown> | undefined {
   const object = record(value)
   if (!object) return undefined
-  const properties = record(object.properties)
+  const properties = record(object.properties) ?? record(object.dict)
   if (properties) return properties
   const schema = record(object.schema)
   if (schema) return schemaProperties(schema)
@@ -33,6 +68,10 @@ function schemaProperties(value: unknown): Record<string, unknown> | undefined {
 }
 
 function compatProperties(schema: unknown): Record<string, unknown> | undefined {
+  const pathNode = schemaNodeAtPath(schema, ['providers', '*', 'compat'])
+  const pathProperties = schemaProperties(pathNode)
+  if (pathProperties && editableFields.some((field) => hasProperty(pathProperties, field))) return pathProperties
+
   const direct = schemaProperties(schema)
   if (direct && editableFields.some((field) => hasProperty(direct, field))) return direct
 
@@ -56,20 +95,22 @@ function schemaAllowsField(schema: unknown, field: GatewayCompatEditableField): 
   return properties !== undefined && hasProperty(properties, field)
 }
 
-function versionAllowsField(
-  capabilities: DshVersionCapabilities | undefined,
+function runtimeAllowsField(
+  capabilities: EditabilityCapabilities | undefined,
   field: GatewayCompatEditableField,
 ): boolean {
-  return capabilities !== undefined && capabilities.gatewayCompatFields.includes(field)
+  if (capabilities === 'modern' || capabilities === 'legacy') return true
+  if (capabilities === 'unknown' || capabilities === undefined) return false
+  return capabilities.gatewayCompatFields.includes(field)
 }
 
 export function editableProviderCompatFields(
-  capabilities: DshVersionCapabilities | undefined,
+  capabilities: EditabilityCapabilities | undefined,
   descriptorSchema: unknown,
 ): GatewayCompatEditability {
-  const supportsDeveloperRole = versionAllowsField(capabilities, 'supportsDeveloperRole')
+  const supportsDeveloperRole = runtimeAllowsField(capabilities, 'supportsDeveloperRole')
     && schemaAllowsField(descriptorSchema, 'supportsDeveloperRole')
-  const maxTokensField = versionAllowsField(capabilities, 'maxTokensField')
+  const maxTokensField = runtimeAllowsField(capabilities, 'maxTokensField')
     && schemaAllowsField(descriptorSchema, 'maxTokensField')
   const editableFieldsResult = editableFields.filter((field) => (
     field === 'supportsDeveloperRole' ? supportsDeveloperRole : maxTokensField
@@ -82,7 +123,7 @@ export function editableProviderCompatFields(
 }
 
 export function validateProviderCompat(
-  capabilities: DshVersionCapabilities | undefined,
+  capabilities: EditabilityCapabilities | undefined,
   descriptorSchema: unknown,
 ): GatewayCompatValidationResult {
   const fields = editableProviderCompatFields(capabilities, descriptorSchema)
@@ -93,7 +134,7 @@ export function validateProviderCompat(
 }
 
 export function canEditProviderCompatField(
-  capabilities: DshVersionCapabilities | undefined,
+  capabilities: EditabilityCapabilities | undefined,
   descriptorSchema: unknown,
   field: GatewayCompatEditableField,
 ): boolean {

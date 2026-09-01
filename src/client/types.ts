@@ -1,5 +1,4 @@
 import type { ALL_LEVELS } from './constants.js'
-import type { DshVersionCapabilities } from '../compat/version-map.js'
 
 export type {
   GatewayCompat,
@@ -68,7 +67,6 @@ export interface SettingsNamespace {
   readonly schema?: unknown
   readonly base?: unknown
   readonly user?: Record<string, unknown>
-  readonly versionCapabilities?: DshVersionCapabilities
 }
 
 export interface SettingsDescribeValue {
@@ -86,6 +84,7 @@ export type ClientResult<T> =
 
 export interface SettingsApi {
   readonly externalLanguages: boolean
+  readonly compatibilityProfile: CompatibilityProfile
   describe(): Promise<ClientResult<SettingsDescribeValue>>
   mutate(ns: string, ops: readonly SettingsOp[], expectedRevision: number): Promise<ClientResult<SettingsNamespace>>
 }

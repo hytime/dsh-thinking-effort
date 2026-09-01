@@ -1,8 +1,7 @@
-import type { InventoryItem, InputModality, ProviderGatewayCompatView, ReasoningEfforts, SettingsNamespace } from './types.js'
+import type { InventoryItem, InputModality, ProviderGatewayCompatView, ReasoningEfforts, SettingsNamespace, CompatibilityProfile } from './types.js'
 import { resolveProviderGatewayCompat } from '../compat/gateway/resolve.js'
 import { editableProviderCompatFields } from '../compat/gateway/validation.js'
 import type { GatewayCompatResolveInput } from '../compat/gateway/types.js'
-import type { DshVersionCapabilities } from '../compat/version-map.js'
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -43,7 +42,11 @@ function fieldLayer(source: Record<string, unknown> | undefined, field: Provider
   return { [field]: source[field] }
 }
 
-export function providerGatewayCompatViewFrom(namespace: SettingsNamespace | unknown, provider: string): ProviderGatewayCompatView {
+export function providerGatewayCompatViewFrom(
+  namespace: SettingsNamespace | unknown,
+  provider: string,
+  compatibilityProfile: CompatibilityProfile = 'unknown',
+): ProviderGatewayCompatView {
   const descriptor = record(namespace)
   const user = layerCompat(descriptor?.user, provider)
   const base = layerCompat(descriptor?.base, provider)
@@ -59,7 +62,7 @@ export function providerGatewayCompatViewFrom(namespace: SettingsNamespace | unk
     ),
   }
   const resolved = resolveProviderGatewayCompat(input)
-  const editability = editableProviderCompatFields(descriptor?.versionCapabilities as DshVersionCapabilities | undefined, descriptor?.schema)
+  const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema)
   return {
     ...resolved,
     supportsDeveloperRoleAvailable: editability.supportsDeveloperRole,
@@ -69,12 +72,15 @@ export function providerGatewayCompatViewFrom(namespace: SettingsNamespace | unk
 
 export const providerCompatViewFrom = providerGatewayCompatViewFrom
 
-export function providerGatewayCompatViewsFrom(namespace: SettingsNamespace | unknown): Record<string, ProviderGatewayCompatView> {
+export function providerGatewayCompatViewsFrom(
+  namespace: SettingsNamespace | unknown,
+  compatibilityProfile: CompatibilityProfile = 'unknown',
+): Record<string, ProviderGatewayCompatView> {
   const descriptor = record(namespace)
   const value = record(descriptor?.value)
   const providers = record(value?.providers)
   if (!providers) return {}
-  return Object.fromEntries(Object.keys(providers).map((provider) => [provider, providerGatewayCompatViewFrom(namespace, provider)]))
+  return Object.fromEntries(Object.keys(providers).map((provider) => [provider, providerGatewayCompatViewFrom(namespace, provider, compatibilityProfile)]))
 }
 
 export const providerCompatViewsFrom = providerGatewayCompatViewsFrom

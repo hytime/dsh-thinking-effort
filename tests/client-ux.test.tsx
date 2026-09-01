@@ -8,7 +8,6 @@ import { SectionEditor } from '../src/client/SectionEditor.js'
 import { GatewayCompatControls } from '../src/client/components/GatewayCompatControls.js'
 import { providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
 import { zh } from '../src/client/locales.js'
-import { iosPalette } from '../src/client/theme.js'
 import type {
   ClientLocale,
   ClientResult,
@@ -25,6 +24,19 @@ const text = (key: string, params?: Record<string, unknown>): string => {
   const value = (zh as Record<string, string>)[key] ?? key
   return value.replace(/\{(\w+)\}/g, (_match: string, name: string) => String(params?.[name] ?? `{${name}}`))
 }
+
+const realGatewaySchema = {
+  uid: 6,
+  refs: {
+    '0': { type: 'boolean', meta: {} },
+    '1': { type: 'string', meta: {} },
+    '2': { type: 'object', meta: { default: {} }, dict: { supportsDeveloperRole: 0, maxTokensField: 1 } },
+    '3': { type: 'object', meta: { default: {} }, dict: { compat: 2 } },
+    '4': { type: 'dict', meta: { default: {} }, inner: 3, sKey: 5 },
+    '5': { type: 'string', meta: {} },
+    '6': { type: 'object', meta: { default: {} }, dict: { providers: 4 } },
+  },
+} as const
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -75,6 +87,7 @@ function renderEditor(options: {
   describe?: () => Promise<ClientResult<{ namespaces: readonly SettingsNamespace[] }>>
   mutate?: (ns: string, ops: readonly SettingsOp[], revision: number) => Promise<ClientResult<SettingsNamespace>>
   locales?: readonly string[]
+  compatibilityProfile?: 'modern' | 'legacy' | 'unknown'
 } = {}): {
   container: HTMLDivElement
   root: Root
@@ -88,6 +101,7 @@ function renderEditor(options: {
   const mutate = vi.fn<SettingsApi['mutate']>(options.mutate ?? (async (_ns, _ops, _revision) => ({ ok: true as const, value: namespace() })))
   const settings: SettingsApi = {
     externalLanguages: false,
+    compatibilityProfile: options.compatibilityProfile ?? 'unknown',
     describe: options.describe ?? (async () => ({ ok: true, value: { namespaces: [namespace()] } })),
     mutate,
   }
@@ -163,11 +177,11 @@ describe('SectionEditor user behavior', () => {
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(<GatewayCompatControls view={view} onChange={onChange} palette={iosPalette()} t={text as Translation} />)
+      root.render(<GatewayCompatControls view={view} onChange={onChange} />)
     })
 
-    expect(container.textContent).toContain(text('gatewayCompatTitle'))
-    expect(container.textContent).toContain(text('gatewayCompatAuto'))
+    expect(container.textContent).toContain('Gateway compatibility')
+    expect(container.textContent).toContain('Auto')
     const selects = [...container.querySelectorAll('select')] as HTMLSelectElement[]
     expect(selects).toHaveLength(2)
     expect(selects[0]?.value).toBe('auto')
@@ -186,15 +200,7 @@ describe('SectionEditor user behavior', () => {
           namespaces: [namespace({
             value: { providers: { provider: { models: [{ id: 'model-a' }] } } },
             schema: {},
-            versionCapabilities: {
-              settingsTransport: 'legacy',
-              settingsApi: 'connection.api.settings',
-              baseModelFields: ['reasoningEfforts'],
-              gatewayCompatFields: [],
-              externalLanguages: false,
-              takeoverTransport: 'unsupported',
-            },
-          } as unknown as SettingsNamespace)],
+          })],
         },
       }),
     })
@@ -210,31 +216,22 @@ describe('SectionEditor user behavior', () => {
       models: [{ id: 'model-a' }],
       compat: { supportsDeveloperRole: true, maxTokensField: 'max_completion_tokens' },
     }
-    const capabilities = {
-      settingsTransport: 'modern' as const,
-      settingsApi: 'remote.settings' as const,
-      baseModelFields: ['reasoningEfforts', 'input', 'contextWindow'] as const,
-      gatewayCompatFields: ['supportsDeveloperRole', 'maxTokensField'] as const,
-      externalLanguages: true,
-      takeoverTransport: 'optional' as const,
-    }
     const projected = providerGatewayCompatViewFrom({
       value: { providers: { provider } },
       user: { providers: { provider: { compat: { supportsDeveloperRole: false } } } },
       base: { providers: { provider: { compat: { maxTokensField: 'max_tokens' } } } },
-      schema: { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } },
-      versionCapabilities: capabilities,
-    } as unknown as SettingsNamespace, 'provider')
+      schema: realGatewaySchema,
+    }, 'provider', 'modern')
     expect(projected).toMatchObject({ supportsDeveloperRole: 'unsupported', maxTokensField: 'max_tokens', source: 'user' })
 
     const view = renderEditor({
+      compatibilityProfile: 'modern',
       describe: async () => ({ ok: true, value: { namespaces: [namespace({
         value: { providers: { provider } },
         user: { providers: { provider: { compat: { supportsDeveloperRole: false } } } },
         base: { providers: { provider: { compat: { maxTokensField: 'max_tokens' } } } },
-        schema: { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } },
-        versionCapabilities: capabilities,
-      } as unknown as SettingsNamespace)] } }),
+        schema: realGatewaySchema,
+      })] } }),
     })
     await settle()
     expect(view.container.textContent).toContain(text('gatewayCompatTitle'))

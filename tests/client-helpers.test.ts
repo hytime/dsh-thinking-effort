@@ -13,7 +13,7 @@ import {
 } from '../src/client/constants.js'
 import { directResult, settingsBridge } from '../src/client/settings-bridge.js'
 import { LOCALE_DATA, LOCALE_CODES } from '../src/client/locales.js'
-import { inventoryFrom } from '../src/client/model-inventory.js'
+import { inventoryFrom, providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
 import { mergeModelUpdate, opsForProviderCompat, setOps } from '../src/client/model-ops.js'
 import {
   buildInput,
@@ -32,6 +32,19 @@ import { capabilitiesForVersion } from '../src/compat/version-map.js'
 import type { InventoryItem, Translation } from '../src/client/types.js'
 
 const translate: Translation = (key, params) => `${key}${params?.level ? `:${params.level}` : ''}`
+
+const realGatewaySchema = {
+  uid: 6,
+  refs: {
+    '0': { type: 'boolean', meta: {} },
+    '1': { type: 'string', meta: {} },
+    '2': { type: 'object', meta: { default: {} }, dict: { supportsDeveloperRole: 0, maxTokensField: 1 } },
+    '3': { type: 'object', meta: { default: {} }, dict: { compat: 2 } },
+    '4': { type: 'dict', meta: { default: {} }, inner: 3, sKey: 5 },
+    '5': { type: 'string', meta: {} },
+    '6': { type: 'object', meta: { default: {} }, dict: { providers: 4 } },
+  },
+} as const
 
 function item(overrides: Partial<InventoryItem> = {}): InventoryItem {
   return {
@@ -73,6 +86,7 @@ describe('client constants and bridge', () => {
     const api = settingsBridge({}, { describe, mutate })
 
     expect(api).toBeDefined()
+    expect(api?.compatibilityProfile).toBe('modern')
     await expect(api?.describe()).resolves.toEqual({ ok: true, value: { namespaces: [] } })
     await expect(api?.mutate(NS, [], 4)).resolves.toEqual({ ok: true, value: { ns: NS } })
     expect(describe).toHaveBeenCalledWith()
@@ -261,6 +275,34 @@ describe('model inventory and operations', () => {
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
       source: 'user',
+    })
+  })
+
+  it('recognizes gateway fields in the real Settings schema.toJSON envelope', () => {
+    expect(editableProviderCompatFields('modern', realGatewaySchema)).toEqual({
+      supportsDeveloperRole: true,
+      maxTokensField: true,
+      editableFields: ['supportsDeveloperRole', 'maxTokensField'],
+    })
+  })
+
+  it('shows modern gateway fields without versionCapabilities on the Settings wire', () => {
+    const view = providerGatewayCompatViewFrom({
+      value: { providers: { provider: { compat: { supportsDeveloperRole: true } } } },
+      schema: realGatewaySchema,
+    }, 'provider', 'modern')
+    expect(view).toMatchObject({
+      supportsDeveloperRoleAvailable: true,
+      maxTokensFieldAvailable: true,
+      supportsDeveloperRole: 'supported',
+    })
+  })
+
+  it('keeps gateway fields hidden for an unknown runtime even when schema contains them', () => {
+    const view = providerGatewayCompatViewFrom({ schema: realGatewaySchema, value: { providers: { provider: {} } } }, 'provider', 'unknown')
+    expect(view).toMatchObject({
+      supportsDeveloperRoleAvailable: false,
+      maxTokensFieldAvailable: false,
     })
   })
 
