@@ -17,7 +17,11 @@
 - [日本語 changelog](./docs/CHANGELOG.ja.md)
 - [한국어 changelog](./docs/CHANGELOG.ko.md)
 
-> **兼容性说明：** DSH `0.1.2-alpha.1` 及更高版本通过 `LocaleRuntime` 支持语言包注册外部 locale ID。本插件会动态注册 `ja` 和 `ko`，无需维护 DSH fork。只支持固定内置 locale ID 的旧版 DSH 仍只能使用 `zh` 和 `en`。
+> **兼容边界：** DSH Runtime compatibility 只负责 Settings 传输：新版 DSH 使用 `remote.settings`，旧版 DSH 使用 `connection.api.settings`。插件按运行时实际能力进行探测；旧版没有 Remote provider 时不会因此要求可选的 Remote 服务。
+>
+> Gateway Protocol compatibility 是独立的一层。DSH schema 提供时，插件读取官方 `llm-pi-ai.compat` 字段 `supportsDeveloperRole` 和 `maxTokensField`。DSH `0.1.0-rc.7` 不提供这两个字段，DSH `0.1.0-rc.8` 及后续受支持范围提供。安装并启用可选的 `dsh-llm-openai-completions` transport 后，它可以接管符合条件的自定义 OpenAI 兼容思考模型供应商。两个网关字段的 `Auto` 都会取消用户覆盖并恢复官方协议默认值。
+>
+> DSH `0.1.2-alpha.1` 及更高版本通过 `LocaleRuntime` 支持语言包注册外部 locale ID。本插件会动态注册 `ja` 和 `ko`，无需维护 DSH fork。只支持固定内置 locale ID 的旧版 DSH 仍只能使用 `zh` 和 `en`。
 >
 > 发布包的运行入口是 `lib/index.js`（Host）和 `lib/client.js`（Client）。修改 TypeScript 或 locale 源文件后，运行 `npm run build`，再启动 DSH 或打包插件。当前 DSH 没有公开的 semver metadata 契约，因此运行时能力探测是权威来源。只有显式 metadata 或测试输入提供时才使用可选版本；未知合法版本仍按实际能力运行。插件同时支持新版 `remote.settings` 和旧版 `connection.api.settings`。
 

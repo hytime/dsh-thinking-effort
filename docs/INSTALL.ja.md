@@ -33,6 +33,22 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 現在の DSH には公開された semver metadata 契約がないため、実行時の capability detection を権威あるソースとします。任意のバージョンは明示的な metadata またはテスト入力がある場合だけ使用し、未知の有効なバージョンでも検出した能力に従って動作します。新しい `remote.settings` と旧来の `connection.api.settings` の両方に対応します。
 
+### DSH Runtime と Gateway Protocol の互換境界
+
+この 2 つは別の互換レイヤーです。
+
+- **DSH Runtime：** Settings の transport は新しい DSH では `remote.settings`、古い DSH では `connection.api.settings` です。プラグインは実行時 capability を検出し、古い経路へのフォールバックをオプションとして扱います。
+- **Gateway Protocol：** DSH の schema が提供する場合、公式の `llm-pi-ai.compat` フィールド `supportsDeveloperRole` と `maxTokensField` を使用します。オプションの `dsh-llm-openai-completions` transport をインストールして有効にすると、条件を満たすカスタム OpenAI 互換の思考プロバイダーを takeover できます。
+
+version-map はゲートウェイ capability を次のように判定します。
+
+| DSH 範囲 | Gateway compat フィールド | Takeover transport |
+| --- | --- | --- |
+| `0.1.0-rc.7` | `supportsDeveloperRole` と `maxTokensField` は非対応 | 非対応 |
+| `0.1.0-rc.8` 以降の対応範囲 | DSH schema が公開する場合は両フィールドに対応 | オプション |
+
+どちらのフィールドでも `Auto` はユーザーの上書きを unset し、公式プロトコルの既定値へ戻します。オプションの transport が未インストールまたは無効の場合、takeover は適用されません。
+
 ## 1. 公式インストール
 
 最新版をインストールします。

@@ -16,7 +16,11 @@
 - [한국어 설치 안내](./docs/INSTALL.ko.md)
 - [Changelog](./docs/CHANGELOG.md) · [日本語](./docs/CHANGELOG.ja.md) · [한국어](./docs/CHANGELOG.ko.md)
 
-> **互換性に関する注意：** DSH `0.1.2-alpha.1` 以降は `LocaleRuntime` の language-pack 拡張をサポートします。このプラグインは `ja` と `ko` を動的に登録するため、DSH の fork は不要です。組み込み locale ID だけを受け付ける古い DSH では `zh` と `en` のみ使用できます。
+> **互換性の境界：** DSH Runtime compatibility は Settings の transport だけを扱います。新しい DSH は `remote.settings`、古い DSH は `connection.api.settings` を公開します。プラグインは実行時の capability を検出し、古い DSH で Remote provider がない場合も、オプションの Remote service を必須にしません。
+>
+> Gateway Protocol compatibility は別の層です。DSH の schema が提供する場合、公式の `llm-pi-ai.compat` フィールド `supportsDeveloperRole` と `maxTokensField` を読み取ります。DSH `0.1.0-rc.7` にはこの 2 つのフィールドがなく、DSH `0.1.0-rc.8` 以降の対応範囲にはあります。オプションの `dsh-llm-openai-completions` transport をインストールして有効にすると、条件を満たすカスタム OpenAI 互換の思考プロバイダーを takeover できます。どちらのゲートウェイフィールドでも `Auto` はユーザーの上書きを unset し、公式プロトコルの既定値へ戻します。
+>
+> DSH `0.1.2-alpha.1` 以降は `LocaleRuntime` の language-pack 拡張をサポートします。このプラグインは `ja` と `ko` を動的に登録するため、DSH の fork は不要です。組み込み locale ID だけを受け付ける古い DSH では `zh` と `en` のみ使用できます。
 >
 > 公開パッケージの実行入口は `lib/index.js`（Host）と `lib/client.js`（Client）です。TypeScript または locale のソースを変更した後は、DSH を起動またはパッケージを作成する前に `npm run build` を実行してください。現在の DSH には公開された semver metadata 契約がないため、実行時の capability detection を権威あるソースとします。任意のバージョンは明示的な metadata またはテスト入力がある場合だけ使用し、未知の有効なバージョンでも検出した能力に従って動作します。新しい `remote.settings` と旧来の `connection.api.settings` の両方に対応します。
 

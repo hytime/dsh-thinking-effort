@@ -17,7 +17,11 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 - [日本語 changelog](./docs/CHANGELOG.ja.md)
 - [한국어 changelog](./docs/CHANGELOG.ko.md)
 
-> **Compatibility note:** DSH `0.1.2-alpha.1` and later accept language-pack locale IDs through `LocaleRuntime`. This plugin registers `ja` and `ko` dynamically, so no DSH core fork is required. Older DSH builds that only expose built-in locale IDs support `zh` and `en` only.
+> **Compatibility boundaries:** DSH Runtime compatibility covers the Settings transport only: modern DSH exposes `remote.settings`, while legacy DSH exposes `connection.api.settings`. The plugin detects the available runtime capability and keeps the legacy fallback optional, so the settings page does not require a Remote provider on older DSH builds.
+>
+> Gateway Protocol compatibility is a separate layer. It reads the official `llm-pi-ai.compat` fields `supportsDeveloperRole` and `maxTokensField` when the DSH schema exposes them. DSH `0.1.0-rc.7` does not provide these fields; DSH `0.1.0-rc.8` and later supported ranges do. The optional `dsh-llm-openai-completions` transport can take over eligible custom OpenAI-compatible thinking providers when it is installed and enabled. For either gateway field, `Auto` unsets the user override and restores the official protocol default.
+>
+> DSH `0.1.2-alpha.1` and later accept language-pack locale IDs through `LocaleRuntime`. This plugin registers `ja` and `ko` dynamically, so no DSH core fork is required. Older DSH builds that only expose built-in locale IDs support `zh` and `en` only.
 >
 > The published runtime entries are `lib/index.js` (Host) and `lib/client.js` (Client). After changing TypeScript or locale sources, run `npm run build` before running DSH or packing the plugin. Current DSH does not expose a public semver metadata contract, so runtime capability detection is authoritative. An optional version is used only when explicit metadata or test input supplies it; unknown valid versions still use the detected capabilities. The plugin supports both modern `remote.settings` and legacy `connection.api.settings`.
 

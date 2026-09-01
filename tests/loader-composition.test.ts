@@ -806,6 +806,12 @@ describe('compatibility documentation and root validation', () => {
     ]
     const documents = documentationFiles.map((file) => readFileSync(join(root, file), 'utf8'))
 
+    expect(documentationFiles.every((file) => existsSync(join(root, file)))).toBe(true)
+    expect(existsSync(join(root, 'INSTALL.md'))).toBe(false)
+    expect(existsSync(join(root, 'INSTALL.zh.md'))).toBe(false)
+    expect(existsSync(join(root, 'CHANGELOG.md'))).toBe(false)
+    expect(existsSync(join(root, 'CHANGELOG.ja.md'))).toBe(false)
+    expect(existsSync(join(root, 'CHANGELOG.ko.md'))).toBe(false)
     expect(documents.every((document) => !/prefers DSH version metadata/i.test(document))).toBe(true)
     expect(documents.every((document) => !/优先使用 DSH version metadata/i.test(document))).toBe(true)
     expect(documents[8]).toContain('Runtime capability detection is authoritative')
@@ -891,9 +897,18 @@ describe('published package composition', () => {
     expect(manifest.files).toContain('lib/client.js')
     expect(manifest.files).toContain('lib/types/**/*.d.ts')
     expect(manifest.files).toContain('cordis.patch.yml')
-    expect(manifest.files).toContain('README.md')
-    expect(manifest.files).toContain('docs/INSTALL.md')
-    expect(manifest.files).toContain('docs/CHANGELOG.md')
+    for (const documentationFile of [
+      'README.md', 'README.zh.md', 'README.ja.md', 'README.ko.md',
+      'docs/INSTALL.md', 'docs/INSTALL.zh.md', 'docs/INSTALL.ja.md', 'docs/INSTALL.ko.md',
+      'docs/CHANGELOG.md', 'docs/CHANGELOG.ja.md', 'docs/CHANGELOG.ko.md',
+    ]) {
+      expect(manifest.files).toContain(documentationFile)
+    }
+    expect(manifest.files).not.toContain('INSTALL.md')
+    expect(manifest.files).not.toContain('INSTALL.zh.md')
+    expect(manifest.files).not.toContain('CHANGELOG.md')
+    expect(manifest.files).not.toContain('CHANGELOG.ja.md')
+    expect(manifest.files).not.toContain('CHANGELOG.ko.md')
     expect(manifest.files).toContain('docs/assets/')
   })
 })

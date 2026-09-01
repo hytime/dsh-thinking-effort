@@ -33,6 +33,22 @@ Use the built package entries `lib/index.js` for Host and `lib/client.js` for Cl
 
 Current DSH does not expose a public semver metadata contract, so runtime capability detection is authoritative. An optional version is used only when explicit metadata or test input supplies it; unknown valid versions still use the detected capabilities. Both modern `remote.settings` and legacy `connection.api.settings` are supported.
 
+### DSH Runtime and Gateway Protocol compatibility
+
+These are separate compatibility layers:
+
+- **DSH Runtime:** the Settings transport is `remote.settings` on modern DSH and `connection.api.settings` on legacy DSH. The plugin detects the available runtime capability and keeps the legacy fallback optional.
+- **Gateway Protocol:** the plugin uses the official `llm-pi-ai.compat` fields `supportsDeveloperRole` and `maxTokensField` when the DSH schema exposes them. The optional `dsh-llm-openai-completions` transport can take over eligible custom OpenAI-compatible thinking providers when installed and enabled.
+
+The version map applies the following gateway capability rules:
+
+| DSH range | Gateway compat fields | Takeover transport |
+| --- | --- | --- |
+| `0.1.0-rc.7` | `supportsDeveloperRole` and `maxTokensField` are not supported | Unsupported |
+| `0.1.0-rc.8` and later supported ranges | Both fields are supported when exposed by the DSH schema | Optional |
+
+For either field, `Auto` unsets the user override and restores the official protocol default. If the optional transport is absent or disabled, no takeover is applied.
+
 ## 1. Official installation
 
 Install the latest version:

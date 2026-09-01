@@ -33,6 +33,22 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 현재 DSH에는 공개된 semver metadata 계약이 없으므로 런타임 capability detection이 권위 있는 출처입니다. 선택적 버전은 명시적인 metadata 또는 테스트 입력이 있을 때만 사용하며, 알 수 없는 유효한 버전도 감지된 capability에 따라 계속 실행합니다. 최신 `remote.settings`와 이전 `connection.api.settings`를 모두 지원합니다.
 
+### DSH Runtime 및 Gateway Protocol 호환 경계
+
+두 호환성 계층은 서로 별개입니다.
+
+- **DSH Runtime:** Settings transport는 최신 DSH에서 `remote.settings`, 이전 DSH에서 `connection.api.settings`입니다. 플러그인은 실제 런타임 capability를 감지하고 이전 경로 fallback을 선택 사항으로 유지합니다.
+- **Gateway Protocol:** DSH schema가 제공하는 경우 공식 `llm-pi-ai.compat` 필드인 `supportsDeveloperRole`과 `maxTokensField`를 사용합니다. 선택 사항인 `dsh-llm-openai-completions` transport를 설치하고 활성화하면 조건을 충족하는 사용자 지정 OpenAI 호환 사고 provider를 takeover할 수 있습니다.
+
+version-map은 다음 규칙으로 게이트웨이 capability를 판정합니다.
+
+| DSH 범위 | Gateway compat 필드 | Takeover transport |
+| --- | --- | --- |
+| `0.1.0-rc.7` | `supportsDeveloperRole`과 `maxTokensField`를 지원하지 않음 | 지원하지 않음 |
+| `0.1.0-rc.8` 및 이후 지원 범위 | DSH schema가 노출하는 경우 두 필드를 지원 | 선택 사항 |
+
+두 필드에서 `Auto`는 사용자 override를 unset하고 공식 protocol 기본값을 복원합니다. 선택 사항인 transport가 설치되지 않았거나 비활성화된 경우 takeover를 적용하지 않습니다.
+
 ## 1. 공식 설치
 
 최신 버전을 설치합니다.

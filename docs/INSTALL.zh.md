@@ -39,6 +39,22 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 当前 DSH 没有公开的 semver metadata 契约，因此运行时能力探测是权威来源。只有显式 metadata 或测试输入提供时才使用可选版本；未知合法版本仍按实际能力运行。插件同时支持新版 `remote.settings` 和旧版 `connection.api.settings`。
 
+### DSH Runtime 与 Gateway Protocol 兼容边界
+
+这两类兼容彼此独立：
+
+- **DSH Runtime：** Settings 传输在新版 DSH 中使用 `remote.settings`，在旧版 DSH 中使用 `connection.api.settings`。插件按运行时实际能力进行探测，旧版回退路径保持可选。
+- **Gateway Protocol：** DSH schema 提供时，插件使用官方 `llm-pi-ai.compat` 字段 `supportsDeveloperRole` 和 `maxTokensField`。安装并启用可选的 `dsh-llm-openai-completions` transport 后，插件可以接管符合条件的自定义 OpenAI 兼容思考模型供应商。
+
+version-map 按以下规则判断网关能力：
+
+| DSH 范围 | Gateway compat 字段 | Takeover transport |
+| --- | --- | --- |
+| `0.1.0-rc.7` | 不支持 `supportsDeveloperRole` 和 `maxTokensField` | 不支持 |
+| `0.1.0-rc.8` 及后续受支持范围 | DSH schema 暴露时支持这两个字段 | 可选 |
+
+对于任一字段，`Auto` 都会取消用户覆盖并恢复官方协议默认值。可选 transport 未安装或未启用时，不会执行 takeover。
+
 校验点：目标目录存在：
 
 ```bash
