@@ -1,22 +1,21 @@
-import type { SettingsOp } from '../../client/types.js'
-import type { GatewayCompatEditability, ProviderGatewayCompatUpdate } from './types.js'
+import type { InventoryItem, SettingsOp } from '../../client/types.js'
+import type { GatewayCompatEditability, ModelGatewayCompatUpdate, ProviderGatewayCompatUpdate } from './types.js'
 
 function providerPath(provider: string, field: string): string[] {
   return ['providers', provider, 'compat', field]
 }
 
-function pushModeOperation(operations: SettingsOp[], provider: string, field: 'supportsDeveloperRole', value: unknown): void {
+function pushModeOperation(operations: SettingsOp[], path: string[], value: unknown): void {
   if (value === 'auto') {
-    operations.push({ op: 'unset', path: providerPath(provider, field) })
+    operations.push({ op: 'unset', path })
   } else if (value === 'supported') {
-    operations.push({ op: 'set', path: providerPath(provider, field), value: true })
+    operations.push({ op: 'set', path, value: true })
   } else if (value === 'unsupported') {
-    operations.push({ op: 'set', path: providerPath(provider, field), value: false })
+    operations.push({ op: 'set', path, value: false })
   }
 }
 
-function pushMaxTokensOperation(operations: SettingsOp[], provider: string, value: unknown): void {
-  const path = providerPath(provider, 'maxTokensField')
+function pushMaxTokensOperation(operations: SettingsOp[], path: string[], value: unknown): void {
   if (value === 'auto') {
     operations.push({ op: 'unset', path })
   } else if (value === 'max_tokens' || value === 'max_completion_tokens') {
@@ -34,11 +33,33 @@ export function opsForProviderCompat(
   const operations: SettingsOp[] = []
   if (Object.prototype.hasOwnProperty.call(update, 'supportsDeveloperRole')
     && editability?.supportsDeveloperRole === true) {
-    pushModeOperation(operations, provider, 'supportsDeveloperRole', update.supportsDeveloperRole)
+    pushModeOperation(operations, providerPath(provider, 'supportsDeveloperRole'), update.supportsDeveloperRole)
   }
   if (Object.prototype.hasOwnProperty.call(update, 'maxTokensField')
     && editability?.maxTokensField === true) {
-    pushMaxTokensOperation(operations, provider, update.maxTokensField)
+    pushMaxTokensOperation(operations, providerPath(provider, 'maxTokensField'), update.maxTokensField)
+  }
+  return operations
+}
+
+export function opsForModelCompat(
+  item: InventoryItem,
+  update: Partial<ModelGatewayCompatUpdate>,
+  editability?: Partial<Pick<GatewayCompatEditability, 'supportsDeveloperRole' | 'maxTokensField'>>,
+): SettingsOp[] {
+  if (item.route.trim() === '' || (!item.inOverrides && (!Number.isInteger(item.index) || item.index < 0))) return []
+
+  const prefix = item.inOverrides
+    ? ['providers', item.route, 'modelOverrides', item.model, 'compat']
+    : ['providers', item.route, 'models', String(item.index), 'compat']
+  const operations: SettingsOp[] = []
+  if (Object.prototype.hasOwnProperty.call(update, 'supportsDeveloperRole')
+    && editability?.supportsDeveloperRole === true) {
+    pushModeOperation(operations, [...prefix, 'supportsDeveloperRole'], update.supportsDeveloperRole)
+  }
+  if (Object.prototype.hasOwnProperty.call(update, 'maxTokensField')
+    && editability?.maxTokensField === true) {
+    pushMaxTokensOperation(operations, [...prefix, 'maxTokensField'], update.maxTokensField)
   }
   return operations
 }

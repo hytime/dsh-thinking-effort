@@ -14,7 +14,7 @@ import {
 import { directResult, settingsBridge } from '../src/client/settings-bridge.js'
 import { LOCALE_DATA, LOCALE_CODES } from '../src/client/locales.js'
 import { inventoryFrom, modelGatewayCompatViewFrom, providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
-import { mergeModelUpdate, opsForProviderCompat, setOps } from '../src/client/model-ops.js'
+import { mergeModelUpdate, opsForModelCompat, opsForProviderCompat, setOps } from '../src/client/model-ops.js'
 import {
   buildInput,
   buildLevels,
@@ -29,7 +29,7 @@ import { resolveGatewayCompat, resolveProviderGatewayCompat } from '../src/compa
 import { editableProviderCompatFields, validateProviderCompat } from '../src/compat/gateway/validation.js'
 import type { GatewayCompatEditability } from '../src/compat/gateway/types.js'
 import { capabilitiesForVersion } from '../src/compat/version-map.js'
-import type { InventoryItem, Translation } from '../src/client/types.js'
+import type { InventoryItem, ModelGatewayCompatUpdate, Translation } from '../src/client/types.js'
 
 const translate: Translation = (key, params) => `${key}${params?.level ? `:${params.level}` : ''}`
 
@@ -584,6 +584,66 @@ describe('model inventory and operations', () => {
     expect(opsForProviderCompat('local', update, { supportsDeveloperRole: true })).toEqual([
       { op: 'set', path: ['providers', 'local', 'compat', 'supportsDeveloperRole'], value: true },
     ])
+  })
+
+  it('model compat operations write fields to the exact models index and override model paths', () => {
+    const editable: GatewayCompatEditability = {
+      supportsDeveloperRole: true,
+      maxTokensField: true,
+      editableFields: ['supportsDeveloperRole', 'maxTokensField'],
+    }
+
+    expect(opsForModelCompat(item({ index: 1, model: 'qwen-thinking' }), {
+      supportsDeveloperRole: 'unsupported',
+    }, editable)).toEqual([
+      {
+        op: 'set',
+        path: ['providers', 'provider', 'models', '1', 'compat', 'supportsDeveloperRole'],
+        value: false,
+      },
+    ])
+
+    expect(opsForModelCompat(item({ index: -1, model: 'qwen-thinking', inOverrides: true }), {
+      maxTokensField: 'max_tokens',
+    }, editable)).toEqual([
+      {
+        op: 'set',
+        path: ['providers', 'provider', 'modelOverrides', 'qwen-thinking', 'compat', 'maxTokensField'],
+        value: 'max_tokens',
+      },
+    ])
+  })
+
+  it('model compat operations unset each field independently for Auto', () => {
+    const model = item({ index: 1, model: 'qwen-thinking' })
+    const editable: GatewayCompatEditability = {
+      supportsDeveloperRole: true,
+      maxTokensField: true,
+      editableFields: ['supportsDeveloperRole', 'maxTokensField'],
+    }
+
+    expect(opsForModelCompat(model, {
+      supportsDeveloperRole: 'auto',
+      maxTokensField: 'auto',
+    }, editable)).toEqual([
+      { op: 'unset', path: ['providers', 'provider', 'models', '1', 'compat', 'supportsDeveloperRole'] },
+      { op: 'unset', path: ['providers', 'provider', 'models', '1', 'compat', 'maxTokensField'] },
+    ])
+  })
+
+  it('model compat operations fail closed for non-editable fields, empty providers, invalid indexes, and invalid enum values', () => {
+    const editable: GatewayCompatEditability = {
+      supportsDeveloperRole: false,
+      maxTokensField: true,
+      editableFields: ['maxTokensField'],
+    }
+
+    expect(opsForModelCompat(item({ route: '   ', index: 1 }), { maxTokensField: 'max_tokens' }, editable)).toEqual([])
+    expect(opsForModelCompat(item({ index: -1 }), { maxTokensField: 'max_tokens' }, editable)).toEqual([])
+    expect(opsForModelCompat(item({ index: 1.5 }), { maxTokensField: 'max_tokens' }, editable)).toEqual([])
+    expect(opsForModelCompat(item({ index: 1 }), { supportsDeveloperRole: 'supported' }, editable)).toEqual([])
+    expect(opsForModelCompat(item({ index: 1 }), { maxTokensField: 'invalid' as ModelGatewayCompatUpdate['maxTokensField'] }, editable)).toEqual([])
+    expect(opsForModelCompat(item({ index: 1 }), { unknown: 'value' } as Partial<ModelGatewayCompatUpdate> & Record<string, unknown>, editable)).toEqual([])
   })
 
   it('checks each schema field independently', () => {
