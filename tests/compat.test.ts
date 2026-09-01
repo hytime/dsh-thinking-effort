@@ -7,31 +7,61 @@ const legacy = { settings: 'legacy', externalLanguages: false } as const
 const modern = { settings: 'remote', externalLanguages: true } as const
 const noSettings = { settings: 'none', externalLanguages: false } as const
 
+const rc7Capabilities = {
+  settingsTransport: 'legacy',
+  settingsApi: 'connection.api.settings',
+  baseModelFields: ['reasoningEfforts'],
+  gatewayCompatFields: [],
+  externalLanguages: false,
+  takeoverTransport: 'unsupported',
+} as const
+
+const rc8Capabilities = {
+  settingsTransport: 'legacy',
+  settingsApi: 'connection.api.settings',
+  baseModelFields: ['reasoningEfforts', 'input', 'contextWindow'],
+  gatewayCompatFields: ['supportsDeveloperRole', 'maxTokensField'],
+  externalLanguages: false,
+  takeoverTransport: 'optional',
+} as const
+
+const modernCapabilities = {
+  settingsTransport: 'modern',
+  settingsApi: 'remote.settings',
+  baseModelFields: ['reasoningEfforts', 'input', 'contextWindow'],
+  gatewayCompatFields: ['supportsDeveloperRole', 'maxTokensField'],
+  externalLanguages: true,
+  takeoverTransport: 'optional',
+} as const
+
 describe('version capability map', () => {
-  it('maps the rc7 compatibility boundary to its legacy API and fields', () => {
-    expect(capabilitiesForVersion('0.1.0-rc.7')).toMatchObject({
-      settingsApi: 'connection.api.settings',
-      gatewayCompatFields: [],
-    })
+  it('returns the complete rc7 capability matrix', () => {
+    expect(capabilitiesForVersion('0.1.0-rc.7')).toEqual(rc7Capabilities)
   })
 
-  it('maps rc8 and later legacy releases to complete gateway fields', () => {
-    expect(capabilitiesForVersion('0.1.0-rc.8')).toMatchObject({
-      settingsApi: 'connection.api.settings',
-      gatewayCompatFields: ['supportsDeveloperRole', 'maxTokensField'],
-    })
+  it('returns the complete rc8 legacy capability matrix', () => {
+    expect(capabilitiesForVersion('0.1.0-rc.8')).toEqual(rc8Capabilities)
   })
 
-  it('maps modern alpha releases as a range without enumerating each alpha', () => {
-    expect(capabilitiesForVersion('0.1.2-alpha.2')).toMatchObject({
-      settingsApi: 'remote.settings',
-      gatewayCompatFields: ['supportsDeveloperRole', 'maxTokensField'],
-    })
-    expect(capabilitiesForVersion('0.1.2-alpha.3')).toMatchObject({
-      settingsApi: 'remote.settings',
-      gatewayCompatFields: ['supportsDeveloperRole', 'maxTokensField'],
-    })
+  it('returns the complete modern capability matrix', () => {
+    expect(capabilitiesForVersion('0.1.2-alpha.3')).toEqual(modernCapabilities)
+  })
+
+  it('keeps range boundaries and accepts semver build metadata', () => {
+    expect(capabilitiesForVersion('0.1.0-rc.6')).toBeUndefined()
+    expect(capabilitiesForVersion('0.1.2-alpha.0')).toEqual(rc8Capabilities)
+    expect(capabilitiesForVersion('0.1.2-alpha.3+build.7')).toEqual(modernCapabilities)
+    expect(capabilitiesForVersion('0.1.3-0')).toBeUndefined()
     expect(capabilitiesForVersion('0.1.3')).toBeUndefined()
+  })
+
+  it('carries the complete mapped matrix in compatibility reports', () => {
+    expect(resolveCompatibility({ version: '0.1.0-rc.7', capabilities: legacy }).versionCapabilities)
+      .toEqual(rc7Capabilities)
+    expect(resolveCompatibility({ version: '0.1.0-rc.8', capabilities: legacy }).versionCapabilities)
+      .toEqual(rc8Capabilities)
+    expect(resolveCompatibility({ version: '0.1.2-alpha.3+build.7', capabilities: modern }).versionCapabilities)
+      .toEqual(modernCapabilities)
   })
 })
 
@@ -94,6 +124,7 @@ describe('compatibility profiles', () => {
       expectedProfile: 'modern',
       actualCapabilities: legacy,
     })
+    expect(report.versionCapabilities).toEqual(modernCapabilities)
   })
 
   it('uses actual capabilities and reports a legacy-version mismatch', () => {

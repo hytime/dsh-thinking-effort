@@ -1,4 +1,5 @@
 import { capabilitiesForVersion, isValidSemver } from './version-map.js'
+import type { DshVersionCapabilities } from './version-map.js'
 import type {
   CompatibilityDiagnostic,
   CompatibilityProfile,
@@ -18,6 +19,7 @@ export interface CompatibilityReport {
   readonly version?: string
   readonly expected?: Exclude<CompatibilityProfile, 'unknown'>
   readonly capabilities: DshCompatibilityCapabilities
+  readonly versionCapabilities?: DshVersionCapabilities
   readonly diagnostics: readonly CompatibilityDiagnostic[]
 }
 
@@ -98,6 +100,7 @@ export function resolveCompatibility(input: {
       profile: actualProfile,
       version,
       expected,
+      versionCapabilities: mappedCapabilities,
       capabilities,
       diagnostics,
     }
@@ -107,6 +110,7 @@ export function resolveCompatibility(input: {
     profile: expected,
     version,
     expected,
+    versionCapabilities: mappedCapabilities,
     capabilities,
     diagnostics,
   }

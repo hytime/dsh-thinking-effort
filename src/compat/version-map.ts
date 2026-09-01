@@ -23,7 +23,7 @@ interface VersionRange {
   readonly capabilities: DshVersionCapabilities
 }
 
-const semverPattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?$/
+const semverPattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 
 const legacyBaseModelFields = ['reasoningEfforts'] as const
 const completeBaseModelFields = ['reasoningEfforts', 'input', 'contextWindow'] as const
@@ -69,7 +69,8 @@ const versionRanges: readonly VersionRange[] = [
 ]
 
 function comparableVersion(value: string): ComparableVersion {
-  const [core, prerelease] = value.split('-', 2)
+  const [withoutBuild] = value.split('+', 2)
+  const [core, prerelease] = withoutBuild.split('-', 2)
   const [major, minor, patch] = core.split('.').map(Number)
   return {
     major,
