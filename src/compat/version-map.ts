@@ -1,3 +1,4 @@
+export type TakeoverTransport = 'unsupported' | 'optional'
 export type SettingsApi = 'connection.api.settings' | 'remote.settings'
 export type GatewayCompatEditableField = 'supportsDeveloperRole' | 'maxTokensField'
 
@@ -7,7 +8,7 @@ export interface DshVersionCapabilities {
   baseModelFields: readonly ('reasoningEfforts' | 'input' | 'contextWindow')[]
   gatewayCompatFields: readonly GatewayCompatEditableField[]
   externalLanguages: boolean
-  takeoverTransport: 'unsupported' | 'optional'
+  takeoverTransport: TakeoverTransport
 }
 
 interface ComparableVersion {
@@ -119,4 +120,12 @@ export function capabilitiesForVersion(version: string): DshVersionCapabilities 
     compareVersions(comparable, comparableVersion(range.minimum)) >= 0
       && compareVersions(comparable, comparableVersion(range.maximumExclusive)) < 0
   ))?.capabilities
+}
+
+export function takeoverTransportForVersion(version: string): TakeoverTransport | undefined {
+  return capabilitiesForVersion(version)?.takeoverTransport
+}
+
+export function takeoverSupportedForVersion(version: string): boolean {
+  return takeoverTransportForVersion(version) === 'optional'
 }

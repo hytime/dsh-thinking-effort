@@ -65,8 +65,6 @@ export interface GatewayCompatResolveInput {
   readonly providerCompat?: unknown
   readonly catalogCompat?: unknown
   readonly protocolDefault?: unknown
-  readonly api?: string
-  readonly baseUrl?: string
   readonly versionCapabilities?: DshVersionCapabilities
 }
 

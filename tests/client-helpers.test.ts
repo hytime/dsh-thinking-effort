@@ -243,7 +243,7 @@ describe('model inventory and operations', () => {
       { op: 'set', path: ['providers', 'local', 'compat', 'supportsDeveloperRole'], value: true },
     ])
   })
-  it('resolves each compat field from model to provider to catalog to protocol to URL', () => {
+  it('resolves each compat field from model to provider to catalog to protocol', () => {
     const result = resolveGatewayCompat({
       provider: 'local',
       model: 'model-a',
@@ -251,8 +251,6 @@ describe('model inventory and operations', () => {
       providerCompat: { supportsDeveloperRole: false },
       catalogCompat: { thinkingFormat: 'deepseek', supportsReasoningEffort: false },
       protocolDefault: { maxTokensField: 'max_completion_tokens' },
-      api: 'openai-completions',
-      baseUrl: 'https://api.openai.com/v1',
     })
 
     expect(result.maxTokensField).toEqual({ value: 'max_tokens', source: 'model' })
@@ -355,27 +353,21 @@ describe('model inventory and operations', () => {
     })
   })
 
-  it('ignores unsupported thinking formats and does not infer them from Anthropic URLs', () => {
+  it('ignores unsupported thinking formats and does not infer them from endpoint metadata', () => {
     expect(resolveGatewayCompat({
       provider: 'local',
       modelCompat: { thinkingFormat: 'not-official' },
       providerCompat: { thinkingFormat: 'anthropic' },
       catalogCompat: { thinkingFormat: 'deepseek' },
-      api: 'openai-completions',
-      baseUrl: 'https://api.anthropic.com/v1',
     }).thinkingFormat).toEqual({ value: 'deepseek', source: 'catalog' })
     expect(resolveGatewayCompat({
       provider: 'anthropic',
-      api: 'anthropic-messages',
-      baseUrl: 'https://api.anthropic.com',
     }).thinkingFormat).toEqual({ value: undefined, source: 'unknown' })
   })
 
   it('leaves deepseek and unknown URL compat fields unresolved', () => {
     expect(resolveGatewayCompat({
       provider: 'deepseek',
-      api: 'openai-completions',
-      baseUrl: 'https://api.deepseek.com/v1',
     })).toMatchObject({
       supportsDeveloperRole: { value: undefined, source: 'unknown' },
       supportsReasoningEffort: { value: undefined, source: 'unknown' },
@@ -384,8 +376,6 @@ describe('model inventory and operations', () => {
     })
     expect(resolveGatewayCompat({
       provider: 'local',
-      api: 'openai-completions',
-      baseUrl: 'https://example.test/v1',
     })).toMatchObject({
       supportsDeveloperRole: { value: undefined, source: 'unknown' },
       maxTokensField: { value: undefined, source: 'unknown' },

@@ -3,6 +3,8 @@ import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 import vm from 'node:vm'
 import { describe, expect, it } from 'vitest'
+import { resolveGatewayCompat } from '../src/compat/gateway/resolve.js'
+import { takeoverProvidersOf } from '../src/compat/gateway/takeover.js'
 
 const root = resolve(import.meta.dirname, '..')
 
@@ -134,6 +136,24 @@ describe('build artifacts', () => {
 
     plugin.apply(context)
     expect(remoteReads).toBe(1)
+  })
+
+  it('projects shared pi-ai compat fields without requiring takeover', () => {
+    expect(resolveGatewayCompat({
+      provider: 'local',
+      model: 'model',
+      modelCompat: { thinkingFormat: 'qwen', supportsReasoningEffort: false },
+    })).toMatchObject({
+      thinkingFormat: { value: 'qwen', source: 'model' },
+      supportsReasoningEffort: { value: false, source: 'model' },
+    })
+    expect(takeoverProvidersOf(undefined)).toBeNull()
+  })
+
+  it('reads an enabled takeover list without mutating its fields', () => {
+    const section = { enabled: true, providers: ['local'] }
+    expect(takeoverProvidersOf(section)).toEqual(['local'])
+    expect(section).toEqual({ enabled: true, providers: ['local'] })
   })
 
   it('exports the Host entry contract', async () => {

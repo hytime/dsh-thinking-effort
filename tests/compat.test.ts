@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { clientCapabilities, hostCapabilities } from '../src/compat/capabilities.ts'
-import { capabilitiesForVersion } from '../src/compat/version-map.ts'
+import { capabilitiesForVersion, takeoverSupportedForVersion, takeoverTransportForVersion } from '../src/compat/version-map.ts'
 import { resolveCompatibility } from '../src/compat/version-adapter.ts'
 
 const legacy = { settings: 'legacy', externalLanguages: false } as const
@@ -47,6 +47,14 @@ describe('version capability map', () => {
     expect(capabilitiesForVersion('0.1.2-alpha.3')).toEqual(modernCapabilities)
   })
 
+  it('exposes takeover availability from the mapped capability ranges', () => {
+    expect(takeoverTransportForVersion('0.1.0-rc.7')).toBe('unsupported')
+    expect(takeoverSupportedForVersion('0.1.0-rc.7')).toBe(false)
+    expect(takeoverTransportForVersion('0.1.1-rc.2')).toBe('optional')
+    expect(takeoverTransportForVersion('0.1.2-alpha.3')).toBe('optional')
+    expect(takeoverTransportForVersion('0.1.3')).toBeUndefined()
+    expect(takeoverSupportedForVersion('bad')).toBe(false)
+  })
   it('keeps every half-open boundary and accepts semver build metadata', () => {
     expect(capabilitiesForVersion('0.1.0-rc.6')).toBeUndefined()
     expect(capabilitiesForVersion('0.1.0-rc.7+ci.1')).toEqual(rc7Capabilities)

@@ -6,6 +6,12 @@ import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { settingsBridge } from '../src/client/settings-bridge.js'
+import { editableProviderCompatFields } from '../src/compat/gateway/validation.js'
+import { capabilitiesForVersion } from '../src/compat/version-map.js'
+import {
+  identifyTakeoverProviders,
+  takeoverProvidersOf,
+} from '../src/compat/gateway/takeover.js'
 import { afterAll, describe, expect, it } from 'vitest'
 
 type PackageManifest = {
@@ -23,12 +29,12 @@ const integrationEnabled = process.env.DSH_LOADER_INTEGRATION === '1'
 
 function parseCliRoots(raw: string): string[] {
   const values = raw.split(',').map((value) => value.trim())
-  if (values.length !== 2 || values.some((value) => value === '')) {
-    throw new Error('DSH_CLI_ROOTS must contain exactly two non-empty comma-separated roots: alpha, rc2')
+  if (values.length !== 3 || values.some((value) => value === '')) {
+    throw new Error('DSH_CLI_ROOTS must contain exactly three non-empty comma-separated roots: rc7, rc2, alpha3')
   }
   const roots = values.map((value) => realpathSync(value))
-  if (new Set(roots).size !== 2) {
-    throw new Error('DSH_CLI_ROOTS must contain two distinct roots')
+  if (new Set(roots).size !== 3) {
+    throw new Error('DSH_CLI_ROOTS must contain three distinct roots')
   }
   return roots
 }
@@ -43,8 +49,9 @@ function readOfficialDshVersion(cliRoot: string): string {
 }
 
 const expectedOfficialDshVersions = [
-  '0.1.2-alpha.3',
+  '0.1.0-rc.7',
   '0.1.1-rc.2',
+  '0.1.2-alpha.3',
 ] as const
 
 const localizedNavigationLabels = {
@@ -802,9 +809,36 @@ describe('compatibility documentation and root validation', () => {
   })
 
   it('rejects duplicate normalized DSH CLI roots', () => {
-    const duplicateRoots = `${root},${join(root, '.')}`
+    const duplicateRoots = `${root},${join(root, '.')},${root}`
 
     expect(() => parseCliRoots(duplicateRoots)).toThrow(/distinct|unique/i)
+  })
+})
+
+describe('optional openai-completions takeover contract', () => {
+  it('identifies custom thinking providers from shared llm-pi-ai fields', () => {
+    expect(identifyTakeoverProviders({
+      providers: {
+        local: {
+          api: 'openai-completions',
+          baseURL: 'http://gateway.test/v1',
+          models: [{
+            id: 'model',
+            reasoningEfforts: { off: null, high: 'high' },
+            compat: { thinkingFormat: 'qwen', supportsReasoningEffort: false },
+          }],
+        },
+        official: {
+          baseURL: 'https://api.deepseek.com/v1',
+          models: [{ id: 'model', reasoningEfforts: { high: 'high' } }],
+        },
+      },
+    })).toEqual(['local'])
+  })
+
+  it('returns null for an absent takeover namespace and never requires it', () => {
+    expect(takeoverProvidersOf(undefined)).toBeNull()
+    expect(takeoverProvidersOf({ enabled: true, providers: ['local'] })).toEqual(['local'])
   })
 })
 
@@ -844,10 +878,10 @@ describe('published package composition', () => {
 })
 
 integrationDescribe('official DSH loader composition', () => {
-  it('requires and verifies alpha and rc2 range representatives independently', { timeout: 180000 }, async () => {
-    expect(cliRoots).toHaveLength(2)
+  it('requires and verifies rc7, rc2, and alpha3 capability representatives independently', { timeout: 180000 }, async () => {
+    expect(cliRoots).toHaveLength(3)
     expect(cliRoots.every((cliRoot) => cliRoot === resolve(cliRoot))).toBe(true)
-    expect(new Set(cliRoots).size).toBe(2)
+    expect(new Set(cliRoots).size).toBe(3)
     const verifiedRoots = cliRoots.map((cliRoot) => ({
       cliRoot,
       version: readOfficialDshVersion(cliRoot),
@@ -929,12 +963,22 @@ integrationDescribe('official DSH loader composition', () => {
         })
         const described = settingsDescribe.body.result as {
           ok: boolean
-          value?: { namespaces?: Array<{ ns?: string; revision?: number }> }
+          value?: { namespaces?: Array<{ ns?: string; revision?: number; schema?: unknown }> }
         }
         expect(described.value?.namespaces?.length).toBeGreaterThan(0)
         const namespace = described.value?.namespaces?.[0]
         expect(namespace?.ns).toEqual(expect.any(String))
         expect(namespace?.revision).toEqual(expect.any(Number))
+         const piAiNamespace = described.value?.namespaces?.find(({ ns }) => ns === 'llm-pi-ai')
+         expect(piAiNamespace).toBeDefined()
+         const mapped = capabilitiesForVersion(version)
+         expect(mapped).toBeDefined()
+         const editability = editableProviderCompatFields(mapped, piAiNamespace?.schema)
+         if (version === '0.1.0-rc.7') {
+           expect(editability).toMatchObject({ supportsDeveloperRole: false, maxTokensField: false })
+         } else {
+           expect(editability).toMatchObject({ supportsDeveloperRole: true, maxTokensField: true })
+         }
         const settingsMutate = await callOfficialRpc(web.url, headers, mutateEndpoint, {
           ns: namespace!.ns,
           ops: [],

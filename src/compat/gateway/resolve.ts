@@ -9,6 +9,15 @@ import type {
   ProviderGatewayCompatView,
 } from './types.js'
 
+export {
+  declaresThinking,
+  identifyTakeoverProviders,
+  isCustomOpenAiGateway,
+  isProviderTakenOver,
+  takeoverProvidersOf,
+} from './takeover.js'
+export type { PiAiModelRow, PiAiProviderProfile, PiAiSection, TakeoverSection } from './takeover.js'
+
 const gatewayFields = ['thinkingFormat', 'supportsReasoningEffort', 'supportsDeveloperRole', 'maxTokensField'] as const
 
 type GatewayField = typeof gatewayFields[number]
