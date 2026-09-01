@@ -1,4 +1,5 @@
 import type { ALL_LEVELS } from './constants.js'
+import type { DshVersionCapabilities } from '../compat/version-map.js'
 
 export type {
   GatewayCompat,
@@ -64,7 +65,10 @@ export interface SettingsNamespace {
   readonly ns: string
   readonly revision: number
   readonly value: Record<string, unknown>
+  readonly schema?: unknown
+  readonly base?: unknown
   readonly user?: Record<string, unknown>
+  readonly versionCapabilities?: DshVersionCapabilities
 }
 
 export interface SettingsDescribeValue {

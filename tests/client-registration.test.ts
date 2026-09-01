@@ -123,6 +123,16 @@ describe('client registration', () => {
     expect(harness.remoteSettings.describe).not.toHaveBeenCalled()
   })
 
+  it('registers a render factory for the provider compatibility settings surface', () => {
+    const harness = createHarness('modern')
+    apply(harness.context)
+
+    const render = harness.registrations[0]?.render
+    expect(render).toEqual(expect.any(Function))
+    const element = (render as () => { props?: Record<string, unknown> })()
+    expect(element.props).toEqual(expect.objectContaining({ settings: expect.any(Object), locale: expect.any(Object), t: expect.any(Function) }))
+  })
+
   it('keeps legacy fallback active and does not replace the first successful mount', () => {
     const harness = createHarness('legacy')
     apply(harness.context)

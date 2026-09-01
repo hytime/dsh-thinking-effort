@@ -84,5 +84,17 @@
   "expandProvider": "제공자 펼치기",
   "providerDefaultShort": "제공자 기본값",
   "contextTitle": "컨텍스트 {value}",
-  "contextLabel": "컨텍스트 {label}"
+  "contextLabel": "컨텍스트 {label}",
+  "gatewayCompatTitle": "게이트웨이 호환성",
+  "supportsDeveloperRole": "Developer 역할",
+  "maxTokensField": "최대 토큰 필드",
+  "gatewayCompatAuto": "자동",
+  "gatewayCompatSupported": "지원",
+  "gatewayCompatUnsupported": "지원 안 함",
+  "maxTokensFieldStandard": "max_tokens",
+  "maxTokensFieldCompletion": "max_completion_tokens",
+  "gatewayCompatUnavailable": "사용할 수 없음",
+  "saveGatewayCompat": "게이트웨이 호환성 저장",
+  "gatewayCompatSaved": "게이트웨이 호환성을 저장했습니다",
+  "gatewayCompatSaveFailed": "게이트웨이 호환성을 저장하지 못했습니다"
 }

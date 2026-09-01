@@ -1,15 +1,16 @@
 import React from 'react'
 import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
 import { DEFAULT_LEVELS, INPUT_MODALITIES, LEVEL_LABEL_KEYS, NS, PRESETS, ALL_LEVELS, CONTEXT_1M } from './constants.js'
-import { inventoryFrom } from './model-inventory.js'
-import { setOps } from './model-ops.js'
+import { inventoryFrom, providerGatewayCompatViewsFrom } from './model-inventory.js'
+import { opsForProviderCompat, setOps } from './model-ops.js'
 import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, validateContextWindow, validateLevels } from './validation.js'
-import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, ModelUpdate, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
+import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, ModelUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
 import type { Palette } from './theme.js'
 import { iosPalette } from './theme.js'
 import { ActionButton, Icon } from './components/Controls.js'
 import { ModelRow } from './components/ModelRow.js'
 import { SubagentSettings } from './components/SubagentSettings.js'
+import { GatewayCompatControls } from './components/GatewayCompatControls.js'
 
 const PLUGIN_VERSION = packageJson.version
 
@@ -18,6 +19,9 @@ interface SubagentState { effort: string | null; revision: number }
 interface EditorState {
   loading: boolean
   inventory: InventoryItem[]
+  providerViews: Record<string, ProviderGatewayCompatView>
+  providerDrafts: Record<string, ProviderGatewayCompatView>
+  providerDirty: Record<string, boolean>
   revision: number
   expanded: Record<string, boolean>
   expandedProviders: Record<string, boolean>
@@ -44,7 +48,7 @@ export interface SectionEditorProps {
 }
 
 const initialState: EditorState = {
-  loading: true, inventory: [], revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
+  loading: true, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
 }
 
 function keyOf(item: InventoryItem): string { return `${item.route}/${item.model}` }
@@ -72,7 +76,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette() }: S
 
   const applyNamespaceView = (current: EditorState, nextNamespace: SettingsNamespace, notice: string | null): EditorState => {
     const view = subagentView(nextNamespace)
-    return { ...current, loading: false, busy: false, nsFound: true, inventory: inventoryFrom(nextNamespace), revision: revisionOf(nextNamespace), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom, notice }
+    return { ...current, loading: false, busy: false, nsFound: true, inventory: inventoryFrom(nextNamespace), providerViews: providerGatewayCompatViewsFrom(nextNamespace), providerDrafts: providerGatewayCompatViewsFrom(nextNamespace), providerDirty: {}, revision: revisionOf(nextNamespace), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom, notice }
   }
 
   const load = (): void => {
@@ -84,11 +88,11 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette() }: S
       }
       const found = response.value.namespaces.find((entry) => entry.ns === NS)
       if (!found) {
-        setState((current) => ({ ...current, loading: false, busy: false, nsFound: false, inventory: [], subagent: null }))
+        setState((current) => ({ ...current, loading: false, busy: false, nsFound: false, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, subagent: null }))
         return
       }
       const view = subagentView(found)
-      setState((current) => ({ ...current, loading: false, busy: false, nsFound: true, inventory: inventoryFrom(found), revision: revisionOf(found), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom }))
+      setState((current) => ({ ...current, loading: false, busy: false, nsFound: true, inventory: inventoryFrom(found), providerViews: providerGatewayCompatViewsFrom(found), providerDrafts: providerGatewayCompatViewsFrom(found), providerDirty: {}, revision: revisionOf(found), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom }))
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       setState((current) => ({ ...current, loading: false, busy: false, error: t('readSettingsFailed', { message }) }))
@@ -174,6 +178,32 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette() }: S
     runOps(ops, t('subagentSaved'))
   }
 
+  const applyProviderCompat = (route: string): void => {
+    const draft = state.providerDrafts[route]
+    if (!draft) return
+    const ops = opsForProviderCompat(route, draft, {
+      supportsDeveloperRole: draft.supportsDeveloperRoleAvailable,
+      maxTokensField: draft.maxTokensFieldAvailable,
+    })
+    if (ops.length === 0) return
+    runOps(ops, t('gatewayCompatSaved'), () => {
+      setState((current) => {
+        const providerDirty = { ...current.providerDirty }
+        delete providerDirty[route]
+        return { ...current, providerDirty }
+      })
+    })
+  }
+
+  const patchProviderCompat = (route: string, next: ProviderGatewayCompatView): void => {
+    setState((current) => ({
+      ...current,
+      notice: null,
+      providerDrafts: { ...current.providerDrafts, [route]: next },
+      providerDirty: { ...current.providerDirty, [route]: true },
+    }))
+  }
+
   const toggleProvider = (route: string): void => setState((current) => ({ ...current, expandedProviders: { ...current.expandedProviders, [route]: current.expandedProviders[route] !== true } }))
   const toggleExpand = (item: InventoryItem): void => {
     const key = keyOf(item)
@@ -219,7 +249,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette() }: S
     {state.nsFound === false ? <p style={{ fontSize: '12px', opacity: 0.75 }}>{t('noNamespace')}</p> : <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: state.quickSettingsOpen ? '4px' : '6px' }}><ActionButton text={t('quickSettings')} onClick={() => setState((current) => ({ ...current, quickSettingsOpen: !current.quickSettingsOpen }))} disabled={state.busy} palette={palette} icon={state.quickSettingsOpen ? 'chevronUp' : 'sliders'} />{state.quickSettingsOpen ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flexBasis: '100%', padding: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.field }}>{PRESETS.map((preset) => <ActionButton key={preset.key} text={t(preset.labelKey)} onClick={() => { setState((current) => ({ ...current, quickSettingsOpen: false })); applyPreset(preset.levels) }} disabled={state.busy} palette={palette} icon={preset.key === 'official' ? 'sparkles' : 'sliders'} />)}</div> : null}</div>
       <div style={{ position: 'relative', marginBottom: '7px' }}><span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: palette.secondary, pointerEvents: 'none' }}><Icon name="search" size={15} /></span><input type="text" value={state.query} placeholder={t('searchPlaceholder')} onChange={(event) => { const value = event.currentTarget.value; setState((current) => ({ ...current, query: value })) }} style={{ boxSizing: 'border-box', width: '100%', height: '30px', padding: '0 10px 0 30px', border: `1px solid ${palette.border}`, borderRadius: '8px', fontSize: '13px', backgroundColor: palette.field, color: palette.text, outline: 'none', boxShadow: palette.shadow }} /></div>
-      {state.loading ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{t('loading')}</div> : visible.length === 0 ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{state.inventory.length === 0 ? t('noModels') : t('noMatches')}</div> : routes.map((route) => { const providerModels = visible.filter((item) => item.route === route); const providerOpen = query !== '' || state.expandedProviders[route] === true; return <div key={route} style={{ marginBottom: '6px' }}><div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '8px', minHeight: '32px', padding: '4px 6px', marginBottom: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.raised }}><span style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}><span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', minWidth: '22px', border: `1px solid ${palette.border}`, borderRadius: '7px', color: palette.secondary, backgroundColor: palette.group }}><Icon name="layers" size={14} /></span><span style={{ display: 'grid', gap: '1px', minWidth: 0 }}><span style={{ color: palette.text, fontSize: '12px', fontWeight: 700, overflowWrap: 'anywhere' }}>{route}</span><span style={{ color: palette.accent, fontSize: '10px', lineHeight: '11px', fontWeight: 700 }}>{t('vendor')}</span></span></span><span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: palette.secondary, whiteSpace: 'nowrap' }}><span>{t('modelCount', { count: providerModels.length })}</span>{query !== '' ? <span>{t('searchResults')}</span> : <ActionButton text="" onClick={() => toggleProvider(route)} palette={palette} tone="ghost" icon={providerOpen ? 'chevronUp' : 'chevronDown'} label={providerOpen ? t('collapseProvider') : t('expandProvider')} />}</span></div>{providerOpen ? providerModels.map((item) => { const key = keyOf(item); const dirty = state.dirty[key] ?? {}; return <ModelRow key={`${key}-${item.inOverrides ? 'override' : item.index}`} item={item} open={state.expanded[key] === true} draft={state.drafts[key]} contextDraft={state.contextDrafts[key] ?? contextDraftFrom(item)} inputDraft={state.inputDrafts[key] ?? inputDraftFrom(item)} dirty={dirty.levels === true || dirty.context === true || dirty.input === true} busy={state.busy} palette={palette} t={t} onToggle={() => toggleExpand(item)} onLevelChange={(level, patch) => patchDraft(item, level, patch)} onContextChange={(value) => patchContextValue(item, value)} onOneMillionChange={(enabled) => setOneMillion(item, enabled)} onInputChange={(modality, enabled) => patchInputCapability(item, modality, enabled)} onSave={() => applyModel(item)} onRestoreReasoning={() => restoreReasoningDefaults(item)} onRestoreCapability={() => restoreProviderDefaults(item)} /> }) : null}</div> })}
+      {state.loading ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{t('loading')}</div> : visible.length === 0 ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{state.inventory.length === 0 ? t('noModels') : t('noMatches')}</div> : routes.map((route) => { const providerModels = visible.filter((item) => item.route === route); const providerOpen = query !== '' || state.expandedProviders[route] === true; return <div key={route} style={{ marginBottom: '6px' }}><div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '8px', minHeight: '32px', padding: '4px 6px', marginBottom: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.raised }}><span style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}><span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', minWidth: '22px', border: `1px solid ${palette.border}`, borderRadius: '7px', color: palette.secondary, backgroundColor: palette.group }}><Icon name="layers" size={14} /></span><span style={{ display: 'grid', gap: '1px', minWidth: 0 }}><span style={{ color: palette.text, fontSize: '12px', fontWeight: 700, overflowWrap: 'anywhere' }}>{route}</span><span style={{ color: palette.accent, fontSize: '10px', lineHeight: '11px', fontWeight: 700 }}>{t('vendor')}</span></span></span><span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: palette.secondary, whiteSpace: 'nowrap' }}><span>{t('modelCount', { count: providerModels.length })}</span>{query !== '' ? <span>{t('searchResults')}</span> : <ActionButton text="" onClick={() => toggleProvider(route)} palette={palette} tone="ghost" icon={providerOpen ? 'chevronUp' : 'chevronDown'} label={providerOpen ? t('collapseProvider') : t('expandProvider')} />}</span></div>{state.providerDrafts[route] ? <><GatewayCompatControls view={state.providerDrafts[route]} onChange={(next) => patchProviderCompat(route, next)} disabled={state.busy} palette={palette} t={t} />{state.providerDirty[route] ? <ActionButton text={t('saveGatewayCompat')} onClick={() => applyProviderCompat(route)} disabled={state.busy} tone="primary" palette={palette} icon="check" /> : null}</> : null}{providerOpen ? providerModels.map((item) => { const key = keyOf(item); const dirty = state.dirty[key] ?? {}; return <ModelRow key={`${key}-${item.inOverrides ? 'override' : item.index}`} item={item} open={state.expanded[key] === true} draft={state.drafts[key]} contextDraft={state.contextDrafts[key] ?? contextDraftFrom(item)} inputDraft={state.inputDrafts[key] ?? inputDraftFrom(item)} dirty={dirty.levels === true || dirty.context === true || dirty.input === true} busy={state.busy} palette={palette} t={t} onToggle={() => toggleExpand(item)} onLevelChange={(level, patch) => patchDraft(item, level, patch)} onContextChange={(value) => patchContextValue(item, value)} onOneMillionChange={(enabled) => setOneMillion(item, enabled)} onInputChange={(modality, enabled) => patchInputCapability(item, modality, enabled)} onSave={() => applyModel(item)} onRestoreReasoning={() => restoreReasoningDefaults(item)} onRestoreCapability={() => restoreProviderDefaults(item)} /> }) : null}</div> })}
       {expandedCount > 0 ? <div style={{ fontSize: '12px', color: palette.secondary, margin: '4px 2px 0' }}>{t('expandedSettings', { count: expandedCount })}</div> : null}
     </div>}
     <span aria-label={t('versionLabel')} style={{ position: 'absolute', right: '12px', bottom: '8px', fontSize: '10px', lineHeight: '14px', opacity: 0.45, pointerEvents: 'none', userSelect: 'none' }}>v{PLUGIN_VERSION}</span>

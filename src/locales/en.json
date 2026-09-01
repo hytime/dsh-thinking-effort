@@ -84,5 +84,17 @@
   "expandProvider": "Expand provider",
   "providerDefaultShort": "Provider default",
   "contextTitle": "Context {value}",
-  "contextLabel": "Context {label}"
+  "contextLabel": "Context {label}",
+  "gatewayCompatTitle": "Gateway compatibility",
+  "supportsDeveloperRole": "Developer role",
+  "maxTokensField": "Max tokens field",
+  "gatewayCompatAuto": "Auto",
+  "gatewayCompatSupported": "Supported",
+  "gatewayCompatUnsupported": "Unsupported",
+  "maxTokensFieldStandard": "max_tokens",
+  "maxTokensFieldCompletion": "max_completion_tokens",
+  "gatewayCompatUnavailable": "Unavailable",
+  "saveGatewayCompat": "Save gateway compatibility",
+  "gatewayCompatSaved": "Gateway compatibility saved",
+  "gatewayCompatSaveFailed": "Failed to save gateway compatibility"
 }

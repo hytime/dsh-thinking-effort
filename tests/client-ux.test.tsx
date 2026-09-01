@@ -5,7 +5,10 @@ import { resolve } from 'node:path'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SectionEditor } from '../src/client/SectionEditor.js'
+import { GatewayCompatControls } from '../src/client/components/GatewayCompatControls.js'
+import { providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
 import { zh } from '../src/client/locales.js'
+import { iosPalette } from '../src/client/theme.js'
 import type {
   ClientLocale,
   ClientResult,
@@ -146,6 +149,106 @@ afterEach(() => {
 })
 
 describe('SectionEditor user behavior', () => {
+  it('renders provider gateway compatibility controls and emits only a view change', async () => {
+    const view = {
+      provider: 'provider',
+      supportsDeveloperRole: 'auto' as const,
+      maxTokensField: 'max_tokens' as const,
+      supportsDeveloperRoleAvailable: true,
+      maxTokensFieldAvailable: true,
+      source: 'unknown' as const,
+    }
+    const onChange = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    act(() => {
+      root.render(<GatewayCompatControls view={view} onChange={onChange} palette={iosPalette()} t={text as Translation} />)
+    })
+
+    expect(container.textContent).toContain(text('gatewayCompatTitle'))
+    expect(container.textContent).toContain(text('gatewayCompatAuto'))
+    const selects = [...container.querySelectorAll('select')] as HTMLSelectElement[]
+    expect(selects).toHaveLength(2)
+    expect(selects[0]?.value).toBe('auto')
+    expect(selects[1]?.value).toBe('max_tokens')
+    act(() => setValue(selects[0]!, 'unsupported'))
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ supportsDeveloperRole: 'unsupported' }))
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('hides unavailable provider fields without hiding the settings page', async () => {
+    const view = renderEditor({
+      describe: async () => ({
+        ok: true,
+        value: {
+          namespaces: [namespace({
+            value: { providers: { provider: { models: [{ id: 'model-a' }] } } },
+            schema: {},
+            versionCapabilities: {
+              settingsTransport: 'legacy',
+              settingsApi: 'connection.api.settings',
+              baseModelFields: ['reasoningEfforts'],
+              gatewayCompatFields: [],
+              externalLanguages: false,
+              takeoverTransport: 'unsupported',
+            },
+          } as unknown as SettingsNamespace)],
+        },
+      }),
+    })
+    await settle()
+    expect(view.container.textContent).toContain(text('pageTitle'))
+    expect(view.container.textContent).not.toContain(text('supportsDeveloperRole'))
+    expect(view.container.textContent).not.toContain(text('maxTokensField'))
+    view.unmount()
+  })
+
+  it('projects provider compat sources and saves field-level operations', async () => {
+    const provider = {
+      models: [{ id: 'model-a' }],
+      compat: { supportsDeveloperRole: true, maxTokensField: 'max_completion_tokens' },
+    }
+    const capabilities = {
+      settingsTransport: 'modern' as const,
+      settingsApi: 'remote.settings' as const,
+      baseModelFields: ['reasoningEfforts', 'input', 'contextWindow'] as const,
+      gatewayCompatFields: ['supportsDeveloperRole', 'maxTokensField'] as const,
+      externalLanguages: true,
+      takeoverTransport: 'optional' as const,
+    }
+    const projected = providerGatewayCompatViewFrom({
+      value: { providers: { provider } },
+      user: { providers: { provider: { compat: { supportsDeveloperRole: false } } } },
+      base: { providers: { provider: { compat: { maxTokensField: 'max_tokens' } } } },
+      schema: { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } },
+      versionCapabilities: capabilities,
+    } as unknown as SettingsNamespace, 'provider')
+    expect(projected).toMatchObject({ supportsDeveloperRole: 'unsupported', maxTokensField: 'max_tokens', source: 'user' })
+
+    const view = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [namespace({
+        value: { providers: { provider } },
+        user: { providers: { provider: { compat: { supportsDeveloperRole: false } } } },
+        base: { providers: { provider: { compat: { maxTokensField: 'max_tokens' } } } },
+        schema: { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } },
+        versionCapabilities: capabilities,
+      } as unknown as SettingsNamespace)] } }),
+    })
+    await settle()
+    expect(view.container.textContent).toContain(text('gatewayCompatTitle'))
+    const selects = [...view.container.querySelectorAll('select')].slice(2) as HTMLSelectElement[]
+    expect(selects[0]?.value).toBe('unsupported')
+    act(() => setValue(selects[1]!, 'auto'))
+    act(() => button(view.container, text('saveGatewayCompat')).click())
+    await settle()
+    expect(view.mutate).toHaveBeenCalledWith('llm-pi-ai', expect.arrayContaining([
+      { op: 'unset', path: ['providers', 'provider', 'compat', 'maxTokensField'] },
+    ]), 2)
+    view.unmount()
+  })
+
   it('shows loading first and then reports a describe failure', async () => {
     let resolveDescribe!: (value: ClientResult<{ namespaces: readonly SettingsNamespace[] }>) => void
     const describe = vi.fn(() => new Promise<ClientResult<{ namespaces: readonly SettingsNamespace[] }>>((resolve) => {

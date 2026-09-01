@@ -84,5 +84,17 @@
   "expandProvider": "プロバイダーを展開",
   "providerDefaultShort": "プロバイダーの既定値",
   "contextTitle": "コンテキスト {value}",
-  "contextLabel": "コンテキスト {label}"
+  "contextLabel": "コンテキスト {label}",
+  "gatewayCompatTitle": "ゲートウェイ互換性",
+  "supportsDeveloperRole": "Developer ロール",
+  "maxTokensField": "最大トークン項目",
+  "gatewayCompatAuto": "自動",
+  "gatewayCompatSupported": "対応",
+  "gatewayCompatUnsupported": "非対応",
+  "maxTokensFieldStandard": "max_tokens",
+  "maxTokensFieldCompletion": "max_completion_tokens",
+  "gatewayCompatUnavailable": "利用不可",
+  "saveGatewayCompat": "ゲートウェイ互換性を保存",
+  "gatewayCompatSaved": "ゲートウェイ互換性を保存しました",
+  "gatewayCompatSaveFailed": "ゲートウェイ互換性の保存に失敗しました"
 }
