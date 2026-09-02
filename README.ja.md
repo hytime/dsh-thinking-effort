@@ -50,7 +50,7 @@ DSH 内蔵モデルだけを使用し、すでに推論コントロールが動�
 | 機能 | 説明 |
 | --- | --- |
 | 既定レベル | カスタム値を上書きせず `off`、`high`、`max` を追加 |
-| モデルごとの編集 | Settings からレベルを設定し、カタログ/modelOverrides モデルのゲートウェイ互換値を編集。`models[]` の compat は YAML 専用 |
+| モデルごとの編集 | Settings からレベルとゲートウェイ値を設定し、カタログ/modelOverrides とカスタム YAML `models[]` の両方で compat を編集 |
 | ゲートウェイ値のマッピング | DSH の `high` 選択時に `ultra` を送信可能 |
 | Subagent の既定値 | 明示値のないリクエストにだけ既定値を適用 |
 | 多言語設定 | 中文、English、日本語、한국어の辞書を同梱。日本語/韓国語の切り替えは DSH の language-pack 対応を使用 |
@@ -115,13 +115,13 @@ providers:
 
 モデルの `compat` は provider の既定値をフィールドごとに上書きします。モデル層に書かれていないフィールドは provider から継承されます。`Auto` は現在の層のフィールドを削除し、provider からの継承へ戻します。同じルート（provider）に非空の `models[]` と非空の `modelOverrides` が同時に存在する場合は無効な設定です。公式 schema はこの無効な設定を拒否し、プラグインは異常なデータに対して fail closed します。
 
-Settings の provider グローバル領域では、その provider の全モデルの既定値を編集します。カタログモデルは展開して、単一モデル領域の `modelOverrides.<model>.compat` を編集します。カスタム YAML の `models[]` ルートではモデル項目の `models[].compat` を使用します。現在の DSH Settings API は配列 path op に対応していないため、`models[]` の compat は YAML 専用です。設定ページでは `models[]` の compat コントロールを表示せず、編集も提供せず、配列 mutation も生成しません。
+Settings の provider グローバル領域では、その provider の全モデルの既定値を編集します。カタログ/modelOverrides とカスタム YAML `models[]` の両方で単一モデルの compat を編集できます。前者は `modelOverrides.<model>.compat`、後者は `models[].compat` に書き込みます。Settings API は配列インデックスの path op に対応しないため、`models[]` の変更は `providers.<route>.models` 全体を 1 回の配列 set で書き戻し、他のモデル、未知フィールド、他の compat フィールドを保持します。
 
 これらの compat 値はコントロールプレーンの設定です。ゲートウェイの transport を実装または置き換えるものではなく、ネットワーク要求は外部 transport が担当します。
 
 ### 設定ページの構成
 
-ページ上部に言語セレクターがあります。その下の **Subagent default effort** カードは明示値のないリクエストの既定値を管理します。**Quick settings** は一括プリセットを適用します。プロバイダーとモデルの一覧は展開/折りたたみができ、各モデル行の入力能力とコンテキスト長を表示します。カタログ/modelOverrides モデルの設定領域ではゲートウェイ互換値を編集できますが、`models[]` の compat は YAML 専用で表示されません。
+ページ上部に言語セレクターがあります。その下の **Subagent default effort** カードは明示値のないリクエストの既定値を管理します。**Quick settings** は一括プリセットを適用します。プロバイダーとモデルの一覧は展開/折りたたみができ、各モデル行に入力能力、コンテキスト長、ゲートウェイ互換値の編集領域が表示されます。`models[]` の保存は配列インデックス path op ではなく、配列全体の set を使用します。
 
 ![英語版 Model capabilities and effort 設定ページ](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/settings-model-capabilities-en.png)
 

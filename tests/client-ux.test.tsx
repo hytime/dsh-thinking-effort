@@ -363,7 +363,7 @@ describe('SectionEditor user behavior', () => {
     container.remove()
   })
 
-  it('does not render saveable model compat controls for catalog models', () => {
+  it('renders saveable model compat controls for models[] entries', () => {
     const item: InventoryItem = {
       route: 'provider',
       model: 'model-a',
@@ -394,9 +394,8 @@ describe('SectionEditor user behavior', () => {
       root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '8192', oneMillion: false, previousValue: '8192', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onCompatChange={onCompatChange} onSaveCompat={onSaveCompat} />)
     })
 
-    expect(container.querySelectorAll('select')).toHaveLength(0)
-    expect(container.textContent).not.toContain(text('saveModelGatewayCompat'))
-    expect([...container.querySelectorAll('button')].some((candidate) => candidate.textContent?.includes(text('saveModelGatewayCompat')))).toBe(false)
+    expect(container.querySelectorAll('select')).toHaveLength(2)
+    expect(container.textContent).toContain(text('saveModelGatewayCompat'))
     expect(onSaveCompat).not.toHaveBeenCalled()
     expect(container.textContent).toContain(text('reasoningLevels'))
     expect(container.querySelector(`input[aria-label="${text('contextLength')}"]`)).not.toBeNull()
@@ -811,7 +810,7 @@ describe('SectionEditor user behavior', () => {
     view.unmount()
   })
 
-  it('does not offer saveable model compat controls for models array entries', async () => {
+  it('offers saveable model compat controls for models array entries', async () => {
     const modelNamespace = namespace({
       value: {
         providers: {
@@ -831,9 +830,109 @@ describe('SectionEditor user behavior', () => {
 
     act(() => providerButton(view.container).click())
     act(() => modelSettingsButton(view.container).click())
-    expect(view.container.querySelector('[data-scope="model"]')).toBeNull()
-    expect(view.container.textContent).not.toContain(text('saveModelGatewayCompat'))
+    expect(view.container.querySelector('[data-scope="model"]')).not.toBeNull()
+    expect(view.container.textContent).toContain(text('saveModelGatewayCompat'))
     expect(view.mutate).not.toHaveBeenCalled()
+    view.unmount()
+  })
+
+  it('shows and saves compat controls for a models[] model with one complete array set', async () => {
+    const modelNamespace = namespace({
+      value: {
+        providers: {
+          provider: {
+            models: [
+              { id: 'model-a', name: 'Model A', custom: 'keep-a', compat: { maxTokensField: 'max_tokens', keep: true } },
+              { id: 'model-b', name: 'Model B', custom: 'keep-b' },
+            ],
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    })
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      describe: async () => ({ ok: true, value: { namespaces: [modelNamespace] } }),
+      mutate: async (_ns, ops) => {
+        expect(ops).toEqual([{
+          op: 'set',
+          path: ['providers', 'provider', 'models'],
+          value: [
+            { id: 'model-a', name: 'Model A', custom: 'keep-a', compat: { maxTokensField: 'max_tokens', keep: true, supportsDeveloperRole: false } },
+            { id: 'model-b', name: 'Model B', custom: 'keep-b' },
+          ],
+        }])
+        return { ok: true as const, value: modelNamespace }
+      },
+    })
+    await settle()
+    act(() => providerButton(view.container).click())
+    act(() => modelSettingsButton(view.container).click())
+
+    const modelControls = view.container.querySelector('[data-scope="model"]')
+    expect(modelControls).not.toBeNull()
+    const supportsDeveloperRole = modelControls?.querySelector(`select[aria-label="${text('supportsDeveloperRole')}"]`) as HTMLSelectElement
+    expect(supportsDeveloperRole).not.toBeNull()
+    act(() => setValue(supportsDeveloperRole, 'unsupported'))
+    act(() => button(view.container, text('saveModelGatewayCompat')).click())
+    await settle()
+    expect(view.mutate).toHaveBeenCalledTimes(1)
+    view.unmount()
+  })
+
+  it('uses one array set for models[] Auto and keeps the draft after a failed mutation', async () => {
+    const modelNamespace = namespace({
+      value: {
+        providers: {
+          provider: {
+            models: [
+              { id: 'model-a', custom: 'keep-a' },
+              { id: 'model-b', custom: 'keep-b', compat: { maxTokensField: 'max_completion_tokens', other: true } },
+            ],
+          },
+        },
+      },
+      user: {
+        providers: {
+          provider: {
+            models: [
+              { id: 'model-a', custom: 'keep-a' },
+              { id: 'model-b', custom: 'keep-b', compat: { maxTokensField: 'max_completion_tokens', other: true } },
+            ],
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    })
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      describe: async () => ({ ok: true, value: { namespaces: [modelNamespace] } }),
+      mutate: async (_ns, ops) => {
+        expect(ops).toEqual([{
+          op: 'set',
+          path: ['providers', 'provider', 'models'],
+          value: [
+            { id: 'model-a', custom: 'keep-a' },
+            { id: 'model-b', custom: 'keep-b', compat: { other: true } },
+          ],
+        }])
+        return { ok: false as const, error: { message: 'stale revision' } }
+      },
+    })
+    await settle()
+    act(() => providerButton(view.container).click())
+    const modelBButton = [...view.container.querySelectorAll<HTMLButtonElement>(`button[aria-label="${text('openModelSettings')}"]`)]
+      .find((candidate) => candidate.parentElement?.parentElement?.parentElement?.textContent?.includes('model-b'))
+    expect(modelBButton).toBeDefined()
+    act(() => modelBButton!.click())
+    const maxTokens = view.container.querySelector(`[data-scope="model"] select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement
+    act(() => setValue(maxTokens, 'auto'))
+    act(() => button(view.container, text('saveModelGatewayCompat')).click())
+    await settle()
+
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain('stale revision')
+    expect(maxTokens.value).toBe('auto')
+    expect(view.container.textContent).toContain(text('unsaved'))
     view.unmount()
   })
 

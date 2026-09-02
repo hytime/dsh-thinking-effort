@@ -62,7 +62,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 | 功能 | 作用 |
 | --- | --- |
 | 默认档位补齐 | 为缺少配置的模型添加 `off`、`high`、`max`，不覆盖已有自定义值 |
-| 模型级编辑 | 在「设置 → 模型能力与档位」中逐模型勾选档位并填写线上值；catalog/modelOverrides 模型可编辑 compat，`models[]` compat 仅限 YAML 配置 |
+| 模型级编辑 | 在「设置 → 模型能力与档位」中逐模型勾选档位并填写线上值；catalog/modelOverrides 和 `models[]` 模型都可编辑 compat |
 | 网关值映射 | 例如 DSH 选择 `high` 时，实际向网关发送 `ultra` |
 | 子 agent 默认值 | 为未显式指定档位的子 agent 请求自动填入默认思考强度 |
 | 快捷预设 | 一键应用官方 DeepSeek 风格或通用档位组合 |
@@ -177,13 +177,13 @@ providers:
 
 模型级 `compat` 会按字段逐字段覆盖 provider 默认值；模型层没有写出的字段继续继承 provider。`Auto` 会删除当前层字段，恢复从 provider 继承。对同一路由（provider）而言，只要同时存在非空的 `models[]` 和非空的 `modelOverrides`，配置就无效；官方 schema 会拒绝该配置，插件遇到异常数据时 fail closed。
 
-设置页的 provider 全局区域用于修改该 provider 下全部模型的默认值。catalog 模型展开后，在单模型区域编辑 `modelOverrides.<model>.compat`。自定义 YAML `models[]` 路由使用模型条目的 `models[].compat`；由于当前 DSH Settings API 不支持数组 path op，这部分仅支持 YAML 配置，设置页不渲染 `models[]` 的 compat 控件，不提供编辑，也不生成数组 mutation。
+设置页的 provider 全局区域用于修改该 provider 下全部模型的默认值。catalog/modelOverrides 模型和自定义 YAML `models[]` 模型都能展开后编辑单模型 compat：前者写入 `modelOverrides.<model>.compat`，后者写入 `models[].compat`。由于 Settings API 不支持数组索引 path op，`models[]` 修改会通过一个完整的 `providers.<route>.models` 数组 set 写回，同时保留其他模型、未知字段和其他 compat 字段。
 
 这些 compat 值属于控制面配置。它们不实现或替代网关 transport；网络请求仍由外部 transport 负责。
 
 ### 设置页界面
 
-页面顶部是语言选择器；其下方的「子 agent 默认档位」卡片控制没有显式档位的请求。「一键设置」负责批量应用预设。供应商和模型列表支持展开/收起；每个模型行显示输入能力和上下文长度，catalog/modelOverrides 模型在设置区域提供网关兼容控件。`models[]` 的 compat 仅支持 YAML 配置，设置页不渲染。
+页面顶部是语言选择器；其下方的「子 agent 默认档位」卡片控制没有显式档位的请求。「一键设置」负责批量应用预设。供应商和模型列表支持展开/收起；每个模型行显示输入能力、上下文长度，并在设置区域提供网关兼容控件。`models[]` 保存使用完整数组 set，而不是数组索引 path op。
 
 ![中文模型能力与档位设置页](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/settings-model-capabilities-zh.png)
 

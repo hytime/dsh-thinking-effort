@@ -10,7 +10,15 @@ function record(value: unknown): Record<string, unknown> | undefined {
     : undefined
 }
 
-function modelItem(route: string, model: string, raw: Record<string, unknown>, index: number, inOverrides: boolean): InventoryItem {
+function ownedData(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((entry) => ownedData(entry))
+  const object = record(value)
+  if (object === undefined) return value
+  const copy: Record<string, unknown> = {}
+  for (const [key, entry] of Object.entries(object)) copy[key] = ownedData(entry)
+  return copy
+}
+function modelItem(route: string, model: string, raw: Record<string, unknown>, index: number, inOverrides: boolean, modelsSnapshot?: readonly unknown[]): InventoryItem {
   const levels = raw.reasoningEfforts === undefined ? null : raw.reasoningEfforts as ReasoningEfforts
   const contextWindow = Number.isInteger(raw.contextWindow) ? raw.contextWindow as number : undefined
   const input = Array.isArray(raw.input) ? raw.input as InputModality[] : []
@@ -22,6 +30,7 @@ function modelItem(route: string, model: string, raw: Record<string, unknown>, i
     contextWindow,
     input,
     raw,
+    ...(modelsSnapshot === undefined ? {} : { modelsSnapshot }),
     index,
     inOverrides,
   }
@@ -95,12 +104,15 @@ export function modelGatewayCompatViewFrom(
     ? undefined
     : record(item.raw?.compat) ?? modelLayerCompat(descriptor?.value, item.route, item.model)
   const catalogProvider = layerCompat(descriptor?.value, item.route)
+  const modelSelection = item.inOverrides
+    ? userModel
+    : item.modelsSnapshot !== undefined ? record(item.raw?.compat) ?? userModel : userModel
   const runtimeModel = modelRuntimeCompatFor(takeoverRuntime, item.route, item.model)
   const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema)
   const resolved = resolveModelGatewayCompat({
     provider: item.route,
     model: item.model,
-    modelCompat: userModel,
+    modelCompat: modelSelection,
     providerCompat: userProvider,
     baseCompat: [baseModel, baseProvider],
     catalogCompat: [catalogModel, catalogProvider],
@@ -194,10 +206,11 @@ export function inventoryFrom(namespace: unknown): InventoryItem[] {
     const profile = record(profileValue)
     if (!profile) continue
     if (Array.isArray(profile.models)) {
+      const modelsSnapshot = ownedData(profile.models) as readonly unknown[]
       profile.models.forEach((entry, index) => {
         const raw = record(entry)
         const model = typeof raw?.id === 'string' ? raw.id : undefined
-        if (raw && model !== undefined) inventory.push(modelItem(route, model, raw, index, false))
+        if (raw && model !== undefined) inventory.push(modelItem(route, model, raw, index, false, modelsSnapshot))
       })
     }
     const overrides = record(profile.modelOverrides)

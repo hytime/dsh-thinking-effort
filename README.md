@@ -53,7 +53,7 @@ These identifiers have different responsibilities:
 | Feature | Description |
 | --- | --- |
 | Default levels | Adds `off`, `high`, and `max` without overwriting custom values |
-| Per-model editor | Select levels and configure gateway values for catalog/modelOverrides models in Settings; `models[]` compat stays YAML-only |
+| Per-model editor | Select levels and configure gateway values for both catalog/modelOverrides and custom YAML `models[]` models in Settings |
 | Gateway mapping | Send `ultra` when the user selects DSH `high` |
 | Subagent default | Apply a default effort only when a subagent request has no explicit value |
 | Multilingual settings | Includes Chinese, English, Japanese, and Korean dictionaries; Japanese/Korean switching uses DSH language-pack support |
@@ -118,13 +118,13 @@ providers:
 
 A model-level `compat` overrides the provider default field-by-field. Fields not written at the model layer continue to inherit from the provider. `Auto` deletes the current-layer field and restores provider inheritance. For a given route/provider, any non-empty `models[]` together with any non-empty `modelOverrides` is invalid; the official schema rejects this invalid configuration, and the plugin fails closed for malformed data.
 
-The provider area in Settings edits defaults for all models. For a catalog model, expand that model and edit `modelOverrides.<model>.compat` in its single-model area. A custom YAML `models[]` entry uses `models[].compat`; this is YAML-only in the current DSH because the Settings API does not support array path operations. The settings page does not render a compat control for `models[]`, does not offer editing, and does not emit array mutations.
+The provider area in Settings edits defaults for all models. Both catalog models and custom YAML `models[]` entries expose a single-model compat editor: catalog models write `modelOverrides.<model>.compat`, while `models[]` models write `models[].compat`. Because the Settings API does not support array-index path operations, a `models[]` edit writes one complete `providers.<route>.models` array set while preserving other models, unknown fields, and compat fields.
 
 These compat values are control plane configuration. They do not implement or replace the gateway transport; an external transport remains responsible for network requests.
 
 ### Settings page layout
 
-The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities and context length, while catalog/modelOverrides models expose gateway compatibility controls in their settings area. `models[]` compat remains YAML-only and is not rendered.
+The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and gateway compatibility controls in its settings area. `models[]` saves use one complete array set rather than an array-index path operation.
 
 ![English Model capabilities and effort settings page](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/settings-model-capabilities-en.png)
 

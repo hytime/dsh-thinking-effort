@@ -819,7 +819,7 @@ describe('compatibility documentation and root validation', () => {
     { name: 'field-by-field provider override semantics', pattern: /(?:field-by-field|field by field|逐字段|フィールドごと|필드별)[^\n]*(?:provider|供应商|プロバイダー|제공자)/i },
     { name: 'Auto restores provider inheritance', pattern: /Auto[^\n]*(?:delete|delet|unset|取消|删除|削除|삭제)[^\n]*(?:inherit|继承|継承|상속)/i },
     { name: 'models and modelOverrides are mutually exclusive at provider scope', pattern: modelSourceConflictContract },
-    { name: 'models[] settings behavior', pattern: /models\[\][^\n]*(?:does not render|不渲染|compat コントロールを表示せず|compat 컨트롤을 렌더링하지)[^\n]*(?:does not offer editing|不提供编辑|編集も提供せず|편집을 제공하지)[^\n]*(?:does not emit array mutations|不生成数组 mutation|配列 mutation も生成しません|배열 mutation을 생성하지)/i },
+    { name: 'models[] settings behavior', pattern: /models\[\][^\n]*(?:complete|完整|全体|全体|전체)[^\n]*(?:array set|数组 set|配列 set|배열 set)/i },
     { name: 'schema rejects model source conflict', pattern: /(?=[^\n]*(?:official schema|官方 schema|公式 schema|공식 schema))(?=[^\n]*models\[\])[^\n]*(?:rejects|拒绝|拒否|거부)[^\n]*(?:fails? closed|异常数据|異常なデータ|비정상 데이터)/i },
     { name: 'control plane and transport boundary', pattern: /(?:control plane|控制面|コントロールプレーン|제어면)[^\n]*(?:transport|传输|トランスポート|전송)/i },
     { name: 'rc7 capability boundary', pattern: /0\.1\.0-rc\.7/ },

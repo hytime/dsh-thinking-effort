@@ -50,7 +50,7 @@ DSH 내장 모델만 사용하고 이미 추론 제어가 정상 작동한다면
 | 기능 | 설명 |
 | --- | --- |
 | 기본 단계 | 사용자 지정 값을 덮어쓰지 않고 `off`, `high`, `max` 추가 |
-| 모델별 편집 | Settings에서 단계를 설정하고 catalog/modelOverrides 모델의 게이트웨이 호환 값을 편집; `models[]` compat은 YAML 전용 |
+| 모델별 편집 | Settings에서 단계를 설정하고 catalog/modelOverrides와 사용자 지정 YAML `models[]` 모델의 게이트웨이 호환 값을 모두 편집 |
 | 게이트웨이 값 매핑 | DSH에서 `high`를 선택하면 `ultra` 전송 가능 |
 | Subagent 기본값 | 명시적 값이 없는 요청에만 기본값 적용 |
 | 다국어 설정 | 中文, English, 日本語, 한국어 사전 포함; 일본어/한국어 전환은 DSH language-pack 지원을 사용 |
@@ -115,13 +115,13 @@ providers:
 
 모델 수준 `compat`는 provider 기본값을 필드별로 덮어씁니다. 모델 수준에 쓰지 않은 필드는 provider에서 계속 상속됩니다. `Auto`는 현재 계층의 필드를 삭제하고 provider 상속으로 복원합니다. 같은 라우트(provider)에 비어 있지 않은 `models[]`와 비어 있지 않은 `modelOverrides`가 동시에 존재하면 잘못된 구성입니다. 공식 schema는 이 잘못된 구성을 거부하며 플러그인은 비정상 데이터에서 fail closed로 동작합니다.
 
-Settings의 provider 전역 영역은 해당 provider의 모든 모델 기본값을 수정합니다. catalog 모델은 펼친 뒤 단일 모델 영역에서 `modelOverrides.<model>.compat`를 수정합니다. 사용자 지정 YAML `models[]` 라우트는 모델 항목의 `models[].compat`를 사용합니다. 현재 DSH Settings API는 배열 path op를 지원하지 않으므로 `models[]` compat은 YAML 전용입니다. 설정 페이지는 `models[]` compat 컨트롤을 렌더링하지 않고 편집을 제공하지 않으며 배열 mutation을 생성하지 않습니다.
+Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델의 기본값을 수정합니다. catalog/modelOverrides 모델과 사용자 지정 YAML `models[]` 모델 모두 단일 모델 compat 편집기를 제공합니다. 전자는 `modelOverrides.<model>.compat`에, 후자는 `models[].compat`에 기록됩니다. 현재 Settings API는 배열 인덱스 path op를 지원하지 않으므로 `models[]` 변경은 `providers.<route>.models` 전체를 하나의 배열 set으로 저장하며 다른 모델, 알 수 없는 필드 및 다른 compat 필드를 보존합니다.
 
 이 compat 값은 제어면 설정입니다. 게이트웨이 transport를 구현하거나 대체하지 않으며 네트워크 요청은 외부 transport가 담당합니다.
 
 ### 설정 페이지 구성
 
-페이지 상단에는 언어 선택기가 있습니다. 그 아래의 **Subagent default effort** 카드는 명시적인 값이 없는 요청의 기본값을 관리합니다. **Quick settings**는 일괄 프리셋을 적용합니다. 제공자와 모델 목록은 펼치거나 접을 수 있으며, 각 모델 행에는 입력 기능과 컨텍스트 길이가 표시됩니다. catalog/modelOverrides 모델의 설정 영역에서는 게이트웨이 호환 값을 편집할 수 있지만 `models[]` compat은 YAML 전용이며 렌더링되지 않습니다.
+페이지 상단에는 언어 선택기가 있습니다. 그 아래의 **Subagent default effort** 카드는 명시적인 값이 없는 요청의 기본값을 관리합니다. **Quick settings**는 일괄 프리셋을 적용합니다. 제공자와 모델 목록은 펼치거나 접을 수 있으며, 각 모델 행에는 입력 기능, 컨텍스트 길이 및 게이트웨이 호환성 편집 영역이 표시됩니다. `models[]` 저장은 배열 인덱스 path op가 아니라 전체 배열 set을 사용합니다.
 
 ![영문 Model capabilities and effort 설정 페이지](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/settings-model-capabilities-en.png)
 

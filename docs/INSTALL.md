@@ -51,7 +51,7 @@ For either field, `Auto` unsets the user override and restores the official prot
 
 ## Gateway compatibility settings
 
-The provider global area in the Settings page edits the default `compat` values for every model under that provider. Expanding one model opens its single-model area. Catalog models use `modelOverrides.<model>.compat`; custom YAML routes use the model entry's `models[].compat`.
+The provider global area in the Settings page edits the default `compat` values for every model under that provider. Expanding one model opens its single-model area. Both catalog models and custom YAML `models[]` entries support compat editing: catalog models use `modelOverrides.<model>.compat`, while `models[]` entries use `models[].compat`.
 
 ```yaml
 providers:
@@ -68,7 +68,7 @@ providers:
 
 A model-level `compat` overrides the provider default field-by-field. Fields omitted at the model layer inherit the provider value. `Auto` deletes the current-layer field and restores provider inheritance. For a given route/provider, any non-empty `models[]` together with any non-empty `modelOverrides` is invalid; the official schema rejects this invalid configuration, and the plugin fails closed for malformed data.
 
-The current DSH Settings API does not support array path operations. Therefore, `models[]` compat is YAML-only: the settings page does not render a compat control for `models[]`, does not offer editing, and does not emit array mutations. Fields that the runtime schema does not expose cannot be edited; older DSH builds keep the existing baseline settings available.
+The current DSH Settings API does not support array-index path operations. Therefore, saving a `models[]` compat edit writes one complete `providers.<route>.models` array set, preserving other models, unknown fields, and other compat fields. `modelOverrides` edits continue to use precise field-level operations. Fields that the runtime schema does not expose cannot be edited; older DSH builds keep the existing baseline settings available.
 
 These values are control plane configuration only. This plugin does not implement or replace the gateway transport; network requests remain the responsibility of an external transport.
 

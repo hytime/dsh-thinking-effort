@@ -1,7 +1,14 @@
 import type { InventoryItem, ModelUpdate, SettingsOp } from './types.js'
 
-export { opsForModelCompat, opsForProviderCompat } from '../compat/gateway/ops.js'
+export { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat } from '../compat/gateway/ops.js'
 
+function cloneOwned(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((entry) => cloneOwned(entry))
+  if (typeof value !== 'object' || value === null) return value
+  const copy: Record<string, unknown> = {}
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) copy[key] = cloneOwned(entry)
+  return copy
+}
 export function mergeModelUpdate(raw: Record<string, unknown>, update: ModelUpdate): Record<string, unknown> {
   const next = { ...raw }
   if (update.levels !== undefined) next.reasoningEfforts = update.levels
@@ -54,12 +61,21 @@ export function setOps(inventory: readonly InventoryItem[], updates: readonly Mo
       return { op: 'set', path: ['providers', group.route, 'modelOverrides'], value: overrides }
     }
 
-    const models = [...candidates]
-      .sort((a, b) => a.index - b.index)
-      .map((candidate) => {
-        const update = group.updates.find((entry) => entry.item.index === candidate.index && entry.item.model === candidate.model)
-        return update ? mergeModelUpdate({ ...candidate.raw }, update) : { ...candidate.raw }
+    const snapshot = group.updates.find((update) => update.item.modelsSnapshot !== undefined)?.item.modelsSnapshot
+    const models = snapshot !== undefined
+      ? snapshot.map((entry, index) => {
+        const raw = typeof entry === 'object' && entry !== null && !Array.isArray(entry)
+          ? entry as Record<string, unknown>
+          : undefined
+        const update = raw?.id === undefined ? undefined : group.updates.find((candidate) => candidate.item.index === index && candidate.item.model === raw.id)
+        return update ? mergeModelUpdate({ ...raw }, update) : cloneOwned(entry)
       })
+      : [...candidates]
+        .sort((a, b) => a.index - b.index)
+        .map((candidate) => {
+          const update = group.updates.find((entry) => entry.item.index === candidate.index && entry.item.model === candidate.model)
+          return update ? mergeModelUpdate({ ...candidate.raw }, update) : { ...candidate.raw }
+        })
     return { op: 'set', path: ['providers', group.route, 'models'], value: models }
   })
 }

@@ -3,7 +3,7 @@ import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 
 import { DEFAULT_LEVELS, INPUT_MODALITIES, LEVEL_LABEL_KEYS, NS, PRESETS, ALL_LEVELS, CONTEXT_1M } from './constants.js'
 import { inventoryFrom, modelCompatKey, modelGatewayCompatViewsFrom, providerGatewayCompatViewsFrom } from './model-inventory.js'
 import { emptyTakeoverRuntimeResolution } from './takeover-runtime.js'
-import { opsForModelCompat, opsForProviderCompat, setOps } from './model-ops.js'
+import { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from './model-ops.js'
 import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, validateContextWindow, validateLevels } from './validation.js'
 import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
 import type { Palette } from './theme.js'
@@ -192,7 +192,6 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   }
 
   const applyModelCompat = (item: InventoryItem): void => {
-    if (!item.inOverrides) return
     const key = keyOf(item)
     const draft = state.modelCompatDrafts[key]
     const current = state.modelCompatViews[key]
@@ -201,10 +200,13 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     const update: { supportsDeveloperRole?: ModelGatewayCompatUpdate['supportsDeveloperRole']; maxTokensField?: ModelGatewayCompatUpdate['maxTokensField'] } = {}
     if (dirty.supportsDeveloperRole === true && draft.supportsDeveloperRole !== current.supportsDeveloperRole) update.supportsDeveloperRole = draft.supportsDeveloperRole
     if (dirty.maxTokensField === true && draft.maxTokensField !== current.maxTokensField) update.maxTokensField = draft.maxTokensField
-    const ops = opsForModelCompat(item, update, {
+    const editability = {
       supportsDeveloperRole: draft.supportsDeveloperRoleAvailable,
       maxTokensField: draft.maxTokensFieldAvailable,
-    })
+    }
+    const ops = item.inOverrides
+      ? opsForModelCompat(item, update, editability)
+      : opsForModelArrayCompat(state.inventory, item, update, editability)
     if (ops.length === 0) {
       setState((currentState) => ({ ...currentState, modelCompatDirty: removeDirtyFields(currentState.modelCompatDirty, key, ['supportsDeveloperRole', 'maxTokensField']) }))
       return
@@ -215,7 +217,6 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   }
 
   const patchModelCompat = (item: InventoryItem, next: Partial<ModelGatewayCompatUpdate>): void => {
-    if (!item.inOverrides) return
     const key = keyOf(item)
     setState((current) => {
       const draft = current.modelCompatDrafts[key] ?? current.modelCompatViews[key]
@@ -356,7 +357,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       {state.loading ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{t('loading')}</div> : visible.length === 0 ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{state.inventory.length === 0 ? t('noModels') : t('noMatches')}</div> :
          routes.map((route) => { const providerModels = visible.filter((item) => item.route === route); const providerOpen = query !== '' || state.expandedProviders[route] === true; return <div key={route} style={{ marginBottom: '6px' }}><div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '8px', minHeight: '32px', padding: '4px 6px', marginBottom: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.raised }}><span style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}><span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', minWidth: '22px', border: `1px solid ${palette.border}`, borderRadius: '7px', color: palette.secondary, backgroundColor: palette.group }}><Icon name="layers" size={14} /></span><span style={{ display: 'grid', gap: '1px', minWidth: 0 }}><span style={{ color: palette.text, fontSize: '12px', fontWeight: 700, overflowWrap: 'anywhere' }}>{route}</span><span style={{ color: palette.accent, fontSize: '10px', lineHeight: '11px', fontWeight: 700 }}>{t('vendor')}</span></span></span><span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: palette.secondary, whiteSpace: 'nowrap' }}><span>{t('modelCount', { count: providerModels.length })}</span>{query !== '' ? <span>{t('searchResults')}</span> : <ActionButton text="" onClick={() => toggleProvider(route)} palette={palette} tone="ghost" icon={providerOpen ? 'chevronUp' : 'chevronDown'} label={providerOpen ? t('collapseProvider') : t('expandProvider')} />}</span></div>{state.providerDrafts[route] ? <>
           {renderGatewayCompatControls({ view: state.providerDrafts[route], onChange: (next) => patchProviderCompat(route, next), disabled: state.busy }, { palette, t })}{state.providerDirty[route] ? <ActionButton text={t('saveGatewayCompat')} onClick={() => applyProviderCompat(route)} disabled={state.busy} tone="primary" palette={palette} icon="check" /> : null}</> : null}{providerOpen ? providerModels.map((item) => { const key = keyOf(item); const dirty = state.dirty[key] ?? {}; return <ModelRow key={`${key}-${item.inOverrides ? 'override' : item.index}`} item={item} open={state.expanded[key] === true} draft={state.drafts[key]} contextDraft={state.contextDrafts[key] ?? contextDraftFrom(item)} inputDraft={state.inputDrafts[key] ?? inputDraftFrom(item)} dirty={dirty.levels === true || dirty.context === true || dirty.input === true} busy={state.busy} palette={palette} t={t} onToggle={() => toggleExpand(item)} onLevelChange={(level, patch) => patchDraft(item, level, patch)} onContextChange={(value) => patchContextValue(item, value)} onOneMillionChange={(enabled) => setOneMillion(item, enabled)} onInputChange={(modality, enabled) => patchInputCapability(item, modality, enabled)} onSave={() => applyModel(item)} onRestoreReasoning={() => restoreReasoningDefaults(item)} onRestoreCapability={() => restoreProviderDefaults(item)}
-                         compatView={item.inOverrides ? state.modelCompatDrafts[keyOf(item)] : undefined} compatDirty={Boolean(state.modelCompatDirty[key]?.supportsDeveloperRole || state.modelCompatDirty[key]?.maxTokensField)} onCompatChange={(next) => patchModelCompat(item, next)} onSaveCompat={() => applyModelCompat(item)} /> }) : null}</div> })}
+                         compatView={state.modelCompatDrafts[keyOf(item)]} compatDirty={Boolean(state.modelCompatDirty[key]?.supportsDeveloperRole || state.modelCompatDirty[key]?.maxTokensField)} onCompatChange={(next) => patchModelCompat(item, next)} onSaveCompat={() => applyModelCompat(item)} /> }) : null}</div> })}
       {expandedCount > 0 ? <div style={{ fontSize: '12px', color: palette.secondary, margin: '4px 2px 0' }}>{t('expandedSettings', { count: expandedCount })}</div> : null}
     </div>}
     <span aria-label={t('versionLabel')} style={{ position: 'absolute', right: '12px', bottom: '8px', fontSize: '10px', lineHeight: '14px', opacity: 0.45, pointerEvents: 'none', userSelect: 'none' }}>v{PLUGIN_VERSION}</span>

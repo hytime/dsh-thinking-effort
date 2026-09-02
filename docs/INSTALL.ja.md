@@ -51,7 +51,7 @@ version-map はゲートウェイ capability を次のように判定します�
 
 ## ゲートウェイ互換設定
 
-Settings の provider グローバル領域では、その provider 配下のすべてのモデルの `compat` 既定値を編集します。モデルを 1 つ展開すると単一モデル領域が開きます。カタログモデルでは `modelOverrides.<model>.compat`、カスタム YAML ルートではモデル項目の `models[].compat` を使用します。
+Settings の provider グローバル領域では、その provider 配下のすべてのモデルの `compat` 既定値を編集します。モデルを 1 つ展開すると単一モデル領域が開きます。カタログモデルとカスタム YAML `models[]` の両方で compat を編集できます。前者は `modelOverrides.<model>.compat`、後者は `models[].compat` を使用します。
 
 ```yaml
 providers:
@@ -68,7 +68,7 @@ providers:
 
 モデルの `compat` は provider の既定値をフィールドごとに上書きします。モデル層にないフィールドは provider の値を継承します。`Auto` は現在の層のフィールドを削除し、provider からの継承へ戻します。同じルート（provider）に非空の `models[]` と非空の `modelOverrides` が同時に存在する場合は無効な設定です。公式 schema はこの無効な設定を拒否し、プラグインは異常なデータに対して fail closed します。
 
-現在の DSH Settings API は配列 path op に対応していません。そのため `models[]` の compat は YAML 専用です。設定ページでは `models[]` の compat コントロールを表示せず、編集も提供せず、配列 mutation も生成しません。実行時 schema が公開しないフィールドも編集不可です。古い DSH では既存の基本設定を引き続き利用できます。
+現在の DSH Settings API は配列インデックスの path op に対応していません。そのため `models[]` の compat 保存は `providers.<route>.models` 全体を 1 回の配列 set で書き戻し、他のモデル、未知フィールド、他の compat フィールドを保持します。`modelOverrides` の編集は従来どおり正確なフィールド単位の操作を使用します。実行時 schema が公開しないフィールドも編集できません。古い DSH では既存の基本設定を引き続き利用できます。
 
 これらの値はコントロールプレーンの設定だけを行います。このプラグインはゲートウェイの transport を実装または置き換えず、ネットワーク要求は外部 transport が担当します。
 

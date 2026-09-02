@@ -14,7 +14,7 @@ import {
 import { directResult, settingsBridge } from '../src/client/settings-bridge.js'
 import { LOCALE_DATA, LOCALE_CODES } from '../src/client/locales.js'
 import { inventoryFrom, modelCompatKey, modelGatewayCompatViewFrom, providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
-import { mergeModelUpdate, opsForModelCompat, opsForProviderCompat, setOps } from '../src/client/model-ops.js'
+import { mergeModelUpdate, opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from '../src/client/model-ops.js'
 import {
   buildInput,
   buildLevels,
@@ -213,6 +213,36 @@ describe('model inventory and operations', () => {
     ])
   })
 
+  it('preserves invalid models[] entries when saving a valid model update', () => {
+    const namespace = {
+      value: {
+        providers: {
+          provider: {
+            models: [
+              { id: 'model-a', custom: 'keep-a' },
+              null,
+              { id: 'model-b', custom: 'keep-b' },
+              'unknown-entry',
+            ],
+          },
+        },
+      },
+    }
+    const inventory = inventoryFrom(namespace)
+    const target = inventory.find((candidate) => candidate.model === 'model-b')
+    expect(target).toBeDefined()
+    expect(setOps(inventory, [{ item: target!, levels: { off: null, high: 'high' } }])).toEqual([{
+      op: 'set',
+      path: ['providers', 'provider', 'models'],
+      value: [
+        { id: 'model-a', custom: 'keep-a' },
+        null,
+        { id: 'model-b', custom: 'keep-b', reasoningEfforts: { off: null, high: 'high' } },
+        'unknown-entry',
+      ],
+    }])
+  })
+
   it('preserves special model IDs in override operations', () => {
     const namespace = JSON.parse(
       '{"value":{"providers":{"provider":{"modelOverrides":{"__proto__":{"id":"__proto__","keep":"proto"},"constructor":{"id":"constructor","keep":"constructor"},"toString":{"id":"toString","keep":"toString"}}}}}}',
@@ -240,6 +270,40 @@ describe('model inventory and operations', () => {
     expect(result.constructor).toEqual({ id: 'constructor', keep: 'constructor', reasoningEfforts: { off: null, high: 'constructor-high' } })
     expect(result.toString).toEqual({ id: 'toString', keep: 'toString', reasoningEfforts: { off: null, high: 'to-string-high' } })
   })
+  it('replaces one models[] compat entry with a complete array while preserving every other value', () => {
+    const target = item({ model: 'model-b', index: 1, raw: { id: 'model-b', compat: { maxTokensField: 'max_tokens', keep: 'yes' }, custom: 'keep-b' } })
+    const other = item({ model: 'model-a', index: 0, raw: { id: 'model-a', custom: 'keep-a' } })
+    const editable: GatewayCompatEditability = { supportsDeveloperRole: true, maxTokensField: true, editableFields: ['supportsDeveloperRole', 'maxTokensField'] }
+
+    expect(opsForModelArrayCompat([other, target], target, { supportsDeveloperRole: 'unsupported' }, editable)).toEqual([{
+      op: 'set',
+      path: ['providers', 'provider', 'models'],
+      value: [
+        { id: 'model-a', custom: 'keep-a' },
+        { id: 'model-b', compat: { maxTokensField: 'max_tokens', keep: 'yes', supportsDeveloperRole: false }, custom: 'keep-b' },
+      ],
+    }])
+  })
+
+  it('deletes only selected models[] compat fields and rejects invalid or mismatched inventory inputs', () => {
+    const target = item({ model: 'model-b', index: 1, raw: { id: 'model-b', compat: { supportsDeveloperRole: true } } })
+    const other = item({ model: 'model-a', index: 0, raw: { id: 'model-a', custom: 'keep-a' } })
+    const editable: GatewayCompatEditability = { supportsDeveloperRole: true, maxTokensField: true, editableFields: ['supportsDeveloperRole', 'maxTokensField'] }
+
+    expect(opsForModelArrayCompat([other, target], target, { supportsDeveloperRole: 'auto' }, editable)).toEqual([{
+      op: 'set', path: ['providers', 'provider', 'models'], value: [other.raw, { id: 'model-b' }],
+    }])
+    expect(opsForModelArrayCompat([other, target], target, { maxTokensField: 'max_completion_tokens' }, editable)[0]?.value).toEqual([
+      other.raw,
+      { id: 'model-b', compat: { supportsDeveloperRole: true, maxTokensField: 'max_completion_tokens' } },
+    ])
+    expect(opsForModelArrayCompat([other, target], { ...target, index: 9 }, { supportsDeveloperRole: 'unsupported' }, editable)).toEqual([])
+    expect(opsForModelArrayCompat([other, target], { ...target, model: 'missing' }, { supportsDeveloperRole: 'unsupported' }, editable)).toEqual([])
+    expect(opsForModelArrayCompat([other, target], target, { supportsDeveloperRole: 'unsupported', maxTokensField: 'bogus' as never }, editable)).toEqual([])
+    expect(opsForModelArrayCompat([other, target], { ...target, inOverrides: true }, { supportsDeveloperRole: 'unsupported' }, editable)).toEqual([])
+    expect(opsForModelArrayCompat([other, target, { ...target, inOverrides: true, index: -1 }], target, { supportsDeveloperRole: 'unsupported' }, editable)).toEqual([])
+  })
+
   it('writes provider compat fields independently for supported and unsupported values', () => {
     const editable: GatewayCompatEditability = { supportsDeveloperRole: true, maxTokensField: true, editableFields: ['supportsDeveloperRole', 'maxTokensField'] }
     expect(opsForProviderCompat('local', {
@@ -368,8 +432,8 @@ describe('model inventory and operations', () => {
     expect(modelGatewayCompatViewFrom(namespace, model!, 'modern', runtime)).toMatchObject({
       provider: 'provider',
       model: 'model-a',
-      supportsDeveloperRole: 'auto',
-      supportsDeveloperRoleSource: 'catalog',
+      supportsDeveloperRole: 'unsupported',
+      supportsDeveloperRoleSource: 'model',
       supportsDeveloperRoleResolved: false,
       maxTokensField: 'auto',
       maxTokensFieldSource: 'unknown',

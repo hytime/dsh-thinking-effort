@@ -82,4 +82,74 @@ export function opsForModelCompat(
   return operations
 }
 
-export const providerCompatOps = opsForProviderCompat
+export function opsForModelArrayCompat(
+  inventory: readonly InventoryItem[],
+  item: InventoryItem,
+  update: Partial<ModelGatewayCompatUpdate>,
+  editability?: Partial<Pick<GatewayCompatEditability, 'supportsDeveloperRole' | 'maxTokensField'>>,
+): SettingsOp[] {
+  if (item.inOverrides !== false
+    || typeof item.route !== 'string'
+    || item.route.trim() === ''
+    || typeof item.model !== 'string'
+    || item.model.trim() === ''
+    || !Number.isInteger(item.index)
+    || item.index < 0) return []
+
+  if (inventory.some((candidate) => candidate.route === item.route && candidate.inOverrides)) return []
+  const matches = inventory.filter((candidate) => candidate.inOverrides === false
+    && candidate.route === item.route
+    && candidate.index === item.index
+    && candidate.model === item.model)
+  if (matches.length !== 1) return []
+
+  const fields = Object.keys(update)
+  if (fields.length === 0 || fields.some((field) => field !== 'supportsDeveloperRole' && field !== 'maxTokensField')) return []
+  if (fields.some((field) => {
+    if (field === 'supportsDeveloperRole') {
+      return editability?.supportsDeveloperRole !== true
+        || !['auto', 'supported', 'unsupported'].includes(update.supportsDeveloperRole as string)
+    }
+    return editability?.maxTokensField !== true
+      || !['auto', 'max_tokens', 'max_completion_tokens'].includes(update.maxTokensField as string)
+  })) return []
+
+  const clone = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map((entry) => clone(entry))
+    if (typeof value !== 'object' || value === null) return value
+    const source = value as Record<string, unknown>
+    const copy: Record<string, unknown> = {}
+    for (const [key, entry] of Object.entries(source)) copy[key] = clone(entry)
+    return copy
+  }
+  const snapshot = item.modelsSnapshot ?? inventory
+    .filter((candidate) => candidate.inOverrides === false && candidate.route === item.route)
+    .sort((left, right) => left.index - right.index)
+    .map((candidate) => candidate.raw)
+  if (!Array.isArray(snapshot) || snapshot.length <= item.index) return []
+  const originalTarget = snapshot[item.index]
+  if (typeof originalTarget !== 'object' || originalTarget === null || Array.isArray(originalTarget)
+    || (originalTarget as Record<string, unknown>).id !== item.model) return []
+
+  const models = snapshot.map((entry, index) => {
+    if (index !== item.index) return clone(entry)
+    const model = clone(entry) as Record<string, unknown>
+    const compatSource = model.compat
+    const compat = typeof compatSource === 'object' && compatSource !== null && !Array.isArray(compatSource)
+      ? { ...(compatSource as Record<string, unknown>) }
+      : {}
+    if (Object.prototype.hasOwnProperty.call(update, 'supportsDeveloperRole')) {
+      if (update.supportsDeveloperRole === 'auto') delete compat.supportsDeveloperRole
+      else compat.supportsDeveloperRole = update.supportsDeveloperRole === 'supported'
+    }
+    if (Object.prototype.hasOwnProperty.call(update, 'maxTokensField')) {
+      if (update.maxTokensField === 'auto') delete compat.maxTokensField
+      else compat.maxTokensField = update.maxTokensField
+    }
+    if (Object.keys(compat).length === 0) delete model.compat
+    else model.compat = compat
+    return model
+  })
+
+  return [{ op: 'set', path: ['providers', item.route, 'models'], value: models }]
+}

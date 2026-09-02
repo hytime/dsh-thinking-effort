@@ -51,7 +51,7 @@ version-map은 다음 규칙으로 게이트웨이 capability를 판정합니다
 
 ## 게이트웨이 호환성 설정
 
-Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델의 `compat` 기본값을 수정합니다. 모델 하나를 펼치면 단일 모델 영역이 열립니다. catalog 모델은 `modelOverrides.<model>.compat`을 사용하고, 사용자 지정 YAML 라우트는 모델 항목의 `models[].compat`을 사용합니다.
+Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델의 `compat` 기본값을 수정합니다. 모델 하나를 펼치면 단일 모델 영역이 열립니다. catalog 모델과 사용자 지정 YAML `models[]` 모델 모두 compat 편집을 지원합니다. 전자는 `modelOverrides.<model>.compat`을, 후자는 `models[].compat`을 사용합니다.
 
 ```yaml
 providers:
@@ -68,7 +68,7 @@ providers:
 
 모델 수준 `compat`는 provider 기본값을 필드별로 덮어씁니다. 모델 수준에 없는 필드는 provider 값을 상속합니다. `Auto`는 현재 계층의 필드를 삭제하고 provider 상속으로 복원합니다. 같은 라우트(provider)에 비어 있지 않은 `models[]`와 비어 있지 않은 `modelOverrides`가 동시에 존재하면 잘못된 구성입니다. 공식 schema는 이 잘못된 구성을 거부하고 플러그인은 비정상 데이터에서 fail closed로 동작합니다.
 
-현재 DSH Settings API는 배열 path op를 지원하지 않습니다. 따라서 `models[]` compat은 YAML 전용입니다. 설정 페이지는 `models[]` compat 컨트롤을 렌더링하지 않고 편집을 제공하지 않으며 배열 mutation을 생성하지 않습니다. 런타임 schema가 노출하지 않는 필드도 편집할 수 없으며, 이전 DSH에서는 기존 기본 설정을 계속 사용할 수 있습니다.
+현재 DSH Settings API는 배열 인덱스 path op를 지원하지 않습니다. 따라서 `models[]` compat 저장은 `providers.<route>.models` 전체를 하나의 배열 set으로 기록하며 다른 모델, 알 수 없는 필드 및 다른 compat 필드를 보존합니다. `modelOverrides` 편집은 계속 정확한 필드 단위 operation을 사용합니다. 런타임 schema가 노출하지 않는 필드도 편집할 수 없으며, 이전 DSH에서는 기존 기본 설정을 계속 사용할 수 있습니다.
 
 이 값은 제어면 설정만 담당합니다. 이 플러그인은 게이트웨이 transport를 구현하거나 대체하지 않으며 네트워크 요청은 외부 transport가 담당합니다.
 

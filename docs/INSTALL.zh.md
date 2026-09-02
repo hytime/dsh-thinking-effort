@@ -57,7 +57,7 @@ version-map 按以下规则判断网关能力：
 
 ## 网关兼容设置
 
-设置页的 provider 全局区域用于修改该 provider 下全部模型的 `compat` 默认值。展开单个模型后进入单模型区域。catalog 模型使用 `modelOverrides.<model>.compat`，自定义 YAML 路由使用模型条目的 `models[].compat`。
+设置页的 provider 全局区域用于修改该 provider 下全部模型的 `compat` 默认值。展开单个模型后进入单模型区域。catalog 模型和自定义 YAML `models[]` 模型都支持编辑 compat：前者使用 `modelOverrides.<model>.compat`，后者使用 `models[].compat`。
 
 ```yaml
 providers:
@@ -74,7 +74,7 @@ providers:
 
 模型级 `compat` 会按字段逐字段覆盖 provider 默认值；模型层省略的字段继承 provider 值。`Auto` 会删除当前层字段，恢复从 provider 继承。对同一路由（provider）而言，只要同时存在非空的 `models[]` 和非空的 `modelOverrides`，配置就无效；官方 schema 会拒绝该配置，插件遇到异常数据时 fail closed。
 
-当前 DSH Settings API 不支持数组 path op。因此，`models[]` 的 compat 只能通过 YAML 配置：设置页不渲染 `models[]` 的 compat 控件，不提供编辑，也不生成数组 mutation。运行时 schema 未暴露的字段同样不可编辑；旧版 DSH 仍可使用原有基础设置。
+当前 DSH Settings API 不支持数组索引 path op。因此，保存 `models[]` compat 会通过一个完整的 `providers.<route>.models` 数组 set 写回，并保留其他模型、未知字段和其他 compat 字段。`modelOverrides` 仍使用精确字段级操作。运行时 schema 未暴露的字段同样不可编辑；旧版 DSH 仍可使用原有基础设置。
 
 这些值只属于控制面配置。本插件不实现或替代网关 transport，网络请求仍由外部 transport 负责。
 
