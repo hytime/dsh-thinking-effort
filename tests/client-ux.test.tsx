@@ -8,7 +8,7 @@ import { SectionEditor } from '../src/client/SectionEditor.js'
 import { createTakeoverRuntimeStore, type TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
 import { GatewayCompatControls, renderGatewayCompatControls } from '../src/client/components/GatewayCompatControls.js'
 import { ModelEditor } from '../src/client/components/ModelEditor.js'
-import { providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
+import { inventoryFrom, modelGatewayCompatViewFrom, providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
 import { en, ja, ko, zh } from '../src/client/locales.js'
 import { iosPalette } from '../src/client/theme.js'
 import type {
@@ -507,21 +507,33 @@ describe('SectionEditor user behavior', () => {
           },
         },
       },
-      user: { providers: { provider: { compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' } } } },
+      user: { providers: { provider: { compat: { supportsDeveloperRole: false } } } },
+      base: { providers: { provider: { compat: { maxTokensField: 'max_completion_tokens' } } } },
       schema: realGatewaySchema,
     })
     const refreshed = namespace({
       revision: 8,
       value: initial.value,
-      user: { providers: { provider: { compat: { supportsDeveloperRole: true, maxTokensField: 'max_tokens' } } } },
+      user: { providers: { provider: { compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' } } } },
+      base: initial.base,
       schema: realGatewaySchema,
     })
+    const initialModelA = inventoryFrom(initial).find((item) => item.model === 'model-a')
+    const refreshedModelB = inventoryFrom(refreshed).find((item) => item.model === 'model-b')
+    expect(initialModelA).toBeDefined()
+    expect(refreshedModelB).toBeDefined()
+    expect(modelGatewayCompatViewFrom(initial, initialModelA!, 'modern')).toMatchObject({
+      maxTokensField: 'auto',
+      maxTokensFieldResolved: 'max_completion_tokens',
+      maxTokensFieldSource: 'base',
+    })
+
     const view = renderEditor({
       compatibilityProfile: 'modern',
       describe: async () => ({ ok: true, value: { namespaces: [initial] } }),
       mutate: async (_ns, ops, revision) => {
         expect(revision).toBe(2)
-        expect(ops).toEqual([{ op: 'set', path: ['providers', 'provider', 'compat', 'supportsDeveloperRole'], value: true }])
+        expect(ops).toEqual([{ op: 'set', path: ['providers', 'provider', 'compat', 'maxTokensField'], value: 'max_tokens' }])
         expect(ops.some((op) => op.path.includes('modelOverrides'))).toBe(false)
         return { ok: true as const, value: refreshed }
       },
@@ -532,26 +544,35 @@ describe('SectionEditor user behavior', () => {
     const modelAButton = modelButtons.find((candidate) => candidate.parentElement?.parentElement?.parentElement?.textContent?.includes('model-a'))
     expect(modelAButton).toBeDefined()
     act(() => modelAButton!.click())
-    const modelAMaxTokens = view.container.querySelector(`[data-scope="model"] select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement
+    const dirtyModel = view.container.querySelector('[data-scope="model"]')
+    expect(dirtyModel?.textContent).toContain(text('compatSourceBase'))
+    const modelAMaxTokens = dirtyModel?.querySelector(`select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement
     act(() => setValue(modelAMaxTokens, 'max_completion_tokens'))
 
-    const providerDeveloper = view.container.querySelector(`[data-scope="provider"] select[aria-label="${text('supportsDeveloperRole')}"]`) as HTMLSelectElement
-    act(() => setValue(providerDeveloper, 'supported'))
+    const providerMaxTokens = view.container.querySelector(`[data-scope="provider"] select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement
+    act(() => setValue(providerMaxTokens, 'max_tokens'))
     act(() => button(view.container, text('saveGatewayCompat')).click())
     await settle()
 
-    expect((view.container.querySelector(`[data-scope="provider"] select[aria-label="${text('supportsDeveloperRole')}"]`) as HTMLSelectElement).value).toBe('supported')
-    expect((view.container.querySelector(`[data-scope="model"] select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement).value).toBe('max_completion_tokens')
-    expect(view.container.querySelector('[data-scope="model"]')?.textContent).toContain(text('compatSourceProvider'))
+    expect((view.container.querySelector(`[data-scope="provider"] select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement).value).toBe('max_tokens')
+    const refreshedDirtyModel = view.container.querySelector('[data-scope="model"]')
+    expect((refreshedDirtyModel?.querySelector(`select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement).value).toBe('max_completion_tokens')
+    expect(refreshedDirtyModel?.textContent).toContain(text('compatSourceProvider'))
+    expect(refreshedDirtyModel?.textContent).not.toContain(text('compatSourceBase'))
 
+    expect(modelGatewayCompatViewFrom(refreshed, refreshedModelB!, 'modern')).toMatchObject({
+      maxTokensField: 'auto',
+      maxTokensFieldResolved: 'max_tokens',
+      maxTokensFieldSource: 'provider',
+    })
     const modelBButton = [...view.container.querySelectorAll<HTMLButtonElement>(`button[aria-label="${text('openModelSettings')}"]`)]
       .find((candidate) => candidate.parentElement?.parentElement?.parentElement?.textContent?.includes('model-b'))
     expect(modelBButton).toBeDefined()
     act(() => modelBButton!.click())
-    const modelB = view.container.querySelectorAll('[data-scope="model"]')[1] ?? view.container.querySelector('[data-scope="model"]')
-    expect(modelB?.querySelector(`select[aria-label="${text('supportsDeveloperRole')}"]`)).not.toBeNull()
-    expect((modelB?.querySelector(`select[aria-label="${text('supportsDeveloperRole')}"]`) as HTMLSelectElement).value).toBe('auto')
-    expect(modelB?.textContent).toContain(text('compatSourceProvider'))
+    const cleanModel = view.container.querySelectorAll('[data-scope="model"]')[1]
+    expect((cleanModel?.querySelector(`select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement).value).toBe('auto')
+    expect(cleanModel?.textContent).toContain(text('compatSourceProvider'))
+    expect(cleanModel?.textContent).not.toContain(text('compatSourceBase'))
     view.unmount()
   })
 
