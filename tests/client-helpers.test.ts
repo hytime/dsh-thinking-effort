@@ -285,6 +285,34 @@ describe('model inventory and operations', () => {
     }])
   })
 
+  it('preserves own __proto__ keys in nested unknown fields during models[] compat saves', () => {
+    const namespace = JSON.parse('{"value":{"providers":{"provider":{"models":[{"id":"model-a","metadata":{"__proto__":{"keep":"a"}}},{"id":"model-b","compat":{"other":{"__proto__":{"keep":"b"}}},"metadata":{"__proto__":{"keep":"target"}}}]}}}}') as Record<string, unknown>
+    const inventory = inventoryFrom(namespace)
+    const target = inventory.find((candidate) => candidate.model === 'model-b')
+    const operations = opsForModelArrayCompat(inventory, target!, { supportsDeveloperRole: 'unsupported' }, { supportsDeveloperRole: true, maxTokensField: true })
+    const models = operations[0]?.value as Array<Record<string, any>>
+
+    expect(Object.prototype.hasOwnProperty.call(models[0]?.metadata, '__proto__')).toBe(true)
+    expect(models[0]?.metadata?.['__proto__']).toEqual({ keep: 'a' })
+    expect(Object.prototype.hasOwnProperty.call(models[1]?.metadata, '__proto__')).toBe(true)
+    expect(models[1]?.metadata?.['__proto__']).toEqual({ keep: 'target' })
+    expect(Object.prototype.hasOwnProperty.call(models[1]?.compat?.other, '__proto__')).toBe(true)
+    expect(models[1]?.compat?.other?.['__proto__']).toEqual({ keep: 'b' })
+  })
+
+  it('preserves own __proto__ keys in nested unknown fields during base model saves', () => {
+    const namespace = JSON.parse('{"value":{"providers":{"provider":{"models":[{"id":"model-a","metadata":{"__proto__":{"keep":"a"}}},{"id":"model-b","metadata":{"__proto__":{"keep":"target"}}}]}}}}') as Record<string, unknown>
+    const inventory = inventoryFrom(namespace)
+    const target = inventory.find((candidate) => candidate.model === 'model-b')
+    const operations = setOps(inventory, [{ item: target!, levels: { off: null, high: 'high' } }])
+    const models = operations[0]?.value as Array<Record<string, any>>
+
+    expect(Object.prototype.hasOwnProperty.call(models[0]?.metadata, '__proto__')).toBe(true)
+    expect(models[0]?.metadata?.['__proto__']).toEqual({ keep: 'a' })
+    expect(Object.prototype.hasOwnProperty.call(models[1]?.metadata, '__proto__')).toBe(true)
+    expect(models[1]?.metadata?.['__proto__']).toEqual({ keep: 'target' })
+  })
+
   it('deletes only selected models[] compat fields and rejects invalid or mismatched inventory inputs', () => {
     const target = item({ model: 'model-b', index: 1, raw: { id: 'model-b', compat: { supportsDeveloperRole: true } } })
     const other = item({ model: 'model-a', index: 0, raw: { id: 'model-a', custom: 'keep-a' } })

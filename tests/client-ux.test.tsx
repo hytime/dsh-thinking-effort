@@ -320,6 +320,32 @@ describe('SectionEditor user behavior', () => {
     }
   })
 
+  it('renders the models[] save note from every locale in the model editor', () => {
+    const locales: readonly [string, Record<string, string>][] = [['en', en], ['zh', zh], ['ja', ja], ['ko', ko]]
+    const item: InventoryItem = { route: 'provider', model: 'model-a', name: 'Model A', levels: { off: null }, input: ['text'], raw: { id: 'model-a' }, index: 0, inOverrides: false }
+    const compatView = {
+      provider: 'provider',
+      model: 'model-a',
+      supportsDeveloperRole: 'auto' as const,
+      maxTokensField: 'auto' as const,
+      supportsDeveloperRoleSource: 'provider' as const,
+      maxTokensFieldSource: 'provider' as const,
+      supportsDeveloperRoleAvailable: true,
+      maxTokensFieldAvailable: true,
+    }
+    for (const [locale, dictionary] of locales) {
+      const container = document.createElement('div')
+      document.body.append(container)
+      const root = createRoot(container)
+      act(() => {
+        root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '', oneMillion: false, previousValue: '', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={(key) => dictionary[key] ?? key} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onCompatChange={vi.fn()} onSaveCompat={vi.fn()} />)
+      })
+      expect(container.textContent, `${locale} missing models[] save note`).toContain(dictionary.modelsArrayCompatSaveNote)
+      act(() => root.unmount())
+      container.remove()
+    }
+  })
+
   it('renders model editor compat controls without changing base model controls', () => {
     const item: InventoryItem = {
       route: 'provider',
@@ -398,6 +424,31 @@ describe('SectionEditor user behavior', () => {
     expect(container.textContent).toContain(text('saveModelGatewayCompat'))
     expect(onSaveCompat).not.toHaveBeenCalled()
     expect(container.textContent).toContain(text('reasoningLevels'))
+    expect(container.querySelector(`input[aria-label="${text('contextLength')}"]`)).not.toBeNull()
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('hides models[] compat controls when the source is not editable', () => {
+    const item: InventoryItem = { route: 'provider', model: 'legacy-model', name: 'Legacy Model', levels: { off: null }, input: ['text'], raw: { id: 'legacy-model' }, index: 0, inOverrides: false }
+    const compatView = {
+      provider: 'provider',
+      model: 'legacy-model',
+      supportsDeveloperRole: 'auto' as const,
+      maxTokensField: 'auto' as const,
+      supportsDeveloperRoleSource: 'unknown' as const,
+      maxTokensFieldSource: 'unknown' as const,
+      supportsDeveloperRoleAvailable: false,
+      maxTokensFieldAvailable: false,
+    }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    act(() => {
+      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '', oneMillion: false, previousValue: '', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onCompatChange={vi.fn()} onSaveCompat={vi.fn()} compatDirty />)
+    })
+    expect(container.querySelector('[data-scope="model"]')).toBeNull()
+    expect(container.textContent).not.toContain(text('saveModelGatewayCompat'))
     expect(container.querySelector(`input[aria-label="${text('contextLength')}"]`)).not.toBeNull()
     act(() => root.unmount())
     container.remove()
@@ -807,6 +858,66 @@ describe('SectionEditor user behavior', () => {
     expect(view.container.querySelector(`input[aria-label="${text('contextLength')}"]`)).not.toBeNull()
     expect(view.container.textContent).toContain(text('reasoningLevels'))
     expect(view.container.textContent).not.toContain(text('saveModelGatewayCompat'))
+    view.unmount()
+  })
+
+  it('hides dirty model compat drafts after a conflict refresh while retaining baseline controls', async () => {
+    const initial = namespace({
+      value: {
+        providers: {
+          provider: {
+            compat: { supportsDeveloperRole: false },
+            models: [{ id: 'model-a', name: 'Model A', input: ['text'] }],
+          },
+        },
+      },
+      user: {
+        providers: {
+          provider: {
+            models: [{ id: 'model-a', name: 'Model A', input: ['text'], compat: { maxTokensField: 'max_tokens' } }],
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    })
+    const conflict = namespace({
+      revision: 3,
+      value: {
+        providers: {
+          provider: {
+            compat: { supportsDeveloperRole: false },
+            models: [{ id: 'model-a', name: 'Model A', input: ['text'] }],
+            modelOverrides: { 'model-a': { id: 'model-a', input: ['text'] } },
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    })
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      describe: async () => ({ ok: true, value: { namespaces: [initial] } }),
+      mutate: async (_ns, ops) => {
+        expect(ops).toEqual([{ op: 'set', path: ['providers', 'provider', 'compat', 'supportsDeveloperRole'], value: true }])
+        return { ok: true as const, value: conflict }
+      },
+    })
+    await settle()
+    act(() => providerButton(view.container).click())
+    act(() => modelSettingsButton(view.container).click())
+    const modelMaxTokens = view.container.querySelector(`[data-scope="model"] select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement
+    act(() => setValue(modelMaxTokens, 'max_completion_tokens'))
+    expect(modelMaxTokens.value).toBe('max_completion_tokens')
+    expect(view.container.textContent).toContain(text('unsaved'))
+    expect(view.container.querySelector('[data-scope="model"]')).not.toBeNull()
+    const providerSupports = view.container.querySelector(`[data-scope="provider"] select[aria-label="${text('supportsDeveloperRole')}"]`) as HTMLSelectElement
+    act(() => setValue(providerSupports, 'supported'))
+    act(() => button(view.container, text('saveGatewayCompat')).click())
+    await settle()
+
+    expect(view.mutate).toHaveBeenCalledTimes(1)
+    expect(view.container.querySelector('[data-scope="model"]')).toBeNull()
+    expect(view.container.textContent).not.toContain(text('saveModelGatewayCompat'))
+    expect(view.container.querySelector(`input[aria-label="${text('contextLength')}"]`)).not.toBeNull()
     view.unmount()
   })
 

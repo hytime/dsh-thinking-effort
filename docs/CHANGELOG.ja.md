@@ -15,7 +15,7 @@
 - `version-map.ts` で DSH Runtime の transport、Gateway compat フィールド、takeover transport の capability mapping を統一し、rc7 は `supportsDeveloperRole`/`maxTokensField` に非対応、rc8 以降は対応することを明記しました。
 - rc7、rc2、alpha3 の 3 つの capability composition representative を個別にロードし、実際の互換性を検証するテストを追加しました。
 - オプションの `dsh-llm-openai-completions` takeover に対応しました。Gateway compat に対応する runtime で、対象がカスタム OpenAI 互換の思考ゲートウェイであり、transport が有効な場合だけ適用されます。
-- provider のグローバル `compat` 既定値と単一モデルの上書きを追加しました。カタログモデルは `modelOverrides.<model>.compat`、カスタム YAML モデルは `models[].compat` を使用します。モデル層は書かれたフィールドだけを provider に対して上書きし、`Auto` は現在の層のフィールドを削除して provider の継承へ戻します。同じルート（provider）に非空の `models[]` と非空の `modelOverrides` が同時に存在する場合は無効な設定です。公式 schema はこの無効な設定を拒否し、プラグインは異常なデータに対して fail closed します。`models[]` の compat は YAML 専用で、設定ページには compat コントロールを表示せず、編集も提供せず、配列 mutation も生成しません。
+- provider のグローバル `compat` 既定値と単一モデルの上書きを追加しました。カタログモデルは `modelOverrides.<model>.compat`、カスタム YAML モデルは `models[].compat` を使用します。モデル層は書かれたフィールドだけを provider に対して上書きし、`Auto` は現在の層のフィールドを削除して provider の継承へ戻します。同じルート（provider）に非空の `models[]` と非空の `modelOverrides` が同時に存在する場合は無効な設定です。公式 schema はこの無効な設定を拒否し、プラグインは異常なデータに対して fail closed します。カタログ/modelOverrides と `models[]` の両方で Settings の単一モデル編集に対応し、`models[]` の保存は配列インデックス path op ではなく、他のモデル、未知フィールド、他の compat フィールドを保持する `providers.<route>.models` 全体の 1 回の配列 set を使用します。
 - これらの compat 値はコントロールプレーン設定だけを行い、外部 transport は実装しません。
 
 ## [0.1.13] - 互換性範囲による検証

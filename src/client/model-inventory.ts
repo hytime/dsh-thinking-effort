@@ -15,7 +15,14 @@ function ownedData(value: unknown): unknown {
   const object = record(value)
   if (object === undefined) return value
   const copy: Record<string, unknown> = {}
-  for (const [key, entry] of Object.entries(object)) copy[key] = ownedData(entry)
+  for (const [key, entry] of Object.entries(object)) {
+    Object.defineProperty(copy, key, {
+      configurable: true,
+      enumerable: true,
+      value: ownedData(entry),
+      writable: true,
+    })
+  }
   return copy
 }
 function modelItem(route: string, model: string, raw: Record<string, unknown>, index: number, inOverrides: boolean, modelsSnapshot?: readonly unknown[]): InventoryItem {

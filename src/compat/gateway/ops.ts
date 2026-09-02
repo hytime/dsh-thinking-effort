@@ -119,7 +119,14 @@ export function opsForModelArrayCompat(
     if (typeof value !== 'object' || value === null) return value
     const source = value as Record<string, unknown>
     const copy: Record<string, unknown> = {}
-    for (const [key, entry] of Object.entries(source)) copy[key] = clone(entry)
+    for (const [key, entry] of Object.entries(source)) {
+      Object.defineProperty(copy, key, {
+        configurable: true,
+        enumerable: true,
+        value: clone(entry),
+        writable: true,
+      })
+    }
     return copy
   }
   const snapshot = item.modelsSnapshot ?? inventory

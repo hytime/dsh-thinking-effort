@@ -6,7 +6,14 @@ function cloneOwned(value: unknown): unknown {
   if (Array.isArray(value)) return value.map((entry) => cloneOwned(entry))
   if (typeof value !== 'object' || value === null) return value
   const copy: Record<string, unknown> = {}
-  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) copy[key] = cloneOwned(entry)
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    Object.defineProperty(copy, key, {
+      configurable: true,
+      enumerable: true,
+      value: cloneOwned(entry),
+      writable: true,
+    })
+  }
   return copy
 }
 export function mergeModelUpdate(raw: Record<string, unknown>, update: ModelUpdate): Record<string, unknown> {
