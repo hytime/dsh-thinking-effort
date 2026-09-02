@@ -1,8 +1,9 @@
 import React from 'react'
 import { ALL_LEVELS, CONTEXT_1M, CONTEXT_MAX, CONTEXT_MIN, LEVEL_LABEL_KEYS } from '../constants.js'
-import type { ContextDraft, DraftCell, InputDraft, InventoryItem, ReasoningDraft, Translation } from '../types.js'
+import type { ContextDraft, DraftCell, InputDraft, InventoryItem, ModelGatewayCompatUpdate, ModelGatewayCompatView, ReasoningDraft, Translation } from '../types.js'
 import type { Palette } from '../theme.js'
 import { ActionButton, Icon, SwitchControl } from './Controls.js'
+import { renderGatewayCompatControls } from './GatewayCompatControls.js'
 
 export interface ModelEditorProps {
   readonly item: InventoryItem
@@ -20,11 +21,19 @@ export interface ModelEditorProps {
   readonly onSave: () => void
   readonly onRestoreReasoning: () => void
   readonly onRestoreCapability: () => void
+  readonly compatView?: ModelGatewayCompatView
+  readonly onCompatChange?: (next: Partial<ModelGatewayCompatUpdate>) => void
+  readonly onSaveCompat?: () => void
 }
 
-export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy, palette, t, onLevelChange, onContextChange, onOneMillionChange, onInputChange, onSave, onRestoreReasoning, onRestoreCapability }: ModelEditorProps): React.ReactElement {
+export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy, palette, t, onLevelChange, onContextChange, onOneMillionChange, onInputChange, onSave, onRestoreReasoning, onRestoreCapability, compatView, onCompatChange, onSaveCompat }: ModelEditorProps): React.ReactElement {
   const levelLabel = (level: typeof ALL_LEVELS[number]): string => t(LEVEL_LABEL_KEYS[level])
+  const modelCompat = item.inOverrides && compatView !== undefined ? <>
+    {renderGatewayCompatControls({ scope: 'model', view: compatView, onChange: (next) => onCompatChange?.(next as Partial<ModelGatewayCompatUpdate>), disabled: busy || onCompatChange === undefined }, { palette, t })}
+    {onSaveCompat ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}><ActionButton text={t('saveModelGatewayCompat')} onClick={onSaveCompat} disabled={busy} tone="primary" palette={palette} icon="check" /></div> : null}
+  </> : null
   return <div style={{ padding: '8px', borderTop: `1px solid ${palette.divider}`, backgroundColor: palette.group }}>
+    {modelCompat}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '6px', marginBottom: '6px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto', alignItems: 'center', gap: '8px', minWidth: 0, padding: '7px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.field }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 650 }}><Icon name="context" size={15} /><span>{t('contextLength')}</span></span>

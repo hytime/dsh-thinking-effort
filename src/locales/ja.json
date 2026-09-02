@@ -96,5 +96,14 @@
   "gatewayCompatUnavailable": "利用不可",
   "saveGatewayCompat": "ゲートウェイ互換性を保存",
   "gatewayCompatSaved": "ゲートウェイ互換性を保存しました",
-  "gatewayCompatSaveFailed": "ゲートウェイ互換性の保存に失敗しました"
+  "gatewayCompatSaveFailed": "ゲートウェイ互換性の保存に失敗しました",
+  "modelGatewayCompatTitle": "モデルゲートウェイ互換性",
+  "compatSourceModel": "モデルの上書き",
+  "compatSourceProvider": "プロバイダー",
+  "compatSourceCatalog": "モデルカタログ",
+  "compatSourceProtocol": "プロトコルの既定値",
+  "compatSourceUnknown": "不明なソース",
+  "inheritProviderCompat": "自動でプロバイダーの互換性を継承",
+  "saveModelGatewayCompat": "モデルの互換性を保存",
+  "modelGatewayCompatSaved": "モデルゲートウェイ互換性を保存しました"
 }

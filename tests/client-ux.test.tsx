@@ -7,8 +7,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SectionEditor } from '../src/client/SectionEditor.js'
 import { createTakeoverRuntimeStore, type TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
 import { GatewayCompatControls } from '../src/client/components/GatewayCompatControls.js'
+import { ModelEditor } from '../src/client/components/ModelEditor.js'
 import { providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
-import { zh } from '../src/client/locales.js'
+import { en, zh } from '../src/client/locales.js'
+import { iosPalette } from '../src/client/theme.js'
 import type {
   ClientLocale,
   ClientResult,
@@ -167,7 +169,7 @@ afterEach(() => {
 })
 
 describe('SectionEditor user behavior', () => {
-  it('renders provider gateway compatibility controls and emits only a view change', async () => {
+  it('renders provider gateway compatibility controls and emits only a view change', () => {
     const view = {
       provider: 'provider',
       supportsDeveloperRole: 'auto' as const,
@@ -194,6 +196,117 @@ describe('SectionEditor user behavior', () => {
     expect(selects[1]?.value).toBe('max_tokens')
     act(() => setValue(selects[0]!, 'unsupported'))
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ supportsDeveloperRole: 'unsupported' }))
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('renders model compat controls with field sources and Auto inheritance', () => {
+    const view = {
+      provider: 'provider',
+      model: 'model-b',
+      supportsDeveloperRole: 'auto' as const,
+      maxTokensField: 'max_tokens' as const,
+      supportsDeveloperRoleSource: 'provider' as const,
+      maxTokensFieldSource: 'model' as const,
+      supportsDeveloperRoleAvailable: true,
+      maxTokensFieldAvailable: true,
+    }
+    const onChange = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    act(() => {
+      root.render(<GatewayCompatControls scope="model" view={view} onChange={onChange} />)
+    })
+
+    expect(container.textContent).toContain('model-b')
+    expect(container.textContent).toContain(en.compatSourceProvider)
+    expect(container.textContent).toContain(en.compatSourceModel)
+    const selects = [...container.querySelectorAll('select')] as HTMLSelectElement[]
+    expect(selects).toHaveLength(2)
+    act(() => setValue(selects[0]!, 'unsupported'))
+    expect(onChange).toHaveBeenLastCalledWith({ supportsDeveloperRole: 'unsupported' })
+    act(() => setValue(selects[1]!, 'auto'))
+    expect(onChange).toHaveBeenLastCalledWith({ maxTokensField: 'auto' })
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('renders model editor compat controls without changing base model controls', () => {
+    const item: InventoryItem = {
+      route: 'provider',
+      model: 'model-b',
+      name: 'Model B',
+      levels: { off: null },
+      contextWindow: 8192,
+      input: ['text', 'image'],
+      raw: { id: 'model-b' },
+      index: 1,
+      inOverrides: true,
+    }
+    const compatView = {
+      provider: 'provider',
+      model: 'model-b',
+      supportsDeveloperRole: 'auto' as const,
+      maxTokensField: 'max_tokens' as const,
+      supportsDeveloperRoleSource: 'provider' as const,
+      maxTokensFieldSource: 'model' as const,
+      supportsDeveloperRoleAvailable: true,
+      maxTokensFieldAvailable: true,
+    }
+    const onCompatChange = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    act(() => {
+      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '8192', oneMillion: false, previousValue: '8192', touched: false }} inputDraft={{ text: true, image: true, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onCompatChange={onCompatChange} onSaveCompat={vi.fn()} />)
+    })
+
+    expect(container.textContent).toContain('model-b')
+    expect(container.textContent).toContain(text('reasoningLevels'))
+    expect(container.querySelector(`input[aria-label="${text('contextLength')}"]`)).not.toBeNull()
+    expect(container.textContent).toContain(text('textInput'))
+    const selects = [...container.querySelectorAll('select')] as HTMLSelectElement[]
+    expect(selects).toHaveLength(2)
+    act(() => setValue(selects[0]!, 'unsupported'))
+    expect(onCompatChange).toHaveBeenCalledWith({ supportsDeveloperRole: 'unsupported' })
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('does not render saveable model compat controls for catalog models', () => {
+    const item: InventoryItem = {
+      route: 'provider',
+      model: 'model-a',
+      name: 'Model A',
+      levels: { off: null },
+      contextWindow: 8192,
+      input: ['text'],
+      raw: { id: 'model-a' },
+      index: 0,
+      inOverrides: false,
+    }
+    const compatView = {
+      provider: 'provider',
+      model: 'model-a',
+      supportsDeveloperRole: 'auto' as const,
+      maxTokensField: 'auto' as const,
+      supportsDeveloperRoleSource: 'catalog' as const,
+      maxTokensFieldSource: 'protocol' as const,
+      supportsDeveloperRoleAvailable: true,
+      maxTokensFieldAvailable: true,
+    }
+    const onCompatChange = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    act(() => {
+      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '8192', oneMillion: false, previousValue: '8192', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onCompatChange={onCompatChange} onSaveCompat={vi.fn()} />)
+    })
+
+    expect(container.querySelectorAll('select')).toHaveLength(0)
+    expect(container.textContent).toContain(text('reasoningLevels'))
+    expect(container.querySelector(`input[aria-label="${text('contextLength')}"]`)).not.toBeNull()
     act(() => root.unmount())
     container.remove()
   })

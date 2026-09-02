@@ -96,5 +96,14 @@
   "gatewayCompatUnavailable": "不可用",
   "saveGatewayCompat": "保存网关兼容性",
   "gatewayCompatSaved": "网关兼容性已保存",
-  "gatewayCompatSaveFailed": "保存网关兼容性失败"
+  "gatewayCompatSaveFailed": "保存网关兼容性失败",
+  "modelGatewayCompatTitle": "模型网关兼容性",
+  "compatSourceModel": "模型覆盖",
+  "compatSourceProvider": "提供方",
+  "compatSourceCatalog": "模型目录",
+  "compatSourceProtocol": "协议默认值",
+  "compatSourceUnknown": "来源未知",
+  "inheritProviderCompat": "自动继承提供方兼容性",
+  "saveModelGatewayCompat": "保存模型兼容性",
+  "modelGatewayCompatSaved": "模型网关兼容性已保存"
 }

@@ -96,5 +96,14 @@
   "gatewayCompatUnavailable": "사용할 수 없음",
   "saveGatewayCompat": "게이트웨이 호환성 저장",
   "gatewayCompatSaved": "게이트웨이 호환성을 저장했습니다",
-  "gatewayCompatSaveFailed": "게이트웨이 호환성을 저장하지 못했습니다"
+  "gatewayCompatSaveFailed": "게이트웨이 호환성을 저장하지 못했습니다",
+  "modelGatewayCompatTitle": "모델 게이트웨이 호환성",
+  "compatSourceModel": "모델 재정의",
+  "compatSourceProvider": "제공자",
+  "compatSourceCatalog": "모델 카탈로그",
+  "compatSourceProtocol": "프로토콜 기본값",
+  "compatSourceUnknown": "알 수 없는 출처",
+  "inheritProviderCompat": "자동으로 제공자 호환성 상속",
+  "saveModelGatewayCompat": "모델 호환성 저장",
+  "modelGatewayCompatSaved": "모델 게이트웨이 호환성이 저장되었습니다"
 }

@@ -96,5 +96,14 @@
   "gatewayCompatUnavailable": "Unavailable",
   "saveGatewayCompat": "Save gateway compatibility",
   "gatewayCompatSaved": "Gateway compatibility saved",
-  "gatewayCompatSaveFailed": "Failed to save gateway compatibility"
+  "gatewayCompatSaveFailed": "Failed to save gateway compatibility",
+  "modelGatewayCompatTitle": "Model gateway compatibility",
+  "compatSourceModel": "Model override",
+  "compatSourceProvider": "Provider",
+  "compatSourceCatalog": "Model catalog",
+  "compatSourceProtocol": "Protocol default",
+  "compatSourceUnknown": "Unknown source",
+  "inheritProviderCompat": "Auto inherits provider compatibility",
+  "saveModelGatewayCompat": "Save model compatibility",
+  "modelGatewayCompatSaved": "Model gateway compatibility saved"
 }
