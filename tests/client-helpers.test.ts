@@ -26,7 +26,7 @@ import {
 } from '../src/client/validation.js'
 import { iosPalette } from '../src/client/theme.js'
 import { hasModelSourceConflict } from '../src/compat/model-source.js'
-import { resolveGatewayCompat, resolveProviderGatewayCompat } from '../src/compat/gateway/resolve.js'
+import { resolveGatewayCompat, resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../src/compat/gateway/resolve.js'
 import { editableProviderCompatFields, validateProviderCompat } from '../src/compat/gateway/validation.js'
 import type { GatewayCompatEditability } from '../src/compat/gateway/types.js'
 import { capabilitiesForVersion } from '../src/compat/version-map.js'
@@ -368,7 +368,7 @@ describe('model inventory and operations', () => {
     expect(modelGatewayCompatViewFrom(namespace, model!, 'modern', runtime)).toMatchObject({
       provider: 'provider',
       model: 'model-a',
-      supportsDeveloperRole: 'unsupported',
+      supportsDeveloperRole: 'auto',
       supportsDeveloperRoleSource: 'catalog',
       supportsDeveloperRoleResolved: false,
       maxTokensField: 'auto',
@@ -494,6 +494,38 @@ describe('model inventory and operations', () => {
     expect(result.maxTokensField).toEqual({ value: 'max_tokens', source: 'provider' })
   })
 
+  it('keeps model selections unset when values are inherited from provider', () => {
+    expect(resolveModelGatewayCompat({
+      provider: 'provider',
+      model: 'model-a',
+      providerCompat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' },
+      protocolDefault: { supportsDeveloperRole: true, maxTokensField: 'max_completion_tokens' },
+    })).toMatchObject({
+      supportsDeveloperRole: 'auto',
+      supportsDeveloperRoleSource: 'provider',
+      supportsDeveloperRoleResolved: false,
+      maxTokensField: 'auto',
+      maxTokensFieldSource: 'provider',
+      maxTokensFieldResolved: 'max_tokens',
+    })
+  })
+
+  it('uses only explicit model fields for model selection in mixed fallback layers', () => {
+    expect(resolveModelGatewayCompat({
+      provider: 'provider',
+      model: 'model-a',
+      modelCompat: { supportsDeveloperRole: true },
+      providerCompat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' },
+      baseCompat: { maxTokensField: 'max_completion_tokens' },
+    })).toMatchObject({
+      supportsDeveloperRole: 'supported',
+      supportsDeveloperRoleSource: 'model',
+      supportsDeveloperRoleResolved: true,
+      maxTokensField: 'auto',
+      maxTokensFieldSource: 'provider',
+      maxTokensFieldResolved: 'max_tokens',
+    })
+  })
   it('projects model compat while keeping provider compat isolated', () => {
     const namespace = {
       value: {
@@ -637,10 +669,12 @@ describe('model inventory and operations', () => {
     }
 
     expect(modelGatewayCompatViewFrom(namespace, item({ route: 'qwen-gateway', model: 'qwen-thinking', raw: { id: 'qwen-thinking' } }), 'modern')).toMatchObject({
-      supportsDeveloperRole: 'unsupported',
+      supportsDeveloperRole: 'auto',
       supportsDeveloperRoleSource: 'catalog',
-      maxTokensField: 'max_tokens',
+      supportsDeveloperRoleResolved: false,
+      maxTokensField: 'auto',
       maxTokensFieldSource: 'catalog',
+      maxTokensFieldResolved: 'max_tokens',
     })
   })
 
@@ -699,8 +733,36 @@ describe('model inventory and operations', () => {
       'modern',
       runtime,
     )).toMatchObject({
-      supportsDeveloperRole: 'unsupported',
+      supportsDeveloperRole: 'auto',
       supportsDeveloperRoleSource: 'catalog',
+      supportsDeveloperRoleResolved: false,
+    })
+  })
+
+  it('uses namespace layers instead of treating a non-protocol takeover hit as a model override', () => {
+    const namespace = {
+      value: { providers: { provider: { models: [{ id: 'model-a' }], compat: { supportsDeveloperRole: false } } } },
+      schema: realGatewaySchema,
+    }
+    const runtime: TakeoverRuntimeResolution = {
+      providers: ['provider'],
+      compat: [{
+        provider: 'provider',
+        model: 'model-a',
+        thinkingFormat: { value: undefined, source: 'unknown' },
+        supportsReasoningEffort: { value: undefined, source: 'unknown' },
+        supportsDeveloperRole: { value: true, source: 'model' },
+        maxTokensField: { value: 'max_completion_tokens', source: 'provider' },
+      }],
+    }
+
+    expect(modelGatewayCompatViewFrom(namespace, inventoryFrom(namespace)[0]!, 'modern', runtime)).toMatchObject({
+      supportsDeveloperRole: 'auto',
+      supportsDeveloperRoleSource: 'catalog',
+      supportsDeveloperRoleResolved: false,
+      maxTokensField: 'auto',
+      maxTokensFieldSource: 'unknown',
+      maxTokensFieldResolved: undefined,
     })
   })
 
@@ -878,11 +940,29 @@ describe('model inventory and operations', () => {
   it('refuses provider compat writes when editability is missing or unclear', () => {
     const update = { supportsDeveloperRole: 'supported' as const, maxTokensField: 'max_tokens' as const }
     expect(opsForProviderCompat('local', update)).toEqual([])
-    expect(opsForProviderCompat('local', update, { supportsDeveloperRole: true })).toEqual([
-      { op: 'set', path: ['providers', 'local', 'compat', 'supportsDeveloperRole'], value: true },
-    ])
+    expect(opsForProviderCompat('local', update, { supportsDeveloperRole: true })).toEqual([])
   })
 
+  it('validates provider compat updates atomically and keeps fields independent', () => {
+    expect(opsForProviderCompat('local', {
+      supportsDeveloperRole: 'supported',
+      maxTokensField: 'invalid' as ModelGatewayCompatUpdate['maxTokensField'],
+    }, { supportsDeveloperRole: true, maxTokensField: true })).toEqual([])
+    expect(opsForProviderCompat('local', {
+      supportsDeveloperRole: 'supported',
+      maxTokensField: 'max_tokens',
+    }, { supportsDeveloperRole: true, maxTokensField: false })).toEqual([])
+    expect(opsForProviderCompat('local', {
+      supportsDeveloperRole: 'supported',
+    }, { supportsDeveloperRole: true, maxTokensField: false })).toEqual([
+      { op: 'set', path: ['providers', 'local', 'compat', 'supportsDeveloperRole'], value: true },
+    ])
+    expect(opsForProviderCompat('local', {
+      maxTokensField: 'max_tokens',
+    }, { supportsDeveloperRole: false, maxTokensField: true })).toEqual([
+      { op: 'set', path: ['providers', 'local', 'compat', 'maxTokensField'], value: 'max_tokens' },
+    ])
+  })
   it('model compat operations write modelOverrides fields to exact model paths', () => {
     const editable: GatewayCompatEditability = {
       supportsDeveloperRole: true,

@@ -30,13 +30,20 @@ export function opsForProviderCompat(
 ): SettingsOp[] {
   if (provider.trim() === '') return []
 
-  const operations: SettingsOp[] = []
+  const fields = Object.keys(update)
+  if (fields.some((field) => field !== 'supportsDeveloperRole' && field !== 'maxTokensField')) return []
   if (Object.prototype.hasOwnProperty.call(update, 'supportsDeveloperRole')
-    && editability?.supportsDeveloperRole === true) {
+    && (editability?.supportsDeveloperRole !== true
+      || !['auto', 'supported', 'unsupported'].includes(update.supportsDeveloperRole as string))) return []
+  if (Object.prototype.hasOwnProperty.call(update, 'maxTokensField')
+    && (editability?.maxTokensField !== true
+      || !['auto', 'max_tokens', 'max_completion_tokens'].includes(update.maxTokensField as string))) return []
+
+  const operations: SettingsOp[] = []
+  if (Object.prototype.hasOwnProperty.call(update, 'supportsDeveloperRole')) {
     pushModeOperation(operations, providerPath(provider, 'supportsDeveloperRole'), update.supportsDeveloperRole)
   }
-  if (Object.prototype.hasOwnProperty.call(update, 'maxTokensField')
-    && editability?.maxTokensField === true) {
+  if (Object.prototype.hasOwnProperty.call(update, 'maxTokensField')) {
     pushMaxTokensOperation(operations, providerPath(provider, 'maxTokensField'), update.maxTokensField)
   }
   return operations

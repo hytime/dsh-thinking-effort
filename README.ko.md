@@ -50,7 +50,7 @@ DSH 내장 모델만 사용하고 이미 추론 제어가 정상 작동한다면
 | 기능 | 설명 |
 | --- | --- |
 | 기본 단계 | 사용자 지정 값을 덮어쓰지 않고 `off`, `high`, `max` 추가 |
-| 모델별 편집 | Settings에서 단계와 게이트웨이 값을 설정 |
+| 모델별 편집 | Settings에서 단계를 설정하고 catalog/modelOverrides 모델의 게이트웨이 호환 값을 편집; `models[]` compat은 YAML 전용 |
 | 게이트웨이 값 매핑 | DSH에서 `high`를 선택하면 `ultra` 전송 가능 |
 | Subagent 기본값 | 명시적 값이 없는 요청에만 기본값 적용 |
 | 다국어 설정 | 中文, English, 日本語, 한국어 사전 포함; 일본어/한국어 전환은 DSH language-pack 지원을 사용 |
@@ -121,7 +121,7 @@ Settings의 provider 전역 영역은 해당 provider의 모든 모델 기본값
 
 ### 설정 페이지 구성
 
-페이지 상단에는 언어 선택기가 있습니다. 그 아래의 **Subagent default effort** 카드는 명시적인 값이 없는 요청의 기본값을 관리합니다. **Quick settings**는 일괄 프리셋을 적용합니다. 제공자와 모델 목록은 펼치거나 접을 수 있으며, 각 모델 행의 입력 기능, 컨텍스트 길이 및 설정 버튼에서 추론 단계와 게이트웨이 값을 편집할 수 있습니다.
+페이지 상단에는 언어 선택기가 있습니다. 그 아래의 **Subagent default effort** 카드는 명시적인 값이 없는 요청의 기본값을 관리합니다. **Quick settings**는 일괄 프리셋을 적용합니다. 제공자와 모델 목록은 펼치거나 접을 수 있으며, 각 모델 행에는 입력 기능과 컨텍스트 길이가 표시됩니다. catalog/modelOverrides 모델의 설정 영역에서는 게이트웨이 호환 값을 편집할 수 있지만 `models[]` compat은 YAML 전용이며 렌더링되지 않습니다.
 
 ![영문 Model capabilities and effort 설정 페이지](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/settings-model-capabilities-en.png)
 

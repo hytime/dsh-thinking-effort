@@ -137,15 +137,20 @@ export function resolveModelGatewayCompat(
   available?: Pick<ModelGatewayCompatView, 'supportsDeveloperRoleAvailable' | 'maxTokensFieldAvailable'>,
 ): ModelGatewayCompatView {
   const resolution = resolveGatewayCompat(input)
+  const modelCompat = readCompat(input.modelCompat)
+  const selectedDeveloperRole = modelCompat.supportsDeveloperRole
+  const selectedMaxTokensField = modelCompat.maxTokensField
   return {
     provider: input.provider,
     model: input.model,
-    supportsDeveloperRole: resolution.supportsDeveloperRole.value === undefined
+    supportsDeveloperRole: selectedDeveloperRole === undefined
       ? 'auto'
-      : resolution.supportsDeveloperRole.value ? 'supported' : 'unsupported',
-    maxTokensField: resolution.maxTokensField.value ?? 'auto',
+      : selectedDeveloperRole ? 'supported' : 'unsupported',
+    maxTokensField: selectedMaxTokensField ?? 'auto',
     supportsDeveloperRoleSource: resolution.supportsDeveloperRole.source,
     maxTokensFieldSource: resolution.maxTokensField.source,
+    supportsDeveloperRoleResolved: resolution.supportsDeveloperRole.value,
+    maxTokensFieldResolved: resolution.maxTokensField.value,
     supportsDeveloperRoleAvailable: available?.supportsDeveloperRoleAvailable ?? resolution.supportsDeveloperRole.value !== undefined,
     maxTokensFieldAvailable: available?.maxTokensFieldAvailable ?? resolution.maxTokensField.value !== undefined,
   }

@@ -106,7 +106,11 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
         maxTokensField: draft.maxTokensField,
       }
     }
-    return { ...current, loading: false, namespace: nextNamespace, busy: false, nsFound: true, inventory: nextInventory, providerViews, providerDrafts: providerViews, providerDirty: {}, modelCompatViews, modelCompatDrafts, revision: revisionOf(nextNamespace), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom, notice }
+    const providerDrafts = { ...current.providerDrafts }
+    for (const [provider, providerView] of Object.entries(providerViews)) {
+      if (current.providerDirty[provider] !== true) providerDrafts[provider] = providerView
+    }
+    return { ...current, loading: false, namespace: nextNamespace, busy: false, nsFound: true, inventory: nextInventory, providerViews, providerDrafts, modelCompatViews, modelCompatDrafts, revision: revisionOf(nextNamespace), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom, notice }
   }
 
   const load = (): void => {

@@ -53,7 +53,7 @@ These identifiers have different responsibilities:
 | Feature | Description |
 | --- | --- |
 | Default levels | Adds `off`, `high`, and `max` without overwriting custom values |
-| Per-model editor | Select levels and configure their gateway values from Settings |
+| Per-model editor | Select levels and configure gateway values for catalog/modelOverrides models in Settings; `models[]` compat stays YAML-only |
 | Gateway mapping | Send `ultra` when the user selects DSH `high` |
 | Subagent default | Apply a default effort only when a subagent request has no explicit value |
 | Multilingual settings | Includes Chinese, English, Japanese, and Korean dictionaries; Japanese/Korean switching uses DSH language-pack support |
@@ -124,7 +124,7 @@ These compat values are control plane configuration. They do not implement or re
 
 ### Settings page layout
 
-The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and a settings control for reasoning levels and gateway values.
+The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities and context length, while catalog/modelOverrides models expose gateway compatibility controls in their settings area. `models[]` compat remains YAML-only and is not rendered.
 
 ![English Model capabilities and effort settings page](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/settings-model-capabilities-en.png)
 

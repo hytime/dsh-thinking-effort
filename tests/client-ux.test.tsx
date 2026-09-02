@@ -495,6 +495,70 @@ describe('SectionEditor user behavior', () => {
     view.unmount()
   })
 
+  it('saves both provider compatibility fields in one mutation', async () => {
+    const providerNamespace = namespace({
+      value: { providers: { provider: { models: [{ id: 'model-a' }] } } },
+      schema: realGatewaySchema,
+    })
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      describe: async () => ({ ok: true, value: { namespaces: [providerNamespace] } }),
+      mutate: async (_ns, _ops, _revision) => ({ ok: true as const, value: providerNamespace }),
+    })
+    await settle()
+
+    const providerControls = [...view.container.querySelectorAll('[data-scope="provider"]')]
+    expect(providerControls).toHaveLength(1)
+    const selects = [...providerControls[0]!.querySelectorAll('select')] as HTMLSelectElement[]
+    act(() => setValue(selects[0]!, 'unsupported'))
+    act(() => setValue(selects[1]!, 'max_tokens'))
+    act(() => button(providerControls[0]!.parentElement!, text('saveGatewayCompat')).click())
+    await settle()
+
+    expect(view.mutate).toHaveBeenCalledWith('llm-pi-ai', [
+      { op: 'set', path: ['providers', 'provider', 'compat', 'supportsDeveloperRole'], value: false },
+      { op: 'set', path: ['providers', 'provider', 'compat', 'maxTokensField'], value: 'max_tokens' },
+    ], 2)
+    view.unmount()
+  })
+
+  it('retains another provider draft when the first provider save succeeds', async () => {
+    const providers = {
+      providerA: { models: [{ id: 'model-a' }] },
+      providerB: { models: [{ id: 'model-b' }] },
+    }
+    const initial = namespace({ value: { providers }, schema: realGatewaySchema })
+    const saved = namespace({
+      revision: 3,
+      value: { providers },
+      user: { providers: { providerA: { compat: { maxTokensField: 'max_tokens' } } } },
+      schema: realGatewaySchema,
+    })
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      describe: async () => ({ ok: true, value: { namespaces: [initial] } }),
+      mutate: async (_ns, ops) => {
+        expect(ops).toEqual([{ op: 'set', path: ['providers', 'providerA', 'compat', 'maxTokensField'], value: 'max_tokens' }])
+        return { ok: true as const, value: saved }
+      },
+    })
+    await settle()
+
+    const providerControls = [...view.container.querySelectorAll('[data-scope="provider"]')]
+    expect(providerControls).toHaveLength(2)
+    const providerASelects = [...providerControls[0]!.querySelectorAll('select')] as HTMLSelectElement[]
+    const providerBSelects = [...providerControls[1]!.querySelectorAll('select')] as HTMLSelectElement[]
+    act(() => setValue(providerBSelects[1]!, 'max_completion_tokens'))
+    act(() => setValue(providerASelects[1]!, 'max_tokens'))
+    act(() => button(providerControls[0]!.parentElement!, text('saveGatewayCompat')).click())
+    await settle()
+
+    const refreshed = [...view.container.querySelectorAll('[data-scope="provider"]')]
+    expect((refreshed[1]!.querySelectorAll('select')[1] as HTMLSelectElement).value).toBe('max_completion_tokens')
+    expect(button(refreshed[1]!.parentElement!, text('saveGatewayCompat'))).toBeDefined()
+    view.unmount()
+  })
+
   it('refreshes provider defaults without replacing dirty model compat drafts', async () => {
     const initial = namespace({
       value: {
@@ -712,6 +776,34 @@ describe('SectionEditor user behavior', () => {
     expect(view.container.querySelector('[role="alert"]')?.textContent).toContain('stale revision')
     expect((view.container.querySelector(`[data-scope="model"] select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement).value).toBe('max_tokens')
     expect(view.container.textContent).toContain(text('unsaved'))
+    view.unmount()
+  })
+
+  it('fails closed for conflicting model sources while keeping provider and baseline editors', async () => {
+    const conflict = namespace({
+      value: {
+        providers: {
+          provider: {
+            compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' },
+            models: [{ id: 'model-a', name: 'Model A', reasoningEfforts: { off: null }, input: ['text'] }],
+            modelOverrides: { 'model-a': { id: 'model-a', name: 'Model A override', reasoningEfforts: { off: null }, input: ['text'], compat: { maxTokensField: 'max_completion_tokens' } } },
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    })
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      describe: async () => ({ ok: true, value: { namespaces: [conflict] } }),
+    })
+    await settle()
+
+    expect(view.container.querySelector('[data-scope="provider"]')).not.toBeNull()
+    act(() => providerButton(view.container).click())
+    act(() => modelSettingsButton(view.container).click())
+    expect(view.container.querySelector('[data-scope="model"]')).toBeNull()
+    expect(view.container.textContent).toContain(text('reasoningLevels'))
+    expect(view.container.textContent).not.toContain(text('saveModelGatewayCompat'))
     view.unmount()
   })
 

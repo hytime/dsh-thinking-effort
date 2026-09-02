@@ -154,8 +154,18 @@ describe('build artifacts', () => {
             reasoningEfforts: { off: null, high: 'high' },
             compat: { thinkingFormat: 'qwen', supportsReasoningEffort: false },
           }],
+         },
+       },
+    }
+    const overridePiAi = {
+      providers: {
+        local: {
+          api: 'openai-completions',
+          baseURL: 'http://gateway.test/v1',
+          compat: { thinkingFormat: 'deepseek', supportsReasoningEffort: true },
           modelOverrides: {
             override: {
+              reasoningEfforts: { high: 'high' },
               compat: { thinkingFormat: 'openai', supportsReasoningEffort: true },
             },
           },
@@ -176,7 +186,7 @@ describe('build artifacts', () => {
     })
     expect(resolveTakeoverGatewayCompat({
       version: '0.1.1-rc.2',
-      piAi,
+      piAi: overridePiAi,
       provider: 'local',
       model: 'override',
     })).toMatchObject({
@@ -185,7 +195,7 @@ describe('build artifacts', () => {
     })
     expect(resolveTakeoverGatewayCompat({
       version: '0.1.1-rc.2',
-      piAi,
+      piAi: overridePiAi,
       provider: 'local',
       model: 'missing',
     })).toMatchObject({

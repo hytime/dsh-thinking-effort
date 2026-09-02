@@ -8,6 +8,7 @@ import type {
   PiAiSection,
   TakeoverSection,
 } from '../compat/gateway/takeover.js'
+import { hasModelSourceConflict } from '../compat/model-source.js'
 import type {
   ClientResult,
   SettingsApi,
@@ -70,16 +71,17 @@ function takeoverValue(namespace: SettingsNamespace | undefined): TakeoverSectio
 }
 
 function modelNames(profile: PiAiProviderProfile | undefined): Array<string | undefined> {
-  if (profile === undefined) return [undefined]
+  if (profile === undefined || hasModelSourceConflict(profile)) return []
   const names: string[] = []
   if (Array.isArray(profile.models)) {
     for (const model of profile.models) {
       const row = record(model)
       if (typeof row?.id === 'string') names.push(row.id)
     }
+  } else {
+    const overrides = record(profile.modelOverrides)
+    if (overrides !== undefined) names.push(...Object.keys(overrides))
   }
-  const overrides = record(profile.modelOverrides)
-  if (overrides !== undefined) names.push(...Object.keys(overrides))
   return names.length === 0 ? [undefined] : names
 }
 
@@ -174,7 +176,11 @@ export function observeTakeoverSettings(
       pendingRefreshGeneration = refreshGeneration
       void settings.describe().then((description) => {
         publish(refreshSequence, refreshGeneration, description, true)
-      }).catch(() => undefined)
+      }).catch(() => {
+        if (!active || pendingRefreshGeneration !== refreshGeneration) return
+        pendingRefreshGeneration = undefined
+        onResolution(EMPTY_RESOLUTION)
+      })
       return response
     },
     dispose: () => {

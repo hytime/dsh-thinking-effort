@@ -50,7 +50,7 @@ DSH 内蔵モデルだけを使用し、すでに推論コントロールが動�
 | 機能 | 説明 |
 | --- | --- |
 | 既定レベル | カスタム値を上書きせず `off`、`high`、`max` を追加 |
-| モデルごとの編集 | Settings からレベルとゲートウェイ値を設定 |
+| モデルごとの編集 | Settings からレベルを設定し、カタログ/modelOverrides モデルのゲートウェイ互換値を編集。`models[]` の compat は YAML 専用 |
 | ゲートウェイ値のマッピング | DSH の `high` 選択時に `ultra` を送信可能 |
 | Subagent の既定値 | 明示値のないリクエストにだけ既定値を適用 |
 | 多言語設定 | 中文、English、日本語、한국어の辞書を同梱。日本語/韓国語の切り替えは DSH の language-pack 対応を使用 |
@@ -121,7 +121,7 @@ Settings の provider グローバル領域では、その provider の全モデ
 
 ### 設定ページの構成
 
-ページ上部に言語セレクターがあります。その下の **Subagent default effort** カードは明示値のないリクエストの既定値を管理します。**Quick settings** は一括プリセットを適用します。プロバイダーとモデルの一覧は展開/折りたたみができ、各モデル行の入力能力、コンテキスト長、設定ボタンから推論レベルとゲートウェイ値を編集できます。
+ページ上部に言語セレクターがあります。その下の **Subagent default effort** カードは明示値のないリクエストの既定値を管理します。**Quick settings** は一括プリセットを適用します。プロバイダーとモデルの一覧は展開/折りたたみができ、各モデル行の入力能力とコンテキスト長を表示します。カタログ/modelOverrides モデルの設定領域ではゲートウェイ互換値を編集できますが、`models[]` の compat は YAML 専用で表示されません。
 
 ![英語版 Model capabilities and effort 設定ページ](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/settings-model-capabilities-en.png)
 

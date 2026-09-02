@@ -62,7 +62,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 | 功能 | 作用 |
 | --- | --- |
 | 默认档位补齐 | 为缺少配置的模型添加 `off`、`high`、`max`，不覆盖已有自定义值 |
-| 模型级编辑 | 在「设置 → 模型能力与档位」中逐模型勾选档位并填写线上值 |
+| 模型级编辑 | 在「设置 → 模型能力与档位」中逐模型勾选档位并填写线上值；catalog/modelOverrides 模型可编辑 compat，`models[]` compat 仅限 YAML 配置 |
 | 网关值映射 | 例如 DSH 选择 `high` 时，实际向网关发送 `ultra` |
 | 子 agent 默认值 | 为未显式指定档位的子 agent 请求自动填入默认思考强度 |
 | 快捷预设 | 一键应用官方 DeepSeek 风格或通用档位组合 |
@@ -183,7 +183,7 @@ providers:
 
 ### 设置页界面
 
-页面顶部是语言选择器；其下方的「子 agent 默认档位」卡片控制没有显式档位的请求。「一键设置」负责批量应用预设。供应商和模型列表支持展开/收起；每个模型行显示输入能力、上下文长度和设置按钮，进入后可编辑思考档位及网关线上值。
+页面顶部是语言选择器；其下方的「子 agent 默认档位」卡片控制没有显式档位的请求。「一键设置」负责批量应用预设。供应商和模型列表支持展开/收起；每个模型行显示输入能力和上下文长度，catalog/modelOverrides 模型在设置区域提供网关兼容控件。`models[]` 的 compat 仅支持 YAML 配置，设置页不渲染。
 
 ![中文模型能力与档位设置页](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/settings-model-capabilities-zh.png)
 

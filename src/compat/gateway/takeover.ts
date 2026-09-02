@@ -6,6 +6,7 @@ import {
 } from '../version-map.js'
 import type { DshVersionCapabilities } from '../version-map.js'
 import { editableProviderCompatFields } from './validation.js'
+import { hasModelSourceConflict } from '../model-source.js'
 
 export const TAKEOVER_NAMESPACE = 'llm-openai-completions'
 export const PI_AI_NAMESPACE = 'llm-pi-ai'
@@ -77,12 +78,11 @@ function isEffortsTable(value: unknown): boolean {
 }
 
 function modelRows(profile: PiAiProviderProfile | undefined): PiAiModelRow[] {
-  if (profile === undefined) return []
+  if (profile === undefined || hasModelSourceConflict(profile)) return []
   const rows: PiAiModelRow[] = []
   if (Array.isArray(profile.models)) {
     rows.push(...profile.models.filter(isRecord))
-  }
-  if (isRecord(profile.modelOverrides)) {
+  } else if (isRecord(profile.modelOverrides)) {
     rows.push(...Object.values(profile.modelOverrides).filter(isRecord))
   }
   return rows
@@ -145,10 +145,11 @@ export function resolveTakeoverProviders(input: TakeoverProvidersInput): string[
 }
 
 function modelCompatFor(profile: PiAiProviderProfile, model: string | undefined): unknown {
-  if (model === undefined) return undefined
-  if (isRecord(profile.modelOverrides)) {
+  if (model === undefined || hasModelSourceConflict(profile)) return undefined
+  if (isRecord(profile.modelOverrides) && Object.prototype.hasOwnProperty.call(profile.modelOverrides, model)) {
     const override = profile.modelOverrides[model]
     if (isRecord(override)) return override.compat
+    return undefined
   }
   if (Array.isArray(profile.models)) {
     const row = profile.models.find((candidate) => isRecord(candidate) && candidate.id === model)
@@ -163,8 +164,11 @@ export function takeoverGatewayCompatInputs(
   provider: string,
   model?: string,
 ): TakeoverGatewayCompatInputs {
-  const profile = section?.providers?.[provider]
-  if (!profile) return {}
+  const providers = section?.providers
+  if (!isRecord(providers) || !Object.prototype.hasOwnProperty.call(providers, provider)) return {}
+  const profileValue = providers[provider]
+  if (!isRecord(profileValue)) return {}
+  const profile = profileValue as PiAiProviderProfile
   const modelCompat = modelCompatFor(profile, model)
   return {
     providerCompat: profile.compat,

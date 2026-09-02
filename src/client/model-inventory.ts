@@ -1,9 +1,8 @@
-import type { InventoryItem, InputModality, ModelGatewayCompatSelection, ModelGatewayCompatView, ProviderGatewayCompatView, ReasoningEfforts, SettingsNamespace, CompatibilityProfile } from './types.js'
+import type { InventoryItem, InputModality, ModelGatewayCompatView, ProviderGatewayCompatView, ReasoningEfforts, SettingsNamespace, CompatibilityProfile } from './types.js'
 import type { TakeoverRuntimeResolution } from './takeover-runtime.js'
 import { resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../compat/gateway/resolve.js'
 import { editableProviderCompatFields } from '../compat/gateway/validation.js'
 import { hasModelSourceConflict } from '../compat/model-source.js'
-import type { GatewayCompatResolveInput } from '../compat/gateway/types.js'
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -55,26 +54,6 @@ function modelLayerCompat(layer: unknown, provider: string, model: string): Reco
   return undefined
 }
 
-function modelFieldValue(
-  candidates: readonly (Record<string, unknown> | undefined)[],
-  field: 'supportsDeveloperRole' | 'maxTokensField',
-): boolean | string | undefined {
-  for (const candidate of candidates) {
-    const value = candidate?.[field]
-    if (field === 'supportsDeveloperRole' && typeof value === 'boolean') return value
-    if (field === 'maxTokensField' && (value === 'max_tokens' || value === 'max_completion_tokens')) return value
-  }
-  return undefined
-}
-
-function modeFrom(value: boolean | undefined): ModelGatewayCompatSelection['supportsDeveloperRole'] {
-  return value === undefined ? 'auto' : value ? 'supported' : 'unsupported'
-}
-
-function resolvedBooleanFrom(mode: ModelGatewayCompatView['supportsDeveloperRole']): boolean | undefined {
-  return mode === 'auto' ? undefined : mode === 'supported'
-}
-
 function modelRuntimeCompatFor(
   runtime: TakeoverRuntimeResolution | undefined,
   provider: string,
@@ -87,34 +66,16 @@ function protocolCompatFrom(
   resolution: TakeoverRuntimeResolution['compat'][number] | undefined,
 ): Record<string, unknown> | undefined {
   if (resolution === undefined) return undefined
-  return {
-    ...(resolution.supportsDeveloperRole.value === undefined ? {} : { supportsDeveloperRole: resolution.supportsDeveloperRole.value }),
-    ...(resolution.maxTokensField.value === undefined ? {} : { maxTokensField: resolution.maxTokensField.value }),
-  }
-}
-
-function modelGatewayCompatViewFromResolution(
-  item: InventoryItem,
-  resolution: TakeoverRuntimeResolution['compat'][number],
-  editability: ReturnType<typeof editableProviderCompatFields>,
-): ModelGatewayCompatView {
-  const modelSupportsDeveloperRole = resolution.supportsDeveloperRole.source === 'model'
+  const supportsDeveloperRole = resolution.supportsDeveloperRole.source === 'protocol'
     ? resolution.supportsDeveloperRole.value
     : undefined
-  const modelMaxTokensField = resolution.maxTokensField.source === 'model'
+  const maxTokensField = resolution.maxTokensField.source === 'protocol'
     ? resolution.maxTokensField.value
     : undefined
+  if (supportsDeveloperRole === undefined && maxTokensField === undefined) return undefined
   return {
-    provider: item.route,
-    model: item.model,
-    supportsDeveloperRole: modeFrom(modelSupportsDeveloperRole),
-    maxTokensField: modelMaxTokensField ?? 'auto',
-    supportsDeveloperRoleSource: resolution.supportsDeveloperRole.source,
-    maxTokensFieldSource: resolution.maxTokensField.source,
-    supportsDeveloperRoleResolved: resolution.supportsDeveloperRole.value,
-    maxTokensFieldResolved: resolution.maxTokensField.value,
-    supportsDeveloperRoleAvailable: editability.supportsDeveloperRole,
-    maxTokensFieldAvailable: editability.maxTokensField,
+    ...(supportsDeveloperRole === undefined ? {} : { supportsDeveloperRole }),
+    ...(maxTokensField === undefined ? {} : { maxTokensField }),
   }
 }
 
@@ -148,18 +109,7 @@ export function modelGatewayCompatViewFrom(
     supportsDeveloperRoleAvailable: editability.supportsDeveloperRole,
     maxTokensFieldAvailable: editability.maxTokensField,
   })
-  if (runtimeModel !== undefined) return modelGatewayCompatViewFromResolution(item, runtimeModel, editability)
-
-  const modelCandidates = [userModel, baseModel, catalogModel]
-  const selectedSupportsDeveloperRole = modelFieldValue(modelCandidates, 'supportsDeveloperRole')
-  const selectedMaxTokensField = modelFieldValue(modelCandidates, 'maxTokensField')
-  return {
-    ...resolved,
-    supportsDeveloperRole: modeFrom(typeof selectedSupportsDeveloperRole === 'boolean' ? selectedSupportsDeveloperRole : undefined),
-    maxTokensField: typeof selectedMaxTokensField === 'string' ? selectedMaxTokensField as ModelGatewayCompatView['maxTokensField'] : 'auto',
-    supportsDeveloperRoleResolved: resolvedBooleanFrom(resolved.supportsDeveloperRole),
-    maxTokensFieldResolved: resolved.maxTokensField === 'auto' ? undefined : resolved.maxTokensField,
-  }
+  return resolved
 }
 
 export const modelCompatViewFrom = modelGatewayCompatViewFrom
@@ -174,10 +124,14 @@ export function modelGatewayCompatViewsFrom(
   compatibilityProfile: CompatibilityProfile = 'unknown',
   takeoverRuntime?: TakeoverRuntimeResolution,
 ): Record<string, ModelGatewayCompatView> {
-  return Object.fromEntries(inventory.map((item) => [
-    modelCompatKey(item.route, item.model),
-    modelGatewayCompatViewFrom(namespace, item, compatibilityProfile, takeoverRuntime),
-  ]))
+  const descriptor = record(namespace)
+  const value = record(descriptor?.value)
+  const providers = record(value?.providers)
+  return Object.fromEntries(inventory.flatMap((item) => {
+    const profile = record(providers?.[item.route])
+    if (hasModelSourceConflict(profile)) return []
+    return [[modelCompatKey(item.route, item.model), modelGatewayCompatViewFrom(namespace, item, compatibilityProfile, takeoverRuntime)] as const]
+  }))
 }
 
 export const modelCompatViewsFrom = modelGatewayCompatViewsFrom
@@ -185,42 +139,6 @@ export const modelCompatViewsFrom = modelGatewayCompatViewsFrom
 function takeoverCompatFor(runtime: TakeoverRuntimeResolution | undefined, provider: string): TakeoverRuntimeResolution['compat'][number] | undefined {
   if (runtime === undefined || !runtime.providers.includes(provider)) return undefined
   return runtime.compat.find((resolution) => resolution.provider === provider && resolution.model === undefined)
-}
-
-function runtimeSource(
-  resolution: TakeoverRuntimeResolution['compat'][number],
-  fallback: ProviderGatewayCompatView['source'],
-): ProviderGatewayCompatView['source'] {
-  const sources = [resolution.supportsDeveloperRole.source, resolution.maxTokensField.source]
-  if (sources.includes('model') || sources.includes('provider')) return 'user'
-  if (sources.includes('protocol')) return 'base'
-  if (sources.includes('catalog')) return 'catalog'
-  return fallback
-}
-
-function runtimeFieldValue<T>(resolution: TakeoverRuntimeResolution['compat'][number], field: 'supportsDeveloperRole' | 'maxTokensField'): T | undefined {
-  const fieldResolution = resolution[field]
-  return fieldResolution.source === 'provider' ? fieldResolution.value as T | undefined : undefined
-}
-
-function applyTakeoverCompat(
-  view: ProviderGatewayCompatView,
-  runtime: TakeoverRuntimeResolution | undefined,
-): ProviderGatewayCompatView {
-  const resolution = takeoverCompatFor(runtime, view.provider)
-  if (resolution === undefined) return view
-  const developer = runtimeFieldValue<boolean>(resolution, 'supportsDeveloperRole')
-  const maxTokens = runtimeFieldValue<ProviderGatewayCompatView['maxTokensField']>(resolution, 'maxTokensField')
-  return {
-    ...view,
-    supportsDeveloperRole: developer === undefined ? 'auto' : developer ? 'supported' : 'unsupported',
-    maxTokensField: maxTokens ?? 'auto',
-    supportsDeveloperRoleSource: resolution.supportsDeveloperRole.source,
-    maxTokensFieldSource: resolution.maxTokensField.source,
-    supportsDeveloperRoleAvailable: view.supportsDeveloperRoleAvailable,
-    maxTokensFieldAvailable: view.maxTokensFieldAvailable,
-    source: runtimeSource(resolution, view.source),
-  }
 }
 
 export function providerGatewayCompatViewFrom(
@@ -233,19 +151,20 @@ export function providerGatewayCompatViewFrom(
   const user = layerCompat(descriptor?.user, provider)
   const base = layerCompat(descriptor?.base, provider)
   const value = layerCompat(descriptor?.value, provider)
-  const input: GatewayCompatResolveInput = {
+  const runtime = takeoverCompatFor(takeoverRuntime, provider)
+  const resolved = resolveProviderGatewayCompat({
     provider,
     providerCompat: user,
     baseCompat: base,
     catalogCompat: value,
-  }
-  const resolved = resolveProviderGatewayCompat(input)
+    protocolDefault: protocolCompatFrom(runtime),
+  })
   const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema)
-  return applyTakeoverCompat({
+  return {
     ...resolved,
     supportsDeveloperRoleAvailable: editability.supportsDeveloperRole,
     maxTokensFieldAvailable: editability.maxTokensField,
-  }, takeoverRuntime)
+  }
 }
 
 export const providerCompatViewFrom = providerGatewayCompatViewFrom
