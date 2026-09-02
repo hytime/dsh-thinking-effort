@@ -586,36 +586,32 @@ describe('model inventory and operations', () => {
     ])
   })
 
-  it('model compat operations write fields to the exact models index and override model paths', () => {
+  it('model compat operations write modelOverrides fields to exact model paths', () => {
     const editable: GatewayCompatEditability = {
       supportsDeveloperRole: true,
       maxTokensField: true,
       editableFields: ['supportsDeveloperRole', 'maxTokensField'],
     }
 
-    expect(opsForModelCompat(item({ index: 1, model: 'qwen-thinking' }), {
+    expect(opsForModelCompat(item({ index: -1, model: 'qwen-thinking', inOverrides: true }), {
       supportsDeveloperRole: 'unsupported',
+      maxTokensField: 'max_completion_tokens',
     }, editable)).toEqual([
       {
         op: 'set',
-        path: ['providers', 'provider', 'models', '1', 'compat', 'supportsDeveloperRole'],
+        path: ['providers', 'provider', 'modelOverrides', 'qwen-thinking', 'compat', 'supportsDeveloperRole'],
         value: false,
       },
-    ])
-
-    expect(opsForModelCompat(item({ index: -1, model: 'qwen-thinking', inOverrides: true }), {
-      maxTokensField: 'max_tokens',
-    }, editable)).toEqual([
       {
         op: 'set',
         path: ['providers', 'provider', 'modelOverrides', 'qwen-thinking', 'compat', 'maxTokensField'],
-        value: 'max_tokens',
+        value: 'max_completion_tokens',
       },
     ])
   })
 
-  it('model compat operations unset each field independently for Auto', () => {
-    const model = item({ index: 1, model: 'qwen-thinking' })
+  it('model compat operations unset modelOverrides fields independently for Auto', () => {
+    const model = item({ index: -1, model: 'qwen-thinking', inOverrides: true })
     const editable: GatewayCompatEditability = {
       supportsDeveloperRole: true,
       maxTokensField: true,
@@ -626,24 +622,43 @@ describe('model inventory and operations', () => {
       supportsDeveloperRole: 'auto',
       maxTokensField: 'auto',
     }, editable)).toEqual([
-      { op: 'unset', path: ['providers', 'provider', 'models', '1', 'compat', 'supportsDeveloperRole'] },
-      { op: 'unset', path: ['providers', 'provider', 'models', '1', 'compat', 'maxTokensField'] },
+      { op: 'unset', path: ['providers', 'provider', 'modelOverrides', 'qwen-thinking', 'compat', 'supportsDeveloperRole'] },
+      { op: 'unset', path: ['providers', 'provider', 'modelOverrides', 'qwen-thinking', 'compat', 'maxTokensField'] },
     ])
   })
 
-  it('model compat operations fail closed for non-editable fields, empty providers, invalid indexes, and invalid enum values', () => {
+  it('model compat operations reject models[] as YAML-only and fail closed for invalid input', () => {
     const editable: GatewayCompatEditability = {
+      supportsDeveloperRole: true,
+      maxTokensField: true,
+      editableFields: ['supportsDeveloperRole', 'maxTokensField'],
+    }
+    const override = item({ index: -1, model: 'qwen-thinking', inOverrides: true })
+
+    expect(opsForModelCompat(item({ index: 1, model: 'qwen-thinking' }), {
+      supportsDeveloperRole: 'supported',
+    }, editable)).toEqual([])
+    expect(opsForModelCompat(item({ index: -1, model: 'qwen-thinking' }), {
+      maxTokensField: 'max_tokens',
+    }, editable)).toEqual([])
+    expect(opsForModelCompat(item({ index: 1.5, model: 'qwen-thinking' }), {
+      maxTokensField: 'max_tokens',
+    }, editable)).toEqual([])
+    expect(opsForModelCompat(item({ route: '   ', index: -1, model: 'qwen-thinking', inOverrides: true }), {
+      maxTokensField: 'max_tokens',
+    }, editable)).toEqual([])
+    expect(opsForModelCompat(item({ index: -1, model: '   ', inOverrides: true }), {
+      maxTokensField: 'max_tokens',
+    }, editable)).toEqual([])
+    expect(opsForModelCompat(override, { supportsDeveloperRole: 'supported' }, {
       supportsDeveloperRole: false,
       maxTokensField: true,
-      editableFields: ['maxTokensField'],
-    }
-
-    expect(opsForModelCompat(item({ route: '   ', index: 1 }), { maxTokensField: 'max_tokens' }, editable)).toEqual([])
-    expect(opsForModelCompat(item({ index: -1 }), { maxTokensField: 'max_tokens' }, editable)).toEqual([])
-    expect(opsForModelCompat(item({ index: 1.5 }), { maxTokensField: 'max_tokens' }, editable)).toEqual([])
-    expect(opsForModelCompat(item({ index: 1 }), { supportsDeveloperRole: 'supported' }, editable)).toEqual([])
-    expect(opsForModelCompat(item({ index: 1 }), { maxTokensField: 'invalid' as ModelGatewayCompatUpdate['maxTokensField'] }, editable)).toEqual([])
-    expect(opsForModelCompat(item({ index: 1 }), { unknown: 'value' } as Partial<ModelGatewayCompatUpdate> & Record<string, unknown>, editable)).toEqual([])
+    })).toEqual([])
+    expect(opsForModelCompat(override, {
+      supportsDeveloperRole: 'supported',
+      maxTokensField: 'invalid' as ModelGatewayCompatUpdate['maxTokensField'],
+    }, editable)).toEqual([])
+    expect(opsForModelCompat(override, { unknown: 'value' } as Partial<ModelGatewayCompatUpdate> & Record<string, unknown>, editable)).toEqual([])
   })
 
   it('checks each schema field independently', () => {

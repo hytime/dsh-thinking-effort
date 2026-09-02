@@ -47,18 +47,29 @@ export function opsForModelCompat(
   update: Partial<ModelGatewayCompatUpdate>,
   editability?: Partial<Pick<GatewayCompatEditability, 'supportsDeveloperRole' | 'maxTokensField'>>,
 ): SettingsOp[] {
-  if (item.route.trim() === '' || (!item.inOverrides && (!Number.isInteger(item.index) || item.index < 0))) return []
+  if (item.inOverrides !== true
+    || typeof item.route !== 'string'
+    || item.route.trim() === ''
+    || typeof item.model !== 'string'
+    || item.model.trim() === '') return []
 
-  const prefix = item.inOverrides
-    ? ['providers', item.route, 'modelOverrides', item.model, 'compat']
-    : ['providers', item.route, 'models', String(item.index), 'compat']
+  const fields = Object.keys(update)
+  if (fields.length === 0 || fields.some((field) => field !== 'supportsDeveloperRole' && field !== 'maxTokensField')) return []
+  if (fields.some((field) => {
+    if (field === 'supportsDeveloperRole') {
+      return editability?.supportsDeveloperRole !== true
+        || !['auto', 'supported', 'unsupported'].includes(update.supportsDeveloperRole as string)
+    }
+    return editability?.maxTokensField !== true
+      || !['auto', 'max_tokens', 'max_completion_tokens'].includes(update.maxTokensField as string)
+  })) return []
+
+  const prefix = ['providers', item.route, 'modelOverrides', item.model, 'compat']
   const operations: SettingsOp[] = []
-  if (Object.prototype.hasOwnProperty.call(update, 'supportsDeveloperRole')
-    && editability?.supportsDeveloperRole === true) {
+  if (Object.prototype.hasOwnProperty.call(update, 'supportsDeveloperRole')) {
     pushModeOperation(operations, [...prefix, 'supportsDeveloperRole'], update.supportsDeveloperRole)
   }
-  if (Object.prototype.hasOwnProperty.call(update, 'maxTokensField')
-    && editability?.maxTokensField === true) {
+  if (Object.prototype.hasOwnProperty.call(update, 'maxTokensField')) {
     pushMaxTokensOperation(operations, [...prefix, 'maxTokensField'], update.maxTokensField)
   }
   return operations
