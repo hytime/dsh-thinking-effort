@@ -74,6 +74,7 @@ describe('model source conflict protection', () => {
 
   it('ignores empty, inherited, and invalid layered model sources', () => {
     const inheritedOverrides = Object.create({ inherited: {} }) as Record<string, unknown>
+    const inheritedProviders = Object.create({ provider: { models: [{ id: 'model' }] } }) as Record<string, unknown>
 
     expect(hasLayeredModelSourceConflict({
       value: { providers: { provider: { models: [], modelOverrides: { model: {} } } } },
@@ -87,6 +88,10 @@ describe('model source conflict protection', () => {
       value: { providers: { provider: { models: [{ id: 'model' }] } } },
       base: { providers: { provider: [] } },
       user: { providers: { provider: { modelOverrides: 1 } } },
+    }, 'provider')).toBe(false)
+    expect(hasLayeredModelSourceConflict({
+      value: { providers: inheritedProviders },
+      user: { providers: { provider: { modelOverrides: { model: {} } } } },
     }, 'provider')).toBe(false)
     expect(hasLayeredModelSourceConflict({
       value: { providers: { provider: { models: [{ id: 'model' }] } } },
