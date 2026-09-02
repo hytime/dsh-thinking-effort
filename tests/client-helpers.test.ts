@@ -261,6 +261,147 @@ describe('model inventory and operations', () => {
     expect(result.model).toBe('model-a')
   })
 
+  it('keeps model-b compat isolated from model-a and the provider view', () => {
+    const namespace = {
+      value: {
+        providers: {
+          provider: {
+            compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' },
+            models: [
+              { id: 'model-a' },
+              { id: 'model-b', compat: { maxTokensField: 'max_completion_tokens' } },
+            ],
+          },
+        },
+      },
+      user: {
+        providers: {
+          provider: {
+            compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' },
+            models: [
+              { id: 'model-a' },
+              { id: 'model-b', compat: { maxTokensField: 'max_completion_tokens' } },
+            ],
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    }
+    const models = inventoryFrom(namespace)
+    const modelA = models.find((candidate) => candidate.model === 'model-a')
+    const modelB = models.find((candidate) => candidate.model === 'model-b')
+    expect(modelA).toBeDefined()
+    expect(modelB).toBeDefined()
+
+    expect(modelGatewayCompatViewFrom(namespace, modelA!, 'modern')).toMatchObject({
+      model: 'model-a',
+      supportsDeveloperRole: 'auto',
+      supportsDeveloperRoleSource: 'provider',
+      supportsDeveloperRoleResolved: false,
+      maxTokensField: 'auto',
+      maxTokensFieldSource: 'provider',
+      maxTokensFieldResolved: 'max_tokens',
+    })
+    expect(modelGatewayCompatViewFrom(namespace, modelB!, 'modern')).toMatchObject({
+      model: 'model-b',
+      supportsDeveloperRole: 'auto',
+      supportsDeveloperRoleSource: 'provider',
+      supportsDeveloperRoleResolved: false,
+      maxTokensField: 'max_completion_tokens',
+      maxTokensFieldSource: 'model',
+      maxTokensFieldResolved: 'max_completion_tokens',
+    })
+    expect(providerGatewayCompatViewFrom(namespace, 'provider', 'modern')).toMatchObject({
+      supportsDeveloperRole: 'unsupported',
+      maxTokensField: 'max_tokens',
+      maxTokensFieldSource: 'provider',
+    })
+  })
+
+  it('ignores takeover runtime resolutions from another provider', () => {
+    const namespace = {
+      value: {
+        providers: {
+          provider: {
+            models: [{ id: 'model-a', compat: { supportsDeveloperRole: false } }],
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    }
+    const runtime: TakeoverRuntimeResolution = {
+      providers: ['other-provider'],
+      compat: [{
+        provider: 'other-provider',
+        model: 'model-a',
+        thinkingFormat: { value: undefined, source: 'unknown' },
+        supportsReasoningEffort: { value: undefined, source: 'unknown' },
+        supportsDeveloperRole: { value: true, source: 'model' },
+        maxTokensField: { value: 'max_completion_tokens', source: 'model' },
+      }],
+    }
+    const model = inventoryFrom(namespace)[0]
+    expect(model).toBeDefined()
+    expect(modelGatewayCompatViewFrom(namespace, model!, 'modern', runtime)).toMatchObject({
+      provider: 'provider',
+      model: 'model-a',
+      supportsDeveloperRole: 'unsupported',
+      supportsDeveloperRoleSource: 'catalog',
+      supportsDeveloperRoleResolved: false,
+      maxTokensField: 'auto',
+      maxTokensFieldSource: 'unknown',
+    })
+  })
+
+  it('fails closed for malformed gateway capability objects', () => {
+    const malformed = { gatewayCompatFields: 'supportsDeveloperRole' } as unknown as Parameters<typeof editableProviderCompatFields>[0]
+    expect(editableProviderCompatFields(malformed, realGatewaySchema)).toEqual({
+      supportsDeveloperRole: false,
+      maxTokensField: false,
+      editableFields: [],
+    })
+    expect(validateProviderCompat(malformed, realGatewaySchema)).toMatchObject({
+      supportsDeveloperRole: false,
+      maxTokensField: false,
+      editableFields: [],
+      available: false,
+    })
+  })
+
+  it('resolves mixed gateway fields independently across every fallback layer', () => {
+    const cases = [
+      {
+        field: 'supportsDeveloperRole' as const,
+        input: { modelCompat: { supportsDeveloperRole: true }, providerCompat: { supportsDeveloperRole: false }, baseCompat: { supportsDeveloperRole: false }, catalogCompat: { supportsDeveloperRole: false }, protocolDefault: { supportsDeveloperRole: false } },
+        expected: { value: true, source: 'model' },
+      },
+      {
+        field: 'maxTokensField' as const,
+        input: { providerCompat: { maxTokensField: 'max_tokens' }, baseCompat: { maxTokensField: 'max_completion_tokens' }, catalogCompat: { maxTokensField: 'max_completion_tokens' }, protocolDefault: { maxTokensField: 'max_completion_tokens' } },
+        expected: { value: 'max_tokens', source: 'provider' },
+      },
+      {
+        field: 'thinkingFormat' as const,
+        input: { baseCompat: { thinkingFormat: 'deepseek' }, catalogCompat: { thinkingFormat: 'openai' }, protocolDefault: { thinkingFormat: 'qwen' } },
+        expected: { value: 'deepseek', source: 'base' },
+      },
+      {
+        field: 'supportsReasoningEffort' as const,
+        input: { catalogCompat: { supportsReasoningEffort: false }, protocolDefault: { supportsReasoningEffort: true } },
+        expected: { value: false, source: 'catalog' },
+      },
+      {
+        field: 'thinkingFormat' as const,
+        input: { protocolDefault: { thinkingFormat: 'qwen' } },
+        expected: { value: 'qwen', source: 'protocol' },
+      },
+    ]
+
+    for (const testCase of cases) {
+      expect(resolveGatewayCompat({ provider: 'provider', ...testCase.input })[testCase.field]).toEqual(testCase.expected)
+    }
+  })
+
   it('resolves model compat before provider compat field by field', () => {
     const result = resolveGatewayCompat({
       provider: 'qwen-gateway',
