@@ -175,7 +175,7 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-模型级 `compat` 会按字段逐字段覆盖 provider 默认值；模型层没有写出的字段继续继承 provider。`Auto` 会删除当前层字段，恢复从 provider 继承。每个模型只能选择一种配置来源：`models[]` 与 `modelOverrides` 不能同时用于同一个模型；官方 schema 会拒绝这种无效组合，插件遇到异常数据时 fail closed。
+模型级 `compat` 会按字段逐字段覆盖 provider 默认值；模型层没有写出的字段继续继承 provider。`Auto` 会删除当前层字段，恢复从 provider 继承。对同一路由（provider）而言，只要同时存在非空的 `models[]` 和非空的 `modelOverrides`，配置就无效；官方 schema 会拒绝该配置，插件遇到异常数据时 fail closed。
 
 设置页的 provider 全局区域用于修改该 provider 下全部模型的默认值。catalog 模型展开后，在单模型区域编辑 `modelOverrides.<model>.compat`。自定义 YAML `models[]` 路由使用模型条目的 `models[].compat`；由于当前 DSH Settings API 不支持数组 path op，这部分仅支持 YAML 配置，设置页不渲染 `models[]` 的 compat 控件，不提供编辑，也不生成数组 mutation。
 

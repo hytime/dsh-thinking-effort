@@ -66,7 +66,7 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-모델 수준 `compat`는 provider 기본값을 필드별로 덮어씁니다. 모델 수준에 없는 필드는 provider 값을 상속합니다. `Auto`는 현재 계층의 필드를 삭제하고 provider 상속으로 복원합니다. 같은 모델에서 `models[]`와 `modelOverrides`를 함께 사용할 수 없으며 모델마다 구성 출처를 하나만 선택해야 합니다. 공식 schema는 이 잘못된 조합을 거부하고 플러그인은 비정상 데이터에서 fail closed로 동작합니다.
+모델 수준 `compat`는 provider 기본값을 필드별로 덮어씁니다. 모델 수준에 없는 필드는 provider 값을 상속합니다. `Auto`는 현재 계층의 필드를 삭제하고 provider 상속으로 복원합니다. 같은 라우트(provider)에 비어 있지 않은 `models[]`와 비어 있지 않은 `modelOverrides`가 동시에 존재하면 잘못된 구성입니다. 공식 schema는 이 잘못된 구성을 거부하고 플러그인은 비정상 데이터에서 fail closed로 동작합니다.
 
 현재 DSH Settings API는 배열 path op를 지원하지 않습니다. 따라서 `models[]` compat은 YAML 전용입니다. 설정 페이지는 `models[]` compat 컨트롤을 렌더링하지 않고 편집을 제공하지 않으며 배열 mutation을 생성하지 않습니다. 런타임 schema가 노출하지 않는 필드도 편집할 수 없으며, 이전 DSH에서는 기존 기본 설정을 계속 사용할 수 있습니다.
 

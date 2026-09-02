@@ -72,7 +72,7 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-模型级 `compat` 会按字段逐字段覆盖 provider 默认值；模型层省略的字段继承 provider 值。`Auto` 会删除当前层字段，恢复从 provider 继承。同一个模型不能同时使用 `models[]` 与 `modelOverrides`；官方 schema 会拒绝这种无效组合，插件遇到异常数据时 fail closed。
+模型级 `compat` 会按字段逐字段覆盖 provider 默认值；模型层省略的字段继承 provider 值。`Auto` 会删除当前层字段，恢复从 provider 继承。对同一路由（provider）而言，只要同时存在非空的 `models[]` 和非空的 `modelOverrides`，配置就无效；官方 schema 会拒绝该配置，插件遇到异常数据时 fail closed。
 
 当前 DSH Settings API 不支持数组 path op。因此，`models[]` 的 compat 只能通过 YAML 配置：设置页不渲染 `models[]` 的 compat 控件，不提供编辑，也不生成数组 mutation。运行时 schema 未暴露的字段同样不可编辑；旧版 DSH 仍可使用原有基础设置。
 

@@ -82,7 +82,8 @@ function modelRows(profile: PiAiProviderProfile | undefined): PiAiModelRow[] {
   const rows: PiAiModelRow[] = []
   if (Array.isArray(profile.models)) {
     rows.push(...profile.models.filter(isRecord))
-  } else if (isRecord(profile.modelOverrides)) {
+  }
+  if (isRecord(profile.modelOverrides)) {
     rows.push(...Object.values(profile.modelOverrides).filter(isRecord))
   }
   return rows

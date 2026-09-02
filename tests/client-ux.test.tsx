@@ -786,7 +786,7 @@ describe('SectionEditor user behavior', () => {
           provider: {
             compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' },
             models: [{ id: 'model-a', name: 'Model A', reasoningEfforts: { off: null }, input: ['text'] }],
-            modelOverrides: { 'model-a': { id: 'model-a', name: 'Model A override', reasoningEfforts: { off: null }, input: ['text'], compat: { maxTokensField: 'max_completion_tokens' } } },
+            modelOverrides: { 'override-model': { id: 'override-model', name: 'Override Model', reasoningEfforts: { off: null }, input: ['text'], compat: { maxTokensField: 'max_completion_tokens' } } },
           },
         },
       },
@@ -800,8 +800,12 @@ describe('SectionEditor user behavior', () => {
 
     expect(view.container.querySelector('[data-scope="provider"]')).not.toBeNull()
     act(() => providerButton(view.container).click())
-    act(() => modelSettingsButton(view.container).click())
+    const overrideModelButton = [...view.container.querySelectorAll<HTMLButtonElement>(`button[aria-label="${text('openModelSettings')}"]`)]
+      .find((candidate) => candidate.parentElement?.parentElement?.parentElement?.textContent?.includes('override-model'))
+    expect(overrideModelButton).toBeDefined()
+    act(() => overrideModelButton!.click())
     expect(view.container.querySelector('[data-scope="model"]')).toBeNull()
+    expect(view.container.querySelector(`input[aria-label="${text('contextLength')}"]`)).not.toBeNull()
     expect(view.container.textContent).toContain(text('reasoningLevels'))
     expect(view.container.textContent).not.toContain(text('saveModelGatewayCompat'))
     view.unmount()

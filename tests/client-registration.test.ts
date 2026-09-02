@@ -345,6 +345,39 @@ describe('client registration', () => {
     expect(result).toEqual({ providers: [], compat: [] })
   })
 
+  it('enumerates model overrides when models is an empty array', () => {
+    const result = resolveTakeoverDescription({ compatibilityProfile: 'modern' }, {
+      ok: true,
+      value: {
+        namespaces: [{
+          ns: 'llm-pi-ai',
+          revision: 1,
+          value: {
+            providers: {
+              local: {
+                api: 'openai-completions',
+                baseURL: 'http://gateway.test/v1',
+                models: [],
+                modelOverrides: {
+                  'override-model': {
+                    reasoningEfforts: { high: 'high' },
+                    compat: { maxTokensField: 'max_completion_tokens' },
+                  },
+                },
+              },
+            },
+          },
+          schema: { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } },
+        }],
+      },
+    })
+
+    expect(result.providers).toEqual(['local'])
+    expect(result.compat).toEqual(expect.arrayContaining([
+      expect.objectContaining({ provider: 'local', model: 'override-model', maxTokensField: { value: 'max_completion_tokens', source: 'model' } }),
+    ]))
+  })
+
   it('keeps takeover model resolution own-property based and fail closed for malformed entries', () => {
     const inherited = Object.create({ inherited: { compat: { supportsDeveloperRole: true } } }) as Record<string, unknown>
     Object.defineProperty(inherited, '__proto__', {
@@ -463,6 +496,48 @@ describe('client registration', () => {
     expect(resolutions.at(-1)).toEqual({ providers: [], compat: [] })
     observed.dispose()
   })
+
+  it('republishes a valid resolution after a rejected post-mutation describe', async () => {
+    let describeCount = 0
+    const valid = {
+      ok: true as const,
+      value: {
+        namespaces: [{
+          ns: 'llm-pi-ai',
+          revision: 1,
+          value: { providers: { local: { api: 'openai-completions', baseURL: 'http://gateway.test/v1', models: [{ id: 'model', reasoningEfforts: { high: 'high' } }] } } },
+          schema: { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } },
+        }],
+      },
+    }
+    const settings = {
+      externalLanguages: false,
+      compatibilityProfile: 'modern' as const,
+      describe: vi.fn(async () => {
+        describeCount += 1
+        if (describeCount === 2) throw new Error('describe unavailable')
+        return valid
+      }),
+      mutate: vi.fn(async () => ({ ok: true as const, value: { ns: 'llm-pi-ai', revision: 2, value: {} } })),
+    }
+    const resolutions: Array<{ providers: readonly string[]; compat: readonly unknown[] }> = []
+    const observed = observeTakeoverSettings(settings, (resolution) => resolutions.push(resolution))
+
+    await observed.describe()
+    await observed.mutate('llm-pi-ai', [], 1)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(resolutions.at(-1)).toEqual({ providers: [], compat: [] })
+
+    await observed.describe()
+
+    expect(resolutions.at(-1)).toMatchObject({
+      providers: ['local'],
+      compat: expect.arrayContaining([expect.objectContaining({ provider: 'local', model: 'model' })]),
+    })
+    observed.dispose()
+  })
+
   it('uses runtime profile and descriptor schema to fail closed for takeover capability', () => {
     const piAi = {
       providers: {

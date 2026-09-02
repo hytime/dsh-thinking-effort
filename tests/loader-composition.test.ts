@@ -805,6 +805,7 @@ describe('compatibility documentation and root validation', () => {
   const changelogFiles = [
     'docs/CHANGELOG.md', 'docs/CHANGELOG.ja.md', 'docs/CHANGELOG.ko.md',
   ] as const
+  const modelSourceConflictContract = /(?=[^\n]*(?:route|路由|ルート|라우트))(?=[^\n]*(?:provider|提供方|プロバイダー|제공자))(?=[^\n]*(?:non-empty|非空|비어 있지 않은))(?=[^\n]*models\[\])(?=[^\n]*modelOverrides)[^\n]*(?:invalid|无效|無効|잘못된)/i
   const documentationContract = [
     { name: 'DSH Runtime compatibility boundary', pattern: /DSH Runtime[^\n]*(?:compatibility|兼容|互換|호환)/i },
     { name: 'Gateway Protocol compatibility boundary', pattern: /Gateway Protocol[^\n]*(?:compatibility|compat|兼容|互換|호환)/i },
@@ -817,7 +818,7 @@ describe('compatibility documentation and root validation', () => {
     { name: 'catalog model override path', pattern: /modelOverrides\.\<model\>\.compat/ },
     { name: 'field-by-field provider override semantics', pattern: /(?:field-by-field|field by field|逐字段|フィールドごと|필드별)[^\n]*(?:provider|供应商|プロバイダー|제공자)/i },
     { name: 'Auto restores provider inheritance', pattern: /Auto[^\n]*(?:delete|delet|unset|取消|删除|削除|삭제)[^\n]*(?:inherit|继承|継承|상속)/i },
-    { name: 'models and modelOverrides are mutually exclusive', pattern: /(?=[^\n]*models\[\])(?=[^\n]*modelOverrides)[^\n]*(?:cannot|must not|不能|不可|併用|함께|동시에)/i },
+    { name: 'models and modelOverrides are mutually exclusive at provider scope', pattern: modelSourceConflictContract },
     { name: 'models[] settings behavior', pattern: /models\[\][^\n]*(?:does not render|不渲染|compat コントロールを表示せず|compat 컨트롤을 렌더링하지)[^\n]*(?:does not offer editing|不提供编辑|編集も提供せず|편집을 제공하지)[^\n]*(?:does not emit array mutations|不生成数组 mutation|配列 mutation も生成しません|배열 mutation을 생성하지)/i },
     { name: 'schema rejects model source conflict', pattern: /(?=[^\n]*(?:official schema|官方 schema|公式 schema|공식 schema))(?=[^\n]*models\[\])[^\n]*(?:rejects|拒绝|拒否|거부)[^\n]*(?:fails? closed|异常数据|異常なデータ|비정상 데이터)/i },
     { name: 'control plane and transport boundary', pattern: /(?:control plane|控制面|コントロールプレーン|제어면)[^\n]*(?:transport|传输|トランスポート|전송)/i },
@@ -868,6 +869,7 @@ describe('compatibility documentation and root validation', () => {
     expect(section(document, 'Unreleased')).toMatch(/provider[^\n]*compat|提供方[^\n]*compat|プロバイダー[^\n]*compat|provider[^\n]*호환/i)
     expect(section(document, 'Unreleased')).toMatch(/modelOverrides/)
     expect(section(document, 'Unreleased')).toMatch(/models\[\]/)
+    expect(section(document, 'Unreleased')).toMatch(modelSourceConflictContract)
     expect(section(document, 'Unreleased')).toMatch(/(?:control plane|控制面|コントロールプレーン|제어면)[^\n]*(?:transport|传输|トランスポート|전송)/i)
     expect(section(document, '0.1.13')).toBe(published013Sections[file])
   })

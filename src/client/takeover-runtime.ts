@@ -78,10 +78,9 @@ function modelNames(profile: PiAiProviderProfile | undefined): Array<string | un
       const row = record(model)
       if (typeof row?.id === 'string') names.push(row.id)
     }
-  } else {
-    const overrides = record(profile.modelOverrides)
-    if (overrides !== undefined) names.push(...Object.keys(overrides))
   }
+  const overrides = record(profile.modelOverrides)
+  if (overrides !== undefined) names.push(...Object.keys(overrides))
   return names.length === 0 ? [undefined] : names
 }
 
