@@ -59,6 +59,17 @@ const expectedOfficialDshVersions = [
   '0.1.2-alpha.3',
 ] as const
 
+const loaderSeedProvider = {
+  api: 'openai-completions',
+  baseURL: 'http://gateway.test/v1',
+  models: [
+    { id: 'loader-model-a', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-a' },
+    { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-b', compat: { maxTokensField: 'max_tokens', supportsStore: true } },
+  ],
+} as const
+
+const officialSeedCompatFields = new Set(['maxTokensField', 'supportsStore'])
+
 const localizedNavigationLabels = {
   continue: /^(继续|Continue)$/,
   configureLater: /^(稍后配置|Configure later)$/,
@@ -1011,6 +1022,17 @@ describe('published package composition', () => {
   })
 })
 
+describe('loader seed schema contract', () => {
+  it('uses only official openai-completions compat fields', () => {
+    for (const model of loaderSeedProvider.models) {
+      const compat = 'compat' in model ? model.compat : undefined
+      for (const field of Object.keys(compat ?? {})) {
+        expect(officialSeedCompatFields.has(field), `unsupported seed compat field: ${field}`).toBe(true)
+      }
+    }
+  })
+})
+
 integrationDescribe('official DSH loader composition', () => {
   it('requires and verifies rc7, rc2, and alpha3 capability representatives independently', { timeout: 180000 }, async () => {
     expect(cliRoots).toHaveLength(3)
@@ -1152,12 +1174,14 @@ integrationDescribe('official DSH loader composition', () => {
                baseURL: 'http://gateway.test/v1',
                models: [
                   { id: 'loader-model-a', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-a' },
-                  { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-b', compat: { maxTokensField: 'max_tokens', keep: true } },
+                  { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-b', compat: { maxTokensField: 'max_tokens', supportsStore: true } },
                 ],
              },
            }], current.revision)
-           expect(seeded).toMatchObject({ ok: true, value: { ns: 'llm-pi-ai' } })
-           if (!seeded.ok) throw new Error(seeded.error.message)
+
+           if (!seeded.ok) throw new Error(`settings seed rejected for ${version}: ${seeded.error.message}`)
+            expect(seeded).toMatchObject({ ok: true, value: { ns: 'llm-pi-ai' } })
+
            const seededNamespace = await describePiAi()
            const setOps = opsForProviderCompat(route, {
              supportsDeveloperRole: 'supported',
@@ -1206,7 +1230,7 @@ integrationDescribe('official DSH loader composition', () => {
               path: ['providers', route, 'models'],
               value: [
                 { id: 'loader-model-a', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-a' },
-                { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-b', compat: { maxTokensField: 'max_tokens', keep: true, supportsDeveloperRole: false } },
+                { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-b', compat: { maxTokensField: 'max_tokens', supportsStore: true, supportsDeveloperRole: false } },
               ],
             }])
             const modelWritten = await settings!.mutate(modelsNamespace.ns, modelSetOps, modelsNamespace.revision)
@@ -1226,7 +1250,7 @@ integrationDescribe('official DSH loader composition', () => {
               path: ['providers', route, 'models'],
               value: [
                 { id: 'loader-model-a', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-a' },
-                { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-b', compat: { maxTokensField: 'max_tokens', keep: true } },
+                { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-b', compat: { maxTokensField: 'max_tokens', supportsStore: true } },
               ],
             }])
             const modelCleared = await settings!.mutate(modelWrittenNamespace.ns, modelAutoOps, modelWrittenNamespace.revision)
