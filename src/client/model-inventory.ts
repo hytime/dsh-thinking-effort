@@ -41,10 +41,10 @@ function modelLayerCompat(layer: unknown, provider: string, model: string): Reco
   if (!profile) return undefined
 
   const overrides = record(profile.modelOverrides)
-  const override = overrides !== undefined && Object.prototype.hasOwnProperty.call(overrides, model)
-    ? record(overrides[model])
-    : undefined
-  if (override !== undefined) return record(override.compat)
+  if (overrides !== undefined && Object.prototype.hasOwnProperty.call(overrides, model)) {
+    const override = record(overrides[model])
+    return override === undefined ? undefined : record(override.compat)
+  }
 
   if (Array.isArray(profile.models)) {
     const row = profile.models.find((entry) => record(entry)?.id === model)

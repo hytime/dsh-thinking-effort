@@ -353,14 +353,62 @@ describe('model inventory and operations', () => {
     })
   })
 
+  it('stops at malformed own modelOverrides entries and projects special model keys', () => {
+    const overrides: Record<string, unknown> = Object.create(null)
+    Object.defineProperty(overrides, '__proto__', {
+      configurable: true,
+      enumerable: true,
+      value: { compat: { supportsDeveloperRole: true } },
+      writable: true,
+    })
+    overrides.constructor = { compat: { supportsDeveloperRole: false } }
+    const namespace = {
+      value: { providers: { provider: { models: [{ id: 'model-a' }, { id: '__proto__' }, { id: 'constructor' }] } } },
+      user: { providers: { provider: { models: [{ id: 'model-a', compat: { supportsDeveloperRole: true } }], modelOverrides: { 'model-a': null, ...overrides } } } },
+      schema: realGatewaySchema,
+    }
+    const models = inventoryFrom(namespace).filter((candidate) => !candidate.inOverrides)
+
+    expect(modelGatewayCompatViewFrom(namespace, models.find((candidate) => candidate.model === 'model-a')!, 'modern')).toMatchObject({
+      model: 'model-a',
+      supportsDeveloperRole: 'auto',
+      supportsDeveloperRoleSource: 'unknown',
+      supportsDeveloperRoleResolved: undefined,
+    })
+    expect(modelGatewayCompatViewFrom(namespace, models.find((candidate) => candidate.model === '__proto__')!, 'modern')).toMatchObject({
+      model: '__proto__',
+      supportsDeveloperRole: 'supported',
+      supportsDeveloperRoleSource: 'model',
+      supportsDeveloperRoleResolved: true,
+    })
+    expect(modelGatewayCompatViewFrom(namespace, models.find((candidate) => candidate.model === 'constructor')!, 'modern')).toMatchObject({
+      model: 'constructor',
+      supportsDeveloperRole: 'unsupported',
+      supportsDeveloperRoleSource: 'model',
+      supportsDeveloperRoleResolved: false,
+    })
+  })
+
   it('fails closed for malformed gateway capability objects', () => {
     const malformed = { gatewayCompatFields: 'supportsDeveloperRole' } as unknown as Parameters<typeof editableProviderCompatFields>[0]
+    const nullCapabilities = null as unknown as Parameters<typeof editableProviderCompatFields>[0]
     expect(editableProviderCompatFields(malformed, realGatewaySchema)).toEqual({
       supportsDeveloperRole: false,
       maxTokensField: false,
       editableFields: [],
     })
     expect(validateProviderCompat(malformed, realGatewaySchema)).toMatchObject({
+      supportsDeveloperRole: false,
+      maxTokensField: false,
+      editableFields: [],
+      available: false,
+    })
+    expect(editableProviderCompatFields(nullCapabilities, realGatewaySchema)).toEqual({
+      supportsDeveloperRole: false,
+      maxTokensField: false,
+      editableFields: [],
+    })
+    expect(validateProviderCompat(nullCapabilities, realGatewaySchema)).toMatchObject({
       supportsDeveloperRole: false,
       maxTokensField: false,
       editableFields: [],

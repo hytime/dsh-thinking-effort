@@ -100,7 +100,7 @@ function runtimeAllowsField(
   field: GatewayCompatEditableField,
 ): boolean {
   if (capabilities === 'modern' || capabilities === 'legacy') return true
-  if (capabilities === 'unknown' || capabilities === undefined) return false
+  if (capabilities === 'unknown' || capabilities === undefined || capabilities === null || typeof capabilities !== 'object') return false
   return Array.isArray(capabilities.gatewayCompatFields) && capabilities.gatewayCompatFields.includes(field)
 }
 
