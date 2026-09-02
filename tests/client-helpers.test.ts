@@ -13,7 +13,7 @@ import {
 } from '../src/client/constants.js'
 import { directResult, settingsBridge } from '../src/client/settings-bridge.js'
 import { LOCALE_DATA, LOCALE_CODES } from '../src/client/locales.js'
-import { inventoryFrom, modelGatewayCompatViewFrom, providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
+import { inventoryFrom, modelCompatKey, modelGatewayCompatViewFrom, providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
 import { mergeModelUpdate, opsForModelCompat, opsForProviderCompat, setOps } from '../src/client/model-ops.js'
 import {
   buildInput,
@@ -128,6 +128,10 @@ describe('client constants and bridge', () => {
 })
 
 describe('model inventory and operations', () => {
+  it('keeps route and model compat keys unambiguous', () => {
+    expect(modelCompatKey('a', 'b/c')).not.toBe(modelCompatKey('a/b', 'c'))
+  })
+
   it('preserves route, model, name, raw, index, and override provenance', () => {
     const ns = {
       value: {
@@ -361,7 +365,12 @@ describe('model inventory and operations', () => {
       value: { compat: { supportsDeveloperRole: true } },
       writable: true,
     })
-    overrides.constructor = { compat: { supportsDeveloperRole: false } }
+    Object.defineProperty(overrides, 'constructor', {
+      configurable: true,
+      enumerable: true,
+      value: { compat: { supportsDeveloperRole: false } },
+      writable: true,
+    })
     const namespace = {
       value: { providers: { provider: { models: [{ id: 'model-a' }, { id: '__proto__' }, { id: 'constructor' }] } } },
       user: { providers: { provider: { models: [{ id: 'model-a', compat: { supportsDeveloperRole: true } }], modelOverrides: { 'model-a': null, ...overrides } } } },

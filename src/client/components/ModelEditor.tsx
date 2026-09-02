@@ -24,13 +24,14 @@ export interface ModelEditorProps {
   readonly compatView?: ModelGatewayCompatView
   readonly onCompatChange?: (next: Partial<ModelGatewayCompatUpdate>) => void
   readonly onSaveCompat?: () => void
+  readonly compatDirty?: boolean
 }
 
-export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy, palette, t, onLevelChange, onContextChange, onOneMillionChange, onInputChange, onSave, onRestoreReasoning, onRestoreCapability, compatView, onCompatChange, onSaveCompat }: ModelEditorProps): React.ReactElement {
+export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy, palette, t, onLevelChange, onContextChange, onOneMillionChange, onInputChange, onSave, onRestoreReasoning, onRestoreCapability, compatView, onCompatChange, onSaveCompat, compatDirty }: ModelEditorProps): React.ReactElement {
   const levelLabel = (level: typeof ALL_LEVELS[number]): string => t(LEVEL_LABEL_KEYS[level])
   const modelCompat = item.inOverrides && compatView !== undefined ? <>
     {renderGatewayCompatControls({ scope: 'model', view: compatView, onChange: (next) => onCompatChange?.(next as Partial<ModelGatewayCompatUpdate>), disabled: busy || onCompatChange === undefined }, { palette, t })}
-    {onSaveCompat ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}><ActionButton text={t('saveModelGatewayCompat')} onClick={onSaveCompat} disabled={busy} tone="primary" palette={palette} icon="check" /></div> : null}
+    {onSaveCompat ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}><ActionButton text={t('saveModelGatewayCompat')} onClick={onSaveCompat} disabled={busy || compatDirty !== true} tone="primary" palette={palette} icon="check" /></div> : null}
   </> : null
   return <div style={{ padding: '8px', borderTop: `1px solid ${palette.divider}`, backgroundColor: palette.group }}>
     {modelCompat}

@@ -159,6 +159,24 @@ export function modelGatewayCompatViewFrom(
 
 export const modelCompatViewFrom = modelGatewayCompatViewFrom
 
+export function modelCompatKey(route: string, model: string): string {
+  return JSON.stringify([route, model])
+}
+
+export function modelGatewayCompatViewsFrom(
+  namespace: SettingsNamespace | unknown,
+  inventory: readonly InventoryItem[],
+  compatibilityProfile: CompatibilityProfile = 'unknown',
+  takeoverRuntime?: TakeoverRuntimeResolution,
+): Record<string, ModelGatewayCompatView> {
+  return Object.fromEntries(inventory.map((item) => [
+    modelCompatKey(item.route, item.model),
+    modelGatewayCompatViewFrom(namespace, item, compatibilityProfile, takeoverRuntime),
+  ]))
+}
+
+export const modelCompatViewsFrom = modelGatewayCompatViewsFrom
+
 function takeoverCompatFor(runtime: TakeoverRuntimeResolution | undefined, provider: string): TakeoverRuntimeResolution['compat'][number] | undefined {
   if (runtime === undefined || !runtime.providers.includes(provider)) return undefined
   return runtime.compat.find((resolution) => resolution.provider === provider && resolution.model === undefined)

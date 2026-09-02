@@ -17,6 +17,11 @@ export type {
   ProviderGatewayCompatUpdate,
   ProviderGatewayCompatView,
 } from '../compat/gateway/types.js'
+export type ModelCompatDirtyFields = {
+  supportsDeveloperRole?: boolean
+  maxTokensField?: boolean
+}
+
 export type ModelGatewayCompatSelection = Pick<GatewayModelGatewayCompatView, 'supportsDeveloperRole' | 'maxTokensField'>
 
 export type ReasoningLevel = typeof ALL_LEVELS[number]
