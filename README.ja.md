@@ -96,6 +96,29 @@ profile の確認、移行、検証、トラブルシューティングについ
 
 設定ページ右下には `v0.1.13` のような小さなバージョン表示が出ます。
 
+### ゲートウェイ互換設定
+
+provider の `compat` ブロックは、その provider 配下のすべてのモデルに対するグローバル既定値です。DSH 公式の YAML 形式で設定します。
+
+```yaml
+providers:
+  qwen-gateway:
+    compat:
+      supportsDeveloperRole: false
+      maxTokensField: max_tokens
+    models:
+      - id: qwen-plus
+      - id: qwen-thinking
+        compat:
+          maxTokensField: max_completion_tokens
+```
+
+モデルの `compat` は provider の既定値をフィールドごとに上書きします。モデル層に書かれていないフィールドは provider から継承されます。`Auto` は現在の層のフィールドを削除し、provider からの継承へ戻します。モデルごとに設定元は 1 つだけにしてください。同じモデルで `models[]` と `modelOverrides` は併用できません。
+
+Settings の provider グローバル領域では、その provider の全モデルの既定値を編集します。カタログモデルは展開して、単一モデル領域の `modelOverrides.<model>.compat` を編集します。カスタム YAML の `models[]` ルートではモデル項目の `models[].compat` を使用します。現在の DSH Settings API は配列 path op に対応していないため、`models[]` の compat は YAML 専用です。設定ページは読み取り専用で表示し、配列 mutation は生成しません。
+
+これらの compat 値はコントロールプレーンの設定です。ゲートウェイの transport を実装または置き換えるものではなく、ネットワーク要求は外部 transport が担当します。
+
 ### 設定ページの構成
 
 ページ上部に言語セレクターがあります。その下の **Subagent default effort** カードは明示値のないリクエストの既定値を管理します。**Quick settings** は一括プリセットを適用します。プロバイダーとモデルの一覧は展開/折りたたみができ、各モデル行の入力能力、コンテキスト長、設定ボタンから推論レベルとゲートウェイ値を編集できます。

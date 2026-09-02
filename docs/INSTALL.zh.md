@@ -55,6 +55,29 @@ version-map 按以下规则判断网关能力：
 
 对于任一字段，`Auto` 都会取消用户覆盖并恢复官方协议默认值。可选 transport 未安装或未启用时，不会执行 takeover。
 
+## 网关兼容设置
+
+设置页的 provider 全局区域用于修改该 provider 下全部模型的 `compat` 默认值。展开单个模型后进入单模型区域。catalog 模型使用 `modelOverrides.<model>.compat`，自定义 YAML 路由使用模型条目的 `models[].compat`。
+
+```yaml
+providers:
+  qwen-gateway:
+    compat:
+      supportsDeveloperRole: false
+      maxTokensField: max_tokens
+    models:
+      - id: qwen-plus
+      - id: qwen-thinking
+        compat:
+          maxTokensField: max_completion_tokens
+```
+
+模型级 `compat` 会按字段逐字段覆盖 provider 默认值；模型层省略的字段继承 provider 值。`Auto` 会删除当前层字段，恢复从 provider 继承。同一个模型不能同时使用 `models[]` 与 `modelOverrides`，请为每个模型选择一种配置来源。
+
+当前 DSH Settings API 不支持数组 path op。因此，`models[]` 的 compat 只能通过 YAML 配置：设置页只读展示它，不生成数组 mutation。运行时 schema 未暴露的字段同样不可编辑；旧版 DSH 仍可使用原有基础设置。
+
+这些值只属于控制面配置。本插件不实现或替代网关 transport，网络请求仍由外部 transport 负责。
+
 校验点：目标目录存在：
 
 ```bash

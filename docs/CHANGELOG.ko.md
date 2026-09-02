@@ -15,6 +15,8 @@
 - `version-map.ts`에서 DSH Runtime transport, Gateway compat 필드 및 takeover transport의 capability mapping을 통일하고, rc7은 `supportsDeveloperRole`/`maxTokensField`를 지원하지 않으며 rc8+는 지원함을 명시했습니다.
 - rc7, rc2 및 alpha3 세 capability composition representative를 각각 로드하고 실제 호환성을 검증하는 테스트를 추가했습니다.
 - 선택 사항인 `dsh-llm-openai-completions` takeover를 지원합니다. Gateway compat을 지원하는 runtime에서 대상이 사용자 지정 OpenAI 호환 사고 게이트웨이이고 transport가 활성화된 경우에만 적용됩니다.
+- provider 전역 `compat` 기본값과 단일 모델 override를 추가했습니다. catalog 모델은 `modelOverrides.<model>.compat`, 사용자 지정 YAML 모델은 `models[].compat`을 사용합니다. 모델 수준은 작성된 필드만 provider 기본값에 대해 덮어쓰며 `Auto`는 현재 계층의 필드를 삭제하고 provider 상속으로 복원합니다. 같은 모델에서 `models[]`와 `modelOverrides`를 함께 사용할 수 없습니다.
+- 이 compat 값은 제어면 설정만 담당하며 외부 transport를 구현하지 않습니다.
 
 ## [0.1.13] - 호환성 범위 기반 검증
 

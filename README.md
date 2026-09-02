@@ -99,6 +99,29 @@ See [INSTALL.md](./docs/INSTALL.md) for profile discovery, migration, validation
 
 The settings page shows the installed version as a small watermark such as `v0.1.13` in the bottom-right corner.
 
+### Gateway compatibility configuration
+
+The provider `compat` block is the global default for every model under that provider. Configure provider defaults with the official DSH YAML shape:
+
+```yaml
+providers:
+  qwen-gateway:
+    compat:
+      supportsDeveloperRole: false
+      maxTokensField: max_tokens
+    models:
+      - id: qwen-plus
+      - id: qwen-thinking
+        compat:
+          maxTokensField: max_completion_tokens
+```
+
+A model-level `compat` overrides the provider default field-by-field. Fields not written at the model layer continue to inherit from the provider. `Auto` deletes the current-layer field and restores provider inheritance. Use one configuration source per model: `models[]` and `modelOverrides` cannot be used together for the same model.
+
+The provider area in Settings edits defaults for all models. For a catalog model, expand that model and edit `modelOverrides.<model>.compat` in its single-model area. A custom YAML `models[]` entry uses `models[].compat`; this is YAML-only in the current DSH because the Settings API does not support array path operations. The settings page shows `models[]` compat as read-only and does not emit array mutations.
+
+These compat values are control plane configuration. They do not implement or replace the gateway transport; an external transport remains responsible for network requests.
+
 ### Settings page layout
 
 The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and a settings control for reasoning levels and gateway values.

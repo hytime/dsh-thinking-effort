@@ -49,6 +49,29 @@ version-map はゲートウェイ capability を次のように判定します�
 
 どちらのフィールドでも `Auto` はユーザーの上書きを unset し、公式プロトコルの既定値へ戻します。オプションの transport が未インストールまたは無効の場合、takeover は適用されません。
 
+## ゲートウェイ互換設定
+
+Settings の provider グローバル領域では、その provider 配下のすべてのモデルの `compat` 既定値を編集します。モデルを 1 つ展開すると単一モデル領域が開きます。カタログモデルでは `modelOverrides.<model>.compat`、カスタム YAML ルートではモデル項目の `models[].compat` を使用します。
+
+```yaml
+providers:
+  qwen-gateway:
+    compat:
+      supportsDeveloperRole: false
+      maxTokensField: max_tokens
+    models:
+      - id: qwen-plus
+      - id: qwen-thinking
+        compat:
+          maxTokensField: max_completion_tokens
+```
+
+モデルの `compat` は provider の既定値をフィールドごとに上書きします。モデル層にないフィールドは provider の値を継承します。`Auto` は現在の層のフィールドを削除し、provider からの継承へ戻します。同じモデルで `models[]` と `modelOverrides` は併用できないため、モデルごとに設定元を 1 つ選びます。
+
+現在の DSH Settings API は配列 path op に対応していません。そのため `models[]` の compat は YAML 専用です。設定ページでは読み取り専用で表示し、配列 mutation は生成しません。実行時 schema が公開しないフィールドも編集不可です。古い DSH では既存の基本設定を引き続き利用できます。
+
+これらの値はコントロールプレーンの設定だけを行います。このプラグインはゲートウェイの transport を実装または置き換えず、ネットワーク要求は外部 transport が担当します。
+
 ## 1. 公式インストール
 
 最新版をインストールします。

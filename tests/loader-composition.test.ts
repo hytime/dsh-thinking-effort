@@ -812,6 +812,12 @@ describe('compatibility documentation and root validation', () => {
     { name: 'legacy Settings transport', pattern: /connection\.api\.settings/ },
     { name: 'supportsDeveloperRole field', pattern: /supportsDeveloperRole/ },
     { name: 'maxTokensField field', pattern: /maxTokensField/ },
+    { name: 'provider global compat example', pattern: /providers:\s*\n[\s\S]*compat:\s*\n[\s\S]*supportsDeveloperRole:\s*(?:true|false)[\s\S]*maxTokensField:\s*[A-Za-z_]+/ },
+    { name: 'model-level compat example', pattern: /models:\s*[\s\S]*compat:|modelOverrides\.\<model\>\.compat/ },
+    { name: 'field-by-field provider override semantics', pattern: /(?:field-by-field|field by field|逐字段|フィールドごと|필드별)[^\n]*(?:provider|供应商|プロバイダー|제공자)/i },
+    { name: 'Auto restores provider inheritance', pattern: /Auto[^\n]*(?:delete|delet|unset|取消|删除|削除|삭제)[^\n]*(?:inherit|继承|継承|상속)/i },
+    { name: 'models and modelOverrides are mutually exclusive', pattern: /(?=[^\n]*models\[\])(?=[^\n]*modelOverrides)[^\n]*(?:cannot|must not|不能|不可|併用|함께|동시에)/i },
+    { name: 'control plane and transport boundary', pattern: /(?:control plane|控制面|コントロールプレーン|제어면)[^\n]*(?:transport|传输|トランスポート|전송)/i },
     { name: 'rc7 capability boundary', pattern: /0\.1\.0-rc\.7/ },
     { name: 'rc8 and later capability boundary', pattern: /0\.1\.0-rc\.8[^\n]*(?:later|后续|以降|이후)/i },
     { name: 'Auto reset semantics', pattern: /Auto[^\n]*(?:unset|取消|恢复|復元|복원)/i },
@@ -855,6 +861,10 @@ describe('compatibility documentation and root validation', () => {
     expect(section(document, 'Unreleased')).toMatch(/rc\.?2/i)
     expect(section(document, 'Unreleased')).toMatch(/alpha\.?3/i)
     expect(section(document, 'Unreleased')).toMatch(/takeover|take over|接管/i)
+    expect(section(document, 'Unreleased')).toMatch(/provider[^\n]*compat|提供方[^\n]*compat|プロバイダー[^\n]*compat|provider[^\n]*호환/i)
+    expect(section(document, 'Unreleased')).toMatch(/modelOverrides/)
+    expect(section(document, 'Unreleased')).toMatch(/models\[\]/)
+    expect(section(document, 'Unreleased')).toMatch(/(?:control plane|控制面|コントロールプレーン|제어면)[^\n]*(?:transport|传输|トランスポート|전송)/i)
     expect(section(document, '0.1.13')).toBe(published013Sections[file])
   })
 

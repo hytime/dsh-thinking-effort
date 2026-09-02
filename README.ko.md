@@ -96,6 +96,29 @@ profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](
 
 설정 페이지 오른쪽 아래에는 `v0.1.13`과 같은 작은 버전 표시가 나타납니다.
 
+### 게이트웨이 호환성 설정
+
+provider의 `compat` 블록은 해당 provider 아래 모든 모델의 전역 기본값입니다. DSH 공식 YAML 형식으로 설정합니다.
+
+```yaml
+providers:
+  qwen-gateway:
+    compat:
+      supportsDeveloperRole: false
+      maxTokensField: max_tokens
+    models:
+      - id: qwen-plus
+      - id: qwen-thinking
+        compat:
+          maxTokensField: max_completion_tokens
+```
+
+모델 수준 `compat`는 provider 기본값을 필드별로 덮어씁니다. 모델 수준에 쓰지 않은 필드는 provider에서 계속 상속됩니다. `Auto`는 현재 계층의 필드를 삭제하고 provider 상속으로 복원합니다. 모델마다 구성 출처는 하나만 사용해야 합니다. 같은 모델에서 `models[]`와 `modelOverrides`를 함께 사용할 수 없습니다.
+
+Settings의 provider 전역 영역은 해당 provider의 모든 모델 기본값을 수정합니다. catalog 모델은 펼친 뒤 단일 모델 영역에서 `modelOverrides.<model>.compat`를 수정합니다. 사용자 지정 YAML `models[]` 라우트는 모델 항목의 `models[].compat`를 사용합니다. 현재 DSH Settings API는 배열 path op를 지원하지 않으므로 `models[]` compat은 YAML 전용입니다. 설정 페이지는 이를 읽기 전용으로 표시하며 배열 mutation을 생성하지 않습니다.
+
+이 compat 값은 제어면 설정입니다. 게이트웨이 transport를 구현하거나 대체하지 않으며 네트워크 요청은 외부 transport가 담당합니다.
+
 ### 설정 페이지 구성
 
 페이지 상단에는 언어 선택기가 있습니다. 그 아래의 **Subagent default effort** 카드는 명시적인 값이 없는 요청의 기본값을 관리합니다. **Quick settings**는 일괄 프리셋을 적용합니다. 제공자와 모델 목록은 펼치거나 접을 수 있으며, 각 모델 행의 입력 기능, 컨텍스트 길이 및 설정 버튼에서 추론 단계와 게이트웨이 값을 편집할 수 있습니다.

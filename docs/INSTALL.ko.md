@@ -49,6 +49,29 @@ version-map은 다음 규칙으로 게이트웨이 capability를 판정합니다
 
 두 필드에서 `Auto`는 사용자 override를 unset하고 공식 protocol 기본값을 복원합니다. 선택 사항인 transport가 설치되지 않았거나 비활성화된 경우 takeover를 적용하지 않습니다.
 
+## 게이트웨이 호환성 설정
+
+Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델의 `compat` 기본값을 수정합니다. 모델 하나를 펼치면 단일 모델 영역이 열립니다. catalog 모델은 `modelOverrides.<model>.compat`을 사용하고, 사용자 지정 YAML 라우트는 모델 항목의 `models[].compat`을 사용합니다.
+
+```yaml
+providers:
+  qwen-gateway:
+    compat:
+      supportsDeveloperRole: false
+      maxTokensField: max_tokens
+    models:
+      - id: qwen-plus
+      - id: qwen-thinking
+        compat:
+          maxTokensField: max_completion_tokens
+```
+
+모델 수준 `compat`는 provider 기본값을 필드별로 덮어씁니다. 모델 수준에 없는 필드는 provider 값을 상속합니다. `Auto`는 현재 계층의 필드를 삭제하고 provider 상속으로 복원합니다. 같은 모델에서 `models[]`와 `modelOverrides`를 함께 사용할 수 없으므로 모델마다 구성 출처를 하나만 선택하세요.
+
+현재 DSH Settings API는 배열 path op를 지원하지 않습니다. 따라서 `models[]` compat은 YAML 전용입니다. 설정 페이지는 이를 읽기 전용으로 표시하고 배열 mutation을 생성하지 않습니다. 런타임 schema가 노출하지 않는 필드도 편집할 수 없으며, 이전 DSH에서는 기존 기본 설정을 계속 사용할 수 있습니다.
+
+이 값은 제어면 설정만 담당합니다. 이 플러그인은 게이트웨이 transport를 구현하거나 대체하지 않으며 네트워크 요청은 외부 transport가 담당합니다.
+
 ## 1. 공식 설치
 
 최신 버전을 설치합니다.

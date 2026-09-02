@@ -49,6 +49,29 @@ The version map applies the following gateway capability rules:
 
 For either field, `Auto` unsets the user override and restores the official protocol default. If the optional transport is absent or disabled, no takeover is applied.
 
+## Gateway compatibility settings
+
+The provider global area in the Settings page edits the default `compat` values for every model under that provider. Expanding one model opens its single-model area. Catalog models use `modelOverrides.<model>.compat`; custom YAML routes use the model entry's `models[].compat`.
+
+```yaml
+providers:
+  qwen-gateway:
+    compat:
+      supportsDeveloperRole: false
+      maxTokensField: max_tokens
+    models:
+      - id: qwen-plus
+      - id: qwen-thinking
+        compat:
+          maxTokensField: max_completion_tokens
+```
+
+A model-level `compat` overrides the provider default field-by-field. Fields omitted at the model layer inherit the provider value. `Auto` deletes the current-layer field and restores provider inheritance. `models[]` and `modelOverrides` cannot be used together for the same model; choose one configuration source.
+
+The current DSH Settings API does not support array path operations. Therefore, `models[]` compat is YAML-only: the settings page shows it read-only and does not emit array mutations. Fields that the runtime schema does not expose are also read-only; older DSH builds keep the existing baseline settings available.
+
+These values are control plane configuration only. This plugin does not implement or replace the gateway transport; network requests remain the responsibility of an external transport.
+
 ## 1. Official installation
 
 Install the latest version:

@@ -158,6 +158,29 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.13
 
 设置页右下角会显示当前安装版本，例如 `v0.1.13`。
 
+### 网关兼容配置
+
+provider 的 `compat` 区域是该 provider 下全部模型的全局默认值。请使用 DSH 官方 YAML 配置结构：
+
+```yaml
+providers:
+  qwen-gateway:
+    compat:
+      supportsDeveloperRole: false
+      maxTokensField: max_tokens
+    models:
+      - id: qwen-plus
+      - id: qwen-thinking
+        compat:
+          maxTokensField: max_completion_tokens
+```
+
+模型级 `compat` 会按字段逐字段覆盖 provider 默认值；模型层没有写出的字段继续继承 provider。`Auto` 会删除当前层字段，恢复从 provider 继承。每个模型只能选择一种配置来源：`models[]` 与 `modelOverrides` 不能同时用于同一个模型。
+
+设置页的 provider 全局区域用于修改该 provider 下全部模型的默认值。catalog 模型展开后，在单模型区域编辑 `modelOverrides.<model>.compat`。自定义 YAML `models[]` 路由使用模型条目的 `models[].compat`；由于当前 DSH Settings API 不支持数组 path op，这部分仅支持 YAML 配置，设置页只读展示 `models[]` 的 compat，不生成数组 mutation。
+
+这些 compat 值属于控制面配置。它们不实现或替代网关 transport；网络请求仍由外部 transport 负责。
+
 ### 设置页界面
 
 页面顶部是语言选择器；其下方的「子 agent 默认档位」卡片控制没有显式档位的请求。「一键设置」负责批量应用预设。供应商和模型列表支持展开/收起；每个模型行显示输入能力、上下文长度和设置按钮，进入后可编辑思考档位及网关线上值。
