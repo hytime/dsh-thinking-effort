@@ -113,9 +113,9 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-모델 수준 `compat`는 provider 기본값을 필드별로 덮어씁니다. 모델 수준에 쓰지 않은 필드는 provider에서 계속 상속됩니다. `Auto`는 현재 계층의 필드를 삭제하고 provider 상속으로 복원합니다. 모델마다 구성 출처는 하나만 사용해야 합니다. 같은 모델에서 `models[]`와 `modelOverrides`를 함께 사용할 수 없습니다.
+모델 수준 `compat`는 provider 기본값을 필드별로 덮어씁니다. 모델 수준에 쓰지 않은 필드는 provider에서 계속 상속됩니다. `Auto`는 현재 계층의 필드를 삭제하고 provider 상속으로 복원합니다. 모델마다 구성 출처는 하나만 사용해야 합니다. 같은 모델에서 `models[]`와 `modelOverrides`를 함께 사용할 수 없습니다. 공식 schema는 이 잘못된 조합을 거부하며 플러그인은 비정상 데이터에서 fail closed로 동작합니다.
 
-Settings의 provider 전역 영역은 해당 provider의 모든 모델 기본값을 수정합니다. catalog 모델은 펼친 뒤 단일 모델 영역에서 `modelOverrides.<model>.compat`를 수정합니다. 사용자 지정 YAML `models[]` 라우트는 모델 항목의 `models[].compat`를 사용합니다. 현재 DSH Settings API는 배열 path op를 지원하지 않으므로 `models[]` compat은 YAML 전용입니다. 설정 페이지는 이를 읽기 전용으로 표시하며 배열 mutation을 생성하지 않습니다.
+Settings의 provider 전역 영역은 해당 provider의 모든 모델 기본값을 수정합니다. catalog 모델은 펼친 뒤 단일 모델 영역에서 `modelOverrides.<model>.compat`를 수정합니다. 사용자 지정 YAML `models[]` 라우트는 모델 항목의 `models[].compat`를 사용합니다. 현재 DSH Settings API는 배열 path op를 지원하지 않으므로 `models[]` compat은 YAML 전용입니다. 설정 페이지는 `models[]` compat 컨트롤을 렌더링하지 않고 편집을 제공하지 않으며 배열 mutation을 생성하지 않습니다.
 
 이 compat 값은 제어면 설정입니다. 게이트웨이 transport를 구현하거나 대체하지 않으며 네트워크 요청은 외부 transport가 담당합니다.
 

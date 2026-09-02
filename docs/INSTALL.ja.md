@@ -66,9 +66,9 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-モデルの `compat` は provider の既定値をフィールドごとに上書きします。モデル層にないフィールドは provider の値を継承します。`Auto` は現在の層のフィールドを削除し、provider からの継承へ戻します。同じモデルで `models[]` と `modelOverrides` は併用できないため、モデルごとに設定元を 1 つ選びます。
+モデルの `compat` は provider の既定値をフィールドごとに上書きします。モデル層にないフィールドは provider の値を継承します。`Auto` は現在の層のフィールドを削除し、provider からの継承へ戻します。同じモデルで `models[]` と `modelOverrides` は併用できません。公式 schema はこの無効な組み合わせを拒否し、プラグインは異常なデータに対して fail closed します。
 
-現在の DSH Settings API は配列 path op に対応していません。そのため `models[]` の compat は YAML 専用です。設定ページでは読み取り専用で表示し、配列 mutation は生成しません。実行時 schema が公開しないフィールドも編集不可です。古い DSH では既存の基本設定を引き続き利用できます。
+現在の DSH Settings API は配列 path op に対応していません。そのため `models[]` の compat は YAML 専用です。設定ページでは `models[]` の compat コントロールを表示せず、編集も提供せず、配列 mutation も生成しません。実行時 schema が公開しないフィールドも編集不可です。古い DSH では既存の基本設定を引き続き利用できます。
 
 これらの値はコントロールプレーンの設定だけを行います。このプラグインはゲートウェイの transport を実装または置き換えず、ネットワーク要求は外部 transport が担当します。
 

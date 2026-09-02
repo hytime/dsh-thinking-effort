@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { apply } from '../src/index.ts'
+import { hasModelSourceConflict } from '../src/compat/model-source.ts'
 
 type SettingsSection = Record<string, unknown> | undefined
 
@@ -322,6 +323,63 @@ describe('subagent request hook', () => {
       descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'ultra' } }],
     })
     const config = { provider: 'route', model: 'model' }
+
+    const result = await harness.listener('agent/request')?.callback(
+      { agent: { session: { header: { origin: 'subagent' } } } },
+      async () => config,
+    )
+
+    expect(result).toBe(config)
+  })
+
+  it('fails closed for model source conflict between models[] and modelOverrides', async () => {
+    const harness = createHarness({
+      writable: false,
+      section: {
+        providers: {
+          route: {
+            models: [{ id: 'model', reasoningEfforts: { high: 'from-models' } }],
+            modelOverrides: { model: { reasoningEfforts: { high: 'from-overrides' } } },
+          },
+        },
+      },
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'from-models' } }],
+    })
+    const config = { provider: 'route', model: 'model' }
+
+    const result = await harness.listener('agent/request')?.callback(
+      { agent: { session: { header: { origin: 'subagent' } } } },
+      async () => config,
+    )
+
+    expect(result).toBe(config)
+  })
+
+  it('keeps normal model lookup when modelOverrides is empty', async () => {
+    const harness = createHarness({
+      writable: false,
+      section: { providers: { route: { models: [{ id: 'model', reasoningEfforts: { high: 'ultra' } }], modelOverrides: {} } } },
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'ultra' } }],
+    })
+    const config = { provider: 'route', model: 'model' }
+
+    const result = await harness.listener('agent/request')?.callback(
+      { agent: { session: { header: { origin: 'subagent' } } } },
+      async () => config,
+    )
+
+    expect(result).toEqual({ ...config, reasoningEffort: 'high' })
+  })
+
+  it('fails closed for an own __proto__ model override key', async () => {
+    const section = JSON.parse('{"providers":{"route":{"models":[{"id":"__proto__","reasoningEfforts":{"high":"from-models"}}],"modelOverrides":{"__proto__":{"reasoningEfforts":{"high":"from-overrides"}}}}}}') as SettingsSection
+    expect(hasModelSourceConflict((section as Record<string, any>).providers.route)).toBe(true)
+    const harness = createHarness({
+      writable: false,
+      section,
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'from-models' } }],
+    })
+    const config = { provider: 'route', model: '__proto__' }
 
     const result = await harness.listener('agent/request')?.callback(
       { agent: { session: { header: { origin: 'subagent' } } } },

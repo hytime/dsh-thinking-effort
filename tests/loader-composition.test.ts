@@ -812,11 +812,14 @@ describe('compatibility documentation and root validation', () => {
     { name: 'legacy Settings transport', pattern: /connection\.api\.settings/ },
     { name: 'supportsDeveloperRole field', pattern: /supportsDeveloperRole/ },
     { name: 'maxTokensField field', pattern: /maxTokensField/ },
-    { name: 'provider global compat example', pattern: /providers:\s*\n[\s\S]*compat:\s*\n[\s\S]*supportsDeveloperRole:\s*(?:true|false)[\s\S]*maxTokensField:\s*[A-Za-z_]+/ },
-    { name: 'model-level compat example', pattern: /models:\s*[\s\S]*compat:|modelOverrides\.\<model\>\.compat/ },
+    { name: 'provider global compat example', pattern: /providers:\n  qwen-gateway:\n    compat:\n      supportsDeveloperRole: false\n      maxTokensField: max_tokens/ },
+    { name: 'model-level compat example', pattern: /- id: qwen-thinking\n        compat:\n          maxTokensField: max_completion_tokens/ },
+    { name: 'catalog model override path', pattern: /modelOverrides\.\<model\>\.compat/ },
     { name: 'field-by-field provider override semantics', pattern: /(?:field-by-field|field by field|逐字段|フィールドごと|필드별)[^\n]*(?:provider|供应商|プロバイダー|제공자)/i },
     { name: 'Auto restores provider inheritance', pattern: /Auto[^\n]*(?:delete|delet|unset|取消|删除|削除|삭제)[^\n]*(?:inherit|继承|継承|상속)/i },
     { name: 'models and modelOverrides are mutually exclusive', pattern: /(?=[^\n]*models\[\])(?=[^\n]*modelOverrides)[^\n]*(?:cannot|must not|不能|不可|併用|함께|동시에)/i },
+    { name: 'models[] settings behavior', pattern: /models\[\][^\n]*(?:does not render|不渲染|compat コントロールを表示せず|compat 컨트롤을 렌더링하지)[^\n]*(?:does not offer editing|不提供编辑|編集も提供せず|편집을 제공하지)[^\n]*(?:does not emit array mutations|不生成数组 mutation|配列 mutation も生成しません|배열 mutation을 생성하지)/i },
+    { name: 'schema rejects model source conflict', pattern: /(?=[^\n]*(?:official schema|官方 schema|公式 schema|공식 schema))(?=[^\n]*models\[\])[^\n]*(?:rejects|拒绝|拒否|거부)[^\n]*(?:fails? closed|异常数据|異常なデータ|비정상 데이터)/i },
     { name: 'control plane and transport boundary', pattern: /(?:control plane|控制面|コントロールプレーン|제어면)[^\n]*(?:transport|传输|トランスポート|전송)/i },
     { name: 'rc7 capability boundary', pattern: /0\.1\.0-rc\.7/ },
     { name: 'rc8 and later capability boundary', pattern: /0\.1\.0-rc\.8[^\n]*(?:later|后续|以降|이후)/i },
@@ -842,6 +845,7 @@ describe('compatibility documentation and root validation', () => {
   it.each(compatibilityDocumentationFiles)('enforces the compatibility contract in %s', (file) => {
     const document = readFileSync(join(root, file), 'utf8')
     expect(existsSync(join(root, file))).toBe(true)
+    expect(document, `${file}: missing scoped package name`).toContain('@hytime/dsh-thinking-effort')
     for (const { name, pattern } of documentationContract) {
       expect(document, `${file}: missing ${name}`).toMatch(pattern)
     }

@@ -2,6 +2,7 @@ import type { InventoryItem, InputModality, ModelGatewayCompatSelection, ModelGa
 import type { TakeoverRuntimeResolution } from './takeover-runtime.js'
 import { resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../compat/gateway/resolve.js'
 import { editableProviderCompatFields } from '../compat/gateway/validation.js'
+import { hasModelSourceConflict } from '../compat/model-source.js'
 import type { GatewayCompatResolveInput } from '../compat/gateway/types.js'
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -39,6 +40,7 @@ function modelLayerCompat(layer: unknown, provider: string, model: string): Reco
   const providers = record(root?.providers)
   const profile = record(providers?.[provider])
   if (!profile) return undefined
+  if (hasModelSourceConflict(profile)) return undefined
 
   const overrides = record(profile.modelOverrides)
   if (overrides !== undefined && Object.prototype.hasOwnProperty.call(overrides, model)) {
@@ -127,7 +129,10 @@ export function modelGatewayCompatViewFrom(
   const userProvider = layerCompat(descriptor?.user, item.route)
   const baseModel = modelLayerCompat(descriptor?.base, item.route, item.model)
   const baseProvider = layerCompat(descriptor?.base, item.route)
-  const catalogModel = record(item.raw?.compat) ?? modelLayerCompat(descriptor?.value, item.route, item.model)
+  const catalogProfile = record(record(record(descriptor?.value)?.providers)?.[item.route])
+  const catalogModel = hasModelSourceConflict(catalogProfile)
+    ? undefined
+    : record(item.raw?.compat) ?? modelLayerCompat(descriptor?.value, item.route, item.model)
   const catalogProvider = layerCompat(descriptor?.value, item.route)
   const runtimeModel = modelRuntimeCompatFor(takeoverRuntime, item.route, item.model)
   const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema)

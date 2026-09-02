@@ -6,6 +6,7 @@ import {
   isUnknownRecord,
 } from './types.js'
 import { SETTINGS_NAMESPACE } from './settings.js'
+import { hasModelSourceConflict } from '../compat/model-source.js'
 
 export const STANDARD_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
 export type StandardLevel = (typeof STANDARD_LEVELS)[number]
@@ -52,6 +53,7 @@ function findModel(settings: HostSettings, config: AgentRequestConfig): unknown 
   if (!Object.prototype.hasOwnProperty.call(section.providers, config.provider)) return undefined
   const profile = section.providers[config.provider]
   if (!isUnknownRecord(profile)) return undefined
+  if (hasModelSourceConflict(profile)) return undefined
   if (Array.isArray(profile.models)) {
     const model = profile.models.find((entry: unknown) => (
       isUnknownRecord(entry) && entry.id === config.model

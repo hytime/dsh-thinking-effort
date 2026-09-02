@@ -23,8 +23,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - 支持可选的 `dsh-llm-openai-completions` takeover：仅在运行时支持 Gateway compat、目标供应商为自定义 OpenAI 兼容思考网关且 transport 已启用时生效。
 - Support optional `dsh-llm-openai-completions` takeover only when the runtime supports Gateway compat, the target provider is a custom OpenAI-compatible thinking gateway, and the transport is enabled.
 - Runtime capability detection is authoritative; optional version metadata never overrides detected runtime capabilities.
-- 新增 provider 全局 `compat` 默认值和单模型覆盖：catalog 模型使用 `modelOverrides.<model>.compat`，自定义 YAML 模型使用 `models[].compat`。模型层只覆盖写出的字段，`Auto` 删除当前层字段并恢复 provider 继承；同一模型不能同时使用 `models[]` 与 `modelOverrides`。
-- Add provider-wide `compat` defaults and per-model overrides: catalog models use `modelOverrides.<model>.compat`, while custom YAML models use `models[].compat`. Model fields override the provider field-by-field, and `Auto` deletes the current-layer field to restore provider inheritance; `models[]` and `modelOverrides` are mutually exclusive for one model.
+- 新增 provider 全局 `compat` 默认值和单模型覆盖：catalog 模型使用 `modelOverrides.<model>.compat`，自定义 YAML 模型使用 `models[].compat`。模型层只覆盖写出的字段，`Auto` 删除当前层字段并恢复 provider 继承；同一模型不能同时使用 `models[]` 与 `modelOverrides`，官方 schema 会拒绝该组合，插件对异常数据 fail closed。`models[]` compat 仅支持 YAML 配置，设置页不渲染其 compat 控件、不提供编辑，也不生成数组 mutation。
+- Add provider-wide `compat` defaults and per-model overrides: catalog models use `modelOverrides.<model>.compat`, while custom YAML models use `models[].compat`. Model fields override the provider field-by-field, and `Auto` deletes the current-layer field to restore provider inheritance; `models[]` and `modelOverrides` are mutually exclusive for one model. The official schema rejects that combination, and the plugin fails closed for malformed data. `models[]` compat is YAML-only; the settings page does not render its compat control, offer editing, or emit array mutations.
 - 这些 compat 值只负责控制面配置，不实现外部 transport。
 - These compat values configure the control plane only; the plugin does not implement external transport.
 

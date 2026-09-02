@@ -25,6 +25,7 @@ import {
   validateLevels,
 } from '../src/client/validation.js'
 import { iosPalette } from '../src/client/theme.js'
+import { hasModelSourceConflict } from '../src/compat/model-source.js'
 import { resolveGatewayCompat, resolveProviderGatewayCompat } from '../src/compat/gateway/resolve.js'
 import { editableProviderCompatFields, validateProviderCompat } from '../src/compat/gateway/validation.js'
 import type { GatewayCompatEditability } from '../src/compat/gateway/types.js'
@@ -61,6 +62,24 @@ function item(overrides: Partial<InventoryItem> = {}): InventoryItem {
     ...overrides,
   }
 }
+
+describe('model source conflict protection', () => {
+  it('detects model source conflict only for non-empty models and own-key plain modelOverrides', () => {
+    const inheritedOverrides = Object.create({ inherited: { compat: { supportsDeveloperRole: true } } }) as Record<string, unknown>
+    const specialKeys = JSON.parse('{"models":[{"id":"__proto__"}],"modelOverrides":{"__proto__":{},"constructor":{},"toString":{}}}') as Record<string, unknown>
+
+    expect(hasModelSourceConflict({ models: [{ id: 'model' }], modelOverrides: { model: {} } })).toBe(true)
+    expect(hasModelSourceConflict(specialKeys)).toBe(true)
+    expect(hasModelSourceConflict({ models: [], modelOverrides: { model: {} } })).toBe(false)
+    expect(hasModelSourceConflict({ models: [{ id: 'model' }], modelOverrides: {} })).toBe(false)
+    expect(hasModelSourceConflict({ models: [{ id: 'model' }], modelOverrides: inheritedOverrides })).toBe(false)
+    expect(hasModelSourceConflict({ models: [{ id: 'model' }], modelOverrides: null })).toBe(false)
+    expect(hasModelSourceConflict({ models: [{ id: 'model' }], modelOverrides: 'model' })).toBe(false)
+    expect(hasModelSourceConflict({ models: [{ id: 'model' }], modelOverrides: 1 })).toBe(false)
+    expect(hasModelSourceConflict(null)).toBe(false)
+    expect(hasModelSourceConflict({ models: [{ id: 'model' }] })).toBe(false)
+  })
+})
 
 describe('client constants and bridge', () => {
   it('keeps the settings and input contracts stable', () => {
@@ -373,7 +392,7 @@ describe('model inventory and operations', () => {
     })
     const namespace = {
       value: { providers: { provider: { models: [{ id: 'model-a' }, { id: '__proto__' }, { id: 'constructor' }] } } },
-      user: { providers: { provider: { models: [{ id: 'model-a', compat: { supportsDeveloperRole: true } }], modelOverrides: { 'model-a': null, ...overrides } } } },
+      user: { providers: { provider: { modelOverrides: { 'model-a': null, ...overrides } } } },
       schema: realGatewaySchema,
     }
     const models = inventoryFrom(namespace).filter((candidate) => !candidate.inOverrides)
@@ -547,6 +566,40 @@ describe('model inventory and operations', () => {
       supportsDeveloperRole: 'auto',
       maxTokensField: 'max_completion_tokens',
       maxTokensFieldSource: 'provider',
+    })
+  })
+
+  it('fails closed for model source conflict between models[] and modelOverrides', () => {
+    const namespace = {
+      value: {
+        providers: {
+          provider: {
+            compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' },
+            models: [{ id: 'model-a', compat: { supportsDeveloperRole: true } }],
+            modelOverrides: { 'model-a': { compat: { supportsDeveloperRole: false } } },
+          },
+        },
+      },
+      user: {
+        providers: {
+          provider: {
+            compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' },
+            models: [{ id: 'model-a', compat: { supportsDeveloperRole: true } }],
+            modelOverrides: { 'model-a': { compat: { supportsDeveloperRole: false } } },
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    }
+
+    expect(modelGatewayCompatViewFrom(namespace, item({ raw: { id: 'model-a', compat: { supportsDeveloperRole: true } } }), 'modern')).toMatchObject({
+      model: 'model-a',
+      supportsDeveloperRole: 'auto',
+      supportsDeveloperRoleSource: 'provider',
+      supportsDeveloperRoleResolved: false,
+      maxTokensField: 'auto',
+      maxTokensFieldSource: 'provider',
+      maxTokensFieldResolved: 'max_tokens',
     })
   })
 

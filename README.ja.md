@@ -113,9 +113,9 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-モデルの `compat` は provider の既定値をフィールドごとに上書きします。モデル層に書かれていないフィールドは provider から継承されます。`Auto` は現在の層のフィールドを削除し、provider からの継承へ戻します。モデルごとに設定元は 1 つだけにしてください。同じモデルで `models[]` と `modelOverrides` は併用できません。
+モデルの `compat` は provider の既定値をフィールドごとに上書きします。モデル層に書かれていないフィールドは provider から継承されます。`Auto` は現在の層のフィールドを削除し、provider からの継承へ戻します。モデルごとに設定元は 1 つだけにしてください。同じモデルで `models[]` と `modelOverrides` は併用できません。公式 schema はこの無効な組み合わせを拒否し、プラグインは異常なデータに対して fail closed します。
 
-Settings の provider グローバル領域では、その provider の全モデルの既定値を編集します。カタログモデルは展開して、単一モデル領域の `modelOverrides.<model>.compat` を編集します。カスタム YAML の `models[]` ルートではモデル項目の `models[].compat` を使用します。現在の DSH Settings API は配列 path op に対応していないため、`models[]` の compat は YAML 専用です。設定ページは読み取り専用で表示し、配列 mutation は生成しません。
+Settings の provider グローバル領域では、その provider の全モデルの既定値を編集します。カタログモデルは展開して、単一モデル領域の `modelOverrides.<model>.compat` を編集します。カスタム YAML の `models[]` ルートではモデル項目の `models[].compat` を使用します。現在の DSH Settings API は配列 path op に対応していないため、`models[]` の compat は YAML 専用です。設定ページでは `models[]` の compat コントロールを表示せず、編集も提供せず、配列 mutation も生成しません。
 
 これらの compat 値はコントロールプレーンの設定です。ゲートウェイの transport を実装または置き換えるものではなく、ネットワーク要求は外部 transport が担当します。
 

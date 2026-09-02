@@ -66,9 +66,9 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-A model-level `compat` overrides the provider default field-by-field. Fields omitted at the model layer inherit the provider value. `Auto` deletes the current-layer field and restores provider inheritance. `models[]` and `modelOverrides` cannot be used together for the same model; choose one configuration source.
+A model-level `compat` overrides the provider default field-by-field. Fields omitted at the model layer inherit the provider value. `Auto` deletes the current-layer field and restores provider inheritance. `models[]` and `modelOverrides` cannot be used together for the same model; the official schema rejects this invalid combination, and the plugin fails closed for malformed data.
 
-The current DSH Settings API does not support array path operations. Therefore, `models[]` compat is YAML-only: the settings page shows it read-only and does not emit array mutations. Fields that the runtime schema does not expose are also read-only; older DSH builds keep the existing baseline settings available.
+The current DSH Settings API does not support array path operations. Therefore, `models[]` compat is YAML-only: the settings page does not render a compat control for `models[]`, does not offer editing, and does not emit array mutations. Fields that the runtime schema does not expose cannot be edited; older DSH builds keep the existing baseline settings available.
 
 These values are control plane configuration only. This plugin does not implement or replace the gateway transport; network requests remain the responsibility of an external transport.
 
