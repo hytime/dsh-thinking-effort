@@ -107,5 +107,5 @@
   "inheritProviderCompat": "Auto inherits provider compatibility",
   "saveModelGatewayCompat": "Save model compatibility",
   "modelGatewayCompatSaved": "Model gateway compatibility saved",
-  "modelsArrayCompatSaveNote": "models[] changes replace the complete provider model array; other models and fields are preserved."
+  "modelsArrayCompatSaveNote": "Saving changes updates only this model; other models are not affected."
 }

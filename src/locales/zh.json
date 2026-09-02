@@ -107,5 +107,5 @@
   "inheritProviderCompat": "自动继承提供方兼容性",
   "saveModelGatewayCompat": "保存模型兼容性",
   "modelGatewayCompatSaved": "模型网关兼容性已保存",
-  "modelsArrayCompatSaveNote": "models[] 的更改会整体写回提供方模型数组；其他模型和字段会保留。"
+  "modelsArrayCompatSaveNote": "保存后只会修改当前模型的设置，不会影响其他模型。"
 }

@@ -107,5 +107,5 @@
   "inheritProviderCompat": "自動でプロバイダーの互換性を継承",
   "saveModelGatewayCompat": "モデルの互換性を保存",
   "modelGatewayCompatSaved": "モデルゲートウェイ互換性を保存しました",
-  "modelsArrayCompatSaveNote": "models[] の変更はプロバイダーのモデル配列全体を書き換えます。他のモデルとフィールドは保持されます。"
+  "modelsArrayCompatSaveNote": "保存すると、このモデルの設定だけが変更され、他のモデルには影響しません。"
 }

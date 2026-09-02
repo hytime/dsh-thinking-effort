@@ -107,5 +107,5 @@
   "inheritProviderCompat": "자동으로 제공자 호환성 상속",
   "saveModelGatewayCompat": "모델 호환성 저장",
   "modelGatewayCompatSaved": "모델 게이트웨이 호환성이 저장되었습니다",
-  "modelsArrayCompatSaveNote": "models[] 변경 사항은 제공자의 전체 모델 배열로 저장되며 다른 모델과 필드는 유지됩니다."
+  "modelsArrayCompatSaveNote": "저장하면 현재 모델의 설정만 변경되며 다른 모델에는 영향을 주지 않습니다."
 }
