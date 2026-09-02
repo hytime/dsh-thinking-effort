@@ -1,4 +1,5 @@
 import type { ALL_LEVELS } from './constants.js'
+import type { ModelGatewayCompatView as GatewayModelGatewayCompatView } from '../compat/gateway/types.js'
 
 export type {
   GatewayCompat,
@@ -16,7 +17,7 @@ export type {
   ProviderGatewayCompatUpdate,
   ProviderGatewayCompatView,
 } from '../compat/gateway/types.js'
-export { SUPPORTED_THINKING_FORMATS } from '../compat/gateway/types.js'
+export type ModelGatewayCompatSelection = Pick<GatewayModelGatewayCompatView, 'supportsDeveloperRole' | 'maxTokensField'>
 
 export type ReasoningLevel = typeof ALL_LEVELS[number]
 export type ReasoningEffort = string | null

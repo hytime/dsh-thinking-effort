@@ -1,4 +1,4 @@
-import type { InventoryItem, InputModality, ModelGatewayCompatView, ProviderGatewayCompatView, ReasoningEfforts, SettingsNamespace, CompatibilityProfile } from './types.js'
+import type { InventoryItem, InputModality, ModelGatewayCompatSelection, ModelGatewayCompatView, ProviderGatewayCompatView, ReasoningEfforts, SettingsNamespace, CompatibilityProfile } from './types.js'
 import type { TakeoverRuntimeResolution } from './takeover-runtime.js'
 import { resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../compat/gateway/resolve.js'
 import { editableProviderCompatFields } from '../compat/gateway/validation.js'
@@ -41,7 +41,9 @@ function modelLayerCompat(layer: unknown, provider: string, model: string): Reco
   if (!profile) return undefined
 
   const overrides = record(profile.modelOverrides)
-  const override = record(overrides?.[model])
+  const override = overrides !== undefined && Object.prototype.hasOwnProperty.call(overrides, model)
+    ? record(overrides[model])
+    : undefined
   if (override !== undefined) return record(override.compat)
 
   if (Array.isArray(profile.models)) {
@@ -51,33 +53,108 @@ function modelLayerCompat(layer: unknown, provider: string, model: string): Reco
   return undefined
 }
 
-export function modelGatewayCompatViewFrom(
-  namespace: SettingsNamespace | unknown,
+function modelFieldValue(
+  candidates: readonly (Record<string, unknown> | undefined)[],
+  field: 'supportsDeveloperRole' | 'maxTokensField',
+): boolean | string | undefined {
+  for (const candidate of candidates) {
+    const value = candidate?.[field]
+    if (field === 'supportsDeveloperRole' && typeof value === 'boolean') return value
+    if (field === 'maxTokensField' && (value === 'max_tokens' || value === 'max_completion_tokens')) return value
+  }
+  return undefined
+}
+
+function modeFrom(value: boolean | undefined): ModelGatewayCompatSelection['supportsDeveloperRole'] {
+  return value === undefined ? 'auto' : value ? 'supported' : 'unsupported'
+}
+
+function resolvedBooleanFrom(mode: ModelGatewayCompatView['supportsDeveloperRole']): boolean | undefined {
+  return mode === 'auto' ? undefined : mode === 'supported'
+}
+
+function modelRuntimeCompatFor(
+  runtime: TakeoverRuntimeResolution | undefined,
   provider: string,
   model: string,
+): TakeoverRuntimeResolution['compat'][number] | undefined {
+  return runtime?.compat.find((resolution) => resolution.provider === provider && resolution.model === model)
+}
+
+function protocolCompatFrom(
+  resolution: TakeoverRuntimeResolution['compat'][number] | undefined,
+): Record<string, unknown> | undefined {
+  if (resolution === undefined) return undefined
+  return {
+    ...(resolution.supportsDeveloperRole.value === undefined ? {} : { supportsDeveloperRole: resolution.supportsDeveloperRole.value }),
+    ...(resolution.maxTokensField.value === undefined ? {} : { maxTokensField: resolution.maxTokensField.value }),
+  }
+}
+
+function modelGatewayCompatViewFromResolution(
+  item: InventoryItem,
+  resolution: TakeoverRuntimeResolution['compat'][number],
+  editability: ReturnType<typeof editableProviderCompatFields>,
+): ModelGatewayCompatView {
+  const modelSupportsDeveloperRole = resolution.supportsDeveloperRole.source === 'model'
+    ? resolution.supportsDeveloperRole.value
+    : undefined
+  const modelMaxTokensField = resolution.maxTokensField.source === 'model'
+    ? resolution.maxTokensField.value
+    : undefined
+  return {
+    provider: item.route,
+    model: item.model,
+    supportsDeveloperRole: modeFrom(modelSupportsDeveloperRole),
+    maxTokensField: modelMaxTokensField ?? 'auto',
+    supportsDeveloperRoleSource: resolution.supportsDeveloperRole.source,
+    maxTokensFieldSource: resolution.maxTokensField.source,
+    supportsDeveloperRoleResolved: resolution.supportsDeveloperRole.value,
+    maxTokensFieldResolved: resolution.maxTokensField.value,
+    supportsDeveloperRoleAvailable: editability.supportsDeveloperRole,
+    maxTokensFieldAvailable: editability.maxTokensField,
+  }
+}
+
+export function modelGatewayCompatViewFrom(
+  namespace: SettingsNamespace | unknown,
+  item: InventoryItem,
   compatibilityProfile: CompatibilityProfile = 'unknown',
-  protocolDefault?: unknown,
+  takeoverRuntime?: TakeoverRuntimeResolution,
 ): ModelGatewayCompatView {
   const descriptor = record(namespace)
-  const userModel = modelLayerCompat(descriptor?.user, provider, model)
-  const userProvider = layerCompat(descriptor?.user, provider)
-  const baseModel = modelLayerCompat(descriptor?.base, provider, model)
-  const baseProvider = layerCompat(descriptor?.base, provider)
-  const valueModel = modelLayerCompat(descriptor?.value, provider, model)
-  const valueProvider = layerCompat(descriptor?.value, provider)
+  const userModel = modelLayerCompat(descriptor?.user, item.route, item.model)
+  const userProvider = layerCompat(descriptor?.user, item.route)
+  const baseModel = modelLayerCompat(descriptor?.base, item.route, item.model)
+  const baseProvider = layerCompat(descriptor?.base, item.route)
+  const catalogModel = record(item.raw?.compat) ?? modelLayerCompat(descriptor?.value, item.route, item.model)
+  const catalogProvider = layerCompat(descriptor?.value, item.route)
+  const runtimeModel = modelRuntimeCompatFor(takeoverRuntime, item.route, item.model)
   const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema)
-  return resolveModelGatewayCompat({
-    provider,
-    model,
+  const resolved = resolveModelGatewayCompat({
+    provider: item.route,
+    model: item.model,
     modelCompat: userModel,
     providerCompat: userProvider,
     baseCompat: [baseModel, baseProvider],
-    catalogCompat: [valueModel, valueProvider],
-    protocolDefault,
+    catalogCompat: [catalogModel, catalogProvider],
+    protocolDefault: protocolCompatFrom(runtimeModel),
   }, {
     supportsDeveloperRoleAvailable: editability.supportsDeveloperRole,
     maxTokensFieldAvailable: editability.maxTokensField,
   })
+  if (runtimeModel !== undefined) return modelGatewayCompatViewFromResolution(item, runtimeModel, editability)
+
+  const modelCandidates = [userModel, baseModel, catalogModel]
+  const selectedSupportsDeveloperRole = modelFieldValue(modelCandidates, 'supportsDeveloperRole')
+  const selectedMaxTokensField = modelFieldValue(modelCandidates, 'maxTokensField')
+  return {
+    ...resolved,
+    supportsDeveloperRole: modeFrom(typeof selectedSupportsDeveloperRole === 'boolean' ? selectedSupportsDeveloperRole : undefined),
+    maxTokensField: typeof selectedMaxTokensField === 'string' ? selectedMaxTokensField as ModelGatewayCompatView['maxTokensField'] : 'auto',
+    supportsDeveloperRoleResolved: resolvedBooleanFrom(resolved.supportsDeveloperRole),
+    maxTokensFieldResolved: resolved.maxTokensField === 'auto' ? undefined : resolved.maxTokensField,
+  }
 }
 
 export const modelCompatViewFrom = modelGatewayCompatViewFrom

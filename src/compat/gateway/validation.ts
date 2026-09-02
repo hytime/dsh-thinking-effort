@@ -101,7 +101,7 @@ function runtimeAllowsField(
 ): boolean {
   if (capabilities === 'modern' || capabilities === 'legacy') return true
   if (capabilities === 'unknown' || capabilities === undefined) return false
-  return capabilities.gatewayCompatFields.includes(field)
+  return Array.isArray(capabilities.gatewayCompatFields) && capabilities.gatewayCompatFields.includes(field)
 }
 
 export function editableProviderCompatFields(

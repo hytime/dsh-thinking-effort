@@ -30,6 +30,7 @@ import { editableProviderCompatFields, validateProviderCompat } from '../src/com
 import type { GatewayCompatEditability } from '../src/compat/gateway/types.js'
 import { capabilitiesForVersion } from '../src/compat/version-map.js'
 import type { InventoryItem, ModelGatewayCompatUpdate, Translation } from '../src/client/types.js'
+import type { TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
 
 const translate: Translation = (key, params) => `${key}${params?.level ? `:${params.level}` : ''}`
 
@@ -297,13 +298,15 @@ describe('model inventory and operations', () => {
       schema: realGatewaySchema,
     }
 
-    expect(modelGatewayCompatViewFrom(namespace, 'qwen-gateway', 'qwen-thinking', 'modern')).toMatchObject({
+    expect(modelGatewayCompatViewFrom(namespace, item({ route: 'qwen-gateway', model: 'qwen-thinking', raw: { id: 'qwen-thinking' } }), 'modern')).toMatchObject({
       provider: 'qwen-gateway',
       model: 'qwen-thinking',
       supportsDeveloperRole: 'supported',
       supportsDeveloperRoleSource: 'model',
-      maxTokensField: 'max_tokens',
+      maxTokensField: 'auto',
       maxTokensFieldSource: 'provider',
+      supportsDeveloperRoleResolved: true,
+      maxTokensFieldResolved: 'max_tokens',
     })
     expect(providerGatewayCompatViewFrom(namespace, 'qwen-gateway', 'modern')).toMatchObject({
       supportsDeveloperRole: 'unsupported',
@@ -334,11 +337,13 @@ describe('model inventory and operations', () => {
       schema: realGatewaySchema,
     }
 
-    expect(modelGatewayCompatViewFrom(namespace, 'qwen-gateway', 'qwen-thinking', 'modern')).toMatchObject({
+    expect(modelGatewayCompatViewFrom(namespace, item({ route: 'qwen-gateway', model: 'qwen-thinking', raw: { id: 'qwen-thinking' } }), 'modern')).toMatchObject({
       supportsDeveloperRole: 'supported',
       supportsDeveloperRoleSource: 'model',
-      maxTokensField: 'max_completion_tokens',
+      maxTokensField: 'auto',
       maxTokensFieldSource: 'provider',
+      supportsDeveloperRoleResolved: true,
+      maxTokensFieldResolved: 'max_completion_tokens',
     })
     expect(providerGatewayCompatViewFrom(namespace, 'qwen-gateway', 'modern')).toMatchObject({
       supportsDeveloperRole: 'auto',
@@ -361,9 +366,10 @@ describe('model inventory and operations', () => {
       schema: realGatewaySchema,
     }
 
-    expect(modelGatewayCompatViewFrom(namespace, 'qwen-gateway', 'qwen-thinking', 'modern')).toMatchObject({
-      supportsDeveloperRole: 'supported',
+    expect(modelGatewayCompatViewFrom(namespace, item({ route: 'qwen-gateway', model: 'qwen-thinking', raw: { id: 'qwen-thinking' } }), 'modern')).toMatchObject({
+      supportsDeveloperRole: 'auto',
       supportsDeveloperRoleSource: 'base',
+      supportsDeveloperRoleResolved: true,
     })
   })
 
@@ -379,7 +385,7 @@ describe('model inventory and operations', () => {
       schema: realGatewaySchema,
     }
 
-    expect(modelGatewayCompatViewFrom(namespace, 'qwen-gateway', 'qwen-thinking', 'modern')).toMatchObject({
+    expect(modelGatewayCompatViewFrom(namespace, item({ route: 'qwen-gateway', model: 'qwen-thinking', raw: { id: 'qwen-thinking' } }), 'modern')).toMatchObject({
       supportsDeveloperRole: 'unsupported',
       supportsDeveloperRoleSource: 'catalog',
       maxTokensField: 'max_tokens',
@@ -387,23 +393,63 @@ describe('model inventory and operations', () => {
     })
   })
 
-  it('resolves model compat protocol defaults supplied to the projection', () => {
+  it('resolves model compat protocol defaults supplied by matching takeover runtime', () => {
     const namespace = {
       value: { providers: { 'qwen-gateway': { models: [{ id: 'qwen-thinking' }] } } },
+      schema: realGatewaySchema,
+    }
+    const runtime: TakeoverRuntimeResolution = {
+      providers: ['qwen-gateway'],
+      compat: [{
+        provider: 'qwen-gateway',
+        model: 'qwen-thinking',
+        thinkingFormat: { value: undefined, source: 'unknown' },
+        supportsReasoningEffort: { value: undefined, source: 'unknown' },
+        supportsDeveloperRole: { value: true, source: 'protocol' },
+        maxTokensField: { value: 'max_completion_tokens', source: 'protocol' },
+      }],
+    }
+
+    expect(modelGatewayCompatViewFrom(
+      namespace,
+      item({ route: 'qwen-gateway', model: 'qwen-thinking', raw: { id: 'qwen-thinking' } }),
+      'modern',
+      runtime,
+    )).toMatchObject({
+      supportsDeveloperRole: 'auto',
+      supportsDeveloperRoleSource: 'protocol',
+      maxTokensField: 'auto',
+      maxTokensFieldSource: 'protocol',
+      supportsDeveloperRoleResolved: true,
+      maxTokensFieldResolved: 'max_completion_tokens',
+    })
+  })
+
+  it('uses namespace compat when takeover runtime has no matching model', () => {
+    const runtime: TakeoverRuntimeResolution = {
+      providers: ['qwen-gateway'],
+      compat: [{
+        provider: 'qwen-gateway',
+        model: 'other-model',
+        thinkingFormat: { value: undefined, source: 'unknown' },
+        supportsReasoningEffort: { value: undefined, source: 'unknown' },
+        supportsDeveloperRole: { value: true, source: 'model' },
+        maxTokensField: { value: 'max_completion_tokens', source: 'model' },
+      }],
+    }
+    const namespace = {
+      value: { providers: { 'qwen-gateway': { models: [{ id: 'qwen-thinking', compat: { supportsDeveloperRole: false } }] } } },
       schema: realGatewaySchema,
     }
 
     expect(modelGatewayCompatViewFrom(
       namespace,
-      'qwen-gateway',
-      'qwen-thinking',
+      item({ route: 'qwen-gateway', model: 'qwen-thinking', raw: { id: 'qwen-thinking', compat: { supportsDeveloperRole: false } } }),
       'modern',
-      { supportsDeveloperRole: true, maxTokensField: 'max_completion_tokens' },
+      runtime,
     )).toMatchObject({
-      supportsDeveloperRole: 'supported',
-      supportsDeveloperRoleSource: 'protocol',
-      maxTokensField: 'max_completion_tokens',
-      maxTokensFieldSource: 'protocol',
+      supportsDeveloperRole: 'unsupported',
+      supportsDeveloperRoleSource: 'catalog',
     })
   })
 

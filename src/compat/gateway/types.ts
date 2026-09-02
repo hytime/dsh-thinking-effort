@@ -41,6 +41,8 @@ export interface ModelGatewayCompatView {
   readonly maxTokensField: 'auto' | MaxTokensField
   readonly supportsDeveloperRoleSource: GatewayCompatSource
   readonly maxTokensFieldSource: GatewayCompatSource
+  readonly supportsDeveloperRoleResolved?: boolean
+  readonly maxTokensFieldResolved?: MaxTokensField
   readonly supportsDeveloperRoleAvailable: boolean
   readonly maxTokensFieldAvailable: boolean
 }
