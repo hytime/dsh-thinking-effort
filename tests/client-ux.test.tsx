@@ -404,6 +404,43 @@ describe('SectionEditor user behavior', () => {
     container.remove()
   })
 
+  it('hides model compat save controls when all model fields are unavailable', () => {
+    const item: InventoryItem = {
+      route: 'provider',
+      model: 'legacy-model',
+      name: 'Legacy Model',
+      levels: { off: null },
+      input: ['text'],
+      raw: { id: 'legacy-model' },
+      index: -1,
+      inOverrides: true,
+    }
+    const compatView = {
+      provider: 'provider',
+      model: 'legacy-model',
+      supportsDeveloperRole: 'auto' as const,
+      maxTokensField: 'auto' as const,
+      supportsDeveloperRoleSource: 'unknown' as const,
+      maxTokensFieldSource: 'unknown' as const,
+      supportsDeveloperRoleAvailable: false,
+      maxTokensFieldAvailable: false,
+    }
+    const onSaveCompat = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    act(() => {
+      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '', oneMillion: false, previousValue: '', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onSaveCompat={onSaveCompat} compatDirty />)
+    })
+
+    expect(container.querySelector('[data-scope="model"]')).toBeNull()
+    expect(container.textContent).not.toContain(text('saveModelGatewayCompat'))
+    expect(onSaveCompat).not.toHaveBeenCalled()
+    expect(container.textContent).toContain(text('reasoningLevels'))
+    act(() => root.unmount())
+    container.remove()
+  })
+
   it('hides unavailable provider fields without hiding the settings page', async () => {
     const view = renderEditor({
       describe: async () => ({
@@ -455,6 +492,66 @@ describe('SectionEditor user behavior', () => {
     expect(view.mutate).toHaveBeenCalledWith('llm-pi-ai', [
       { op: 'set', path: ['providers', 'provider', 'compat', 'maxTokensField'], value: 'max_completion_tokens' },
     ], 2)
+    view.unmount()
+  })
+
+  it('refreshes provider defaults without replacing dirty model compat drafts', async () => {
+    const initial = namespace({
+      value: {
+        providers: {
+          provider: {
+            modelOverrides: {
+              'model-a': { id: 'model-a', input: ['text'] },
+              'model-b': { id: 'model-b', input: ['text'] },
+            },
+          },
+        },
+      },
+      user: { providers: { provider: { compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' } } } },
+      schema: realGatewaySchema,
+    })
+    const refreshed = namespace({
+      revision: 8,
+      value: initial.value,
+      user: { providers: { provider: { compat: { supportsDeveloperRole: true, maxTokensField: 'max_tokens' } } } },
+      schema: realGatewaySchema,
+    })
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      describe: async () => ({ ok: true, value: { namespaces: [initial] } }),
+      mutate: async (_ns, ops, revision) => {
+        expect(revision).toBe(2)
+        expect(ops).toEqual([{ op: 'set', path: ['providers', 'provider', 'compat', 'supportsDeveloperRole'], value: true }])
+        expect(ops.some((op) => op.path.includes('modelOverrides'))).toBe(false)
+        return { ok: true as const, value: refreshed }
+      },
+    })
+    await settle()
+    act(() => providerButton(view.container).click())
+    const modelButtons = [...view.container.querySelectorAll<HTMLButtonElement>(`button[aria-label="${text('openModelSettings')}"]`)]
+    const modelAButton = modelButtons.find((candidate) => candidate.parentElement?.parentElement?.parentElement?.textContent?.includes('model-a'))
+    expect(modelAButton).toBeDefined()
+    act(() => modelAButton!.click())
+    const modelAMaxTokens = view.container.querySelector(`[data-scope="model"] select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement
+    act(() => setValue(modelAMaxTokens, 'max_completion_tokens'))
+
+    const providerDeveloper = view.container.querySelector(`[data-scope="provider"] select[aria-label="${text('supportsDeveloperRole')}"]`) as HTMLSelectElement
+    act(() => setValue(providerDeveloper, 'supported'))
+    act(() => button(view.container, text('saveGatewayCompat')).click())
+    await settle()
+
+    expect((view.container.querySelector(`[data-scope="provider"] select[aria-label="${text('supportsDeveloperRole')}"]`) as HTMLSelectElement).value).toBe('supported')
+    expect((view.container.querySelector(`[data-scope="model"] select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement).value).toBe('max_completion_tokens')
+    expect(view.container.querySelector('[data-scope="model"]')?.textContent).toContain(text('compatSourceProvider'))
+
+    const modelBButton = [...view.container.querySelectorAll<HTMLButtonElement>(`button[aria-label="${text('openModelSettings')}"]`)]
+      .find((candidate) => candidate.parentElement?.parentElement?.parentElement?.textContent?.includes('model-b'))
+    expect(modelBButton).toBeDefined()
+    act(() => modelBButton!.click())
+    const modelB = view.container.querySelectorAll('[data-scope="model"]')[1] ?? view.container.querySelector('[data-scope="model"]')
+    expect(modelB?.querySelector(`select[aria-label="${text('supportsDeveloperRole')}"]`)).not.toBeNull()
+    expect((modelB?.querySelector(`select[aria-label="${text('supportsDeveloperRole')}"]`) as HTMLSelectElement).value).toBe('auto')
+    expect(modelB?.textContent).toContain(text('compatSourceProvider'))
     view.unmount()
   })
 
@@ -510,10 +607,26 @@ describe('SectionEditor user behavior', () => {
       },
       schema: realGatewaySchema,
     })
+    const savedNamespace = namespace({
+      revision: 7,
+      value: modelNamespace.value,
+      user: {
+        providers: {
+          provider: {
+            compat: { supportsDeveloperRole: false },
+            modelOverrides: {
+              'model-b': { compat: { maxTokensField: 'max_tokens' } },
+            },
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    })
+    let mutationCount = 0
     const view = renderEditor({
       compatibilityProfile: 'modern',
       describe: async () => ({ ok: true, value: { namespaces: [modelNamespace] } }),
-      mutate: async () => ({ ok: true, value: modelNamespace }),
+      mutate: async () => ({ ok: true as const, value: mutationCount++ === 0 ? savedNamespace : modelNamespace }),
     })
     await settle()
 
@@ -544,11 +657,11 @@ describe('SectionEditor user behavior', () => {
     expect(view.mutate).toHaveBeenNthCalledWith(2, 'llm-pi-ai', [{
       op: 'unset',
       path: ['providers', 'provider', 'modelOverrides', 'model-b', 'compat', 'maxTokensField'],
-    }], 2)
+    }], 7)
     view.unmount()
   })
 
-  it('keeps a model compat draft after a rejected save', async () => {
+  it('keeps the model compat draft after a stale revision conflict', async () => {
     const modelNamespace = namespace({
       value: { providers: { provider: { modelOverrides: { 'model-b': { id: 'model-b', input: ['text'] } } } } },
       user: { providers: { provider: { modelOverrides: { 'model-b': { compat: { maxTokensField: 'max_completion_tokens' } } } } } },
@@ -557,7 +670,7 @@ describe('SectionEditor user behavior', () => {
     const view = renderEditor({
       compatibilityProfile: 'modern',
       describe: async () => ({ ok: true, value: { namespaces: [modelNamespace] } }),
-      mutate: async () => ({ ok: false, error: { message: 'conflict' } }),
+      mutate: async () => ({ ok: false, error: { message: 'stale revision' } }),
     })
     await settle()
     act(() => providerButton(view.container).click())
@@ -570,7 +683,12 @@ describe('SectionEditor user behavior', () => {
     act(() => button(view.container, text('saveModelGatewayCompat')).click())
     await settle()
 
-    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain('conflict')
+    expect(view.mutate).toHaveBeenCalledWith('llm-pi-ai', [{
+      op: 'set',
+      path: ['providers', 'provider', 'modelOverrides', 'model-b', 'compat', 'maxTokensField'],
+      value: 'max_tokens',
+    }], 2)
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain('stale revision')
     expect((view.container.querySelector(`[data-scope="model"] select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement).value).toBe('max_tokens')
     expect(view.container.textContent).toContain(text('unsaved'))
     view.unmount()
