@@ -37,6 +37,7 @@ export interface InventoryItem {
   readonly input: readonly InputModality[]
   readonly raw: Record<string, unknown>
   readonly modelsSnapshot?: readonly unknown[]
+  readonly modelSourceConflict?: boolean
   readonly index: number
   readonly inOverrides: boolean
 }

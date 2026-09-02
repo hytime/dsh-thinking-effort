@@ -8,7 +8,7 @@ import type {
   PiAiSection,
   TakeoverSection,
 } from '../compat/gateway/takeover.js'
-import { hasModelSourceConflict } from '../compat/model-source.js'
+import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '../compat/model-source.js'
 import type {
   ClientResult,
   SettingsApi,
@@ -102,12 +102,13 @@ export function resolveTakeoverDescription(
     piAi,
     takeover,
   }
-  const providers = resolveTakeoverProviders(input)
+  const providers = resolveTakeoverProviders(input).filter((provider) => !hasLayeredModelSourceConflict(piAiNamespace, provider))
   const profiles = record(piAi?.providers)
   if (profiles === undefined) return { providers, compat: [] }
 
   const compat: GatewayCompatResolution[] = []
   for (const [provider, value] of Object.entries(profiles)) {
+    if (!providers.includes(provider)) continue
     const profile = record(value) as PiAiProviderProfile | undefined
     const providerResolution = resolveTakeoverGatewayCompat({ ...input, provider })
     if (providerResolution !== undefined) compat.push(providerResolution)

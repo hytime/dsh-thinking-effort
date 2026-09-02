@@ -55,6 +55,7 @@ export function opsForModelCompat(
   editability?: Partial<Pick<GatewayCompatEditability, 'supportsDeveloperRole' | 'maxTokensField'>>,
 ): SettingsOp[] {
   if (item.inOverrides !== true
+    || item.modelSourceConflict === true
     || typeof item.route !== 'string'
     || item.route.trim() === ''
     || typeof item.model !== 'string'
@@ -89,6 +90,7 @@ export function opsForModelArrayCompat(
   editability?: Partial<Pick<GatewayCompatEditability, 'supportsDeveloperRole' | 'maxTokensField'>>,
 ): SettingsOp[] {
   if (item.inOverrides !== false
+    || item.modelSourceConflict === true
     || typeof item.route !== 'string'
     || item.route.trim() === ''
     || typeof item.model !== 'string'
@@ -96,7 +98,7 @@ export function opsForModelArrayCompat(
     || !Number.isInteger(item.index)
     || item.index < 0) return []
 
-  if (inventory.some((candidate) => candidate.route === item.route && candidate.inOverrides)) return []
+  if (inventory.some((candidate) => candidate.route === item.route && (candidate.modelSourceConflict === true || candidate.inOverrides === true))) return []
   const matches = inventory.filter((candidate) => candidate.inOverrides === false
     && candidate.route === item.route
     && candidate.index === item.index

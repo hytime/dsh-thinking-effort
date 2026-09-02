@@ -2,7 +2,7 @@ import type { InventoryItem, InputModality, ModelGatewayCompatView, ProviderGate
 import type { TakeoverRuntimeResolution } from './takeover-runtime.js'
 import { resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../compat/gateway/resolve.js'
 import { editableProviderCompatFields } from '../compat/gateway/validation.js'
-import { hasModelSourceConflict } from '../compat/model-source.js'
+import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '../compat/model-source.js'
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -25,7 +25,7 @@ function ownedData(value: unknown): unknown {
   }
   return copy
 }
-function modelItem(route: string, model: string, raw: Record<string, unknown>, index: number, inOverrides: boolean, modelsSnapshot?: readonly unknown[]): InventoryItem {
+function modelItem(route: string, model: string, raw: Record<string, unknown>, index: number, inOverrides: boolean, modelsSnapshot?: readonly unknown[], modelSourceConflict = false): InventoryItem {
   const levels = raw.reasoningEfforts === undefined ? null : raw.reasoningEfforts as ReasoningEfforts
   const contextWindow = Number.isInteger(raw.contextWindow) ? raw.contextWindow as number : undefined
   const input = Array.isArray(raw.input) ? raw.input as InputModality[] : []
@@ -37,6 +37,7 @@ function modelItem(route: string, model: string, raw: Record<string, unknown>, i
     contextWindow,
     input,
     raw,
+    ...(modelSourceConflict ? { modelSourceConflict: true } : {}),
     ...(modelsSnapshot === undefined ? {} : { modelsSnapshot }),
     index,
     inOverrides,
@@ -102,12 +103,13 @@ export function modelGatewayCompatViewFrom(
   takeoverRuntime?: TakeoverRuntimeResolution,
 ): ModelGatewayCompatView {
   const descriptor = record(namespace)
-  const userModel = modelLayerCompat(descriptor?.user, item.route, item.model)
+  const sourceConflict = hasLayeredModelSourceConflict(namespace, item.route)
+  const userModel = sourceConflict ? undefined : modelLayerCompat(descriptor?.user, item.route, item.model)
   const userProvider = layerCompat(descriptor?.user, item.route)
-  const baseModel = modelLayerCompat(descriptor?.base, item.route, item.model)
+  const baseModel = sourceConflict ? undefined : modelLayerCompat(descriptor?.base, item.route, item.model)
   const baseProvider = layerCompat(descriptor?.base, item.route)
   const catalogProfile = record(record(record(descriptor?.value)?.providers)?.[item.route])
-  const catalogModel = hasModelSourceConflict(catalogProfile)
+  const catalogModel = sourceConflict || hasModelSourceConflict(catalogProfile)
     ? undefined
     : record(item.raw?.compat) ?? modelLayerCompat(descriptor?.value, item.route, item.model)
   const catalogProvider = layerCompat(descriptor?.value, item.route)
@@ -141,12 +143,8 @@ export function modelGatewayCompatViewsFrom(
   compatibilityProfile: CompatibilityProfile = 'unknown',
   takeoverRuntime?: TakeoverRuntimeResolution,
 ): Record<string, ModelGatewayCompatView> {
-  const descriptor = record(namespace)
-  const value = record(descriptor?.value)
-  const providers = record(value?.providers)
   return Object.fromEntries(inventory.flatMap((item) => {
-    const profile = record(providers?.[item.route])
-    if (hasModelSourceConflict(profile)) return []
+    if (hasLayeredModelSourceConflict(namespace, item.route)) return []
     return [[modelCompatKey(item.route, item.model), modelGatewayCompatViewFrom(namespace, item, compatibilityProfile, takeoverRuntime)] as const]
   }))
 }
@@ -210,18 +208,19 @@ export function inventoryFrom(namespace: unknown): InventoryItem[] {
   for (const [route, profileValue] of Object.entries(providers)) {
     const profile = record(profileValue)
     if (!profile) continue
+    const modelSourceConflict = hasLayeredModelSourceConflict(namespace, route)
     if (Array.isArray(profile.models)) {
       const modelsSnapshot = ownedData(profile.models) as readonly unknown[]
       profile.models.forEach((entry, index) => {
         const raw = record(entry)
         const model = typeof raw?.id === 'string' ? raw.id : undefined
-        if (raw && model !== undefined) inventory.push(modelItem(route, model, raw, index, false, modelsSnapshot))
+        if (raw && model !== undefined) inventory.push(modelItem(route, model, raw, index, false, modelsSnapshot, modelSourceConflict))
       })
     }
     const overrides = record(profile.modelOverrides)
     if (overrides) {
       for (const [model, entry] of Object.entries(overrides)) {
-        inventory.push(modelItem(route, model, record(entry) ?? {}, -1, true))
+        inventory.push(modelItem(route, model, record(entry) ?? {}, -1, true, undefined, modelSourceConflict))
       }
     }
   }

@@ -345,6 +345,37 @@ describe('client registration', () => {
     expect(result).toEqual({ providers: [], compat: [] })
   })
 
+  it('does not publish takeover compatibility when model sources are split across descriptor layers', () => {
+    const result = resolveTakeoverDescription({ compatibilityProfile: 'modern' }, {
+      ok: true,
+      value: {
+        namespaces: [{
+          ns: 'llm-pi-ai',
+          revision: 1,
+          value: {
+            providers: {
+              local: {
+                api: 'openai-completions',
+                baseURL: 'http://gateway.test/v1',
+                models: [{ id: 'model', reasoningEfforts: { high: 'high' } }],
+              },
+            },
+          },
+          user: {
+            providers: {
+              local: {
+                modelOverrides: { model: { reasoningEfforts: { high: 'override-high' } } },
+              },
+            },
+          },
+          schema: { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } },
+        }],
+      },
+    })
+
+    expect(result).toEqual({ providers: [], compat: [] })
+  })
+
   it('enumerates model overrides when models is an empty array', () => {
     const result = resolveTakeoverDescription({ compatibilityProfile: 'modern' }, {
       ok: true,

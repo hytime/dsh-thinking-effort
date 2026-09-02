@@ -13,7 +13,7 @@ import {
 } from '../src/client/constants.js'
 import { directResult, settingsBridge } from '../src/client/settings-bridge.js'
 import { LOCALE_DATA, LOCALE_CODES } from '../src/client/locales.js'
-import { inventoryFrom, modelCompatKey, modelGatewayCompatViewFrom, providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
+import { inventoryFrom, modelCompatKey, modelGatewayCompatViewFrom, modelGatewayCompatViewsFrom, providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
 import { mergeModelUpdate, opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from '../src/client/model-ops.js'
 import {
   buildInput,
@@ -25,7 +25,7 @@ import {
   validateLevels,
 } from '../src/client/validation.js'
 import { iosPalette } from '../src/client/theme.js'
-import { hasModelSourceConflict } from '../src/compat/model-source.js'
+import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '../src/compat/model-source.js'
 import { resolveGatewayCompat, resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../src/compat/gateway/resolve.js'
 import { editableProviderCompatFields, validateProviderCompat } from '../src/compat/gateway/validation.js'
 import type { GatewayCompatEditability } from '../src/compat/gateway/types.js'
@@ -64,6 +64,36 @@ function item(overrides: Partial<InventoryItem> = {}): InventoryItem {
 }
 
 describe('model source conflict protection', () => {
+  it.each([
+    ['value models and base overrides', { value: { providers: { provider: { models: [{ id: 'model' }] } } }, base: { providers: { provider: { modelOverrides: { model: {} } } } } }],
+    ['base models and user overrides', { base: { providers: { provider: { models: [{ id: 'model' }] } } }, user: { providers: { provider: { modelOverrides: { model: {} } } } } }],
+    ['user models and value overrides', { user: { providers: { provider: { models: [{ id: 'model' }] } } }, value: { providers: { provider: { modelOverrides: { model: {} } } } } }],
+  ])('detects non-empty model sources split across %s', (_label, namespace) => {
+    expect(hasLayeredModelSourceConflict(namespace, 'provider')).toBe(true)
+  })
+
+  it('ignores empty, inherited, and invalid layered model sources', () => {
+    const inheritedOverrides = Object.create({ inherited: {} }) as Record<string, unknown>
+
+    expect(hasLayeredModelSourceConflict({
+      value: { providers: { provider: { models: [], modelOverrides: { model: {} } } } },
+      user: { providers: { provider: { models: [] } } },
+    }, 'provider')).toBe(false)
+    expect(hasLayeredModelSourceConflict({
+      value: { providers: { provider: { models: [{ id: 'model' }], modelOverrides: {} } } },
+      user: { providers: { provider: { modelOverrides: inheritedOverrides } } },
+    }, 'provider')).toBe(false)
+    expect(hasLayeredModelSourceConflict({
+      value: { providers: { provider: { models: [{ id: 'model' }] } } },
+      base: { providers: { provider: [] } },
+      user: { providers: { provider: { modelOverrides: 1 } } },
+    }, 'provider')).toBe(false)
+    expect(hasLayeredModelSourceConflict({
+      value: { providers: { provider: { models: [{ id: 'model' }] } } },
+      user: { providers: { provider: { modelOverrides: inheritedOverrides } } },
+    }, 'other-provider')).toBe(false)
+  })
+
   it('detects model source conflict only for non-empty models and own-key plain modelOverrides', () => {
     const inheritedOverrides = Object.create({ inherited: { compat: { supportsDeveloperRole: true } } }) as Record<string, unknown>
     const specialKeys = JSON.parse('{"models":[{"id":"__proto__"}],"modelOverrides":{"__proto__":{},"constructor":{},"toString":{}}}') as Record<string, unknown>
@@ -468,23 +498,15 @@ describe('model inventory and operations', () => {
     })
   })
 
-  it('stops at malformed own modelOverrides entries and projects special model keys', () => {
-    const overrides: Record<string, unknown> = Object.create(null)
-    Object.defineProperty(overrides, '__proto__', {
-      configurable: true,
-      enumerable: true,
-      value: { compat: { supportsDeveloperRole: true } },
-      writable: true,
-    })
-    Object.defineProperty(overrides, 'constructor', {
-      configurable: true,
-      enumerable: true,
-      value: { compat: { supportsDeveloperRole: false } },
-      writable: true,
-    })
+  it('ignores inherited modelOverrides and projects special model keys', () => {
+    const inheritedOverrides = Object.create({ inherited: { compat: { supportsDeveloperRole: true } } }) as Record<string, unknown>
     const namespace = {
-      value: { providers: { provider: { models: [{ id: 'model-a' }, { id: '__proto__' }, { id: 'constructor' }] } } },
-      user: { providers: { provider: { modelOverrides: { 'model-a': null, ...overrides } } } },
+      value: { providers: { provider: { models: [
+        { id: 'model-a' },
+        { id: '__proto__', compat: { supportsDeveloperRole: true } },
+        { id: 'constructor', compat: { supportsDeveloperRole: false } },
+      ] } } },
+      user: { providers: { provider: { modelOverrides: inheritedOverrides } } },
       schema: realGatewaySchema,
     }
     const models = inventoryFrom(namespace).filter((candidate) => !candidate.inOverrides)
@@ -497,14 +519,14 @@ describe('model inventory and operations', () => {
     })
     expect(modelGatewayCompatViewFrom(namespace, models.find((candidate) => candidate.model === '__proto__')!, 'modern')).toMatchObject({
       model: '__proto__',
-      supportsDeveloperRole: 'supported',
-      supportsDeveloperRoleSource: 'model',
+      supportsDeveloperRole: 'auto',
+      supportsDeveloperRoleSource: 'catalog',
       supportsDeveloperRoleResolved: true,
     })
     expect(modelGatewayCompatViewFrom(namespace, models.find((candidate) => candidate.model === 'constructor')!, 'modern')).toMatchObject({
       model: 'constructor',
-      supportsDeveloperRole: 'unsupported',
-      supportsDeveloperRoleSource: 'model',
+      supportsDeveloperRole: 'auto',
+      supportsDeveloperRoleSource: 'catalog',
       supportsDeveloperRoleResolved: false,
     })
   })
@@ -691,6 +713,35 @@ describe('model inventory and operations', () => {
       maxTokensField: 'max_completion_tokens',
       maxTokensFieldSource: 'provider',
     })
+  })
+
+  it('fails closed when models[] and modelOverrides are split across descriptor layers', () => {
+    const namespace = {
+      value: {
+        providers: {
+          provider: {
+            models: [{ id: 'model-a', compat: { supportsDeveloperRole: true } }],
+          },
+        },
+      },
+      user: {
+        providers: {
+          provider: {
+            modelOverrides: { 'model-a': { compat: { supportsDeveloperRole: false } } },
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    }
+    const inventory = inventoryFrom(namespace)
+    const model = inventory.find((candidate) => candidate.model === 'model-a')
+    expect(model).toBeDefined()
+
+    expect(modelGatewayCompatViewsFrom(namespace, inventory, 'modern')).toEqual({})
+    expect(opsForModelArrayCompat(inventory, model!, { supportsDeveloperRole: 'unsupported' }, {
+      supportsDeveloperRole: true,
+      maxTokensField: true,
+    })).toEqual([])
   })
 
   it('fails closed for model source conflict between models[] and modelOverrides', () => {
