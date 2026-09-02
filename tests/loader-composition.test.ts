@@ -863,16 +863,16 @@ describe('compatibility documentation and root validation', () => {
     expect(document).toMatch(/alpha\.?3/i)
     expect(document).toMatch(/(?:optional|可选|オプション|선택)[^\n]*(?:takeover|take over|接管)/is)
     expect(document).toContain('## [Unreleased]')
-    expect(section(document, 'Unreleased')).toMatch(/version-map/i)
-    expect(section(document, 'Unreleased')).toMatch(/rc\.?7/i)
-    expect(section(document, 'Unreleased')).toMatch(/rc\.?2/i)
-    expect(section(document, 'Unreleased')).toMatch(/alpha\.?3/i)
-    expect(section(document, 'Unreleased')).toMatch(/takeover|take over|接管/i)
-    expect(section(document, 'Unreleased')).toMatch(/provider[^\n]*compat|提供方[^\n]*compat|プロバイダー[^\n]*compat|provider[^\n]*호환/i)
-    expect(section(document, 'Unreleased')).toMatch(/modelOverrides/)
-    expect(section(document, 'Unreleased')).toMatch(/models\[\]/)
-    expect(section(document, 'Unreleased')).toMatch(modelSourceConflictContract)
-    expect(section(document, 'Unreleased')).toMatch(/(?:control plane|控制面|コントロールプレーン|제어면)[^\n]*(?:transport|传输|トランスポート|전송)/i)
+    expect(section(document, '0.1.14')).toMatch(/version-map/i)
+    expect(section(document, '0.1.14')).toMatch(/rc\.?7/i)
+    expect(section(document, '0.1.14')).toMatch(/rc\.?2/i)
+    expect(section(document, '0.1.14')).toMatch(/alpha\.?3/i)
+    expect(section(document, '0.1.14')).toMatch(/takeover|take over|接管/i)
+    expect(section(document, '0.1.14')).toMatch(/provider[^\n]*compat|提供方[^\n]*compat|プロバイダー[^\n]*compat|provider[^\n]*호환/i)
+    expect(section(document, '0.1.14')).toMatch(/modelOverrides/)
+    expect(section(document, '0.1.14')).toMatch(/models\[\]/)
+    expect(section(document, '0.1.14')).toMatch(modelSourceConflictContract)
+    expect(section(document, '0.1.14')).toMatch(/(?:control plane|控制面|コントロールプレーン|제어면)[^\n]*(?:transport|传输|トランスポート|전송)/i)
     expect(section(document, '0.1.13')).toBe(published013Sections[file])
   })
 
@@ -893,7 +893,7 @@ describe('compatibility documentation and root validation', () => {
 
   it('requires the English changelog to state that runtime capability detection is authoritative', () => {
     const document = readFileSync(join(root, 'docs/CHANGELOG.md'), 'utf8')
-    expect(section(document, 'Unreleased')).toMatch(/Runtime capability detection is authoritative/i)
+    expect(section(document, '0.1.14')).toMatch(/Runtime capability detection is authoritative/i)
   })
 
   it('keeps publish workflow roots aligned with loader verification order', () => {
@@ -971,7 +971,7 @@ describe('published package composition', () => {
   it('exposes built Host and Client artifacts with declarations', () => {
     const manifest = readPackage()
 
-    expect(manifest.version).toBe('0.1.13')
+    expect(manifest.version).toBe('0.1.14')
     expect(manifest.main).toBe('./lib/index.js')
     expect(manifest.types).toBe('./lib/types/index.d.ts')
     expect(manifest.exports['.']).toEqual({
@@ -1046,7 +1046,7 @@ integrationDescribe('official DSH loader composition', () => {
     const installedDir = join(profile, 'node_modules', '@hytime', 'dsh-thinking-effort')
     const installedManifest = JSON.parse(readFileSync(join(installedDir, 'package.json'), 'utf8')) as PackageManifest
     expect(installedManifest.name).toBe('@hytime/dsh-thinking-effort')
-    expect(installedManifest.version).toBe('0.1.13')
+    expect(installedManifest.version).toBe('0.1.14')
 
     const hostEntry = join(installedDir, 'lib', 'index.js')
     const clientEntry = join(installedDir, 'lib', 'client.js')

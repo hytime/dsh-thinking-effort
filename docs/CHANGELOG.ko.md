@@ -8,7 +8,9 @@
 
 버전 번호는 [Semantic Versioning](https://semver.org/)을 따릅니다.
 
-## [Unreleased] - 게이트웨이 capability mapping 및 optional takeover
+## [Unreleased]
+
+## [0.1.14] - 게이트웨이 capability mapping 및 optional takeover
 
 ### 게시 호환성 매트릭스
 

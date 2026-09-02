@@ -83,7 +83,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 현재 릴리스 버전을 명시하여 설치합니다.
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.13
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
 ```
 
 공식 CLI가 profile 의존성, lockfile 및 `dsh.profile.bundles`를 자동으로 업데이트합니다. YAML 행을 수동으로 추가하지 마세요.
@@ -99,7 +99,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 특정 버전으로 업데이트하려면 다음을 사용합니다.
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.13
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
 ```
 
 Host 변경에는 DSH를 재시작하고 Client 변경에는 Web 페이지를 새로 고치세요.
@@ -117,7 +117,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.13
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
 ```
 
 다른 도구로 의존성을 제거했지만 이전 bundle이 남아 있으면 composition을 확인합니다.
@@ -131,7 +131,7 @@ dsh --profile <profile> --dump-default-config
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.13
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
 ```
 
 새 bundle 목록에 이전 패키지 이름을 추가하지 마세요.
@@ -146,7 +146,7 @@ grep -n "@hytime/dsh-thinking-effort" \
 node -p "require('${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/node_modules/@hytime/dsh-thinking-effort/package.json').version"
 ```
 
-이 릴리스의 버전은 `0.1.13`이어야 합니다.
+이 릴리스의 버전은 `0.1.14`이어야 합니다.
 
 ## 일본어 및 한국어 지원 상태
 
@@ -180,7 +180,7 @@ DSH를 재시작하고 Web 페이지를 새로 고친 다음 **Settings → Mode
 2. **Subagent default effort** 카드에 현재 기본값과 **Apply**가 표시됩니다.
 3. **Quick settings**에서 공식 DeepSeek 방식 또는 일반 프리셋을 일괄 적용할 수 있습니다.
 4. 제공자/모델 목록에서 검색, 펼치기/접기, 입력 기능, 컨텍스트 길이 및 모델 설정 버튼을 확인할 수 있습니다.
-5. 오른쪽 아래 버전 표시가 `v0.1.13`로 표시됩니다.
+5. 오른쪽 아래 버전 표시가 `v0.1.14`로 표시됩니다.
 
 Host 로드 마커는 다음 명령으로 확인할 수 있습니다.
 

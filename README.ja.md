@@ -65,7 +65,7 @@ profile の管理には公式 DSH CLI を使用してください。通常の `n
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 特定バージョンをインストール
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.13
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
 
 # 更新
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -94,7 +94,7 @@ profile の確認、移行、検証、トラブルシューティングについ
 
 7. Composer に戻り、設定したモデルを選択して推論セレクターを使用します。
 
-設定ページ右下には `v0.1.13` のような小さなバージョン表示が出ます。
+設定ページ右下には `v0.1.14` のような小さなバージョン表示が出ます。
 
 ### ゲートウェイ互換設定
 

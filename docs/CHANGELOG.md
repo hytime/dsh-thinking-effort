@@ -12,7 +12,9 @@ This file records the features, fixes, and user-facing impact of every published
 
 Versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] - 网关能力映射与可选 takeover / Gateway capability mapping and optional takeover
+## [Unreleased]
+
+## [0.1.14] - 网关能力映射与可选 takeover / Gateway capability mapping and optional takeover
 
 ### 发布兼容矩阵 / Release compatibility matrix
 

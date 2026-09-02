@@ -8,7 +8,9 @@
 
 バージョン番号は [Semantic Versioning](https://semver.org/) に従います。
 
-## [Unreleased] - ゲートウェイ capability mapping と optional takeover
+## [Unreleased]
+
+## [0.1.14] - ゲートウェイ capability mapping と optional takeover
 
 ### 公開互換性マトリックス
 
