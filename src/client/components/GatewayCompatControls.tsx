@@ -47,7 +47,7 @@ function sourceKey(source: ModelGatewayCompatView['supportsDeveloperRoleSource']
   const keys: Record<ModelGatewayCompatView['supportsDeveloperRoleSource'], string> = {
     model: 'compatSourceModel',
     provider: 'compatSourceProvider',
-    base: 'compatSourceProtocol',
+    base: 'compatSourceBase',
     catalog: 'compatSourceCatalog',
     protocol: 'compatSourceProtocol',
     unknown: 'compatSourceUnknown',

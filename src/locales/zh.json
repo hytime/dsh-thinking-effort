@@ -99,6 +99,7 @@
   "gatewayCompatSaveFailed": "保存网关兼容性失败",
   "modelGatewayCompatTitle": "模型网关兼容性",
   "compatSourceModel": "模型覆盖",
+  "compatSourceBase": "基础配置",
   "compatSourceProvider": "提供方",
   "compatSourceCatalog": "模型目录",
   "compatSourceProtocol": "协议默认值",

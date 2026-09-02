@@ -6,10 +6,10 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SectionEditor } from '../src/client/SectionEditor.js'
 import { createTakeoverRuntimeStore, type TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
-import { GatewayCompatControls } from '../src/client/components/GatewayCompatControls.js'
+import { GatewayCompatControls, renderGatewayCompatControls } from '../src/client/components/GatewayCompatControls.js'
 import { ModelEditor } from '../src/client/components/ModelEditor.js'
 import { providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
-import { en, zh } from '../src/client/locales.js'
+import { en, ja, ko, zh } from '../src/client/locales.js'
 import { iosPalette } from '../src/client/theme.js'
 import type {
   ClientLocale,
@@ -224,12 +224,100 @@ describe('SectionEditor user behavior', () => {
     expect(container.textContent).toContain(en.compatSourceModel)
     const selects = [...container.querySelectorAll('select')] as HTMLSelectElement[]
     expect(selects).toHaveLength(2)
+    expect([...selects[0]!.options].map((option) => option.value)).toContain('auto')
+    expect([...selects[1]!.options].map((option) => option.value)).toContain('auto')
+    expect(container.textContent).toContain(en.gatewayCompatAuto)
     act(() => setValue(selects[0]!, 'unsupported'))
     expect(onChange).toHaveBeenLastCalledWith({ supportsDeveloperRole: 'unsupported' })
     act(() => setValue(selects[1]!, 'auto'))
     expect(onChange).toHaveBeenLastCalledWith({ maxTokensField: 'auto' })
     act(() => root.unmount())
     container.remove()
+  })
+
+  it('renders a distinct base source label instead of the protocol source label', () => {
+    const view = {
+      provider: 'provider',
+      model: 'model-b',
+      supportsDeveloperRole: 'auto' as const,
+      maxTokensField: 'auto' as const,
+      supportsDeveloperRoleSource: 'base' as const,
+      maxTokensFieldSource: 'unknown' as const,
+      supportsDeveloperRoleAvailable: true,
+      maxTokensFieldAvailable: true,
+    }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    act(() => {
+      root.render(<GatewayCompatControls scope="model" view={view} onChange={vi.fn()} />)
+    })
+
+    expect(container.textContent).toContain(en.compatSourceBase)
+    expect(container.textContent).not.toContain(en.compatSourceProtocol)
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('keeps the other model compat field editable when one field is unavailable', () => {
+    const view = {
+      provider: 'provider',
+      model: 'model-b',
+      supportsDeveloperRole: 'auto' as const,
+      maxTokensField: 'max_tokens' as const,
+      supportsDeveloperRoleSource: 'unknown' as const,
+      maxTokensFieldSource: 'model' as const,
+      supportsDeveloperRoleAvailable: false,
+      maxTokensFieldAvailable: true,
+    }
+    const onChange = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    act(() => {
+      root.render(<GatewayCompatControls scope="model" view={view} onChange={onChange} />)
+    })
+
+    const selects = [...container.querySelectorAll('select')] as HTMLSelectElement[]
+    expect(selects).toHaveLength(1)
+    expect(selects[0]?.getAttribute('aria-label')).toBe(en.maxTokensField)
+    act(() => setValue(selects[0]!, 'max_completion_tokens'))
+    expect(onChange).toHaveBeenCalledWith({ maxTokensField: 'max_completion_tokens' })
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('renders model compatibility copy from every locale without key fallbacks', () => {
+    const locales: readonly [string, Record<string, string>][] = [['en', en], ['zh', zh], ['ja', ja], ['ko', ko]]
+    const keys = ['modelGatewayCompatTitle', 'compatSourceBase', 'compatSourceModel', 'compatSourceProvider', 'compatSourceCatalog', 'compatSourceProtocol', 'compatSourceUnknown', 'inheritProviderCompat', 'saveModelGatewayCompat', 'modelGatewayCompatSaved']
+    const view = {
+      provider: 'provider',
+      model: 'model-b',
+      supportsDeveloperRole: 'auto' as const,
+      maxTokensField: 'max_tokens' as const,
+      supportsDeveloperRoleSource: 'base' as const,
+      maxTokensFieldSource: 'unknown' as const,
+      supportsDeveloperRoleAvailable: true,
+      maxTokensFieldAvailable: true,
+    }
+    for (const [locale, dictionary] of locales) {
+      for (const key of keys) {
+        expect(dictionary[key], `${locale} missing ${key}`).toBeTruthy()
+        expect(dictionary[key], `${locale} fell back to ${key}`).not.toBe(key)
+      }
+      const container = document.createElement('div')
+      document.body.append(container)
+      const root = createRoot(container)
+      act(() => {
+        root.render(renderGatewayCompatControls({ scope: 'model', view, onChange: vi.fn() }, { palette: iosPalette(), t: (key) => dictionary[key] ?? key }))
+      })
+      expect(container.textContent).toContain(dictionary.modelGatewayCompatTitle)
+      expect(container.textContent).toContain(dictionary.compatSourceBase)
+      expect(container.textContent).toContain(dictionary.inheritProviderCompat)
+      expect(container.textContent).not.toContain('compatSourceBase')
+      act(() => root.unmount())
+      container.remove()
+    }
   })
 
   it('renders model editor compat controls without changing base model controls', () => {
@@ -255,11 +343,12 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldAvailable: true,
     }
     const onCompatChange = vi.fn()
+    const onSaveCompat = vi.fn()
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '8192', oneMillion: false, previousValue: '8192', touched: false }} inputDraft={{ text: true, image: true, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onCompatChange={onCompatChange} onSaveCompat={vi.fn()} />)
+      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '8192', oneMillion: false, previousValue: '8192', touched: false }} inputDraft={{ text: true, image: true, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onCompatChange={onCompatChange} onSaveCompat={onSaveCompat} />)
     })
 
     expect(container.textContent).toContain('model-b')
@@ -297,14 +386,18 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldAvailable: true,
     }
     const onCompatChange = vi.fn()
+    const onSaveCompat = vi.fn()
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '8192', oneMillion: false, previousValue: '8192', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onCompatChange={onCompatChange} onSaveCompat={vi.fn()} />)
+      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '8192', oneMillion: false, previousValue: '8192', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onCompatChange={onCompatChange} onSaveCompat={onSaveCompat} />)
     })
 
     expect(container.querySelectorAll('select')).toHaveLength(0)
+    expect(container.textContent).not.toContain(text('saveModelGatewayCompat'))
+    expect([...container.querySelectorAll('button')].some((candidate) => candidate.textContent?.includes(text('saveModelGatewayCompat')))).toBe(false)
+    expect(onSaveCompat).not.toHaveBeenCalled()
     expect(container.textContent).toContain(text('reasoningLevels'))
     expect(container.querySelector(`input[aria-label="${text('contextLength')}"]`)).not.toBeNull()
     act(() => root.unmount())

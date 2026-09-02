@@ -99,6 +99,7 @@
   "gatewayCompatSaveFailed": "게이트웨이 호환성을 저장하지 못했습니다",
   "modelGatewayCompatTitle": "모델 게이트웨이 호환성",
   "compatSourceModel": "모델 재정의",
+  "compatSourceBase": "기본 구성",
   "compatSourceProvider": "제공자",
   "compatSourceCatalog": "모델 카탈로그",
   "compatSourceProtocol": "프로토콜 기본값",

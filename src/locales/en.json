@@ -99,6 +99,7 @@
   "gatewayCompatSaveFailed": "Failed to save gateway compatibility",
   "modelGatewayCompatTitle": "Model gateway compatibility",
   "compatSourceModel": "Model override",
+  "compatSourceBase": "Base configuration",
   "compatSourceProvider": "Provider",
   "compatSourceCatalog": "Model catalog",
   "compatSourceProtocol": "Protocol default",

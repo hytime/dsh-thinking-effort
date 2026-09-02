@@ -99,6 +99,7 @@
   "gatewayCompatSaveFailed": "ゲートウェイ互換性の保存に失敗しました",
   "modelGatewayCompatTitle": "モデルゲートウェイ互換性",
   "compatSourceModel": "モデルの上書き",
+  "compatSourceBase": "ベース設定",
   "compatSourceProvider": "プロバイダー",
   "compatSourceCatalog": "モデルカタログ",
   "compatSourceProtocol": "プロトコルの既定値",
