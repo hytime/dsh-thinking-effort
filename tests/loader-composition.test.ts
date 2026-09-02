@@ -6,6 +6,8 @@ import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
 import { settingsBridge } from '../src/client/settings-bridge.js'
+import { inventoryFrom } from '../src/client/model-inventory.js'
+import { opsForModelArrayCompat } from '../src/client/model-ops.js'
 import { editableProviderCompatFields } from '../src/compat/gateway/validation.js'
 import { capabilitiesForVersion } from '../src/compat/version-map.js'
 import {
@@ -894,6 +896,25 @@ describe('compatibility documentation and root validation', () => {
     expect(section(document, 'Unreleased')).toMatch(/Runtime capability detection is authoritative/i)
   })
 
+  it('keeps publish workflow roots aligned with loader verification order', () => {
+    const workflow = readFileSync(join(root, '.github/workflows/publish.yml'), 'utf8')
+    const roots = [
+      '"rc7:$RC7_ROOT:$RUN_ROOT/homes/rc7"',
+      '"rc2:$RC2_ROOT:$RUN_ROOT/homes/rc2"',
+      '"alpha:$ALPHA_ROOT:$RUN_ROOT/homes/alpha"',
+    ]
+    const rootSpecStart = workflow.indexOf('for spec in')
+    expect(rootSpecStart).toBeGreaterThanOrEqual(0)
+    let previous = rootSpecStart
+    for (const rootSpec of roots) {
+      const position = workflow.indexOf(rootSpec, previous)
+      expect(position, `publish workflow missing ordered root ${rootSpec}`).toBeGreaterThan(previous)
+      previous = position
+    }
+    expect(workflow).toContain('DSH_CLI_ROOTS="$RC7_ROOT,$RC2_ROOT,$ALPHA_ROOT"')
+    expect(expectedOfficialDshVersions).toEqual(['0.1.0-rc.7', '0.1.1-rc.2', '0.1.2-alpha.3'])
+  })
+
   it('rejects duplicate normalized DSH CLI roots', () => {
     const duplicateRoots = `${root},${join(root, '.')},${root}`
 
@@ -1129,7 +1150,10 @@ integrationDescribe('official DSH loader composition', () => {
              value: {
                api: 'openai-completions',
                baseURL: 'http://gateway.test/v1',
-               models: [{ id: 'loader-model', reasoningEfforts: { off: null, high: 'high' } }],
+               models: [
+                  { id: 'loader-model-a', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-a' },
+                  { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-b', compat: { maxTokensField: 'max_tokens', keep: true } },
+                ],
              },
            }], current.revision)
            expect(seeded).toMatchObject({ ok: true, value: { ns: 'llm-pi-ai' } })
@@ -1167,6 +1191,50 @@ integrationDescribe('official DSH loader composition', () => {
            const clearedNamespace = await describePiAi()
            const clearedProviders = clearedNamespace.value.providers as Record<string, Record<string, unknown>>
            const clearedCompat = clearedProviders[route]?.compat as Record<string, unknown> | undefined
+            expect(clearedCompat?.supportsDeveloperRole).toBeUndefined()
+            expect(clearedCompat?.maxTokensField).toBeUndefined()
+
+            const modelsNamespace = await describePiAi()
+            const modelsInventory = inventoryFrom({ value: modelsNamespace.value })
+            const targetModel = modelsInventory.find((candidate) => candidate.route === route && candidate.model === 'loader-model-b')
+            expect(targetModel).toBeDefined()
+            const modelSetOps = opsForModelArrayCompat(modelsInventory, targetModel!, {
+              supportsDeveloperRole: 'unsupported',
+            }, editability)
+            expect(modelSetOps).toEqual([{
+              op: 'set',
+              path: ['providers', route, 'models'],
+              value: [
+                { id: 'loader-model-a', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-a' },
+                { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-b', compat: { maxTokensField: 'max_tokens', keep: true, supportsDeveloperRole: false } },
+              ],
+            }])
+            const modelWritten = await settings!.mutate(modelsNamespace.ns, modelSetOps, modelsNamespace.revision)
+            expect(modelWritten).toMatchObject({ ok: true, value: { ns: 'llm-pi-ai' } })
+            if (!modelWritten.ok) throw new Error(modelWritten.error.message)
+            const modelWrittenNamespace = await describePiAi()
+            const modelWrittenProfile = (modelWrittenNamespace.value.providers as Record<string, Record<string, unknown>>)[route]
+            expect(modelWrittenProfile?.models).toEqual(modelSetOps[0]?.value)
+
+            const modelAfterSet = inventoryFrom({ value: modelWrittenNamespace.value }).find((candidate) => candidate.route === route && candidate.model === 'loader-model-b')
+            expect(modelAfterSet).toBeDefined()
+            const modelAutoOps = opsForModelArrayCompat(inventoryFrom({ value: modelWrittenNamespace.value }), modelAfterSet!, {
+              supportsDeveloperRole: 'auto',
+            }, editability)
+            expect(modelAutoOps).toEqual([{
+              op: 'set',
+              path: ['providers', route, 'models'],
+              value: [
+                { id: 'loader-model-a', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-a' },
+                { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-b', compat: { maxTokensField: 'max_tokens', keep: true } },
+              ],
+            }])
+            const modelCleared = await settings!.mutate(modelWrittenNamespace.ns, modelAutoOps, modelWrittenNamespace.revision)
+            expect(modelCleared).toMatchObject({ ok: true, value: { ns: 'llm-pi-ai' } })
+            if (!modelCleared.ok) throw new Error(modelCleared.error.message)
+            const modelClearedNamespace = await describePiAi()
+            const modelClearedProfile = (modelClearedNamespace.value.providers as Record<string, Record<string, unknown>>)[route]
+            expect(modelClearedProfile?.models).toEqual(modelAutoOps[0]?.value)
            expect(clearedCompat?.supportsDeveloperRole).toBeUndefined()
            expect(clearedCompat?.maxTokensField).toBeUndefined()
          }
@@ -1206,7 +1274,10 @@ integrationDescribe('official DSH loader composition', () => {
         })
          const domProbe = await probeOfficialSettingsDom(cliRoot, web)
         if (domProbe.blocked !== undefined) {
-          console.log(`[BLOCKED] browser probe: ${domProbe.blocked}`)
+          if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
+             throw new Error(`required DSH Web DOM probe was blocked: ${domProbe.blocked}`)
+           }
+           console.log(`[BLOCKED] browser probe: ${domProbe.blocked}`)
         } else {
           expect(domProbe.settingsText).toMatch(/插件|Plugins/)
           expect(domProbe.errors).toEqual([])

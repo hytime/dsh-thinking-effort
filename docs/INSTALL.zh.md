@@ -57,7 +57,7 @@ version-map 按以下规则判断网关能力：
 
 ## 网关兼容设置
 
-设置页的 provider 全局区域用于修改该 provider 下全部模型的 `compat` 默认值。展开单个模型后进入单模型区域。catalog 模型和自定义 YAML `models[]` 模型都支持编辑 compat：前者使用 `modelOverrides.<model>.compat`，后者使用 `models[].compat`。
+设置页的 provider 全局区域用于修改该 provider 下全部模型的 `compat` 默认值。展开单个模型后进入单模型区域。catalog 模型和 `models[]` 模型都支持编辑 compat：前者使用 `modelOverrides.<model>.compat`，后者使用 `models[].compat`。
 
 ```yaml
 providers:
@@ -286,10 +286,11 @@ curl -s http://127.0.0.1:3080/ \
 
 请为 npm 包配置 GitHub Trusted Publisher：仓库为 `hytime/dsh-thinking-effort`，workflow 为 `publish.yml`。发布使用 GitHub OIDC 和 provenance，命令为 `npm publish --provenance --access public`，不使用 `NPM_TOKEN` 或长期 token。如果 npm 中已存在相同版本，发布会被阻止。
 
-发布前 workflow 会为每个兼容范围创建一个临时官方 DSH 代表 checkout，使用官方 `dsh plugin` 命令安装当前 tarball，再运行真实兼容测试：
+发布前 workflow 会按 rc7 → rc2 → alpha3 顺序创建三个临时官方 DSH 能力代表 checkout，使用官方 `dsh plugin` 命令安装当前 tarball，再运行真实兼容测试：
 
-- `dsh-v0.1.2-alpha.3`（`0.1.2-alpha.3`）——modern 范围
-- `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）——legacy 范围
+- `dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）——rc7 能力代表
+- `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）——rc2 能力代表
+- `dsh-v0.1.2-alpha.3`（`0.1.2-alpha.3`）——alpha3 能力代表
 
 普通 CI 仍然只做测试，会在 Pull Request 和推送到 `main` 时运行。它使用 `npm ci`，依赖变更时请保持 `package-lock.json` 已提交。
 

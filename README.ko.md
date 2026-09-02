@@ -50,7 +50,7 @@ DSH 내장 모델만 사용하고 이미 추론 제어가 정상 작동한다면
 | 기능 | 설명 |
 | --- | --- |
 | 기본 단계 | 사용자 지정 값을 덮어쓰지 않고 `off`, `high`, `max` 추가 |
-| 모델별 편집 | Settings에서 단계를 설정하고 catalog/modelOverrides와 사용자 지정 YAML `models[]` 모델의 게이트웨이 호환 값을 모두 편집 |
+| 모델별 편집 | Settings에서 단계를 설정하고 catalog/modelOverrides와 `models[]` 항목의 게이트웨이 호환 값을 모두 편집 |
 | 게이트웨이 값 매핑 | DSH에서 `high`를 선택하면 `ultra` 전송 가능 |
 | Subagent 기본값 | 명시적 값이 없는 요청에만 기본값 적용 |
 | 다국어 설정 | 中文, English, 日本語, 한국어 사전 포함; 일본어/한국어 전환은 DSH language-pack 지원을 사용 |
@@ -148,7 +148,7 @@ Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델
 - 일반 CI workflow는 npm에 게시하지 않습니다. `publish.yml`은 `v<version>` tag에서만 게시를 시작합니다.
 - 릴리스 tag를 만들기 전에 유지 관리자는 `package.json` 버전과 각 언어의 `CHANGELOG`를 업데이트하여 커밋하고 일치하는 `v<version>` tag를 만듭니다. tag가 가리키는 커밋은 `main` 기록에 포함되어야 합니다.
 - npm 패키지에 GitHub Trusted Publisher를 설정해야 합니다. 저장소는 `hytime/dsh-thinking-effort`, workflow는 `publish.yml`입니다. 게시에는 GitHub OIDC provenance가 포함되며 `NPM_TOKEN`이 필요하지 않습니다.
-- 게시 전에 workflow는 지원되는 각 DSH 호환성 범위에서 대표 버전 하나씩을 선택합니다. modern은 `dsh-v0.1.2-alpha.3` (`0.1.2-alpha.3`), legacy는 `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`)를 공식 `dsh plugin` 명령으로 빌드하고 설치한 뒤 실제 호환성 테스트를 실행합니다.
+- 게시 전에 workflow는 rc7 → rc2 → alpha3 순서로 세 공식 DSH capability representative를 빌드하고 테스트합니다: `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), `dsh-v0.1.2-alpha.3` (`0.1.2-alpha.3`). 공식 `dsh plugin` 명령으로 설치한 뒤 실제 호환성 테스트를 실행합니다.
 - workflow는 버전이나 `CHANGELOG`를 자동으로 변경하지 않습니다. npm에 같은 버전이 이미 있으면 게시도 중단됩니다.
 
 ## 라이선스

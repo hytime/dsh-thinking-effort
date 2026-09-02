@@ -14,6 +14,14 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased] - 网关能力映射与可选 takeover / Gateway capability mapping and optional takeover
 
+### 发布兼容矩阵 / Release compatibility matrix
+
+| 顺序 / Order | 官方 DSH 代表 / Official representative | 版本 / Version |
+| --- | --- | --- |
+| 1 | `dsh-v0.1.0-rc.7` | `0.1.0-rc.7` |
+| 2 | `dsh-v0.1.1-rc.2` | `0.1.1-rc.2` |
+| 3 | `dsh-v0.1.2-alpha.3` | `0.1.2-alpha.3` |
+
 ### 变更 / Changed
 
 - 统一 `version-map.ts` 对 DSH Runtime transport、Gateway compat 字段和 takeover transport 的能力映射，并明确 rc7 不支持 `supportsDeveloperRole`/`maxTokensField`、rc8+ 支持。
@@ -23,8 +31,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - 支持可选的 `dsh-llm-openai-completions` takeover：仅在运行时支持 Gateway compat、目标供应商为自定义 OpenAI 兼容思考网关且 transport 已启用时生效。
 - Support optional `dsh-llm-openai-completions` takeover only when the runtime supports Gateway compat, the target provider is a custom OpenAI-compatible thinking gateway, and the transport is enabled.
 - Runtime capability detection is authoritative; optional version metadata never overrides detected runtime capabilities.
-- 新增 provider 全局 `compat` 默认值和单模型覆盖：catalog 模型使用 `modelOverrides.<model>.compat`，自定义 YAML 模型使用 `models[].compat`。模型层只覆盖写出的字段，`Auto` 删除当前层字段并恢复 provider 继承；对同一路由（provider）而言，只要同时存在非空的 `models[]` 和非空的 `modelOverrides`，配置就无效，官方 schema 会拒绝该配置，插件对异常数据 fail closed。catalog/modelOverrides 与 `models[]` 两种模型形式都支持设置页单模型编辑；`models[]` 保存使用一个完整的 `providers.<route>.models` 数组 set，保留其他模型、未知字段和其他 compat 字段，不使用数组索引 path op。
-- Add provider-wide `compat` defaults and per-model overrides: catalog models use `modelOverrides.<model>.compat`, while custom YAML models use `models[].compat`. Model fields override the provider field-by-field, and `Auto` deletes the current-layer field to restore provider inheritance; for a given route/provider, any non-empty `models[]` together with any non-empty `modelOverrides` is invalid. The official schema rejects this configuration, and the plugin fails closed for malformed data. Both catalog/modelOverrides and `models[]` models support single-model editing in Settings; `models[]` saves use one complete `providers.<route>.models` array set that preserves other models, unknown fields, and other compat fields instead of an array-index path operation.
+- 新增 provider 全局 `compat` 默认值和单模型覆盖：catalog 模型使用 `modelOverrides.<model>.compat`，`models[]` 模型使用 `models[].compat`。模型层只覆盖写出的字段，`Auto` 删除当前层字段并恢复 provider 继承；对同一路由（provider）而言，只要同时存在非空的 `models[]` 和非空的 `modelOverrides`，配置就无效，官方 schema 会拒绝该配置，插件对异常数据 fail closed。catalog/modelOverrides 与 `models[]` 两种模型形式都支持设置页单模型编辑；`models[]` 保存使用一个完整的 `providers.<route>.models` 数组 set，保留其他模型、未知字段和其他 compat 字段，不使用数组索引 path op。
+- Add provider-wide `compat` defaults and per-model overrides: catalog models use `modelOverrides.<model>.compat`, while `models[]` entries use `models[].compat`. Model fields override the provider field-by-field, and `Auto` deletes the current-layer field to restore provider inheritance; for a given route/provider, any non-empty `models[]` together with any non-empty `modelOverrides` is invalid. The official schema rejects this configuration, and the plugin fails closed for malformed data. Both catalog/modelOverrides and `models[]` models support single-model editing in Settings; `models[]` saves use one complete `providers.<route>.models` array set that preserves other models, unknown fields, and other compat fields instead of an array-index path operation.
 - 这些 compat 值只负责控制面配置，不实现外部 transport。
 - These compat values configure the control plane only; the plugin does not implement external transport.
 

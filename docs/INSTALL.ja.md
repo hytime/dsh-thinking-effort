@@ -51,7 +51,7 @@ version-map はゲートウェイ capability を次のように判定します�
 
 ## ゲートウェイ互換設定
 
-Settings の provider グローバル領域では、その provider 配下のすべてのモデルの `compat` 既定値を編集します。モデルを 1 つ展開すると単一モデル領域が開きます。カタログモデルとカスタム YAML `models[]` の両方で compat を編集できます。前者は `modelOverrides.<model>.compat`、後者は `models[].compat` を使用します。
+Settings の provider グローバル領域では、その provider 配下のすべてのモデルの `compat` 既定値を編集します。モデルを 1 つ展開すると単一モデル領域が開きます。カタログモデルと `models[]` エントリの両方で compat を編集できます。前者は `modelOverrides.<model>.compat`、後者は `models[].compat` を使用します。
 
 ```yaml
 providers:
@@ -206,10 +206,11 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 
 npm パッケージには GitHub Trusted Publishing を設定してください。リポジトリは `hytime/dsh-thinking-effort`、workflow は `publish.yml` です。公開は GitHub OIDC と provenance を使い、`npm publish --provenance --access public` を実行します。`NPM_TOKEN` や長期 token は使用しません。npm に同じ version が存在する場合、公開は停止します。
 
-公開前に workflow は、各互換性範囲から 1 つずつ選んだ 2 つの一時的な公式 DSH checkout を作成し、公式 `dsh plugin` コマンドで現在の tarball をインストールしてから実際の互換性テストを実行します。
+公開前に workflow は rc7 → rc2 → alpha3 の順で、3 つの一時的な公式 DSH capability representative checkout を作成します。公式 `dsh plugin` コマンドで現在の tarball をインストールしてから、実際の互換性テストを実行します。
 
-- `dsh-v0.1.2-alpha.3`（`0.1.2-alpha.3`）— modern 範囲
-- `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）— legacy 範囲
+- `dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）— rc7 capability representative
+- `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）— rc2 capability representative
+- `dsh-v0.1.2-alpha.3`（`0.1.2-alpha.3`）— alpha3 capability representative
 
 通常の CI はテスト専用で、Pull Request と `main` への push で実行されます。`npm ci` を使うため、依存関係変更時は `package-lock.json` をコミットしてください。
 

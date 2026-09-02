@@ -111,9 +111,7 @@ export function modelGatewayCompatViewFrom(
     ? undefined
     : record(item.raw?.compat) ?? modelLayerCompat(descriptor?.value, item.route, item.model)
   const catalogProvider = layerCompat(descriptor?.value, item.route)
-  const modelSelection = item.inOverrides
-    ? userModel
-    : item.modelsSnapshot !== undefined ? record(item.raw?.compat) ?? userModel : userModel
+  const modelSelection = userModel
   const runtimeModel = modelRuntimeCompatFor(takeoverRuntime, item.route, item.model)
   const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema)
   const resolved = resolveModelGatewayCompat({

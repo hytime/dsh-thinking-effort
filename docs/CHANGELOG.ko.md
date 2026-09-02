@@ -10,12 +10,20 @@
 
 ## [Unreleased] - 게이트웨이 capability mapping 및 optional takeover
 
+### 게시 호환성 매트릭스
+
+| 순서 | 공식 DSH representative | 버전 |
+| --- | --- | --- |
+| 1 | `dsh-v0.1.0-rc.7` | `0.1.0-rc.7` |
+| 2 | `dsh-v0.1.1-rc.2` | `0.1.1-rc.2` |
+| 3 | `dsh-v0.1.2-alpha.3` | `0.1.2-alpha.3` |
+
 ### 변경
 
 - `version-map.ts`에서 DSH Runtime transport, Gateway compat 필드 및 takeover transport의 capability mapping을 통일하고, rc7은 `supportsDeveloperRole`/`maxTokensField`를 지원하지 않으며 rc8+는 지원함을 명시했습니다.
 - rc7, rc2 및 alpha3 세 capability composition representative를 각각 로드하고 실제 호환성을 검증하는 테스트를 추가했습니다.
 - 선택 사항인 `dsh-llm-openai-completions` takeover를 지원합니다. Gateway compat을 지원하는 runtime에서 대상이 사용자 지정 OpenAI 호환 사고 게이트웨이이고 transport가 활성화된 경우에만 적용됩니다.
-- provider 전역 `compat` 기본값과 단일 모델 override를 추가했습니다. catalog 모델은 `modelOverrides.<model>.compat`, 사용자 지정 YAML 모델은 `models[].compat`을 사용합니다. 모델 수준은 작성된 필드만 provider 기본값에 대해 덮어쓰며 `Auto`는 현재 계층의 필드를 삭제하고 provider 상속으로 복원합니다. 같은 라우트(provider)에 비어 있지 않은 `models[]`와 비어 있지 않은 `modelOverrides`가 동시에 존재하면 잘못된 구성입니다. 공식 schema는 이 잘못된 구성을 거부하며 플러그인은 비정상 데이터에서 fail closed로 동작합니다. catalog/modelOverrides와 `models[]` 두 모델 형식 모두 Settings의 단일 모델 편집을 지원하며, `models[]` 저장은 배열 인덱스 path op 대신 다른 모델, 알 수 없는 필드 및 다른 compat 필드를 보존하는 `providers.<route>.models` 전체 배열 set 하나를 사용합니다.
+- provider 전역 `compat` 기본값과 단일 모델 override를 추가했습니다. catalog 모델은 `modelOverrides.<model>.compat`, `models[]` 항목은 `models[].compat`을 사용합니다. 모델 수준은 작성된 필드만 provider 기본값에 대해 덮어쓰며 `Auto`는 현재 계층의 필드를 삭제하고 provider 상속으로 복원합니다. 같은 라우트(provider)에 비어 있지 않은 `models[]`와 비어 있지 않은 `modelOverrides`가 동시에 존재하면 잘못된 구성입니다. 공식 schema는 이 잘못된 구성을 거부하며 플러그인은 비정상 데이터에서 fail closed로 동작합니다. catalog/modelOverrides와 `models[]` 두 모델 형식 모두 Settings의 단일 모델 편집을 지원하며, `models[]` 저장은 배열 인덱스 path op 대신 다른 모델, 알 수 없는 필드 및 다른 compat 필드를 보존하는 `providers.<route>.models` 전체 배열 set 하나를 사용합니다.
 - 이 compat 값은 제어면 설정만 담당하며 외부 transport를 구현하지 않습니다.
 
 ## [0.1.13] - 호환성 범위 기반 검증

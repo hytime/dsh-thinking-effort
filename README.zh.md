@@ -177,7 +177,7 @@ providers:
 
 模型级 `compat` 会按字段逐字段覆盖 provider 默认值；模型层没有写出的字段继续继承 provider。`Auto` 会删除当前层字段，恢复从 provider 继承。对同一路由（provider）而言，只要同时存在非空的 `models[]` 和非空的 `modelOverrides`，配置就无效；官方 schema 会拒绝该配置，插件遇到异常数据时 fail closed。
 
-设置页的 provider 全局区域用于修改该 provider 下全部模型的默认值。catalog/modelOverrides 模型和自定义 YAML `models[]` 模型都能展开后编辑单模型 compat：前者写入 `modelOverrides.<model>.compat`，后者写入 `models[].compat`。由于 Settings API 不支持数组索引 path op，`models[]` 修改会通过一个完整的 `providers.<route>.models` 数组 set 写回，同时保留其他模型、未知字段和其他 compat 字段。
+设置页的 provider 全局区域用于修改该 provider 下全部模型的默认值。catalog/modelOverrides 模型和 `models[]` 模型都能展开后编辑单模型 compat：前者写入 `modelOverrides.<model>.compat`，后者写入 `models[].compat`。由于 Settings API 不支持数组索引 path op，`models[]` 修改会通过一个完整的 `providers.<route>.models` 数组 set 写回，同时保留其他模型、未知字段和其他 compat 字段。
 
 这些 compat 值属于控制面配置。它们不实现或替代网关 transport；网络请求仍由外部 transport 负责。
 
@@ -237,7 +237,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 - 普通 CI workflow 不会发布 npm；发布只由 `publish.yml` 接收匹配的 `v<version>` tag 后执行。
 - 创建发布 tag 前，维护者先更新 `package.json` 版本和各语言 `CHANGELOG`，提交这些变更，再创建匹配的 `v<version>` tag。tag 指向的提交必须位于 `main` 历史中。
 - npm 包必须配置 GitHub Trusted Publisher：仓库为 `hytime/dsh-thinking-effort`，workflow 为 `publish.yml`。发布使用 GitHub OIDC 生成 provenance，不需要 `NPM_TOKEN`。
-- 发布前 workflow 会为每个受支持的 DSH 兼容范围选择一个代表版本：modern 使用 `dsh-v0.1.2-alpha.3`（`0.1.2-alpha.3`），legacy 使用 `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）；通过官方 `dsh plugin` 命令安装并执行真实兼容检查。
+- 发布前 workflow 会按 rc7 → rc2 → alpha3 顺序构建并测试三个官方 DSH 能力代表：`dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）和 `dsh-v0.1.2-alpha.3`（`0.1.2-alpha.3`）；通过官方 `dsh plugin` 命令安装并执行真实兼容检查。
 - workflow 不会自动修改版本或任何 `CHANGELOG`；如果 npm 中已经存在相同版本，发布也会被阻止。
 
 ## 排查

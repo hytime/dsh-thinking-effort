@@ -460,8 +460,8 @@ describe('model inventory and operations', () => {
     expect(modelGatewayCompatViewFrom(namespace, model!, 'modern', runtime)).toMatchObject({
       provider: 'provider',
       model: 'model-a',
-      supportsDeveloperRole: 'unsupported',
-      supportsDeveloperRoleSource: 'model',
+      supportsDeveloperRole: 'auto',
+      supportsDeveloperRoleSource: 'catalog',
       supportsDeveloperRoleResolved: false,
       maxTokensField: 'auto',
       maxTokensFieldSource: 'unknown',
@@ -745,6 +745,46 @@ describe('model inventory and operations', () => {
       supportsDeveloperRole: 'auto',
       supportsDeveloperRoleSource: 'base',
       supportsDeveloperRoleResolved: true,
+    })
+  })
+
+  it('keeps models[] selections automatic when value snapshots contain inherited compat', () => {
+    const ns = {
+      value: {
+        providers: {
+          provider: {
+            compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' },
+            models: [{ id: 'model-a', compat: { supportsDeveloperRole: true, maxTokensField: 'max_completion_tokens' } }],
+          },
+        },
+      },
+      user: {
+        providers: {
+          provider: {
+            models: [{ id: 'model-a' }],
+          },
+        },
+      },
+      base: {
+        providers: {
+          provider: {
+            compat: { supportsDeveloperRole: false, maxTokensField: 'max_tokens' },
+            models: [{ id: 'model-a' }],
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    }
+    const model = inventoryFrom(ns)[0]
+    expect(model).toBeDefined()
+
+    expect(modelGatewayCompatViewFrom(ns, model!, 'modern')).toMatchObject({
+      supportsDeveloperRole: 'auto',
+      supportsDeveloperRoleSource: 'base',
+      supportsDeveloperRoleResolved: false,
+      maxTokensField: 'auto',
+      maxTokensFieldSource: 'base',
+      maxTokensFieldResolved: 'max_tokens',
     })
   })
 
@@ -1096,7 +1136,7 @@ describe('model inventory and operations', () => {
     ])
   })
 
-  it('model compat operations reject models[] as YAML-only and fail closed for invalid input', () => {
+  it('modelOverrides helper rejects models[] items and fails closed for invalid input', () => {
     const editable: GatewayCompatEditability = {
       supportsDeveloperRole: true,
       maxTokensField: true,

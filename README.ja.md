@@ -50,7 +50,7 @@ DSH 内蔵モデルだけを使用し、すでに推論コントロールが動�
 | 機能 | 説明 |
 | --- | --- |
 | 既定レベル | カスタム値を上書きせず `off`、`high`、`max` を追加 |
-| モデルごとの編集 | Settings からレベルとゲートウェイ値を設定し、カタログ/modelOverrides とカスタム YAML `models[]` の両方で compat を編集 |
+| モデルごとの編集 | Settings からレベルとゲートウェイ値を設定し、カタログ/modelOverrides と `models[]` エントリの両方で compat を編集 |
 | ゲートウェイ値のマッピング | DSH の `high` 選択時に `ultra` を送信可能 |
 | Subagent の既定値 | 明示値のないリクエストにだけ既定値を適用 |
 | 多言語設定 | 中文、English、日本語、한국어の辞書を同梱。日本語/韓国語の切り替えは DSH の language-pack 対応を使用 |
@@ -148,7 +148,7 @@ Settings の provider グローバル領域では、その provider の全モデ
 - 通常の CI workflow は npm に公開しません。`publish.yml` は `v<version>` tag によってのみ公開を開始します。
 - リリース tag を作成する前に、メンテナーは `package.json` の version と各言語の `CHANGELOG` を更新してコミットし、一致する `v<version>` tag を作成します。tag の指す commit は `main` の履歴に含まれている必要があります。
 - npm パッケージには GitHub Trusted Publisher を設定してください。リポジトリは `hytime/dsh-thinking-effort`、workflow は `publish.yml` です。公開は GitHub OIDC による provenance を含み、`NPM_TOKEN` は必要ありません。
-- 公開前に workflow は、対応する各 DSH 互換性範囲から 1 つずつ代表バージョンを選びます。modern は `dsh-v0.1.2-alpha.3`（`0.1.2-alpha.3`）、legacy は `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）を公式の `dsh plugin` コマンドで構築・インストールし、実際の互換性テストを実行します。
+- 公開前に workflow は rc7 → rc2 → alpha3 の順で 3 つの公式 DSH capability representative を構築・テストします：`dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）、`dsh-v0.1.2-alpha.3`（`0.1.2-alpha.3`）。公式の `dsh plugin` コマンドでインストールし、実際の互換性テストを実行します。
 - workflow は version や `CHANGELOG` を自動変更しません。npm に同じ version が既にある場合も公開を停止します。
 
 ## ライセンス

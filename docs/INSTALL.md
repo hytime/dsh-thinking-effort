@@ -51,7 +51,7 @@ For either field, `Auto` unsets the user override and restores the official prot
 
 ## Gateway compatibility settings
 
-The provider global area in the Settings page edits the default `compat` values for every model under that provider. Expanding one model opens its single-model area. Both catalog models and custom YAML `models[]` entries support compat editing: catalog models use `modelOverrides.<model>.compat`, while `models[]` entries use `models[].compat`.
+The provider global area in the Settings page edits the default `compat` values for every model under that provider. Expanding one model opens its single-model area. Both catalog models and `models[]` entries support compat editing: catalog models use `modelOverrides.<model>.compat`, while `models[]` entries use `models[].compat`.
 
 ```yaml
 providers:
@@ -205,10 +205,11 @@ Maintainers update the `package.json` version and all applicable `CHANGELOG` fil
 
 Configure npm GitHub Trusted Publishing for repository `hytime/dsh-thinking-effort` and workflow `publish.yml`. Publishing uses GitHub OIDC and provenance with `npm publish --provenance --access public`; no `NPM_TOKEN` or long-lived token is used. A version that already exists in npm blocks the release.
 
-Before publishing, the workflow builds two temporary official DSH range representatives and runs the real compatibility suite after installing the current tarball with the official `dsh plugin` command:
+Before publishing, the workflow builds three temporary official DSH capability representatives in rc7 → rc2 → alpha3 order and runs the real compatibility suite after installing the current tarball with the official `dsh plugin` command:
 
-- `dsh-v0.1.2-alpha.3` (`0.1.2-alpha.3`) — modern range
-- `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`) — legacy range
+- `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`) — rc7 capability representative
+- `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`) — rc2 capability representative
+- `dsh-v0.1.2-alpha.3` (`0.1.2-alpha.3`) — alpha3 capability representative
 
 The ordinary CI workflow remains test-only and runs on pull requests and `main` pushes. Keep `package-lock.json` committed for its `npm ci` installation.
 
