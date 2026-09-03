@@ -406,6 +406,7 @@ async function probeOfficialAgentRuntime(
 
 type BrowserLocator = {
   click: () => Promise<void>
+  count: () => Promise<number>
   waitFor: (options?: Record<string, unknown>) => Promise<void>
   getByRole: (role: string, options: { name: string | RegExp }) => BrowserLocator
 }
@@ -501,13 +502,19 @@ async function probeOfficialSettingsDom(cliRoot: string, web: RunningWeb): Promi
     const buttons = await page.locator('button').allTextContents()
     await page.getByRole('button', { name: localizedNavigationLabels.continue }).click()
     await page.waitForTimeout(500)
-    await page.getByRole('button', { name: localizedNavigationLabels.configureLater }).click()
-    await page.waitForTimeout(500)
-    await page.getByRole('button', { name: localizedNavigationLabels.chooseWorkspace }).click()
-    const workspaceDialog = page.getByRole('dialog', { name: /^(选择工作区目录|Select Workspace Directory)$/ })
-    await workspaceDialog.waitFor({ state: 'visible', timeout: 10000 })
-    await workspaceDialog.getByRole('button', { name: /^(取消|Cancel)$/ }).click()
-    await workspaceDialog.waitFor({ state: 'hidden', timeout: 10000 })
+    const configureLater = page.getByRole('button', { name: localizedNavigationLabels.configureLater })
+    if ((await configureLater.count().catch(() => 0)) > 0) {
+      await configureLater.click()
+      await page.waitForTimeout(500)
+    }
+    const chooseWorkspace = page.getByRole('button', { name: localizedNavigationLabels.chooseWorkspace })
+    if ((await chooseWorkspace.count().catch(() => 0)) > 0) {
+      await chooseWorkspace.click()
+      const workspaceDialog = page.getByRole('dialog', { name: /^(选择工作区目录|Select Workspace Directory)$/ })
+      await workspaceDialog.waitFor({ state: 'visible', timeout: 10000 })
+      await workspaceDialog.getByRole('button', { name: /^(取消|Cancel)$/ }).click()
+      await workspaceDialog.waitFor({ state: 'hidden', timeout: 10000 })
+    }
     await page.getByRole('button', { name: localizedNavigationLabels.settings }).click()
     await page.waitForTimeout(500)
     await page.getByRole('button', { name: localizedNavigationLabels.plugins }).click()
