@@ -1229,8 +1229,8 @@ integrationDescribe('official DSH loader composition', () => {
               op: 'set',
               path: ['providers', route, 'models'],
               value: [
-                { id: 'loader-model-a', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-a' },
-                { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-b', compat: { maxTokensField: 'max_tokens', supportsStore: true, supportsDeveloperRole: false } },
+                { id: 'loader-model-a', reasoningEfforts: { off: null, high: 'high' }, input: [], custom: 'keep-a', compat: { chatTemplateKwargs: {} } },
+                { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, input: [], custom: 'keep-b', compat: { chatTemplateKwargs: {}, maxTokensField: 'max_tokens', supportsStore: true, supportsDeveloperRole: false } },
               ],
             }])
             const modelWritten = await settings!.mutate(modelsNamespace.ns, modelSetOps, modelsNamespace.revision)
@@ -1249,8 +1249,8 @@ integrationDescribe('official DSH loader composition', () => {
               op: 'set',
               path: ['providers', route, 'models'],
               value: [
-                { id: 'loader-model-a', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-a' },
-                { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, custom: 'keep-b', compat: { maxTokensField: 'max_tokens', supportsStore: true } },
+                { id: 'loader-model-a', reasoningEfforts: { off: null, high: 'high' }, input: [], custom: 'keep-a', compat: { chatTemplateKwargs: {} } },
+                { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, input: [], custom: 'keep-b', compat: { chatTemplateKwargs: {}, maxTokensField: 'max_tokens', supportsStore: true } },
               ],
             }])
             const modelCleared = await settings!.mutate(modelWrittenNamespace.ns, modelAutoOps, modelWrittenNamespace.revision)
