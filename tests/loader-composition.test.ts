@@ -1173,6 +1173,9 @@ integrationDescribe('official DSH loader composition', () => {
            expect((await describePiAi()).revision).toBe(current.revision)
          } else {
            const route = `loader-compat-${version.replaceAll('.', '-')}`
+            const defaultCompat = version === '0.1.2-alpha.3'
+              ? { chatTemplateArgs: {}, chatTemplateKwargs: {} }
+              : { chatTemplateKwargs: {} }
            const seeded = await settings!.mutate(current.ns, [{
              op: 'set',
              path: ['providers', route],
@@ -1236,8 +1239,8 @@ integrationDescribe('official DSH loader composition', () => {
               op: 'set',
               path: ['providers', route, 'models'],
               value: [
-                { id: 'loader-model-a', reasoningEfforts: { off: null, high: 'high' }, input: [], custom: 'keep-a', compat: { chatTemplateKwargs: {} } },
-                { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, input: [], custom: 'keep-b', compat: { chatTemplateKwargs: {}, maxTokensField: 'max_tokens', supportsStore: true, supportsDeveloperRole: false } },
+                { id: 'loader-model-a', reasoningEfforts: { off: null, high: 'high' }, input: [], custom: 'keep-a', compat: defaultCompat },
+                { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, input: [], custom: 'keep-b', compat: { ...defaultCompat, maxTokensField: 'max_tokens', supportsStore: true, supportsDeveloperRole: false } },
               ],
             }])
             const modelWritten = await settings!.mutate(modelsNamespace.ns, modelSetOps, modelsNamespace.revision)
@@ -1256,8 +1259,8 @@ integrationDescribe('official DSH loader composition', () => {
               op: 'set',
               path: ['providers', route, 'models'],
               value: [
-                { id: 'loader-model-a', reasoningEfforts: { off: null, high: 'high' }, input: [], custom: 'keep-a', compat: { chatTemplateKwargs: {} } },
-                { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, input: [], custom: 'keep-b', compat: { chatTemplateKwargs: {}, maxTokensField: 'max_tokens', supportsStore: true } },
+                { id: 'loader-model-a', reasoningEfforts: { off: null, high: 'high' }, input: [], custom: 'keep-a', compat: defaultCompat },
+                { id: 'loader-model-b', reasoningEfforts: { off: null, high: 'high' }, input: [], custom: 'keep-b', compat: { ...defaultCompat, maxTokensField: 'max_tokens', supportsStore: true } },
               ],
             }])
             const modelCleared = await settings!.mutate(modelWrittenNamespace.ns, modelAutoOps, modelWrittenNamespace.revision)
