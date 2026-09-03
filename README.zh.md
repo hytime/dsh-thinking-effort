@@ -25,13 +25,13 @@
 >
 > 发布包的运行入口是 `lib/index.js`（Host）和 `lib/client.js`（Client）。修改 TypeScript 或 locale 源文件后，运行 `npm run build`，再启动 DSH 或打包插件。当前 DSH 没有公开的 semver metadata 契约，因此运行时能力探测是权威来源。只有显式 metadata 或测试输入提供时才使用可选版本；未知合法版本仍按实际能力运行。插件同时支持新版 `remote.settings` 和旧版 `connection.api.settings`。
 
-## DSH 版本兼容矩阵
+## DSH 版本兼容
 
-| DSH 范围 | Settings 传输 | 网关兼容能力 | 可选 takeover |
-| --- | --- | --- | --- |
-| `0.1.0-rc.7` | 旧版 `connection.api.settings` | 隐藏网关字段 | 不支持 |
-| `0.1.0-rc.8` 至 `<0.1.2-alpha.1` | 旧版 `connection.api.settings` | 支持 `supportsDeveloperRole`、`maxTokensField` | 启用后支持 |
-| `0.1.2-alpha.1` 至 `<0.1.3-0` | 新版 `remote.settings` | 支持 `supportsDeveloperRole`、`maxTokensField` | 启用后支持 |
+| DSH 范围 | 网关兼容设置 |
+| --- | --- |
+| `0.1.0-rc.7` | 不支持 |
+| `0.1.0-rc.8` 至 `<0.1.2-alpha.1` | 支持 |
+| `0.1.2-alpha.1` 至 `<0.1.3-0` | 支持 |
 
 ## 为什么需要它？
 

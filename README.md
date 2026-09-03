@@ -25,13 +25,13 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 >
 > The published runtime entries are `lib/index.js` (Host) and `lib/client.js` (Client). After changing TypeScript or locale sources, run `npm run build` before running DSH or packing the plugin. Current DSH does not expose a public semver metadata contract, so runtime capability detection is authoritative. An optional version is used only when explicit metadata or test input supplies it; unknown valid versions still use the detected capabilities. The plugin supports both modern `remote.settings` and legacy `connection.api.settings`.
 
-## DSH compatibility matrix
+## DSH compatibility
 
-| DSH range | Settings transport | Gateway compatibility | Optional takeover |
-| --- | --- | --- | --- |
-| `0.1.0-rc.7` | Legacy `connection.api.settings` | Gateway fields hidden | Not supported |
-| `0.1.0-rc.8` to `<0.1.2-alpha.1` | Legacy `connection.api.settings` | `supportsDeveloperRole`, `maxTokensField` | Supported when enabled |
-| `0.1.2-alpha.1` to `<0.1.3-0` | Modern `remote.settings` | `supportsDeveloperRole`, `maxTokensField` | Supported when enabled |
+| DSH range | Gateway compatibility settings |
+| --- | --- |
+| `0.1.0-rc.7` | Not available |
+| `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available |
+| `0.1.2-alpha.1` to `<0.1.3-0` | Available |
 
 ## Why use it?
 

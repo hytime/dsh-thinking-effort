@@ -24,13 +24,13 @@
 >
 > 게시 패키지의 실행 진입점은 `lib/index.js`(Host)와 `lib/client.js`(Client)입니다. TypeScript 또는 locale 소스를 변경한 뒤 DSH를 실행하거나 패키지를 만들기 전에 `npm run build`를 실행하세요. 현재 DSH에는 공개된 semver metadata 계약이 없으므로 런타임 capability detection이 권위 있는 출처입니다. 선택적 버전은 명시적인 metadata 또는 테스트 입력이 있을 때만 사용하며, 알 수 없는 유효한 버전도 감지된 capability에 따라 계속 실행합니다. 최신 `remote.settings`와 이전 `connection.api.settings`를 모두 지원합니다.
 
-## DSH 버전 호환성 매트릭스
+## DSH 버전 호환성
 
-| DSH 범위 | Settings 전송 | 게이트웨이 호환성 | 선택적 takeover |
-| --- | --- | --- | --- |
-| `0.1.0-rc.7` | 이전 `connection.api.settings` | 게이트웨이 필드 숨김 | 지원하지 않음 |
-| `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 | 이전 `connection.api.settings` | `supportsDeveloperRole`, `maxTokensField` 지원 | 활성화 시 지원 |
-| `0.1.2-alpha.1`부터 `<0.1.3-0`까지 | 최신 `remote.settings` | `supportsDeveloperRole`, `maxTokensField` 지원 | 활성화 시 지원 |
+| DSH 범위 | 게이트웨이 호환 설정 |
+| --- | --- |
+| `0.1.0-rc.7` | 지원하지 않음 |
+| `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 | 지원 |
+| `0.1.2-alpha.1`부터 `<0.1.3-0`까지 | 지원 |
 
 ## 왜 필요한가요?
 
