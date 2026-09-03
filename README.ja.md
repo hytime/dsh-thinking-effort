@@ -24,6 +24,14 @@
 >
 > 公開パッケージの実行入口は `lib/index.js`（Host）と `lib/client.js`（Client）です。TypeScript または locale のソースを変更した後は、DSH を起動またはパッケージを作成する前に `npm run build` を実行してください。現在の DSH には公開された semver metadata 契約がないため、実行時の capability detection を権威あるソースとします。任意のバージョンは明示的な metadata またはテスト入力がある場合だけ使用し、未知の有効なバージョンでも検出した能力に従って動作します。新しい `remote.settings` と旧来の `connection.api.settings` の両方に対応します。
 
+## DSH バージョン互換性マトリックス
+
+| DSH 範囲 | Settings transport | Gateway 互換性 | オプションの takeover |
+| --- | --- | --- | --- |
+| `0.1.0-rc.7` | 旧 `connection.api.settings` | Gateway フィールドを非表示 | 非対応 |
+| `0.1.0-rc.8` から `<0.1.2-alpha.1` | 旧 `connection.api.settings` | `supportsDeveloperRole`、`maxTokensField` に対応 | 有効化時に対応 |
+| `0.1.2-alpha.1` から `<0.1.3-0` | 新 `remote.settings` | `supportsDeveloperRole`、`maxTokensField` に対応 | 有効化時に対応 |
+
 ## なぜ使うのか
 
 `llm-pi-ai` アダプターではサードパーティモデルを手動で定義できますが、モデルに `reasoningEfforts` が設定されていないことがあります。その場合、Composer に推論強度セレクターが表示されず、ゲートウェイ固有の `ultra` のような値を DSH の標準レベルへ割り当てることもできません。
