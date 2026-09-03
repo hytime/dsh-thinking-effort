@@ -50,7 +50,9 @@ DSH 내장 모델만 사용하고 이미 추론 제어가 정상 작동한다면
 | 기능 | 설명 |
 | --- | --- |
 | 기본 단계 | 사용자 지정 값을 덮어쓰지 않고 `off`, `high`, `max` 추가 |
-| 게이트웨이 호환 설정 | provider 전체 또는 모델별로 `supportsDeveloperRole`과 `maxTokensField`를 설정 || 게이트웨이 값 매핑 | DSH에서 `high`를 선택하면 `ultra` 전송 가능 |
+| 모델별 편집 | Settings에서 단계를 설정하고 catalog/modelOverrides와 `models[]` 항목의 게이트웨이 호환 값을 모두 편집 |
+| 게이트웨이 호환 설정 | provider 전체 또는 모델별로 `supportsDeveloperRole`과 `maxTokensField`를 설정 |
+| 게이트웨이 값 매핑 | DSH에서 `high`를 선택하면 `ultra` 전송 가능 |
 | Subagent 기본값 | 명시적 값이 없는 요청에만 기본값 적용 |
 | 다국어 설정 | 中文, English, 日本語, 한국어 사전 포함; 일본어/한국어 전환은 DSH language-pack 지원을 사용 |
 | 버전 표시 | 설정 페이지 오른쪽 아래에 설치된 버전 표시 |

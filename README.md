@@ -53,7 +53,9 @@ These identifiers have different responsibilities:
 | Feature | Description |
 | --- | --- |
 | Default levels | Adds `off`, `high`, and `max` without overwriting custom values |
-| Gateway compatibility | Configure `supportsDeveloperRole` and `maxTokensField` globally per provider or separately per model || Gateway mapping | Send `ultra` when the user selects DSH `high` |
+| Per-model editor | Select levels and configure gateway values for both catalog/modelOverrides and `models[]` entries in Settings |
+| Gateway compatibility | Configure `supportsDeveloperRole` and `maxTokensField` globally per provider or separately per model |
+| Gateway mapping | Send `ultra` when the user selects DSH `high` |
 | Subagent default | Apply a default effort only when a subagent request has no explicit value |
 | Multilingual settings | Includes Chinese, English, Japanese, and Korean dictionaries; Japanese/Korean switching uses DSH language-pack support |
 | Version watermark | Show the installed plugin version in the bottom-right corner |
