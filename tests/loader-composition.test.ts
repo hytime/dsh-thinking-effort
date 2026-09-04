@@ -1145,9 +1145,15 @@ integrationDescribe('official DSH loader composition', () => {
          expect(mapped).toBeDefined()
          const editability = editableProviderCompatFields(mapped, piAiNamespace?.schema)
          if (version === '0.1.0-rc.7') {
-           expect(editability).toMatchObject({ supportsDeveloperRole: false, maxTokensField: false })
+           // rc7 exposes no gateway compat fields: the availability map is
+           // sparse (only editable fields appear as `true`), so both keys must
+           // be absent and editableFields empty.
+           expect(editability.editableFields).toEqual([])
+           expect(editability.supportsDeveloperRole).toBeUndefined()
+           expect(editability.maxTokensField).toBeUndefined()
          } else {
-           expect(editability).toMatchObject({ supportsDeveloperRole: true, maxTokensField: true })
+           expect(editability.supportsDeveloperRole).toBe(true)
+           expect(editability.maxTokensField).toBe(true)
          }
 
          const describePiAi = async (): Promise<{
