@@ -411,6 +411,21 @@ describe('model inventory and operations', () => {
     expect(result.model).toBe('model-a')
   })
 
+  it('resolves the new scalar fields from catalog and protocol layers', () => {
+    const result = resolveGatewayCompat({
+      provider: 'local',
+      model: 'model-a',
+      providerCompat: { supportsStore: true, requiresThinkingAsText: true },
+      catalogCompat: { supportsStore: false, supportsThinkingTokenBudget: true, thinkingFormat: 'deepseek' },
+      protocolDefault: { thinkingFormat: 'openai', supportsUsageInStreaming: true },
+    })
+    expect(result.supportsStore).toEqual({ value: true, source: 'provider' })
+    expect(result.requiresThinkingAsText).toEqual({ value: true, source: 'provider' })
+    expect(result.supportsThinkingTokenBudget).toEqual({ value: true, source: 'catalog' })
+    expect(result.thinkingFormat).toEqual({ value: 'deepseek', source: 'catalog' })
+    expect(result.supportsUsageInStreaming).toEqual({ value: true, source: 'protocol' })
+  })
+
   it('keeps model-b compat isolated from model-a and the provider view', () => {
     const namespace = {
       value: {
@@ -960,7 +975,7 @@ describe('model inventory and operations', () => {
       model: 'model-a',
       modelCompat: { maxTokensField: 'max_tokens' },
       providerCompat: { maxTokensField: 'max_completion_tokens', supportsDeveloperRole: true },
-    })).toEqual({
+    })).toMatchObject({
       provider: 'local',
       supportsDeveloperRole: 'supported',
       maxTokensField: 'max_completion_tokens',
