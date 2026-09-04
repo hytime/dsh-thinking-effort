@@ -132,13 +132,12 @@ function selectionFor(modelCompatValue: unknown, kind: 'boolean' | 'enum'): stri
 
 function isFieldAvailable(editability: GatewayCompatEditability | Record<string, unknown>, key: string, resolved: unknown): boolean {
   const record = editability as Record<string, unknown>
-  // 显式标志优先（own property），尊重 false
   if (Object.prototype.hasOwnProperty.call(record, key)) return record[key] === true
   if (Object.prototype.hasOwnProperty.call(record, `${key}Available`)) return record[`${key}Available`] === true
-  // 新形状 editableFields 语义：列出即视为可编辑
   const ef = record.editableFields
-  if (Array.isArray(ef) && ef.includes(key)) return true
-  // 完全未提供标志才 fallback 到 resolved
+  // 若 editableFields 是数组，它的 includes(key) 完全决定可用性（含负向 false）
+  if (Array.isArray(ef)) return ef.includes(key)
+  // 完全未提供编辑性信息才 fallback 到 resolved
   return resolved !== undefined
 }
 

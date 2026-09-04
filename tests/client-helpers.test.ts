@@ -438,6 +438,30 @@ describe('model inventory and operations', () => {
     expect(view.supportsStoreResolved).toBe(true)
   })
 
+  it('treats an empty editableFields array as unavailable even when a value is resolved', () => {
+    const view = resolveModelGatewayCompat({
+      provider: 'provider',
+      model: 'model-a',
+      catalogCompat: { supportsStore: true },
+    }, {
+      editableFields: [],
+    })
+    expect(view.supportsStoreAvailable).toBe(false)
+    expect(view.supportsStoreResolved).toBe(true)
+  })
+
+  it('uses editableFields to decide availability for fields not listed in it', () => {
+    const view = resolveModelGatewayCompat({
+      provider: 'provider',
+      model: 'model-a',
+      catalogCompat: { supportsStore: true, maxTokensField: 'max_tokens' },
+    }, {
+      editableFields: ['maxTokensField'],
+    })
+    expect(view.supportsStoreAvailable).toBe(false)
+    expect(view.maxTokensFieldAvailable).toBe(true)
+  })
+
   it('projects resolved values onto the provider view alongside sources and availability', () => {
     expect(resolveProviderGatewayCompat({
       provider: 'local',
