@@ -1312,20 +1312,27 @@ integrationDescribe('official DSH loader composition', () => {
           },
 
         })
-         const domProbe = await probeOfficialSettingsDom(cliRoot, web)
-        if (domProbe.blocked !== undefined) {
-          if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
-             throw new Error(`required DSH Web DOM probe was blocked: ${domProbe.blocked}`)
-           }
-           console.log(`[BLOCKED] browser probe: ${domProbe.blocked}`)
-        } else {
-          expect(domProbe.settingsText).toMatch(/插件|Plugins/)
-          expect(domProbe.errors).toEqual([])
-          if (!domProbe.thinkingEffortVisible) {
-             if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
-               throw new Error('thinking-effort settings section is absent from the real DSH Web DOM')
-             }
-            console.log(`[BLOCKED] thinking-effort section missing; DOM=${JSON.stringify(domProbe.settingsText)}; bootRows=${JSON.stringify(bootRows)}`)
+         // The real-browser DOM probe validates client-side rendering of the
+        // settings section. The client bundle is identical across the three
+        // representative DSH versions, so launch Playwright once on the
+        // newest representative (alpha3) and keep the RPC/profile/写入
+        // verification for every version, which needs no browser.
+        if (version === '0.1.2-alpha.3') {
+          const domProbe = await probeOfficialSettingsDom(cliRoot, web)
+          if (domProbe.blocked !== undefined) {
+            if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
+              throw new Error(`required DSH Web DOM probe was blocked: ${domProbe.blocked}`)
+            }
+            console.log(`[BLOCKED] browser probe: ${domProbe.blocked}`)
+          } else {
+            expect(domProbe.settingsText).toMatch(/插件|Plugins/)
+            expect(domProbe.errors).toEqual([])
+            if (!domProbe.thinkingEffortVisible) {
+              if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
+                throw new Error('thinking-effort settings section is absent from the real DSH Web DOM')
+              }
+              console.log(`[BLOCKED] thinking-effort section missing; DOM=${JSON.stringify(domProbe.settingsText)}; bootRows=${JSON.stringify(bootRows)}`)
+            }
           }
         }
       } finally {
