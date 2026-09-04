@@ -20,15 +20,20 @@ export interface GatewayCompatFieldOption {
   readonly labelKey?: string
 }
 
-export interface GatewayCompatFieldSpec {
+interface GatewayCompatFieldBase {
   readonly key: string
-  readonly kind: GatewayCompatFieldKind
   readonly group: GatewayCompatGroupId
-  readonly enumValues?: readonly string[]
-  readonly enumOptions?: readonly GatewayCompatFieldOption[]
   readonly labelKey: string
   readonly descriptionKey?: string
 }
+
+export type GatewayCompatFieldSpec =
+  | (GatewayCompatFieldBase & { readonly kind: 'boolean' })
+  | (GatewayCompatFieldBase & {
+      readonly kind: 'enum'
+      readonly enumValues: readonly string[]
+      readonly enumOptions?: readonly GatewayCompatFieldOption[]
+    })
 
 export const SUPPORTED_THINKING_FORMATS = [
   'openai', 'openrouter', 'deepseek', 'together', 'baseten', 'zai', 'qwen',
@@ -37,12 +42,17 @@ export const SUPPORTED_THINKING_FORMATS = [
 
 export const MAX_TOKENS_FIELDS = ['max_tokens', 'max_completion_tokens'] as const
 
-function booleanField(key: string, group: GatewayCompatGroupId): GatewayCompatFieldSpec {
-  return { key, kind: 'boolean', group, labelKey: key }
+function booleanField(key: string, group: GatewayCompatGroupId) {
+  return { key, kind: 'boolean' as const, group, labelKey: key }
 }
 
-function enumField(key: string, group: GatewayCompatGroupId, enumValues: readonly string[], enumOptions?: readonly GatewayCompatFieldOption[]): GatewayCompatFieldSpec {
-  return { key, kind: 'enum', group, labelKey: key, enumValues, enumOptions }
+function enumField<const V extends readonly string[]>(
+  key: string,
+  group: GatewayCompatGroupId,
+  enumValues: V,
+  enumOptions?: readonly GatewayCompatFieldOption[],
+) {
+  return { key, kind: 'enum' as const, group, labelKey: key, enumValues, enumOptions }
 }
 
 export const GATEWAY_COMPAT_FIELDS = {
@@ -94,17 +104,19 @@ export const ALPHA1_PLUS_COMPAT_FIELDS = [
 
 export type GatewayCompatSelection = 'auto' | string
 
-type BooleanFieldKey = { [K in GatewayCompatFieldKey]: typeof GATEWAY_COMPAT_FIELDS[K]['kind'] extends 'boolean' ? K : never }[GatewayCompatFieldKey]
-type EnumFieldKey = { [K in GatewayCompatFieldKey]: typeof GATEWAY_COMPAT_FIELDS[K]['kind'] extends 'enum' ? K : never }[GatewayCompatFieldKey]
+type FieldSpecOf<K extends GatewayCompatFieldKey> = (typeof GATEWAY_COMPAT_FIELDS)[K]
+type BooleanFieldKey = { [K in GatewayCompatFieldKey]: FieldSpecOf<K> extends { kind: 'boolean' } ? K : never }[GatewayCompatFieldKey]
+type EnumFieldKey = { [K in GatewayCompatFieldKey]: FieldSpecOf<K> extends { kind: 'enum'; enumValues: readonly string[] } ? K : never }[GatewayCompatFieldKey]
+type EnumValuesOf<K extends EnumFieldKey> = FieldSpecOf<K> extends { readonly enumValues: infer V extends readonly string[] } ? V[number] : never
 
 export type GatewayCompatValue<K extends GatewayCompatFieldKey> =
   K extends BooleanFieldKey ? boolean
-  : K extends EnumFieldKey ? Exclude<GatewayCompatSelection, 'auto'>
+  : K extends EnumFieldKey ? EnumValuesOf<K>
   : unknown
 
 export type GatewayCompatSelectionFor<K extends GatewayCompatFieldKey> =
   K extends BooleanFieldKey ? 'auto' | 'supported' | 'unsupported'
-  : K extends EnumFieldKey ? 'auto' | (string & {})
+  : K extends EnumFieldKey ? 'auto' | EnumValuesOf<K>
   : 'auto'
 
 export type SelectionNamed = { [K in GatewayCompatFieldKey]: GatewayCompatSelectionFor<K> }
