@@ -995,6 +995,46 @@ describe('model inventory and operations', () => {
     })
   })
 
+  it('does not crash on a partial takeover runtime resolution and falls back for unprojected fields', () => {
+    const namespace = {
+      value: { providers: { 'qwen-gateway': { models: [{ id: 'qwen-thinking' }], compat: { supportsStore: false } } } },
+      schema: realGatewaySchema,
+    }
+    const runtime: TakeoverRuntimeResolution = {
+      providers: ['qwen-gateway'],
+      compat: [{
+        provider: 'qwen-gateway',
+        model: 'qwen-thinking',
+        // Simulate a DSH runtime entry that projects only two fields.
+        supportsDeveloperRole: { value: true, source: 'protocol' },
+        maxTokensField: { value: 'max_completion_tokens', source: 'protocol' },
+      } as unknown as TakeoverRuntimeResolution['compat'][number]],
+    }
+
+    const view = modelGatewayCompatViewFrom(
+      namespace,
+      item({ route: 'qwen-gateway', model: 'qwen-thinking', raw: { id: 'qwen-thinking' } }),
+      'modern',
+      runtime,
+    )
+    // 仅协议条目的字段按 protocol 投影，其余字段不受影响
+    expect(view).toMatchObject({
+      supportsDeveloperRole: 'auto',
+      supportsDeveloperRoleSource: 'protocol',
+      supportsDeveloperRoleResolved: true,
+      maxTokensField: 'auto',
+      maxTokensFieldSource: 'protocol',
+      maxTokensFieldResolved: 'max_completion_tokens',
+    })
+    // 缺失字段不会以 protocol 来源泄漏，且正常走 catalog fallback
+    expect(view.supportsStoreSource).toBe('catalog')
+    expect(view.thinkingFormatSource).toBe('unknown')
+    expect(view.cacheControlFormatSource).toBe('unknown')
+    // 批量视图复用同一防御路径
+    expect(modelGatewayCompatViewsFrom(namespace, inventoryFrom(namespace), 'modern', runtime)[modelCompatKey('qwen-gateway', 'qwen-thinking')])
+      .toMatchObject({ supportsDeveloperRoleSource: 'protocol', supportsStoreSource: 'catalog' })
+  })
+
   it('uses namespace compat when takeover runtime has no matching model', () => {
     const runtime: TakeoverRuntimeResolution = {
       providers: ['qwen-gateway'],
