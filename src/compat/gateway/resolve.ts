@@ -143,7 +143,7 @@ function isFieldAvailable(editability: GatewayCompatEditability | Record<string,
 
 export function resolveModelGatewayCompat(
   input: GatewayCompatResolveInput & { readonly model: string },
-  editability: GatewayCompatEditability | Record<string, unknown> = { editableFields: [] },
+  editability: GatewayCompatEditability | Record<string, unknown> = {},
 ): ModelGatewayCompatView {
   const resolution = resolveGatewayCompat(input)
   const modelCompat = readCompat(input.modelCompat)

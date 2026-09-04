@@ -450,6 +450,16 @@ describe('model inventory and operations', () => {
     expect(view.supportsStoreResolved).toBe(true)
   })
 
+  it('falls back to resolved availability when editability is omitted', () => {
+    const view = resolveModelGatewayCompat({
+      provider: 'provider',
+      model: 'model-a',
+      catalogCompat: { supportsStore: true },
+    })
+    expect(view.supportsStoreAvailable).toBe(true)
+    expect(view.supportsStoreResolved).toBe(true)
+  })
+
   it('uses editableFields to decide availability for fields not listed in it', () => {
     const view = resolveModelGatewayCompat({
       provider: 'provider',
