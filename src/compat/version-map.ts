@@ -1,6 +1,9 @@
+import { ALPHA1_PLUS_COMPAT_FIELDS, GATEWAY_COMPAT_FIELDS, RC8_COMPAT_FIELDS } from './gateway/fields.js'
+import type { GatewayCompatFieldKey } from './gateway/fields.js'
+
 export type TakeoverTransport = 'unsupported' | 'optional'
 export type SettingsApi = 'connection.api.settings' | 'remote.settings'
-export type GatewayCompatEditableField = 'supportsDeveloperRole' | 'maxTokensField'
+export type GatewayCompatEditableField = keyof typeof GATEWAY_COMPAT_FIELDS
 
 export interface DshVersionCapabilities {
   settingsTransport: 'legacy' | 'modern'
@@ -28,7 +31,6 @@ const semverPattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:(?:
 
 const legacyBaseModelFields = ['reasoningEfforts'] as const
 const completeBaseModelFields = ['reasoningEfforts', 'input', 'contextWindow'] as const
-const completeGatewayCompatFields = ['supportsDeveloperRole', 'maxTokensField'] as const
 
 const versionRanges: readonly VersionRange[] = [
   {
@@ -50,7 +52,7 @@ const versionRanges: readonly VersionRange[] = [
       settingsTransport: 'legacy',
       settingsApi: 'connection.api.settings',
       baseModelFields: completeBaseModelFields,
-      gatewayCompatFields: completeGatewayCompatFields,
+      gatewayCompatFields: RC8_COMPAT_FIELDS,
       externalLanguages: false,
       takeoverTransport: 'optional',
     },
@@ -62,7 +64,7 @@ const versionRanges: readonly VersionRange[] = [
       settingsTransport: 'modern',
       settingsApi: 'remote.settings',
       baseModelFields: completeBaseModelFields,
-      gatewayCompatFields: completeGatewayCompatFields,
+      gatewayCompatFields: ALPHA1_PLUS_COMPAT_FIELDS,
       externalLanguages: true,
       takeoverTransport: 'optional',
     },

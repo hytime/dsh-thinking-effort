@@ -30,6 +30,7 @@ import { resolveGatewayCompat, resolveModelGatewayCompat, resolveProviderGateway
 import { editableProviderCompatFields, validateProviderCompat } from '../src/compat/gateway/validation.js'
 import type { GatewayCompatEditability } from '../src/compat/gateway/types.js'
 import { capabilitiesForVersion } from '../src/compat/version-map.js'
+import { GATEWAY_COMPAT_FIELD_KEYS, ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS } from '../src/compat/gateway/fields.js'
 import type { InventoryItem, ModelGatewayCompatUpdate, Translation } from '../src/client/types.js'
 import type { TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
 
@@ -40,7 +41,23 @@ const realGatewaySchema = {
   refs: {
     '0': { type: 'boolean', meta: {} },
     '1': { type: 'string', meta: {} },
-    '2': { type: 'object', meta: { default: {} }, dict: { supportsDeveloperRole: 0, maxTokensField: 1 } },
+    '2': { type: 'object', meta: { default: {} }, dict: {
+       supportsStore: 0,
+       supportsDeveloperRole: 0,
+       supportsReasoningEffort: 0,
+       supportsUsageInStreaming: 0,
+       supportsFinishReason: 0,
+       requiresToolResultName: 0,
+       requiresAssistantAfterToolResult: 0,
+       requiresThinkingAsText: 0,
+       requiresReasoningContentOnAssistantMessages: 0,
+       supportsThinkingTokenBudget: 0,
+       supportsStrictMode: 0,
+       supportsLongCacheRetention: 0,
+       maxTokensField: 1,
+       thinkingFormat: 1,
+       cacheControlFormat: 1,
+     } },
     '3': { type: 'object', meta: { default: {} }, dict: { compat: 2 } },
     '4': { type: 'dict', meta: { default: {} }, inner: 3, sKey: 5 },
     '5': { type: 'string', meta: {} },
@@ -486,6 +503,19 @@ describe('model inventory and operations', () => {
     })
   })
 
+  it('projects every registered scalar field when version and schema admit it', () => {
+    const view = providerGatewayCompatViewFrom({
+      value: { providers: { provider: { compat: { supportsStore: true } } } },
+      schema: realGatewaySchema,
+    }, 'provider', 'modern')
+
+    expect(view.supportsStore).toBe('auto')
+    expect(view.supportsStoreSource).toBe('catalog')
+    expect(view.supportsStoreAvailable).toBe(true)
+    expect(view.supportsThinkingTokenBudgetAvailable).toBe(true)
+    expect(view.cacheControlFormatAvailable).toBe(true)
+  })
+
   it('keeps model-b compat isolated from model-a and the provider view', () => {
     const namespace = {
       value: {
@@ -615,24 +645,16 @@ describe('model inventory and operations', () => {
     const malformed = { gatewayCompatFields: 'supportsDeveloperRole' } as unknown as Parameters<typeof editableProviderCompatFields>[0]
     const nullCapabilities = null as unknown as Parameters<typeof editableProviderCompatFields>[0]
     expect(editableProviderCompatFields(malformed, realGatewaySchema)).toEqual({
-      supportsDeveloperRole: false,
-      maxTokensField: false,
       editableFields: [],
     })
     expect(validateProviderCompat(malformed, realGatewaySchema)).toMatchObject({
-      supportsDeveloperRole: false,
-      maxTokensField: false,
       editableFields: [],
       available: false,
     })
     expect(editableProviderCompatFields(nullCapabilities, realGatewaySchema)).toEqual({
-      supportsDeveloperRole: false,
-      maxTokensField: false,
       editableFields: [],
     })
     expect(validateProviderCompat(nullCapabilities, realGatewaySchema)).toMatchObject({
-      supportsDeveloperRole: false,
-      maxTokensField: false,
       editableFields: [],
       available: false,
     })
@@ -1048,11 +1070,9 @@ describe('model inventory and operations', () => {
   })
 
   it('recognizes gateway fields in the real Settings schema.toJSON envelope', () => {
-    expect(editableProviderCompatFields('modern', realGatewaySchema)).toEqual({
-      supportsDeveloperRole: true,
-      maxTokensField: true,
-      editableFields: ['supportsDeveloperRole', 'maxTokensField'],
-    })
+    const result = editableProviderCompatFields('modern', realGatewaySchema)
+    expect(result.editableFields).toEqual(GATEWAY_COMPAT_FIELD_KEYS)
+    expect(result).toMatchObject(Object.fromEntries(GATEWAY_COMPAT_FIELD_KEYS.map((field) => [field, true])))
   })
 
   it('shows only user overrides as explicit provider values and retains field provenance', () => {
@@ -1188,16 +1208,34 @@ describe('model inventory and operations', () => {
       editableFields: ['supportsDeveloperRole', 'maxTokensField'],
     })
     expect(validateProviderCompat(capabilitiesForVersion('0.1.0-rc.7'), schema)).toMatchObject({
-      supportsDeveloperRole: false,
-      maxTokensField: false,
       editableFields: [],
       available: false,
     })
     expect(validateProviderCompat(capabilitiesForVersion('0.1.0-rc.8'), {})).toMatchObject({
-      supportsDeveloperRole: false,
-      maxTokensField: false,
+      editableFields: [],
       available: false,
     })
+    const rc8Schema = {
+      properties: {
+        providers: {
+          additionalProperties: {
+            properties: {
+              compat: { properties: Object.fromEntries(RC8_COMPAT_FIELDS.map((field) => [field, {}])) },
+            },
+          },
+        },
+      },
+    }
+    expect(editableProviderCompatFields(capabilitiesForVersion('0.1.0-rc.8'), rc8Schema).editableFields)
+      .toEqual(GATEWAY_COMPAT_FIELD_KEYS.filter((field) => RC8_COMPAT_FIELDS.includes(field as typeof RC8_COMPAT_FIELDS[number])))
+  })
+
+  it('keeps aggregate provider availability true for rc8 with alpha-only schema fields excluded', () => {
+    const result = validateProviderCompat(capabilitiesForVersion('0.1.0-rc.8'), realGatewaySchema)
+    expect(result.available).toBe(true)
+    expect(result.editableFields).toEqual(GATEWAY_COMPAT_FIELD_KEYS.filter((field) => RC8_COMPAT_FIELDS.includes(field as typeof RC8_COMPAT_FIELDS[number])))
+    expect(result.supportsFinishReason).toBeUndefined()
+    expect(result.supportsThinkingTokenBudget).toBeUndefined()
   })
 
   it('refuses provider compat writes when editability is missing or unclear', () => {
@@ -1305,7 +1343,6 @@ describe('model inventory and operations', () => {
     const schema = { properties: { maxTokensField: {} } }
     const result = editableProviderCompatFields(capabilitiesForVersion('0.1.0-rc.8'), schema)
     expect(result).toEqual({
-      supportsDeveloperRole: false,
       maxTokensField: true,
       editableFields: ['maxTokensField'],
     })
