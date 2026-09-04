@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { GatewayCompatGroup } from '../src/client/components/GatewayCompatGroup.js'
 import { GatewayCompatControls } from '../src/client/components/GatewayCompatControls.js'
 import { en } from '../src/client/locales.js'
-import { modelView } from './gateway-compat-test-helpers.js'
+import { modelView, availableCountFor } from './gateway-compat-test-helpers.js'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -98,14 +98,14 @@ describe('GatewayCompatControls collapse', () => {
     })
 
     act(() => {
-      root!.render(<GatewayCompatControls scope="model" view={view} onChange={vi.fn()} />)
+      root!.render(<GatewayCompatControls scope="model" view={view} onChange={vi.fn()} availableCount={availableCountFor(view)} />)
     })
 
     const selects = [...container.querySelectorAll('select')] as HTMLSelectElement[]
     expect(selects).toHaveLength(2)
     const expander = [...container.querySelectorAll('button')].find((candidate) => candidate.getAttribute('aria-expanded') === 'false')
     expect(expander).toBeDefined()
-    expect(expander?.textContent).toBe(label('gatewayMoreFields'))
+    expect(expander?.textContent).toBe(label('gatewayMoreFields').replace('{count}', '1'))
     expect(container.querySelector(`[aria-label="${label('supportsStore')}"]`)).toBeNull()
   })
 
@@ -121,14 +121,21 @@ describe('GatewayCompatControls collapse', () => {
       maxTokensFieldAvailable: true,
       supportsStore: 'supported',
       supportsStoreAvailable: true,
+      thinkingFormat: 'qwen',
+      thinkingFormatAvailable: true,
     })
 
     act(() => {
-      root!.render(<GatewayCompatControls scope="model" view={view} onChange={vi.fn()} expanded onToggleExpanded={onToggleExpanded} />)
+      root!.render(<GatewayCompatControls scope="model" view={view} onChange={vi.fn()} expanded availableCount={availableCountFor(view)} onToggleExpanded={onToggleExpanded} />)
     })
 
     const storeSelect = container.querySelector(`[aria-label="${label('supportsStore')}"]`) as HTMLSelectElement
+    const thinkingSelect = container.querySelector(`[aria-label="${label('thinkingFormat')}"]`) as HTMLSelectElement
     expect(storeSelect).not.toBeNull()
+    expect(thinkingSelect).not.toBeNull()
+    expect(container.querySelectorAll(`[aria-label="${label('supportsDeveloperRole')}"]`)).toHaveLength(1)
+    expect(container.querySelectorAll(`[aria-label="${label('maxTokensField')}"]`)).toHaveLength(1)
+    expect(container.querySelectorAll('select')).toHaveLength(4)
     expect(storeSelect.value).toBe('supported')
     expect([...storeSelect.options].map((option) => option.value)).toEqual(['auto', 'supported', 'unsupported'])
     expect(container.textContent).toContain(label('gatewayExpandedLess'))

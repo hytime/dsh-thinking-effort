@@ -10,6 +10,7 @@ export interface GatewayCompatGroupProps {
   readonly view: ProviderGatewayCompatView | ModelGatewayCompatView
   readonly onChange: (next: Partial<ModelGatewayCompatUpdate>) => void
   readonly disabled?: boolean
+  readonly excludeKeys?: readonly GatewayCompatFieldKey[]
   readonly palette?: Palette
   readonly t?: Translation
 }
@@ -67,9 +68,10 @@ function renderField(
   </label>
 }
 
-export function GatewayCompatGroup({ groupId, view, onChange, disabled = false, palette = iosPalette(), t = defaultTranslation }: GatewayCompatGroupProps): React.ReactElement | null {
+export function GatewayCompatGroup({ groupId, view, onChange, disabled = false, excludeKeys, palette = iosPalette(), t = defaultTranslation }: GatewayCompatGroupProps): React.ReactElement | null {
+  const excluded = new Set(excludeKeys ?? [])
   const specs = fieldsInGroup(groupId)
-  const available = specs.filter((spec) => (view as unknown as Record<string, unknown>)[`${spec.key}Available`] === true)
+  const available = specs.filter((spec) => !excluded.has(spec.key as GatewayCompatFieldKey) && (view as unknown as Record<string, unknown>)[`${spec.key}Available`] === true)
   if (available.length === 0) return null
   const titleKey = GATEWAY_COMPAT_GROUPS.find((group) => group.id === groupId)?.titleKey ?? groupId
   return <div style={{ display: 'grid', gap: '4px' }}>

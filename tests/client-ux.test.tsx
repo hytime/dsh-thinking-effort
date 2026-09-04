@@ -203,7 +203,7 @@ describe('SectionEditor user behavior', () => {
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(<GatewayCompatControls view={view} onChange={onChange} />)
+      root.render(<GatewayCompatControls view={view} onChange={onChange} availableCount={0} />)
     })
 
     expect(container.textContent).toContain('Gateway compatibility')
@@ -234,7 +234,7 @@ describe('SectionEditor user behavior', () => {
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(<GatewayCompatControls scope="model" view={view} onChange={onChange} />)
+      root.render(<GatewayCompatControls scope="model" view={view} onChange={onChange} availableCount={0} />)
     })
 
     expect(container.textContent).toContain('model-b')
@@ -268,7 +268,7 @@ describe('SectionEditor user behavior', () => {
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(<GatewayCompatControls scope="model" view={view} onChange={vi.fn()} />)
+      root.render(<GatewayCompatControls scope="model" view={view} onChange={vi.fn()} availableCount={0} />)
     })
 
     expect(container.textContent).toContain(en.compatSourceBase)
@@ -293,7 +293,7 @@ describe('SectionEditor user behavior', () => {
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(<GatewayCompatControls scope="model" view={view} onChange={onChange} />)
+      root.render(<GatewayCompatControls scope="model" view={view} onChange={onChange} availableCount={0} />)
     })
 
     const selects = [...container.querySelectorAll('select')] as HTMLSelectElement[]
@@ -327,7 +327,7 @@ describe('SectionEditor user behavior', () => {
       document.body.append(container)
       const root = createRoot(container)
       act(() => {
-        root.render(renderGatewayCompatControls({ scope: 'model', view, onChange: vi.fn() }, { palette: iosPalette(), t: (key) => dictionary[key] ?? key }))
+        root.render(renderGatewayCompatControls({ scope: 'model', view, onChange: vi.fn(), availableCount: 0 }, { palette: iosPalette(), t: (key) => dictionary[key] ?? key }))
       })
       expect(container.textContent).toContain(dictionary.modelGatewayCompatTitle)
       expect(container.textContent).toContain(dictionary.compatSourceBase)

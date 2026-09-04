@@ -13,7 +13,7 @@ interface ProviderGatewayCompatControlsProps {
   readonly disabled?: boolean
   readonly expanded?: boolean
   readonly onToggleExpanded?: () => void
-  readonly availableCount?: number
+  readonly availableCount: number
   readonly expandedLabel?: string
   readonly collapsedHint?: string
 }
@@ -25,7 +25,7 @@ interface ModelGatewayCompatControlsProps {
   readonly disabled?: boolean
   readonly expanded?: boolean
   readonly onToggleExpanded?: () => void
-  readonly availableCount?: number
+  readonly availableCount: number
   readonly expandedLabel?: string
   readonly collapsedHint?: string
 }
@@ -51,8 +51,10 @@ function selectStyle(palette: Palette): React.CSSProperties {
   }
 }
 
-function defaultTranslation(key: string): string {
-  return (en as Record<string, string>)[key] ?? key
+function defaultTranslation(key: string, params?: Record<string, unknown>): string {
+  const value = (en as Record<string, string>)[key] ?? key
+  if (params === undefined) return value
+  return value.replace(/\{(\w+)\}/g, (_match: string, name: string) => String(params[name] ?? `{${name}}`))
 }
 
 function sourceKey(source: ModelGatewayCompatView['supportsDeveloperRoleSource']): string {
@@ -87,7 +89,6 @@ export function renderGatewayCompatControls(
     if (modelView) (onChange as (value: Partial<ModelGatewayCompatUpdate>) => void)(next)
     else (onChange as (value: ProviderGatewayCompatView) => void)({ ...view, ...next } as ProviderGatewayCompatView)
   }
-  const extraAvailableCount = availableCount ?? GATEWAY_COMPAT_FIELD_KEYS.filter((key) => key !== 'supportsDeveloperRole' && key !== 'maxTokensField' && view[`${key}Available`] === true).length
   const fieldSource = (source: ModelGatewayCompatView['supportsDeveloperRoleSource']): React.ReactElement => <span style={{ color: palette.secondary, fontSize: '10px', fontWeight: 500 }}>({sourceLabel(t, source)})</span>
   return <div data-provider={view.provider} data-scope={modelView ? 'model' : 'provider'} style={{ display: 'grid', gap: '5px', marginBottom: '4px', padding: '6px 8px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.group }}>
     <div style={{ display: 'grid', gap: '2px', fontSize: '12px', fontWeight: 700, color: palette.text }}>
@@ -98,14 +99,14 @@ export function renderGatewayCompatControls(
       {view.supportsDeveloperRoleAvailable ? <label style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(110px, auto)', alignItems: 'center', gap: '7px', minWidth: 0, fontSize: '12px', color: palette.text }}><span style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0, flexWrap: 'wrap' }}><span>{t('supportsDeveloperRole')}</span>{modelView ? fieldSource(view.supportsDeveloperRoleSource) : null}</span><select aria-label={t('supportsDeveloperRole')} value={view.supportsDeveloperRole} disabled={disabled} onChange={(event) => patch({ supportsDeveloperRole: event.currentTarget.value as ModelGatewayCompatView['supportsDeveloperRole'] })} style={selectStyle(palette)}><option value="auto">{t('gatewayCompatAuto')}</option><option value="supported">{t('gatewayCompatSupported')}</option><option value="unsupported">{t('gatewayCompatUnsupported')}</option></select></label> : null}
       {view.maxTokensFieldAvailable ? <label style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(110px, auto)', alignItems: 'center', gap: '7px', minWidth: 0, fontSize: '12px', color: palette.text }}><span style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0, flexWrap: 'wrap' }}><span>{t('maxTokensField')}</span>{modelView ? fieldSource(view.maxTokensFieldSource) : null}</span><select aria-label={t('maxTokensField')} value={view.maxTokensField} disabled={disabled} onChange={(event) => patch({ maxTokensField: event.currentTarget.value as ModelGatewayCompatView['maxTokensField'] })} style={selectStyle(palette)}><option value="auto">{t('gatewayCompatAuto')}</option><option value="max_tokens">{t('maxTokensFieldStandard')}</option><option value="max_completion_tokens">{t('maxTokensFieldCompletion')}</option></select></label> : null}
     </div> : null}
-    {extraAvailableCount > 0 ? <div style={{ display: 'grid', gap: '3px', justifyItems: 'start' }}>
+    {availableCount > 0 ? <div style={{ display: 'grid', gap: '3px', justifyItems: 'start' }}>
       <button type="button" aria-expanded={expanded} onClick={() => onToggleExpanded?.()} disabled={disabled} style={{ border: 0, padding: '2px 0', background: 'transparent', color: palette.accent, fontSize: '11px', fontWeight: 650, cursor: disabled ? 'default' : 'pointer' }}>
-        {expanded ? t('gatewayExpandedLess') : expandedLabel ?? t('gatewayMoreFields', { count: extraAvailableCount })}
+        {expanded ? t('gatewayExpandedLess') : expandedLabel ?? t('gatewayMoreFields', { count: availableCount })}
       </button>
       {!expanded && collapsedHint ? <span style={{ color: palette.secondary, fontSize: '10px' }}>{collapsedHint}</span> : null}
     </div> : null}
     {expanded ? <div style={{ display: 'grid', gap: '9px', paddingTop: '2px' }}>
-      {GATEWAY_COMPAT_GROUPS.map((group) => <GatewayCompatGroup key={group.id} groupId={group.id} view={view} onChange={patch} disabled={disabled} palette={palette} t={t} />)}
+      {GATEWAY_COMPAT_GROUPS.map((group) => <GatewayCompatGroup key={group.id} groupId={group.id} view={view} onChange={patch} disabled={disabled} excludeKeys={['supportsDeveloperRole', 'maxTokensField']} palette={palette} t={t} />)}
     </div> : null}
     {modelView ? <div style={{ color: palette.secondary, fontSize: '10px' }}>{t('inheritProviderCompat')}</div> : null}
   </div>
