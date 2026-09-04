@@ -2,7 +2,7 @@ import type { InventoryItem, InputModality, ModelGatewayCompatView, ProviderGate
 import type { TakeoverRuntimeResolution } from './takeover-runtime.js'
 import { resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../compat/gateway/resolve.js'
 import { editableProviderCompatFields } from '../compat/gateway/validation.js'
-import { GATEWAY_COMPAT_FIELD_KEYS } from '../compat/gateway/fields.js'
+import { fieldsForApi, GATEWAY_COMPAT_FIELD_KEYS } from '../compat/gateway/fields.js'
 import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '../compat/model-source.js'
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -50,6 +50,23 @@ function layerCompat(layer: unknown, provider: string): Record<string, unknown> 
   const providers = record(root?.providers)
   const profile = record(providers?.[provider])
   return record(profile?.compat)
+}
+
+/**
+ * Resolve the `api` protocol string a route declares across the descriptor
+ * value, user, and base layers. `undefined` means the route declares no
+ * protocol; the UI then keeps full-field compatibility.
+ */
+export function routeApi(namespace: unknown, route: string): string | undefined {
+  for (const layer of ['value', 'user', 'base']) {
+    const root = record(record(namespace)?.[layer])
+    const providers = record(root?.providers)
+    const profile = record(providers?.[route])
+    if (profile === undefined) continue
+    const api = profile.api
+    if (typeof api === 'string' && api.length > 0) return api
+  }
+  return undefined
 }
 
 function modelLayerCompat(layer: unknown, provider: string, model: string): Record<string, unknown> | undefined {
@@ -111,7 +128,7 @@ export function modelGatewayCompatViewFrom(
   const catalogProvider = layerCompat(descriptor?.value, item.route)
   const modelSelection = userModel
   const runtimeModel = modelRuntimeCompatFor(takeoverRuntime, item.route, item.model)
-  const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema)
+  const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema, routeApi(namespace, item.route))
   const resolved = resolveModelGatewayCompat({
     provider: item.route,
     model: item.model,
@@ -160,14 +177,15 @@ export function providerGatewayCompatViewFrom(
   const base = layerCompat(descriptor?.base, provider)
   const value = layerCompat(descriptor?.value, provider)
   const runtime = takeoverCompatFor(takeoverRuntime, provider)
+  const api = routeApi(namespace, provider)
+  const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema, api)
   const resolved = resolveProviderGatewayCompat({
     provider,
     providerCompat: user,
     baseCompat: base,
     catalogCompat: value,
     protocolDefault: protocolCompatFrom(runtime),
-  })
-  const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema)
+  }, editability)
   const out: Record<string, unknown> = { ...resolved }
   for (const key of GATEWAY_COMPAT_FIELD_KEYS) {
     out[`${key}Available`] = editability[key] === true

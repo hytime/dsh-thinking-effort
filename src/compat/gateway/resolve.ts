@@ -166,7 +166,10 @@ function providerSource(resolution: GatewayCompatResolution): ProviderGatewayCom
   return 'unknown'
 }
 
-export function resolveProviderGatewayCompat(input: GatewayCompatResolveInput): ProviderGatewayCompatView {
+export function resolveProviderGatewayCompat(
+  input: GatewayCompatResolveInput,
+  editability: GatewayCompatEditability | Record<string, unknown> = {},
+): ProviderGatewayCompatView {
   const resolution = resolveGatewayCompat({ ...input, model: undefined, modelCompat: undefined })
   const out: Record<string, unknown> = { provider: input.provider }
   for (const key of GATEWAY_COMPAT_FIELD_KEYS) {
@@ -176,7 +179,7 @@ export function resolveProviderGatewayCompat(input: GatewayCompatResolveInput): 
     out[key] = selectionFor(explicit, spec.kind)
     out[`${key}Source`] = resolution[key].source
     out[`${key}Resolved`] = resolution[key].value
-    out[`${key}Available`] = explicit !== undefined
+    out[`${key}Available`] = isFieldAvailable(editability, key, resolution[key].value)
   }
   out.source = providerSource(resolution)
   return out as unknown as ProviderGatewayCompatView

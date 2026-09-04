@@ -13,7 +13,7 @@ import {
 } from '../src/client/constants.js'
 import { directResult, settingsBridge } from '../src/client/settings-bridge.js'
 import { LOCALE_DATA, LOCALE_CODES } from '../src/client/locales.js'
-import { inventoryFrom, modelCompatKey, modelGatewayCompatViewFrom, modelGatewayCompatViewsFrom, providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
+import { inventoryFrom, modelCompatKey, modelGatewayCompatViewFrom, modelGatewayCompatViewsFrom, providerGatewayCompatViewFrom, routeApi } from '../src/client/model-inventory.js'
 import { mergeModelUpdate, opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from '../src/client/model-ops.js'
 import {
   buildInput,
@@ -30,7 +30,7 @@ import { resolveGatewayCompat, resolveModelGatewayCompat, resolveProviderGateway
 import { editableProviderCompatFields, validateProviderCompat } from '../src/compat/gateway/validation.js'
 import type { GatewayCompatEditability, GatewayCompatFieldKey, GatewayCompatFieldResolution } from '../src/compat/gateway/types.js'
 import { capabilitiesForVersion } from '../src/compat/version-map.js'
-import { GATEWAY_COMPAT_FIELD_KEYS, ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS } from '../src/compat/gateway/fields.js'
+import { GATEWAY_COMPAT_FIELD_KEYS, ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS, fieldsForApi } from '../src/compat/gateway/fields.js'
 import type { InventoryItem, ModelGatewayCompatUpdate, Translation } from '../src/client/types.js'
 import type { TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
 
@@ -1512,6 +1512,96 @@ describe('model inventory and operations', () => {
       maxTokensField: { value: undefined, source: 'unknown' },
       thinkingFormat: { value: undefined, source: 'unknown' },
     })
+  })
+})
+
+describe('route protocol gating of gateway compat fields', () => {
+  const responseApi = 'openai-responses'
+  const completionApi = 'openai-completions'
+
+  it('gates fieldsForApi by the route protocol offer', () => {
+    expect(fieldsForApi(completionApi)).toContain('thinkingFormat')
+    expect(fieldsForApi(completionApi)).toContain('supportsStore')
+    expect(fieldsForApi('openai-responses')).not.toContain('thinkingFormat')
+    expect(fieldsForApi(responseApi)).not.toContain('supportsStore')
+    expect(fieldsForApi(responseApi)).toContain('supportsDeveloperRole')
+    expect(fieldsForApi(responseApi)).toContain('supportsStrictMode')
+    expect(fieldsForApi(responseApi)).toContain('supportsLongCacheRetention')
+    expect(fieldsForApi('anthropic-messages')).toEqual(['supportsLongCacheRetention'])
+    expect(fieldsForApi('bedrock-converse-stream')).toEqual(['supportsStrictMode'])
+    expect(fieldsForApi(undefined)).toEqual(GATEWAY_COMPAT_FIELD_KEYS)
+    expect(fieldsForApi({ api: completionApi })).toEqual(GATEWAY_COMPAT_FIELD_KEYS)
+  })
+
+  it('hides openai-completions-only fields from responses editability', () => {
+    const editable = editableProviderCompatFields('modern', realGatewaySchema, responseApi)
+    expect(editable.thinkingFormat).toBeUndefined()
+    expect(editable.supportsStore).toBeUndefined()
+    expect(editable.supportsUsageInStreaming).toBeUndefined()
+    expect(editable.supportsDeveloperRole).toBe(true)
+    expect(editable.supportsStrictMode).toBe(true)
+    expect(editable.supportsLongCacheRetention).toBe(true)
+    expect(editable.editableFields).toEqual(expect.arrayContaining([
+      'supportsDeveloperRole', 'supportsStrictMode', 'supportsLongCacheRetention',
+    ]))
+    expect(editable.editableFields).not.toContain('thinkingFormat')
+  })
+
+  it('keeps all fields editable when the api is absent', () => {
+    const plain = editableProviderCompatFields('modern', realGatewaySchema)
+    expect(plain.editableFields).toEqual(GATEWAY_COMPAT_FIELD_KEYS)
+    const unknown = editableProviderCompatFields('modern', realGatewaySchema, 'not-a-protocol')
+    expect(unknown.editableFields).toEqual(GATEWAY_COMPAT_FIELD_KEYS)
+  })
+
+  it('filters provider route availability by the route api protocol', () => {
+    const view = providerGatewayCompatViewFrom({
+      value: {
+        providers: {
+          'sub2api': { api: 'openai-responses' },
+          'completions': { api: 'openai-completions' },
+          'no-api': {},
+        },
+      },
+      schema: realGatewaySchema,
+    }, 'sub2api', 'modern')
+    expect(view.thinkingFormatAvailable).toBe(false)
+    expect(view.supportsStoreAvailable).toBe(false)
+    expect(view.supportsDeveloperRoleAvailable).toBe(true)
+    expect(view.supportsStrictModeAvailable).toBe(true)
+    expect(view.supportsLongCacheRetentionAvailable).toBe(true)
+  })
+
+  it('reads the route api from value, user and base layers and falls back to full fields', () => {
+    expect(routeApi({ value: { providers: { route: { api: 'openai-responses' } } } }, 'route')).toBe('openai-responses')
+    expect(routeApi({ value: { providers: { route: {} } }, user: { providers: { route: { api: 'openai-completions' } } } }, 'route')).toBe('openai-completions')
+    expect(routeApi({ value: { providers: { route: {} } }, user: { providers: { route: {} } }, base: { providers: { route: { api: 'anthropic-messages' } } } }, 'route')).toBe('anthropic-messages')
+    expect(routeApi({ value: { providers: { route: {} } } }, 'route')).toBeUndefined()
+    expect(routeApi({}, 'route')).toBeUndefined()
+    expect(routeApi(undefined, 'route')).toBeUndefined()
+  })
+
+  it('filters model view availability by the route api protocol', () => {
+    const namespace = {
+      value: { providers: { 'sub2api': { api: 'openai-responses' } } },
+      schema: realGatewaySchema,
+    }
+    expect(modelGatewayCompatViewFrom(namespace, item({ route: 'sub2api', model: 'model-a', raw: { id: 'model-a' } }), 'modern')).toMatchObject({
+      thinkingFormatAvailable: false,
+      supportsStoreAvailable: false,
+      supportsDeveloperRoleAvailable: true,
+      supportsStrictModeAvailable: true,
+      supportsLongCacheRetentionAvailable: true,
+    })
+  })
+
+  it('falls back to full-field availability for routes without an api', () => {
+    const view = providerGatewayCompatViewFrom({
+      value: { providers: { 'no-api': {} } },
+      schema: realGatewaySchema,
+    }, 'no-api', 'modern')
+    expect(view.thinkingFormatAvailable).toBe(true)
+    expect(view.supportsStoreAvailable).toBe(true)
   })
 })
 

@@ -1,4 +1,4 @@
-import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS } from './fields.js'
+import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, fieldsForApi } from './fields.js'
 import type { GatewayCompatFieldKey } from './fields.js'
 import type { DshVersionCapabilities } from '../version-map.js'
 import type { GatewayCompatEditability, GatewayCompatValidationResult } from './types.js'
@@ -105,12 +105,27 @@ function runtimeAllowsField(
   return Array.isArray(capabilities.gatewayCompatFields) && capabilities.gatewayCompatFields.includes(field)
 }
 
+/**
+ * Compute which gateway compat fields are editable for a provider route.
+ *
+ * A field must pass (a) the runtime version capabilities, (b) the descriptor
+ * schema offering it, and — when `api` is provided — (c) the route protocol's
+ * offer (`fieldsForApi`). When `api` is absent the protocol gate is skipped, so
+ * routes without a declared protocol keep full-field compatibility. The
+ * resulting availability map only marks fields the filtered set offers, so the
+ * UI never presents (and never attempts to write) a field DSH's
+ * `assertOfferedCompatFields` would reject for that protocol.
+ */
 export function editableProviderCompatFields(
   capabilities: EditabilityCapabilities | undefined,
   descriptorSchema: unknown,
+  api?: unknown,
 ): GatewayCompatEditability {
+  const protocolFields = api === undefined ? undefined : fieldsForApi(api)
   const editableFieldsResult = GATEWAY_COMPAT_FIELD_KEYS.filter((field) => (
-    runtimeAllowsField(capabilities, field) && schemaAllowsField(descriptorSchema, field)
+    runtimeAllowsField(capabilities, field)
+    && schemaAllowsField(descriptorSchema, field)
+    && (protocolFields === undefined || protocolFields.includes(field))
   ))
   const availability = Object.fromEntries(
     editableFieldsResult.map((field) => [field, true]),
@@ -121,8 +136,9 @@ export function editableProviderCompatFields(
 export function validateProviderCompat(
   capabilities: EditabilityCapabilities | undefined,
   descriptorSchema: unknown,
+  api?: unknown,
 ): GatewayCompatValidationResult {
-  const fields = editableProviderCompatFields(capabilities, descriptorSchema)
+  const fields = editableProviderCompatFields(capabilities, descriptorSchema, api)
   return {
     ...fields,
     available: fields.supportsDeveloperRole === true && fields.maxTokensField === true,
@@ -133,8 +149,9 @@ export function canEditProviderCompatField(
   capabilities: EditabilityCapabilities | undefined,
   descriptorSchema: unknown,
   field: GatewayCompatFieldKey,
+  api?: unknown,
 ): boolean {
-  return editableProviderCompatFields(capabilities, descriptorSchema)[field] === true
+  return editableProviderCompatFields(capabilities, descriptorSchema, api)[field] === true
 }
 
 export const providerCompatEditability = editableProviderCompatFields

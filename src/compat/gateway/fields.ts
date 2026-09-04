@@ -3,6 +3,26 @@ import type { GatewayCompatSource } from './types.js'
 export type GatewayCompatFieldKind = 'boolean' | 'enum'
 export type GatewayCompatGroupId = 'role' | 'format' | 'stream' | 'cache'
 
+/**
+ * Route protocols understood by DSH's `llm-pi-ai` compat gates. Each protocol
+ * offers only a subset of the scalar gateway compat fields; configuring a field
+ * the route's protocol does not offer makes DSH's `assertOfferedCompatFields`
+ * reject the whole settings mutate.
+ */
+export type GatewayProtocol =
+  | 'openai-completions'
+  | 'openai-responses'
+  | 'azure-openai-responses'
+  | 'openai-codex-responses'
+  | 'anthropic-messages'
+  | 'bedrock-converse-stream'
+
+const COMPLETIONS: readonly GatewayProtocol[] = ['openai-completions']
+const RESPONSES: readonly GatewayProtocol[] = ['openai-responses', 'azure-openai-responses', 'openai-codex-responses']
+const COMPLETIONS_AND_RESPONSES: readonly GatewayProtocol[] = [...COMPLETIONS, ...RESPONSES]
+const STRICT_MODE_PROTOCOLS: readonly GatewayProtocol[] = [...COMPLETIONS_AND_RESPONSES, 'bedrock-converse-stream']
+const LONG_CACHE_PROTOCOLS: readonly GatewayProtocol[] = [...COMPLETIONS_AND_RESPONSES, 'anthropic-messages']
+
 export interface GatewayCompatGroup {
   readonly id: GatewayCompatGroupId
   readonly titleKey: string
@@ -24,6 +44,8 @@ interface GatewayCompatFieldBase {
   readonly key: string
   readonly group: GatewayCompatGroupId
   readonly labelKey: string
+  /** Route protocols that offer this field; a field outside the route's offer must not be written. */
+  readonly protocols: readonly GatewayProtocol[]
   readonly descriptionKey?: string
 }
 
@@ -42,44 +64,68 @@ export const SUPPORTED_THINKING_FORMATS = [
 
 export const MAX_TOKENS_FIELDS = ['max_tokens', 'max_completion_tokens'] as const
 
-function booleanField(key: string, group: GatewayCompatGroupId) {
-  return { key, kind: 'boolean' as const, group, labelKey: key }
+function booleanField(key: string, group: GatewayCompatGroupId, protocols: readonly GatewayProtocol[]) {
+  return { key, kind: 'boolean' as const, group, labelKey: key, protocols }
 }
 
 function enumField<const V extends readonly string[]>(
   key: string,
   group: GatewayCompatGroupId,
+  protocols: readonly GatewayProtocol[],
   enumValues: V,
   enumOptions?: readonly GatewayCompatFieldOption[],
 ) {
-  return { key, kind: 'enum' as const, group, labelKey: key, enumValues, enumOptions }
+  return { key, kind: 'enum' as const, group, labelKey: key, protocols, enumValues, enumOptions }
 }
 
 export const GATEWAY_COMPAT_FIELDS = {
-  supportsDeveloperRole: booleanField('supportsDeveloperRole', 'role'),
-  supportsReasoningEffort: booleanField('supportsReasoningEffort', 'role'),
-  supportsThinkingTokenBudget: booleanField('supportsThinkingTokenBudget', 'role'),
-  thinkingFormat: enumField('thinkingFormat', 'format', SUPPORTED_THINKING_FORMATS),
-  maxTokensField: enumField('maxTokensField', 'format', MAX_TOKENS_FIELDS, [
+  supportsDeveloperRole: booleanField('supportsDeveloperRole', 'role', COMPLETIONS_AND_RESPONSES),
+  supportsReasoningEffort: booleanField('supportsReasoningEffort', 'role', COMPLETIONS),
+  supportsThinkingTokenBudget: booleanField('supportsThinkingTokenBudget', 'role', COMPLETIONS),
+  thinkingFormat: enumField('thinkingFormat', 'format', COMPLETIONS, SUPPORTED_THINKING_FORMATS),
+  maxTokensField: enumField('maxTokensField', 'format', COMPLETIONS, MAX_TOKENS_FIELDS, [
     { value: 'max_tokens', labelKey: 'maxTokensFieldStandard' },
     { value: 'max_completion_tokens', labelKey: 'maxTokensFieldCompletion' },
   ]),
-  requiresThinkingAsText: booleanField('requiresThinkingAsText', 'format'),
-  requiresReasoningContentOnAssistantMessages: booleanField('requiresReasoningContentOnAssistantMessages', 'format'),
-  supportsUsageInStreaming: booleanField('supportsUsageInStreaming', 'stream'),
-  supportsFinishReason: booleanField('supportsFinishReason', 'stream'),
-  requiresToolResultName: booleanField('requiresToolResultName', 'stream'),
-  requiresAssistantAfterToolResult: booleanField('requiresAssistantAfterToolResult', 'stream'),
-  supportsStrictMode: booleanField('supportsStrictMode', 'stream'),
-  supportsStore: booleanField('supportsStore', 'cache'),
-  supportsLongCacheRetention: booleanField('supportsLongCacheRetention', 'cache'),
-  cacheControlFormat: enumField('cacheControlFormat', 'cache', ['anthropic'], [
+  requiresThinkingAsText: booleanField('requiresThinkingAsText', 'format', COMPLETIONS),
+  requiresReasoningContentOnAssistantMessages: booleanField('requiresReasoningContentOnAssistantMessages', 'format', COMPLETIONS),
+  supportsUsageInStreaming: booleanField('supportsUsageInStreaming', 'stream', COMPLETIONS),
+  supportsFinishReason: booleanField('supportsFinishReason', 'stream', COMPLETIONS),
+  requiresToolResultName: booleanField('requiresToolResultName', 'stream', COMPLETIONS),
+  requiresAssistantAfterToolResult: booleanField('requiresAssistantAfterToolResult', 'stream', COMPLETIONS),
+  supportsStrictMode: booleanField('supportsStrictMode', 'stream', STRICT_MODE_PROTOCOLS),
+  supportsStore: booleanField('supportsStore', 'cache', COMPLETIONS),
+  supportsLongCacheRetention: booleanField('supportsLongCacheRetention', 'cache', LONG_CACHE_PROTOCOLS),
+  cacheControlFormat: enumField('cacheControlFormat', 'cache', COMPLETIONS, ['anthropic'], [
     { value: 'anthropic', labelKey: 'cacheControlFormatAnthropic' },
   ]),
 } as const
 
 export type GatewayCompatFieldKey = keyof typeof GATEWAY_COMPAT_FIELDS
 export const GATEWAY_COMPAT_FIELD_KEYS = Object.keys(GATEWAY_COMPAT_FIELDS) as GatewayCompatFieldKey[]
+
+/**
+ * Return the gateway compat fields offered by a route's `api` protocol. An
+ * unknown or missing api offers every registered field, so routes that do not
+ * declare a protocol keep the previous full-field compatibility behavior.
+ * Handles api values that are a string, an object (e.g. the provider profile),
+ * or undefined.
+ */
+export function fieldsForApi(api: unknown): readonly GatewayCompatFieldKey[] {
+  const rawProtocol = typeof api === 'string' && api.length > 0 ? api : record(api)?.api
+  const protocol = typeof rawProtocol === 'string' && rawProtocol.length > 0 ? rawProtocol : undefined
+  if (protocol === undefined) return GATEWAY_COMPAT_FIELD_KEYS
+  const offered = GATEWAY_COMPAT_FIELD_KEYS.filter((key) => (
+    GATEWAY_COMPAT_FIELDS[key].protocols.some((candidate) => candidate === protocol)
+  ))
+  return offered.length > 0 ? offered : GATEWAY_COMPAT_FIELD_KEYS
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined
+}
 
 /**
  * Per-DSH-version field sets. `gatewayCompatFields` in the version map must be
