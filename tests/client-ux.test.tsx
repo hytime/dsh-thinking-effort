@@ -879,6 +879,53 @@ describe('SectionEditor user behavior', () => {
     view.unmount()
   })
 
+  it('saves a new model override scalar field via the model group expansion', async () => {
+    const modelNamespace = namespace({
+      value: {
+        providers: {
+          provider: {
+            modelOverrides: {
+              'model-a': { id: 'model-a', name: 'Model A', input: ['text'] },
+            },
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    })
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      describe: async () => ({ ok: true, value: { namespaces: [modelNamespace] } }),
+      mutate: async (_ns, _ops, _revision) => ({ ok: true as const, value: modelNamespace }),
+    })
+    await settle()
+
+    act(() => providerButton(view.container).click())
+    const modelAButton = [...view.container.querySelectorAll<HTMLButtonElement>(`button[aria-label="${text('openModelSettings')}"]`)]
+      .find((candidate) => candidate.parentElement?.parentElement?.parentElement?.textContent?.includes('model-a'))
+    expect(modelAButton).toBeDefined()
+    act(() => modelAButton!.click())
+
+    const modelControls = view.container.querySelector('[data-scope="model"]') as HTMLElement
+    expect(modelControls).not.toBeNull()
+    expect(modelControls.querySelector('select[aria-label="supportsStore"]')).toBeNull()
+    act(() => button(modelControls, text('gatewayMoreFields', { count: 13 })).click())
+    const supportsStore = modelControls.querySelector('select[aria-label="supportsStore"]') as HTMLSelectElement
+    const thinkingFormat = modelControls.querySelector('select[aria-label="thinkingFormat"]') as HTMLSelectElement
+    expect(supportsStore).not.toBeNull()
+    expect(thinkingFormat).not.toBeNull()
+    act(() => setValue(supportsStore, 'unsupported'))
+    act(() => setValue(thinkingFormat, 'deepseek'))
+    expect(view.container.textContent).toContain(text('unsaved'))
+    act(() => button(view.container, text('saveModelGatewayCompat')).click())
+    await settle()
+
+    expect(view.mutate).toHaveBeenCalledWith('llm-pi-ai', [
+      { op: 'set', path: ['providers', 'provider', 'modelOverrides', 'model-a', 'compat', 'thinkingFormat'], value: 'deepseek' },
+      { op: 'set', path: ['providers', 'provider', 'modelOverrides', 'model-a', 'compat', 'supportsStore'], value: false },
+    ], 2)
+    view.unmount()
+  })
+
   it('fails closed for conflicting model sources while keeping provider and baseline editors', async () => {
     const conflict = namespace({
       value: {

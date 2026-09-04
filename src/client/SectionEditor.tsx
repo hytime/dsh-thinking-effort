@@ -1,5 +1,6 @@
 import React from 'react'
 import { GATEWAY_COMPAT_FIELD_KEYS, type GatewayCompatFieldKey } from '../compat/gateway/fields.js'
+import { editableProviderCompatFields } from '../compat/gateway/validation.js'
 import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
 import { DEFAULT_LEVELS, INPUT_MODALITIES, LEVEL_LABEL_KEYS, NS, PRESETS, ALL_LEVELS, CONTEXT_1M } from './constants.js'
 import { inventoryFrom, modelCompatKey, modelGatewayCompatViewsFrom, providerGatewayCompatViewsFrom } from './model-inventory.js'
@@ -26,6 +27,7 @@ interface EditorState {
   providerViews: Record<string, ProviderGatewayCompatView>
   providerDrafts: Record<string, ProviderGatewayCompatView>
   providerDirty: Record<string, boolean>
+  providerCompatDirty: Record<string, Partial<Record<GatewayCompatFieldKey, boolean>>>
   providerCompatExpanded: Record<string, boolean>
   modelCompatViews: Record<string, ModelGatewayCompatView>
   modelCompatDrafts: Record<string, ModelGatewayCompatView>
@@ -58,7 +60,7 @@ export interface SectionEditorProps {
 }
 
 const initialState: EditorState = {
-  loading: true, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
+  loading: true, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
 }
 
 function keyOf(item: InventoryItem): string { return modelCompatKey(item.route, item.model) }
@@ -66,10 +68,6 @@ function revisionOf(namespace: SettingsNamespace): number { return typeof namesp
 function availableCompatFieldCount(view: ProviderGatewayCompatView | ModelGatewayCompatView): number {
   const values = view as unknown as Record<string, unknown>
   return GATEWAY_COMPAT_FIELD_KEYS.filter((key) => key !== 'supportsDeveloperRole' && key !== 'maxTokensField' && values[`${key}Available`] === true).length
-}
-function compatEditability(view: ProviderGatewayCompatView | ModelGatewayCompatView): Partial<Record<GatewayCompatFieldKey, boolean>> {
-  const values = view as unknown as Record<string, unknown>
-  return Object.fromEntries(GATEWAY_COMPAT_FIELD_KEYS.filter((key) => values[`${key}Available`] === true).map((key) => [key, true])) as Partial<Record<GatewayCompatFieldKey, boolean>>
 }
 function removeDirtyFields<T extends object>(dirty: Record<string, T>, key: string, fields: readonly (keyof T)[]): Record<string, T> {
   const next = { ...dirty }
@@ -224,7 +222,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     for (const field of GATEWAY_COMPAT_FIELD_KEYS) {
       if (dirty[field] === true && draft[field] !== current[field]) Object.assign(update, { [field]: draft[field] })
     }
-    const editability = compatEditability(draft)
+    const editability = editableProviderCompatFields(settings.compatibilityProfile, state.namespace?.schema)
     const ops = item.inOverrides
       ? opsForModelCompat(item, update, editability)
       : opsForModelArrayCompat(state.inventory, item, update, editability)
@@ -296,27 +294,26 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   const applyProviderCompat = (route: string): void => {
     const draft = state.providerDrafts[route]
     const current = state.providerViews[route]
+    const dirtyFields = state.providerCompatDirty[route]
     if (!draft || !current) return
     const update: Partial<ProviderGatewayCompatUpdate> = {}
-    const dirtyKeys = new Set(GATEWAY_COMPAT_FIELD_KEYS.filter((key) => (draft as Record<string, unknown>)[`${key}Dirty`] === true))
     for (const field of GATEWAY_COMPAT_FIELD_KEYS) {
-      if (dirtyKeys.has(field) && draft[field] !== current[field]) Object.assign(update, { [field]: draft[field] })
+      if (dirtyFields?.[field] === true && draft[field] !== current[field]) Object.assign(update, { [field]: draft[field] })
     }
-    const ops = opsForProviderCompat(route, update, compatEditability(draft) as Partial<Pick<GatewayCompatEditability, GatewayCompatFieldKey>>)
+    const ops = opsForProviderCompat(route, update, editableProviderCompatFields(settings.compatibilityProfile, state.namespace?.schema) as Partial<Pick<GatewayCompatEditability, GatewayCompatFieldKey>>)
+    const clearProviderDirty = (currentState: EditorState): EditorState => {
+      const providerDirty = { ...currentState.providerDirty }
+      delete providerDirty[route]
+      const providerCompatDirty = { ...currentState.providerCompatDirty }
+      delete providerCompatDirty[route]
+      return { ...currentState, providerDirty, providerCompatDirty }
+    }
     if (ops.length === 0) {
-      setState((state) => {
-        const providerDirty = { ...state.providerDirty }
-        delete providerDirty[route]
-        return { ...state, providerDirty }
-      })
+      setState((currentState) => clearProviderDirty(currentState))
       return
     }
     runOps(ops, t('gatewayCompatSaved'), () => {
-      setState((current) => {
-        const providerDirty = { ...current.providerDirty }
-        delete providerDirty[route]
-        return { ...current, providerDirty }
-      })
+      setState((currentState) => clearProviderDirty(currentState))
     })
   }
 
@@ -325,14 +322,15 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       const draft = current.providerDrafts[route] ?? current.providerViews[route]
       if (!draft) return { ...current, notice: null, providerDrafts: { ...current.providerDrafts, [route]: next }, providerDirty: { ...current.providerDirty, [route]: true } }
       const keysChanged = GATEWAY_COMPAT_FIELD_KEYS.filter((key) => next[key] !== draft[key])
-      const nextDirty: Record<string, boolean> = {}
-      for (const field of keysChanged) nextDirty[`${field}Dirty`] = true
-      const patched = { ...next } as unknown as Record<string, unknown>
-      for (const field of GATEWAY_COMPAT_FIELD_KEYS) {
-        if (nextDirty[`${field}Dirty`] === true) Object.assign(patched, { [`${field}Dirty`]: true })
+      const nextDirtyFields: Partial<Record<GatewayCompatFieldKey, boolean>> = { ...current.providerCompatDirty[route] }
+      for (const field of keysChanged) Object.assign(nextDirtyFields, { [field]: true })
+      return {
+        ...current,
+        notice: null,
+        providerDrafts: { ...current.providerDrafts, [route]: next },
+        providerCompatDirty: { ...current.providerCompatDirty, [route]: nextDirtyFields },
+        providerDirty: { ...current.providerDirty, [route]: true },
       }
-      const providerDraft = patched as unknown as ProviderGatewayCompatView
-      return { ...current, notice: null, providerDrafts: { ...current.providerDrafts, [route]: providerDraft }, providerDirty: { ...current.providerDirty, [route]: true } }
     })
   }
 
