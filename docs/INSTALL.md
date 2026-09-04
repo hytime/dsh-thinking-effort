@@ -38,20 +38,30 @@ Current DSH does not expose a public semver metadata contract, so runtime capabi
 These are separate compatibility layers:
 
 - **DSH Runtime:** the Settings transport is `remote.settings` on modern DSH and `connection.api.settings` on legacy DSH. The plugin detects the available runtime capability and keeps the legacy fallback optional.
-- **Gateway Protocol:** the plugin uses the official `llm-pi-ai.compat` fields `supportsDeveloperRole` and `maxTokensField` when the DSH schema exposes them. The optional `dsh-llm-openai-completions` transport can take over eligible custom OpenAI-compatible thinking providers when installed and enabled.
+- **Gateway Protocol:** the plugin uses the official `llm-pi-ai.compat` fields when the DSH schema exposes them. The optional `dsh-llm-openai-completions` transport can take over eligible custom OpenAI-compatible thinking providers when installed and enabled.
 
-The version map applies the following gateway capability rules:
+The version map applies these gateway capability rules:
 
 | DSH range | Gateway compat fields | Takeover transport |
 | --- | --- | --- |
-| `0.1.0-rc.7` | `supportsDeveloperRole` and `maxTokensField` are not supported | Unsupported |
-| `0.1.0-rc.8` and later supported ranges | Both fields are supported when exposed by the DSH schema | Optional |
+| `0.1.0-rc.7` | Not available | Unsupported |
+| `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available except `supportsFinishReason` and `supportsThinkingTokenBudget` | Optional |
+| `0.1.2-alpha.1` and later supported ranges | All 15 fields when exposed by the DSH schema | Optional |
 
-For either field, `Auto` unsets the user override and restores the official protocol default. If the optional transport is absent or disabled, no takeover is applied.
+DSH `0.1.0-rc.8` and later supported ranges follow the field availability shown above. The UI does not show fields that the runtime schema does not expose. If the optional transport is absent or disabled, no takeover is applied.
 
 ## Gateway compatibility settings
 
-The provider global area in the Settings page edits the default `compat` values for every model under that provider. Expanding one model opens its single-model area. Both catalog models and `models[]` entries support compat editing: catalog models use `modelOverrides.<model>.compat`, while `models[]` entries use `models[].compat`.
+The provider global area in the Settings page edits the default `compat` values for every model under that provider. Expanding one model opens its single-model area. The four groups are collapsed by default.
+
+| Group | Boolean fields (`Auto` / supported / unsupported) | Enum fields (`Auto` / concrete values) |
+| --- | --- | --- |
+| Role and reasoning | `supportsDeveloperRole`, `supportsReasoningEffort`, `supportsThinkingTokenBudget` | — |
+| Format and output | `requiresThinkingAsText`, `requiresReasoningContentOnAssistantMessages` | `thinkingFormat`: `openai`, `openrouter`, `deepseek`, `together`, `baseten`, `zai`, `qwen`, `chat-template`, `qwen-chat-template`, `string-thinking`, `ant-ling`; `maxTokensField`: `max_tokens`, `max_completion_tokens` |
+| Streaming and tools | `supportsUsageInStreaming`, `supportsFinishReason`, `requiresToolResultName`, `requiresAssistantAfterToolResult`, `supportsStrictMode` | — |
+| Storage and cache | `supportsStore`, `supportsLongCacheRetention` | `cacheControlFormat`: `anthropic` |
+
+Catalog models and `models[]` entries both support compat editing: catalog models use `modelOverrides.<model>.compat`, while `models[]` entries use `models[].compat`.
 
 ```yaml
 providers:
@@ -66,11 +76,9 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-A model-level `compat` overrides the provider default field-by-field. Fields omitted at the model layer inherit the provider value. `Auto` deletes the current-layer field and restores provider inheritance. For a given route/provider, any non-empty `models[]` together with any non-empty `modelOverrides` is invalid; the official schema rejects this invalid configuration, and the plugin fails closed for malformed data.
+Field-by-field, each value resolves independently in this order: model → provider → base/catalog → protocol → URL detection. A model value overrides only that field. `Auto` deletes or unsets the current-layer value, restores provider inheritance when applicable, and lets the next value in the chain take effect. Provider defaults apply to every model on the route; a model edit changes only the current model. For a route/provider, non-empty `models[]` and non-empty `modelOverrides` are mutually exclusive; the official schema rejects this invalid configuration, and the plugin fails closed for malformed data.
 
-The current DSH Settings API does not support array-index path operations. Therefore, saving a `models[]` compat edit writes one complete `providers.<route>.models` array set, preserving other models, unknown fields, and other compat fields. `modelOverrides` edits continue to use precise field-level operations. Fields that the runtime schema does not expose cannot be edited; older DSH builds keep the existing baseline settings available.
-
-These values are control plane configuration only. This plugin does not implement or replace the gateway transport; network requests remain the responsibility of an external transport.
+The current DSH Settings API does not support array-index path operations. `modelOverrides` edits therefore use field-level `set`/`unset` operations and touch only the selected field. A `models[]` edit writes one complete `providers.<route>.models` array set, preserving other model entries, unknown fields, and compat fields. These values are control plane configuration only; an external transport remains responsible for network requests.
 
 ## 1. Official installation
 

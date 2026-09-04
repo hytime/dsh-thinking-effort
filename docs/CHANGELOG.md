@@ -14,6 +14,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 未发布 / Unreleased
+
+### 新增 / Added
+
+- 新增：网关兼容性支持常用标量字段（`supportsStore`、`thinkingFormat`、`supportsThinkingTokenBudget` 等）的独立配置与自动继承，并按语义分组默认收起。
+- Add independent configuration and automatic inheritance for common scalar gateway compatibility fields such as `supportsStore`, `thinkingFormat`, and `supportsThinkingTokenBudget`, grouped by meaning and collapsed by default.
+
 ## [0.1.14] - 网关能力映射与可选 takeover / Gateway capability mapping and optional takeover
 
 ### 发布兼容矩阵 / Release compatibility matrix

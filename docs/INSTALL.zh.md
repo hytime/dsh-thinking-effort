@@ -44,20 +44,30 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 这两类兼容彼此独立：
 
 - **DSH Runtime：** Settings 传输在新版 DSH 中使用 `remote.settings`，在旧版 DSH 中使用 `connection.api.settings`。插件按运行时实际能力进行探测，旧版回退路径保持可选。
-- **Gateway Protocol：** DSH schema 提供时，插件使用官方 `llm-pi-ai.compat` 字段 `supportsDeveloperRole` 和 `maxTokensField`。安装并启用可选的 `dsh-llm-openai-completions` transport 后，插件可以接管符合条件的自定义 OpenAI 兼容思考模型供应商。
+- **Gateway Protocol：** DSH schema 提供时，插件使用官方 `llm-pi-ai.compat` 字段。安装并启用可选的 `dsh-llm-openai-completions` transport 后，插件可以接管符合条件的自定义 OpenAI 兼容思考模型供应商。
 
 version-map 按以下规则判断网关能力：
 
 | DSH 范围 | Gateway compat 字段 | Takeover transport |
 | --- | --- | --- |
-| `0.1.0-rc.7` | 不支持 `supportsDeveloperRole` 和 `maxTokensField` | 不支持 |
-| `0.1.0-rc.8` 及后续受支持范围 | DSH schema 暴露时支持这两个字段 | 可选 |
+| `0.1.0-rc.7` | 不支持 | 不支持 |
+| `0.1.0-rc.8` 至 `<0.1.2-alpha.1`（后续范围见下一行） | 支持，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget` | 可选 |
+| `0.1.2-alpha.1` 及后续受支持范围 | DSH schema 暴露时支持全部 15 个字段 | 可选 |
 
-对于任一字段，`Auto` 都会取消用户覆盖并恢复官方协议默认值。可选 transport 未安装或未启用时，不会执行 takeover。
+运行时 schema 没有暴露的字段不会在界面中显示。可选 transport 未安装或未启用时，不会执行 takeover。
 
 ## 网关兼容设置
 
-设置页的 provider 全局区域用于修改该 provider 下全部模型的 `compat` 默认值。展开单个模型后进入单模型区域。catalog 模型和 `models[]` 模型都支持编辑 compat：前者使用 `modelOverrides.<model>.compat`，后者使用 `models[].compat`。
+设置页的 provider 全局区域用于修改该 provider 下全部模型的 `compat` 默认值。展开单个模型后进入单模型区域。4 组字段默认收起。
+
+| 分组 | boolean 字段（自动 / 支持 / 不支持） | enum 字段（自动 / 具体取值） |
+| --- | --- | --- |
+| 角色与推理 | `supportsDeveloperRole`、`supportsReasoningEffort`、`supportsThinkingTokenBudget` | — |
+| 格式与输出 | `requiresThinkingAsText`、`requiresReasoningContentOnAssistantMessages` | `thinkingFormat`：`openai`、`openrouter`、`deepseek`、`together`、`baseten`、`zai`、`qwen`、`chat-template`、`qwen-chat-template`、`string-thinking`、`ant-ling`；`maxTokensField`：`max_tokens`、`max_completion_tokens` |
+| 流式与工具 | `supportsUsageInStreaming`、`supportsFinishReason`、`requiresToolResultName`、`requiresAssistantAfterToolResult`、`supportsStrictMode` | — |
+| 存储与缓存 | `supportsStore`、`supportsLongCacheRetention` | `cacheControlFormat`：`anthropic` |
+
+catalog 模型和 `models[]` 模型都支持编辑 compat：前者使用 `modelOverrides.<model>.compat`，后者使用 `models[].compat`。
 
 ```yaml
 providers:
@@ -72,11 +82,9 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-模型级 `compat` 会按字段逐字段覆盖 provider 默认值；模型层省略的字段继承 provider 值。`Auto` 会删除当前层字段，恢复从 provider 继承。对同一路由（provider）而言，只要同时存在非空的 `models[]` 和非空的 `modelOverrides`，配置就无效；官方 schema 会拒绝该配置，插件遇到异常数据时 fail closed。
+逐字段独立按以下顺序取值：model → provider → base/catalog → protocol → URL 检测。模型值只覆盖当前字段。「自动」（`Auto`）会删除当前层字段，恢复 provider 继承，并让继承链中的下一层生效。provider 默认值会应用到该路由的所有模型，模型级修改只影响当前模型。对同一路由（provider）而言，非空的 `models[]` 和非空的 `modelOverrides` 互斥；官方 schema 会拒绝该无效配置，插件遇到异常数据时 fail closed。
 
-当前 DSH Settings API 不支持数组索引 path op。因此，保存 `models[]` compat 会通过一个完整的 `providers.<route>.models` 数组 set 写回，并保留其他模型、未知字段和其他 compat 字段。`modelOverrides` 仍使用精确字段级操作。运行时 schema 未暴露的字段同样不可编辑；旧版 DSH 仍可使用原有基础设置。
-
-这些值只属于控制面配置。本插件不实现或替代网关 transport，网络请求仍由外部 transport 负责。
+当前 DSH Settings API 不支持数组索引 path op。因此，`modelOverrides` 修改使用字段级 `set`/`unset`，只操作选中的字段；`models[]` 修改通过一个完整的 `providers.<route>.models` 数组 set 写回，并保留其他模型条目、未知字段和其他 compat 字段。运行时 schema 未暴露的字段不会显示。这些值只属于控制面配置，网络请求仍由外部 transport 负责。
 
 校验点：目标目录存在：
 

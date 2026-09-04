@@ -10,6 +10,12 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 미출시
+
+### 추가
+
+- `supportsStore`, `thinkingFormat`, `supportsThinkingTokenBudget` 등 일반적인 스칼라 게이트웨이 호환 필드를 개별적으로 설정하고 자동 상속할 수 있으며, 의미별로 그룹화하고 기본으로 접어 둡니다.
+
 ## [0.1.14] - 게이트웨이 capability mapping 및 optional takeover
 
 ### 게시 호환성 매트릭스

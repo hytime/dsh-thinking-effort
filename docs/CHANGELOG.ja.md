@@ -10,6 +10,12 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 未リリース
+
+### 追加
+
+- `supportsStore`、`thinkingFormat`、`supportsThinkingTokenBudget` など、一般的なスカラーのゲートウェイ互換フィールドを個別に設定して自動継承できるようにし、意味ごとにグループ化して既定で折りたたみました。
+
 ## [0.1.14] - ゲートウェイ capability mapping と optional takeover
 
 ### 公開互換性マトリックス

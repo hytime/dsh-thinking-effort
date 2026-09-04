@@ -19,7 +19,7 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 
 > **Compatibility boundaries:** DSH Runtime compatibility covers the Settings transport only: modern DSH exposes `remote.settings`, while legacy DSH exposes `connection.api.settings`. The plugin detects the available runtime capability and keeps the legacy fallback optional, so the settings page does not require a Remote provider on older DSH builds.
 >
-> Gateway Protocol compatibility is a separate layer. It reads the official `llm-pi-ai.compat` fields `supportsDeveloperRole` and `maxTokensField` when the DSH schema exposes them. DSH `0.1.0-rc.7` does not provide these fields; DSH `0.1.0-rc.8` and later supported ranges do. The optional `dsh-llm-openai-completions` transport can take over eligible custom OpenAI-compatible thinking providers when it is installed and enabled. For either gateway field, `Auto` unsets the user override and restores the official protocol default.
+> Gateway Protocol compatibility is a separate layer. When the DSH schema exposes them, the plugin supports 15 common scalar `llm-pi-ai.compat` fields, grouped into role/reasoning, format/output, streaming/tools, and storage/cache. Boolean fields offer `Auto`, supported, and unsupported; enum fields offer `Auto` and their concrete values. DSH `0.1.0-rc.7` does not provide gateway compat settings. DSH `0.1.0-rc.8` through `<0.1.2-alpha.1` provide the other fields, but not `supportsFinishReason` or `supportsThinkingTokenBudget`; DSH `0.1.2-alpha.1` and later expose all 15 when supported by the schema. The optional `dsh-llm-openai-completions` transport can take over eligible custom OpenAI-compatible thinking providers when it is installed and enabled. `Auto` unsets the current-layer override and restores the next value in the inheritance chain.
 >
 > DSH `0.1.2-alpha.1` and later accept language-pack locale IDs through `LocaleRuntime`. This plugin registers `ja` and `ko` dynamically, so no DSH core fork is required. Older DSH builds that only expose built-in locale IDs support `zh` and `en` only.
 >
@@ -30,8 +30,8 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 | DSH range | Gateway compatibility settings |
 | --- | --- |
 | `0.1.0-rc.7` | Not available |
-| `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available |
-| `0.1.2-alpha.1` to `<0.1.3-0` | Available |
+| `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available except `supportsFinishReason` and `supportsThinkingTokenBudget` |
+| `0.1.2-alpha.1` to `<0.1.3-0` | All 15 fields when exposed by the DSH schema |
 
 ## Why use it?
 
@@ -62,7 +62,7 @@ These identifiers have different responsibilities:
 | --- | --- |
 | Default levels | Adds `off`, `high`, and `max` without overwriting custom values |
 | Per-model editor | Select levels and configure gateway values for both catalog/modelOverrides and `models[]` entries in Settings |
-| Gateway compatibility | Configure `supportsDeveloperRole` and `maxTokensField` globally per provider or separately per model |
+| Gateway compatibility | Configure 15 common scalar fields globally per provider or separately per model, grouped by role/reasoning, format/output, streaming/tools, and storage/cache; groups are collapsed by default |
 | Gateway mapping | Send `ultra` when the user selects DSH `high` |
 | Subagent default | Apply a default effort only when a subagent request has no explicit value |
 | Multilingual settings | Includes Chinese, English, Japanese, and Korean dictionaries; Japanese/Korean switching uses DSH language-pack support |
@@ -110,7 +110,7 @@ The settings page shows the installed version as a small watermark such as `v0.1
 
 ### Gateway compatibility configuration
 
-The provider `compat` block is the global default for every model under that provider. Configure provider defaults with the official DSH YAML shape:
+The provider `compat` block is the global default for every model under that provider. The Settings page groups the 15 fields into four sections that are collapsed by default. Configure provider defaults with the official DSH YAML shape:
 
 ```yaml
 providers:
@@ -125,9 +125,9 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-A model-level `compat` overrides the provider default field-by-field. Fields not written at the model layer continue to inherit from the provider. `Auto` deletes the current-layer field and restores provider inheritance. For a given route/provider, any non-empty `models[]` together with any non-empty `modelOverrides` is invalid; the official schema rejects this invalid configuration, and the plugin fails closed for malformed data.
+Field-by-field, each value resolves independently in this order: model → provider → base/catalog → protocol → URL detection. A model value overrides only that field. `Auto` removes the current-layer value, restores provider inheritance when applicable, and lets the next value in the chain take effect. Provider defaults apply to every model on the route; a model edit changes only the current model. For a route/provider, non-empty `models[]` and non-empty `modelOverrides` are mutually exclusive; the official schema rejects this invalid configuration, and the plugin fails closed for malformed data.
 
-The provider area in Settings edits defaults for all models. Both catalog models and custom YAML `models[]` entries expose a single-model compat editor: catalog models write `modelOverrides.<model>.compat`, while `models[]` models write `models[].compat`. Because the Settings API does not support array-index path operations, a `models[]` edit writes one complete `providers.<route>.models` array set while preserving other models, unknown fields, and compat fields.
+The provider area in Settings edits defaults for all models. Both catalog models and custom YAML `models[]` entries expose a single-model compat editor: catalog models write only the target fields with field-level `set`/`unset` operations under `modelOverrides.<model>.compat`, while `models[]` models write one complete `providers.<route>.models` array set while preserving other entries and fields. A model edit does not change other models.
 
 These compat values are control plane configuration. They do not implement or replace the gateway transport; an external transport remains responsible for network requests.
 

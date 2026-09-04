@@ -18,7 +18,7 @@
 
 > **호환성 경계:** DSH Runtime compatibility는 Settings transport만 담당합니다. 최신 DSH는 `remote.settings`를 제공하고 이전 DSH는 `connection.api.settings`를 제공합니다. 플러그인은 실제 런타임 capability를 감지하며, 이전 DSH에 Remote provider가 없어도 선택적인 Remote service를 필수로 요구하지 않습니다.
 >
-> Gateway Protocol compatibility는 별도 계층입니다. DSH schema가 제공하는 경우 공식 `llm-pi-ai.compat` 필드인 `supportsDeveloperRole`과 `maxTokensField`를 읽습니다. DSH `0.1.0-rc.7`에는 이 두 필드가 없고, DSH `0.1.0-rc.8` 및 이후 지원 범위에는 있습니다. 선택 사항인 `dsh-llm-openai-completions` transport를 설치하고 활성화하면 조건을 충족하는 사용자 지정 OpenAI 호환 사고 provider를 takeover할 수 있습니다. 두 게이트웨이 필드에서 `Auto`는 사용자 override를 unset하고 공식 protocol 기본값을 복원합니다.
+> Gateway Protocol compatibility는 별도 계층입니다. DSH schema가 제공하는 경우 15개의 일반적인 스칼라 `llm-pi-ai.compat` 필드를 지원합니다. 필드는 역할/추론, 형식/출력, 스트리밍/도구, 저장/캐시의 4개 그룹으로 나뉘며 기본으로 접혀 있습니다. boolean 필드는 `Auto`, 지원, 미지원으로 설정하고 enum 필드는 `Auto` 또는 구체적인 값으로 설정합니다. DSH `0.1.0-rc.7`에는 게이트웨이 호환 설정이 없습니다. `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지는 `supportsFinishReason`와 `supportsThinkingTokenBudget`가 없고, DSH `0.1.2-alpha.1` 이상은 schema가 지원하는 경우 15개 필드를 모두 제공합니다. 선택 사항인 `dsh-llm-openai-completions` transport를 설치하고 활성화하면 조건을 충족하는 사용자 지정 OpenAI 호환 사고 provider를 takeover할 수 있습니다. `Auto`는 현재 계층의 override를 unset하고 상속 체인의 다음 값을 복원합니다.
 >
 > DSH `0.1.2-alpha.1` 이상은 `LocaleRuntime`의 language-pack 확장을 지원합니다. 이 플러그인은 `ja`와 `ko`를 동적으로 등록하므로 DSH fork가 필요하지 않습니다. 고정된 내장 locale ID만 허용하는 이전 DSH에서는 `zh`와 `en`만 사용할 수 있습니다.
 >
@@ -29,8 +29,8 @@
 | DSH 범위 | 게이트웨이 호환 설정 |
 | --- | --- |
 | `0.1.0-rc.7` | 지원하지 않음 |
-| `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 | 지원 |
-| `0.1.2-alpha.1`부터 `<0.1.3-0`까지 | 지원 |
+| `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 (이후 지원 범위는 다음 행 참조) | `supportsFinishReason` 및 `supportsThinkingTokenBudget`를 제외하고 지원 |
+| `0.1.2-alpha.1`부터 `<0.1.3-0`까지 | DSH schema가 노출하는 경우 15개 필드 모두 지원 |
 
 ## 왜 필요한가요?
 
@@ -59,7 +59,7 @@ DSH 내장 모델만 사용하고 이미 추론 제어가 정상 작동한다면
 | --- | --- |
 | 기본 단계 | 사용자 지정 값을 덮어쓰지 않고 `off`, `high`, `max` 추가 |
 | 모델별 편집 | Settings에서 단계를 설정하고 catalog/modelOverrides와 `models[]` 항목의 게이트웨이 호환 값을 모두 편집 |
-| 게이트웨이 호환 설정 | provider 전체 또는 모델별로 `supportsDeveloperRole`과 `maxTokensField`를 설정 |
+| 게이트웨이 호환 설정 | 15개의 일반적인 스칼라 필드를 provider 전체 또는 모델별로 설정하며, 역할/추론, 형식/출력, 스트리밍/도구, 저장/캐시로 나뉘고 기본으로 접혀 있음 |
 | 게이트웨이 값 매핑 | DSH에서 `high`를 선택하면 `ultra` 전송 가능 |
 | Subagent 기본값 | 명시적 값이 없는 요청에만 기본값 적용 |
 | 다국어 설정 | 中文, English, 日本語, 한국어 사전 포함; 일본어/한국어 전환은 DSH language-pack 지원을 사용 |
@@ -107,7 +107,7 @@ profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](
 
 ### 게이트웨이 호환성 설정
 
-provider의 `compat` 블록은 해당 provider 아래 모든 모델의 전역 기본값입니다. DSH 공식 YAML 형식으로 설정합니다.
+provider의 `compat` 블록은 해당 provider 아래 모든 모델의 전역 기본값입니다. Settings 페이지에서는 15개 필드를 4개 그룹으로 나누고 기본으로 접어 둡니다. DSH 공식 YAML 형식으로 설정합니다.
 
 ```yaml
 providers:
@@ -122,9 +122,9 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-모델 수준 `compat`는 provider 기본값을 필드별로 덮어씁니다. 모델 수준에 쓰지 않은 필드는 provider에서 계속 상속됩니다. `Auto`는 현재 계층의 필드를 삭제하고 provider 상속으로 복원합니다. 같은 라우트(provider)에 비어 있지 않은 `models[]`와 비어 있지 않은 `modelOverrides`가 동시에 존재하면 잘못된 구성입니다. 공식 schema는 이 잘못된 구성을 거부하며 플러그인은 비정상 데이터에서 fail closed로 동작합니다.
+필드별로 각 값은 model → provider → base/catalog → protocol → URL 감지 순서로 독립적으로 결정됩니다. 모델 값은 해당 필드만 덮어씁니다. `Auto`는 현재 계층의 필드를 삭제해 provider 상속을 복원하고 상속 체인의 다음 값을 사용합니다. provider 기본값은 해당 라우트의 모든 모델에 적용되며 모델 편집은 현재 모델만 변경합니다. 같은 라우트(provider)에서는 비어 있지 않은 `models[]`와 비어 있지 않은 `modelOverrides`를 함께 사용할 수 없습니다. 공식 schema는 이 잘못된 구성을 거부하며 플러그인은 비정상 데이터에서 fail closed로 동작합니다.
 
-Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델의 기본값을 수정합니다. catalog/modelOverrides 모델과 사용자 지정 YAML `models[]` 모델 모두 단일 모델 compat 편집기를 제공합니다. 전자는 `modelOverrides.<model>.compat`에, 후자는 `models[].compat`에 기록됩니다. 현재 Settings API는 배열 인덱스 path op를 지원하지 않으므로 `models[]` 변경은 `providers.<route>.models` 전체를 하나의 배열 set으로 저장하며 다른 모델, 알 수 없는 필드 및 다른 compat 필드를 보존합니다.
+Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델의 기본값을 수정합니다. catalog/modelOverrides 모델과 사용자 지정 YAML `models[]` 모델 모두 단일 모델 compat 편집기를 제공합니다. 전자는 `modelOverrides.<model>.compat`에서 대상 필드만 `set`/`unset`하고, 후자는 `providers.<route>.models` 전체를 하나의 배열 set으로 저장하며 다른 모델과 필드를 보존합니다. 모델 편집은 다른 모델에 영향을 주지 않습니다.
 
 이 compat 값은 제어면 설정입니다. 게이트웨이 transport를 구현하거나 대체하지 않으며 네트워크 요청은 외부 transport가 담당합니다.
 
