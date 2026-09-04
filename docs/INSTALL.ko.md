@@ -62,6 +62,17 @@ Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델
 | 스트리밍 및 도구 | `supportsUsageInStreaming`, `supportsFinishReason`, `requiresToolResultName`, `requiresAssistantAfterToolResult`, `supportsStrictMode` | — |
 | 저장 및 캐시 | `supportsStore`, `supportsLongCacheRetention` | `cacheControlFormat`: `anthropic` |
 
+프로토콜 지원 범위는 DSH 버전과 런타임 schema가 정한 최대 범위에 추가로 적용됩니다.
+
+| 라우트 `api` | 이 플러그인의 15개 스칼라 필드 중 지원되는 필드 |
+| --- | --- |
+| `openai-completions` | 15개 필드 모두 |
+| `openai-responses`, `azure-openai-responses`, `openai-codex-responses` | `supportsDeveloperRole`, `supportsStrictMode`, `supportsLongCacheRetention` |
+| `anthropic-messages` | `supportsLongCacheRetention` |
+| `bedrock-converse-stream` | `supportsStrictMode` |
+
+알려진 프로토콜에서는 목록에 없는 필드를 UI에 표시하지 않으며 기록하지도 않습니다. 라우트에 인식 가능한 `api`가 없으면 런타임 schema와 DSH 검증을 최종 기준으로 사용합니다.
+
 catalog 모델과 `models[]` 항목 모두 compat 편집을 지원합니다. 전자는 `modelOverrides.<model>.compat`, 후자는 `models[].compat`을 사용합니다.
 
 ```yaml

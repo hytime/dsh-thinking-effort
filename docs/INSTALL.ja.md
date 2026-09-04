@@ -62,6 +62,17 @@ Settings の provider グローバル領域では、その provider 配下のす
 | ストリーミングとツール | `supportsUsageInStreaming`、`supportsFinishReason`、`requiresToolResultName`、`requiresAssistantAfterToolResult`、`supportsStrictMode` | — |
 | 保存とキャッシュ | `supportsStore`、`supportsLongCacheRetention` | `cacheControlFormat`：`anthropic` |
 
+プロトコルの対応範囲は、DSH バージョンと実行時 schema による上限に加わる制限です。
+
+| ルートの `api` | このプラグインの 15 個のスカラーから設定できるフィールド |
+| --- | --- |
+| `openai-completions` | 15 フィールドすべて |
+| `openai-responses`、`azure-openai-responses`、`openai-codex-responses` | `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention` |
+| `anthropic-messages` | `supportsLongCacheRetention` |
+| `bedrock-converse-stream` | `supportsStrictMode` |
+
+認識されたプロトコルでは、一覧にないフィールドは UI に表示されず、書き込まれません。`api` がない、または認識できない場合は、実行時 schema と DSH の検証を最終的な基準にします。
+
 カタログモデルと `models[]` エントリの両方で compat を編集できます。前者は `modelOverrides.<model>.compat`、後者は `models[].compat` を使用します。
 
 ```yaml

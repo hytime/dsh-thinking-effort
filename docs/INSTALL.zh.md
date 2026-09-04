@@ -68,6 +68,17 @@ version-map 按以下规则判断网关能力：
 | 流式与工具 | `supportsUsageInStreaming`、`supportsFinishReason`、`requiresToolResultName`、`requiresAssistantAfterToolResult`、`supportsStrictMode` | — |
 | 存储与缓存 | `supportsStore`、`supportsLongCacheRetention` | `cacheControlFormat`：`anthropic` |
 
+协议支持还会在 DSH 版本和运行时 schema 的基础上进一步限制可配置字段：
+
+| 路由 `api` | 本插件 15 个标量字段中支持的字段 |
+| --- | --- |
+| `openai-completions` | 全部 15 个字段 |
+| `openai-responses`、`azure-openai-responses`、`openai-codex-responses` | `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention` |
+| `anthropic-messages` | `supportsLongCacheRetention` |
+| `bedrock-converse-stream` | `supportsStrictMode` |
+
+对于已识别的协议，列表之外的字段不会显示，也不会写入。如果路由没有可识别的 `api`，最终仍以运行时 schema 和 DSH 校验为准。
+
 catalog 模型和 `models[]` 模型都支持编辑 compat：前者使用 `modelOverrides.<model>.compat`，后者使用 `models[].compat`。
 
 ```yaml

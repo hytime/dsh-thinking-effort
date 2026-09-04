@@ -33,7 +33,9 @@
 | `0.1.0-rc.8` 至 `<0.1.2-alpha.1` | schema 暴露时可用，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget` |
 | `0.1.2-alpha.1` 至 `<0.1.3-0` | schema 暴露时支持全部 15 个字段 |
 
-从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。
+从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。上表表示各 DSH 版本最多可用的字段集合；当前网关协议还可能进一步缩小集合。
+
+实际可配置字段需要同时满足三项条件：DSH 版本支持、运行时 schema 暴露，以及当前路由的 `api` 协议支持。不支持的字段不会显示，也不会写入 Settings。15 个字段中，`openai-completions` 支持全部 15 个；`openai-responses`、`azure-openai-responses` 和 `openai-codex-responses` 只支持 `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention`。如果 `api` 缺失或无法识别，最终仍以运行时 schema 和 DSH 校验为准。
 ## 为什么需要它？
 
 DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模型通常没有 `reasoningEfforts` 配置。因此，Composer 的模型选择器不会显示「推理等级」，你也无法把网关实际支持的值（例如 `ultra`）映射到 DSH 的标准档位。

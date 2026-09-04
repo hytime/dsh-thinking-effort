@@ -32,7 +32,9 @@
 | `0.1.0-rc.8` から `<0.1.2-alpha.1` | schema が公開する場合は対応。ただし `supportsFinishReason` と `supportsThinkingTokenBudget` はありません |
 | `0.1.2-alpha.1` から `<0.1.3-0` | schema が公開する場合は 15 フィールドに対応 |
 
-DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行時 schema の公開内容に従います。
+DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行時 schema の公開内容に従います。上表は各 DSH バージョンで利用できるフィールドの上限であり、ルートのプロトコルによってさらに絞り込まれます。
+
+ゲートウェイ互換フィールドを設定できるのは、DSH のバージョン、実行時 schema、ルートの `api` プロトコルのすべてが対応している場合だけです。対応しないフィールドは UI に表示されず、Settings にも書き込まれません。この 15 フィールドでは `openai-completions` がすべてを提供し、`openai-responses`、`azure-openai-responses`、`openai-codex-responses` は `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention` だけを提供します。`api` がない、または認識できない場合は、実行時 schema と DSH の検証を最終的な基準にします。
 ## なぜ使うのか
 
 `llm-pi-ai` アダプターではサードパーティモデルを手動で定義できますが、モデルに `reasoningEfforts` が設定されていないことがあります。その場合、Composer に推論強度セレクターが表示されず、ゲートウェイ固有の `ultra` のような値を DSH の標準レベルへ割り当てることもできません。

@@ -33,7 +33,9 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 | `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available when exposed by the DSH schema, but without `supportsFinishReason` and `supportsThinkingTokenBudget` |
 | `0.1.2-alpha.1` to `<0.1.3-0` | All 15 fields when exposed by the DSH schema |
 
-From DSH `0.1.0-rc.8` onward, field availability follows the runtime schema.
+From DSH `0.1.0-rc.8` onward, field availability follows the runtime schema. The table shows the maximum field set for each DSH version; the route protocol can further reduce it.
+
+A gateway compat field can be configured only when the DSH version, runtime schema, and route's `api` protocol all support it. Unsupported fields stay hidden and are not written to Settings. Among these 15 fields, `openai-completions` supports all 15, while `openai-responses`, `azure-openai-responses`, and `openai-codex-responses` support only `supportsDeveloperRole`, `supportsStrictMode`, and `supportsLongCacheRetention`. If `api` is missing or unrecognized, the runtime schema and DSH validation remain the final authority.
 ## Why use it?
 
 The `llm-pi-ai` adapter supports hand-declared third-party models, but those entries often do not declare `reasoningEfforts`. As a result, Composer does not show a reasoning effort selector, and gateway-specific values such as `ultra` cannot be mapped to DSH's standard levels.

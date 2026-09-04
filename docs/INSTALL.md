@@ -62,6 +62,17 @@ The provider global area in the Settings page edits the default `compat` values 
 | Streaming and tools | `supportsUsageInStreaming`, `supportsFinishReason`, `requiresToolResultName`, `requiresAssistantAfterToolResult`, `supportsStrictMode` | — |
 | Storage and cache | `supportsStore`, `supportsLongCacheRetention` | `cacheControlFormat`: `anthropic` |
 
+Protocol support is an additional limit on top of the DSH version and runtime schema:
+
+| Route `api` | Supported fields from this plugin's 15 scalar fields |
+| --- | --- |
+| `openai-completions` | All 15 fields |
+| `openai-responses`, `azure-openai-responses`, `openai-codex-responses` | `supportsDeveloperRole`, `supportsStrictMode`, `supportsLongCacheRetention` |
+| `anthropic-messages` | `supportsLongCacheRetention` |
+| `bedrock-converse-stream` | `supportsStrictMode` |
+
+For a known protocol, fields outside its list are hidden and are not written. If the route has no recognized `api`, the runtime schema and DSH validation remain authoritative.
+
 Catalog models and `models[]` entries both support compat editing: catalog models use `modelOverrides.<model>.compat`, while `models[]` entries use `models[].compat`.
 
 ```yaml

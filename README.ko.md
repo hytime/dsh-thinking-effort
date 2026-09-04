@@ -32,7 +32,9 @@
 | `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 | schema가 노출하는 경우 지원하지만 `supportsFinishReason` 및 `supportsThinkingTokenBudget`는 없음 |
 | `0.1.2-alpha.1`부터 `<0.1.3-0`까지 | schema가 노출하는 경우 15개 필드 모두 지원 |
 
-DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 런타임 schema 노출에 따라 결정됩니다.
+DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 런타임 schema 노출에 따라 결정됩니다. 위 표는 각 DSH 버전의 최대 필드 집합이며, 라우트의 프로토콜에 따라 더 줄어들 수 있습니다.
+
+게이트웨이 호환 필드는 DSH 버전, 런타임 schema, 현재 라우트의 `api` 프로토콜이 모두 지원할 때만 설정할 수 있습니다. 지원하지 않는 필드는 UI에 표시되지 않으며 Settings에도 기록되지 않습니다. 이 15개 필드 중 `openai-completions`는 모두 제공하고, `openai-responses`, `azure-openai-responses`, `openai-codex-responses`는 `supportsDeveloperRole`, `supportsStrictMode`, `supportsLongCacheRetention`만 제공합니다. `api`가 없거나 인식되지 않으면 런타임 schema와 DSH 검증을 최종 기준으로 사용합니다.
 ## 왜 필요한가요?
 
 `llm-pi-ai` 어댑터는 타사 모델을 수동으로 선언할 수 있지만, 모델에 `reasoningEfforts`가 없는 경우가 많습니다. 그러면 Composer에 추론 강도 선택기가 표시되지 않고, `ultra`와 같은 게이트웨이 전용 값을 DSH 표준 단계에 매핑할 수도 없습니다.
