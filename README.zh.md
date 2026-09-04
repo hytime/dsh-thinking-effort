@@ -19,7 +19,7 @@
 
 > **兼容边界：** DSH Runtime compatibility 只负责 Settings 传输：新版 DSH 使用 `remote.settings`，旧版 DSH 使用 `connection.api.settings`。插件按运行时实际能力进行探测；旧版没有 Remote provider 时不会因此要求可选的 Remote 服务。
 >
-> Gateway Protocol compatibility 是独立的一层。DSH schema 提供时，插件读取官方 `llm-pi-ai.compat` 字段 `supportsDeveloperRole` 和 `maxTokensField`。DSH `0.1.0-rc.7` 不提供这两个字段，DSH `0.1.0-rc.8` 及后续受支持范围提供。安装并启用可选的 `dsh-llm-openai-completions` transport 后，它可以接管符合条件的自定义 OpenAI 兼容思考模型供应商。两个网关字段的 `Auto` 都会取消用户覆盖并恢复官方协议默认值。
+> Gateway Protocol compatibility 是独立的一层。DSH schema 提供时，插件支持 15 个常用标量 `llm-pi-ai.compat` 字段，按角色与推理、格式与输出、流式与工具、存储与缓存 4 组组织。boolean 字段可设为「自动」「支持」或「不支持」，enum 字段可设为「自动」或具体取值。DSH `0.1.0-rc.7` 不提供网关兼容设置；`0.1.0-rc.8` 至 `<0.1.2-alpha.1` 支持其他字段，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget`；`0.1.2-alpha.1` 及更高版本在 schema 支持时提供全部 15 个字段。安装并启用可选的 `dsh-llm-openai-completions` transport 后，它可以接管符合条件的自定义 OpenAI 兼容思考模型供应商。「自动」会取消当前层覆盖，并恢复继承链中的下一层取值。
 >
 > DSH `0.1.2-alpha.1` 及更高版本通过 `LocaleRuntime` 支持语言包注册外部 locale ID。本插件会动态注册 `ja` 和 `ko`，无需维护 DSH fork。只支持固定内置 locale ID 的旧版 DSH 仍只能使用 `zh` 和 `en`。
 >
@@ -30,9 +30,10 @@
 | DSH 范围 | 网关兼容设置 |
 | --- | --- |
 | `0.1.0-rc.7` | 不支持 |
-| `0.1.0-rc.8` 至 `<0.1.2-alpha.1` | 支持 |
-| `0.1.2-alpha.1` 至 `<0.1.3-0` | 支持 |
+| `0.1.0-rc.8` 至 `<0.1.2-alpha.1` | schema 暴露时可用，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget` |
+| `0.1.2-alpha.1` 至 `<0.1.3-0` | schema 暴露时支持全部 15 个字段 |
 
+从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。
 ## 为什么需要它？
 
 DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模型通常没有 `reasoningEfforts` 配置。因此，Composer 的模型选择器不会显示「推理等级」，你也无法把网关实际支持的值（例如 `ultra`）映射到 DSH 的标准档位。
@@ -71,7 +72,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 | --- | --- |
 | 默认档位补齐 | 为缺少配置的模型添加 `off`、`high`、`max`，不覆盖已有自定义值 |
 | 模型级编辑 | 在「设置 → 模型能力与档位」中逐模型勾选档位并填写线上值；catalog/modelOverrides 和 `models[]` 模型都可编辑 compat |
-| 网关兼容配置 | 按 provider 全局或单个模型配置 `supportsDeveloperRole` 和 `maxTokensField` |
+| 网关兼容配置 | 按 provider 全局或单个模型配置 15 个常用标量字段，按角色与推理、格式与输出、流式与工具、存储与缓存分组并默认收起 |
 | 网关值映射 | 例如 DSH 选择 `high` 时，实际向网关发送 `ultra` |
 | 子 agent 默认值 | 为未显式指定档位的子 agent 请求自动填入默认思考强度 |
 | 快捷预设 | 一键应用官方 DeepSeek 风格或通用档位组合 |
@@ -100,7 +101,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 ```
 
 官方 CLI 会同时更新 profile 依赖、锁文件和 `dsh.profile.bundles`，无需手工追加 YAML。
@@ -135,7 +136,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 ```
 
 如果旧依赖已经被其他工具移除，但 profile 的 bundle 列表仍残留旧名称，先从旧 profile 的 `pnpm-lock.yaml` 找到旧 GitHub commit，再使用官方命令恢复并移除：
@@ -143,7 +144,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 ```
 
 不要把 `dsh-thinking-effort` 添加到新的 `dsh.profile.bundles` 中。
@@ -169,7 +170,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
 
 ### 网关兼容配置
 
-provider 的 `compat` 区域是该 provider 下全部模型的全局默认值。请使用 DSH 官方 YAML 配置结构：
+provider 的 `compat` 区域是该 provider 下全部模型的全局默认值。设置页将 15 个字段按 4 组组织并默认收起。请使用 DSH 官方 YAML 配置结构：
 
 ```yaml
 providers:
@@ -184,9 +185,9 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-模型级 `compat` 会按字段逐字段覆盖 provider 默认值；模型层没有写出的字段继续继承 provider。`Auto` 会删除当前层字段，恢复从 provider 继承。对同一路由（provider）而言，只要同时存在非空的 `models[]` 和非空的 `modelOverrides`，配置就无效；官方 schema 会拒绝该配置，插件遇到异常数据时 fail closed。
+逐字段独立按以下顺序取值：model → provider → base/catalog → protocol。URL/hostname 不会作为 compat 来源。模型值只覆盖当前字段。「自动」（`Auto`）会删除当前层字段，恢复 provider 继承，并让继承链中的下一层生效。provider 默认值会应用到该路由的所有模型，模型级修改只影响当前模型。对同一路由（provider）而言，非空的 `models[]` 和非空的 `modelOverrides` 互斥；官方 schema 会拒绝该无效配置，插件遇到异常数据时 fail closed。
 
-设置页的 provider 全局区域用于修改该 provider 下全部模型的默认值。catalog/modelOverrides 模型和 `models[]` 模型都能展开后编辑单模型 compat：前者写入 `modelOverrides.<model>.compat`，后者写入 `models[].compat`。由于 Settings API 不支持数组索引 path op，`models[]` 修改会通过一个完整的 `providers.<route>.models` 数组 set 写回，同时保留其他模型、未知字段和其他 compat 字段。
+设置页的 provider 全局区域用于修改该 provider 下全部模型的默认值。catalog/modelOverrides 模型和 `models[]` 模型都能展开后编辑单模型 compat：前者只对目标字段使用 `modelOverrides.<model>.compat` 下的字段级 `set`/`unset`，后者通过一个完整的 `providers.<route>.models` 数组 set 写回，同时保留其他模型和字段。模型级修改不会影响其他模型。
 
 这些 compat 值属于控制面配置。它们不实现或替代网关 transport；网络请求仍由外部 transport 负责。
 

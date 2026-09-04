@@ -18,7 +18,7 @@
 
 > **互換性の境界：** DSH Runtime compatibility は Settings の transport だけを扱います。新しい DSH は `remote.settings`、古い DSH は `connection.api.settings` を公開します。プラグインは実行時の capability を検出し、古い DSH で Remote provider がない場合も、オプションの Remote service を必須にしません。
 >
-> Gateway Protocol compatibility は別の層です。DSH の schema が提供する場合、公式の `llm-pi-ai.compat` フィールド `supportsDeveloperRole` と `maxTokensField` を読み取ります。DSH `0.1.0-rc.7` にはこの 2 つのフィールドがなく、DSH `0.1.0-rc.8` 以降の対応範囲にはあります。オプションの `dsh-llm-openai-completions` transport をインストールして有効にすると、条件を満たすカスタム OpenAI 互換の思考プロバイダーを takeover できます。どちらのゲートウェイフィールドでも `Auto` はユーザーの上書きを unset し、公式プロトコルの既定値へ戻します。
+> Gateway Protocol compatibility は別の層です。DSH の schema が提供する場合、15 個の一般的なスカラー `llm-pi-ai.compat` フィールドに対応します。フィールドはロールと推論、形式と出力、ストリーミングとツール、保存とキャッシュの 4 グループに分かれ、既定では折りたたまれています。boolean は `Auto`、対応、非対応、enum は `Auto` と具体的な値を選べます。DSH `0.1.0-rc.7` にはゲートウェイ互換設定がなく、`0.1.0-rc.8` から `<0.1.2-alpha.1` では `supportsFinishReason` と `supportsThinkingTokenBudget` がありません。DSH `0.1.2-alpha.1` 以降は schema が対応する場合に 15 フィールドを提供します。オプションの `dsh-llm-openai-completions` transport をインストールして有効にすると、条件を満たすカスタム OpenAI 互換の思考プロバイダーを takeover できます。`Auto` は現在の層の上書きを unset し、継承チェーンの次の値へ戻します。
 >
 > DSH `0.1.2-alpha.1` 以降は `LocaleRuntime` の language-pack 拡張をサポートします。このプラグインは `ja` と `ko` を動的に登録するため、DSH の fork は不要です。組み込み locale ID だけを受け付ける古い DSH では `zh` と `en` のみ使用できます。
 >
@@ -29,9 +29,10 @@
 | DSH 範囲 | ゲートウェイ互換設定 |
 | --- | --- |
 | `0.1.0-rc.7` | 非対応 |
-| `0.1.0-rc.8` から `<0.1.2-alpha.1` | 対応 |
-| `0.1.2-alpha.1` から `<0.1.3-0` | 対応 |
+| `0.1.0-rc.8` から `<0.1.2-alpha.1` | schema が公開する場合は対応。ただし `supportsFinishReason` と `supportsThinkingTokenBudget` はありません |
+| `0.1.2-alpha.1` から `<0.1.3-0` | schema が公開する場合は 15 フィールドに対応 |
 
+DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行時 schema の公開内容に従います。
 ## なぜ使うのか
 
 `llm-pi-ai` アダプターではサードパーティモデルを手動で定義できますが、モデルに `reasoningEfforts` が設定されていないことがあります。その場合、Composer に推論強度セレクターが表示されず、ゲートウェイ固有の `ultra` のような値を DSH の標準レベルへ割り当てることもできません。
@@ -59,7 +60,7 @@ DSH 内蔵モデルだけを使用し、すでに推論コントロールが動�
 | --- | --- |
 | 既定レベル | カスタム値を上書きせず `off`、`high`、`max` を追加 |
 | モデルごとの編集 | Settings からレベルとゲートウェイ値を設定し、カタログ/modelOverrides と `models[]` エントリの両方で compat を編集 |
-| ゲートウェイ互換設定 | provider 全体またはモデルごとに `supportsDeveloperRole` と `maxTokensField` を設定 |
+| ゲートウェイ互換設定 | 15 個の一般的なスカラーを provider 全体またはモデルごとに設定。ロールと推論、形式と出力、ストリーミングとツール、保存とキャッシュの 4 グループで既定は折りたたみ |
 | ゲートウェイ値のマッピング | DSH の `high` 選択時に `ultra` を送信可能 |
 | Subagent の既定値 | 明示値のないリクエストにだけ既定値を適用 |
 | 多言語設定 | 中文、English、日本語、한국어の辞書を同梱。日本語/韓国語の切り替えは DSH の language-pack 対応を使用 |
@@ -74,7 +75,7 @@ profile の管理には公式 DSH CLI を使用してください。通常の `n
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 特定バージョンをインストール
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 
 # 更新
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -107,7 +108,7 @@ profile の確認、移行、検証、トラブルシューティングについ
 
 ### ゲートウェイ互換設定
 
-provider の `compat` ブロックは、その provider 配下のすべてのモデルに対するグローバル既定値です。DSH 公式の YAML 形式で設定します。
+provider の `compat` ブロックは、その provider 配下のすべてのモデルに対するグローバル既定値です。設定ページでは 15 フィールドを 4 グループに分け、既定で折りたたみます。DSH 公式の YAML 形式で設定します。
 
 ```yaml
 providers:
@@ -122,9 +123,9 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-モデルの `compat` は provider の既定値をフィールドごとに上書きします。モデル層に書かれていないフィールドは provider から継承されます。`Auto` は現在の層のフィールドを削除し、provider からの継承へ戻します。同じルート（provider）に非空の `models[]` と非空の `modelOverrides` が同時に存在する場合は無効な設定です。公式 schema はこの無効な設定を拒否し、プラグインは異常なデータに対して fail closed します。
+フィールドごとに独立して、model → provider → base/catalog → protocol の順で解決されます。URL/hostname は compat のソースとして使用しません。モデルの値はそのフィールドだけを上書きします。`Auto` は現在の層のフィールドを削除して provider の継承を復元し、チェーンの次の値を有効にします。provider の既定値はそのルートの全モデルに適用され、モデルの変更は現在のモデルだけに反映されます。同じルート（provider）では、非空の `models[]` と非空の `modelOverrides` は併用できません。公式 schema はこの無効な設定を拒否し、プラグインは異常なデータに対して fail closed します。
 
-Settings の provider グローバル領域では、その provider の全モデルの既定値を編集します。カタログ/modelOverrides とカスタム YAML `models[]` の両方で単一モデルの compat を編集できます。前者は `modelOverrides.<model>.compat`、後者は `models[].compat` に書き込みます。Settings API は配列インデックスの path op に対応しないため、`models[]` の変更は `providers.<route>.models` 全体を 1 回の配列 set で書き戻し、他のモデル、未知フィールド、他の compat フィールドを保持します。
+Settings の provider グローバル領域では、その provider の全モデルの既定値を編集します。カタログ/modelOverrides とカスタム YAML `models[]` の両方で単一モデルの compat を編集できます。前者は `modelOverrides.<model>.compat` の対象フィールドだけを `set`/`unset` し、後者は `providers.<route>.models` 全体を 1 回の配列 set で書き戻して他のモデルとフィールドを保持します。モデルの変更は他のモデルに影響しません。
 
 これらの compat 値はコントロールプレーンの設定です。ゲートウェイの transport を実装または置き換えるものではなく、ネットワーク要求は外部 transport が担当します。
 

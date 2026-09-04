@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS } from '../src/compat/gateway/fields.ts'
 import { clientCapabilities, hostCapabilities } from '../src/compat/capabilities.ts'
 import { capabilitiesForVersion, takeoverSupportedForVersion, takeoverTransportForVersion } from '../src/compat/version-map.ts'
 import { resolveCompatibility } from '../src/compat/version-adapter.ts'
@@ -20,7 +21,7 @@ const rc8Capabilities = {
   settingsTransport: 'legacy',
   settingsApi: 'connection.api.settings',
   baseModelFields: ['reasoningEfforts', 'input', 'contextWindow'],
-  gatewayCompatFields: ['supportsDeveloperRole', 'maxTokensField'],
+  gatewayCompatFields: [...RC8_COMPAT_FIELDS],
   externalLanguages: false,
   takeoverTransport: 'optional',
 } as const
@@ -29,7 +30,7 @@ const modernCapabilities = {
   settingsTransport: 'modern',
   settingsApi: 'remote.settings',
   baseModelFields: ['reasoningEfforts', 'input', 'contextWindow'],
-  gatewayCompatFields: ['supportsDeveloperRole', 'maxTokensField'],
+  gatewayCompatFields: [...ALPHA1_PLUS_COMPAT_FIELDS],
   externalLanguages: true,
   takeoverTransport: 'optional',
 } as const

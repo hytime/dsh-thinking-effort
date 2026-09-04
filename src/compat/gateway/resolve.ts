@@ -1,5 +1,6 @@
-import { SUPPORTED_THINKING_FORMATS } from './types.js'
 import { capabilitiesForVersion } from '../version-map.js'
+import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS } from './fields.js'
+import type { GatewayCompatFieldKey } from './fields.js'
 import {
   resolveTakeoverProviders,
   takeoverGatewayCompatInputs,
@@ -7,6 +8,7 @@ import {
 import type { PiAiSection, TakeoverSection } from './takeover.js'
 import type {
   GatewayCompat,
+  GatewayCompatEditability,
   GatewayCompatFieldResolution,
   GatewayCompatResolveInput,
   GatewayCompatResolution,
@@ -34,10 +36,6 @@ export type {
   TakeoverSection,
 } from './takeover.js'
 
-const gatewayFields = ['thinkingFormat', 'supportsReasoningEffort', 'supportsDeveloperRole', 'maxTokensField'] as const
-
-type GatewayField = typeof gatewayFields[number]
-
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -51,36 +49,31 @@ function compatRecord(value: unknown): Record<string, unknown> | undefined {
   return nested ?? input
 }
 
-function isSupportedThinkingFormat(value: unknown): value is typeof SUPPORTED_THINKING_FORMATS[number] {
-  return typeof value === 'string' && SUPPORTED_THINKING_FORMATS.some((entry) => entry === value)
-}
-
 function readCompat(value: unknown): GatewayCompat {
   const candidates = Array.isArray(value) ? value : [value]
-  const output: { -readonly [Key in keyof GatewayCompat]?: GatewayCompat[Key] } = {}
+  const output: Record<string, unknown> = {}
   for (const candidate of candidates) {
     const input = compatRecord(candidate)
     if (!input) continue
-    if (output.thinkingFormat === undefined && isSupportedThinkingFormat(input.thinkingFormat)) {
-      output.thinkingFormat = input.thinkingFormat
-    }
-    if (output.supportsReasoningEffort === undefined && typeof input.supportsReasoningEffort === 'boolean') {
-      output.supportsReasoningEffort = input.supportsReasoningEffort
-    }
-    if (output.supportsDeveloperRole === undefined && typeof input.supportsDeveloperRole === 'boolean') {
-      output.supportsDeveloperRole = input.supportsDeveloperRole
-    }
-    if (output.maxTokensField === undefined && (input.maxTokensField === 'max_tokens' || input.maxTokensField === 'max_completion_tokens')) {
-      output.maxTokensField = input.maxTokensField
+    for (const spec of Object.values(GATEWAY_COMPAT_FIELDS)) {
+      if (output[spec.key] !== undefined) continue
+      const fieldValue = input[spec.key]
+      if (spec.kind === 'boolean') {
+        if (typeof fieldValue === 'boolean') output[spec.key] = fieldValue
+      } else if (spec.kind === 'enum') {
+        if (typeof fieldValue === 'string' && (spec.enumValues as readonly string[]).some((entry) => entry === fieldValue)) {
+          output[spec.key] = fieldValue
+        }
+      }
     }
   }
-  return output
+  return output as GatewayCompat
 }
 
-function sourceFor(field: GatewayField, sources: readonly { value: GatewayCompat; source: GatewayCompatSource }[]): GatewayCompatFieldResolution<never> {
+function sourceFor(field: GatewayCompatFieldKey, sources: readonly { value: GatewayCompat; source: GatewayCompatSource }[]): GatewayCompatFieldResolution<unknown> {
   for (const candidate of sources) {
     const value = candidate.value[field]
-    if (value !== undefined) return { value: value as never, source: candidate.source }
+    if (value !== undefined) return { value, source: candidate.source }
   }
   return { value: undefined, source: 'unknown' }
 }
@@ -93,13 +86,12 @@ export function resolveGatewayCompat(input: GatewayCompatResolveInput): GatewayC
     { value: readCompat(input.catalogCompat), source: 'catalog' as const },
     { value: readCompat(input.protocolDefault), source: 'protocol' as const },
   ]
+  const fields = {} as Record<GatewayCompatFieldKey, GatewayCompatFieldResolution<unknown>>
+  for (const key of GATEWAY_COMPAT_FIELD_KEYS) fields[key] = sourceFor(key, sources)
   return {
     provider: input.provider,
     ...(input.model === undefined ? {} : { model: input.model }),
-    thinkingFormat: sourceFor('thinkingFormat', sources),
-    supportsReasoningEffort: sourceFor('supportsReasoningEffort', sources),
-    supportsDeveloperRole: sourceFor('supportsDeveloperRole', sources),
-    maxTokensField: sourceFor('maxTokensField', sources),
+    ...fields,
     ...(input.versionCapabilities === undefined ? {} : { versionCapabilities: input.versionCapabilities }),
   }
 }
@@ -132,35 +124,42 @@ export function resolveTakeoverGatewayCompat(input: {
   })
 }
 
+function selectionFor(modelCompatValue: unknown, kind: 'boolean' | 'enum'): string {
+  if (modelCompatValue === undefined) return 'auto'
+  if (kind === 'boolean') return modelCompatValue ? 'supported' : 'unsupported'
+  return String(modelCompatValue)
+}
+
+function isFieldAvailable(editability: GatewayCompatEditability | Record<string, unknown>, key: string, resolved: unknown): boolean {
+  const record = editability as Record<string, unknown>
+  if (Object.prototype.hasOwnProperty.call(record, key)) return record[key] === true
+  if (Object.prototype.hasOwnProperty.call(record, `${key}Available`)) return record[`${key}Available`] === true
+  const ef = record.editableFields
+  // 若 editableFields 是数组，它的 includes(key) 完全决定可用性（含负向 false）
+  if (Array.isArray(ef)) return ef.includes(key)
+  // 完全未提供编辑性信息才 fallback 到 resolved
+  return resolved !== undefined
+}
+
 export function resolveModelGatewayCompat(
   input: GatewayCompatResolveInput & { readonly model: string },
-  available?: Pick<ModelGatewayCompatView, 'supportsDeveloperRoleAvailable' | 'maxTokensFieldAvailable'>,
+  editability: GatewayCompatEditability | Record<string, unknown> = {},
 ): ModelGatewayCompatView {
   const resolution = resolveGatewayCompat(input)
   const modelCompat = readCompat(input.modelCompat)
-  const selectedDeveloperRole = modelCompat.supportsDeveloperRole
-  const selectedMaxTokensField = modelCompat.maxTokensField
-  return {
-    provider: input.provider,
-    model: input.model,
-    supportsDeveloperRole: selectedDeveloperRole === undefined
-      ? 'auto'
-      : selectedDeveloperRole ? 'supported' : 'unsupported',
-    maxTokensField: selectedMaxTokensField ?? 'auto',
-    supportsDeveloperRoleSource: resolution.supportsDeveloperRole.source,
-    maxTokensFieldSource: resolution.maxTokensField.source,
-    supportsDeveloperRoleResolved: resolution.supportsDeveloperRole.value,
-    maxTokensFieldResolved: resolution.maxTokensField.value,
-    supportsDeveloperRoleAvailable: available?.supportsDeveloperRoleAvailable ?? resolution.supportsDeveloperRole.value !== undefined,
-    maxTokensFieldAvailable: available?.maxTokensFieldAvailable ?? resolution.maxTokensField.value !== undefined,
+  const out: Record<string, unknown> = { provider: input.provider, model: input.model }
+  for (const key of GATEWAY_COMPAT_FIELD_KEYS) {
+    const spec = GATEWAY_COMPAT_FIELDS[key]
+    out[key] = selectionFor(modelCompat[key], spec.kind)
+    out[`${key}Source`] = resolution[key].source
+    out[`${key}Resolved`] = resolution[key].value
+    out[`${key}Available`] = isFieldAvailable(editability, key, resolution[key].value)
   }
+  return out as unknown as ModelGatewayCompatView
 }
 
 function providerSource(resolution: GatewayCompatResolution): ProviderGatewayCompatView['source'] {
-  const sources = [
-    resolution.supportsDeveloperRole.source,
-    resolution.maxTokensField.source,
-  ]
+  const sources = GATEWAY_COMPAT_FIELD_KEYS.map((key) => resolution[key].source)
   if (sources.includes('model') || sources.includes('provider')) return 'user'
   if (sources.includes('protocol') || sources.includes('base')) return 'base'
   if (sources.includes('catalog')) return 'catalog'
@@ -169,29 +168,25 @@ function providerSource(resolution: GatewayCompatResolution): ProviderGatewayCom
 
 export function resolveProviderGatewayCompat(input: GatewayCompatResolveInput): ProviderGatewayCompatView {
   const resolution = resolveGatewayCompat({ ...input, model: undefined, modelCompat: undefined })
-  const developer = resolution.supportsDeveloperRole.source === 'provider'
-    ? resolution.supportsDeveloperRole.value
-    : undefined
-  const maxTokens = resolution.maxTokensField.source === 'provider'
-    ? resolution.maxTokensField.value
-    : undefined
-  return {
-    provider: input.provider,
-    supportsDeveloperRole: developer === undefined ? 'auto' : developer ? 'supported' : 'unsupported',
-    maxTokensField: maxTokens ?? 'auto',
-    supportsDeveloperRoleSource: resolution.supportsDeveloperRole.source,
-    maxTokensFieldSource: resolution.maxTokensField.source,
-    supportsDeveloperRoleAvailable: developer !== undefined,
-    maxTokensFieldAvailable: maxTokens !== undefined,
-    source: providerSource(resolution),
+  const out: Record<string, unknown> = { provider: input.provider }
+  for (const key of GATEWAY_COMPAT_FIELD_KEYS) {
+    const spec = GATEWAY_COMPAT_FIELDS[key]
+    // provider 视图只看 source === 'provider' 的值作为显式选择，否则 auto
+    const explicit = resolution[key].source === 'provider' ? resolution[key].value : undefined
+    out[key] = selectionFor(explicit, spec.kind)
+    out[`${key}Source`] = resolution[key].source
+    out[`${key}Resolved`] = resolution[key].value
+    out[`${key}Available`] = explicit !== undefined
   }
+  out.source = providerSource(resolution)
+  return out as unknown as ProviderGatewayCompatView
 }
 
 export const resolveProviderCompat = resolveProviderGatewayCompat
 export const resolveGatewayCompatibility = resolveGatewayCompat
 
-export function gatewayCompatFieldNames(): readonly GatewayField[] {
-  return gatewayFields
+export function gatewayCompatFieldNames(): readonly GatewayCompatFieldKey[] {
+  return GATEWAY_COMPAT_FIELD_KEYS
 }
 
 export type { MaxTokensField }

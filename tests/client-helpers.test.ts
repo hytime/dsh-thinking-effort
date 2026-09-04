@@ -28,8 +28,9 @@ import { iosPalette } from '../src/client/theme.js'
 import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '../src/compat/model-source.js'
 import { resolveGatewayCompat, resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../src/compat/gateway/resolve.js'
 import { editableProviderCompatFields, validateProviderCompat } from '../src/compat/gateway/validation.js'
-import type { GatewayCompatEditability } from '../src/compat/gateway/types.js'
+import type { GatewayCompatEditability, GatewayCompatFieldKey, GatewayCompatFieldResolution } from '../src/compat/gateway/types.js'
 import { capabilitiesForVersion } from '../src/compat/version-map.js'
+import { GATEWAY_COMPAT_FIELD_KEYS, ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS } from '../src/compat/gateway/fields.js'
 import type { InventoryItem, ModelGatewayCompatUpdate, Translation } from '../src/client/types.js'
 import type { TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
 
@@ -40,7 +41,23 @@ const realGatewaySchema = {
   refs: {
     '0': { type: 'boolean', meta: {} },
     '1': { type: 'string', meta: {} },
-    '2': { type: 'object', meta: { default: {} }, dict: { supportsDeveloperRole: 0, maxTokensField: 1 } },
+    '2': { type: 'object', meta: { default: {} }, dict: {
+       supportsStore: 0,
+       supportsDeveloperRole: 0,
+       supportsReasoningEffort: 0,
+       supportsUsageInStreaming: 0,
+       supportsFinishReason: 0,
+       requiresToolResultName: 0,
+       requiresAssistantAfterToolResult: 0,
+       requiresThinkingAsText: 0,
+       requiresReasoningContentOnAssistantMessages: 0,
+       supportsThinkingTokenBudget: 0,
+       supportsStrictMode: 0,
+       supportsLongCacheRetention: 0,
+       maxTokensField: 1,
+       thinkingFormat: 1,
+       cacheControlFormat: 1,
+     } },
     '3': { type: 'object', meta: { default: {} }, dict: { compat: 2 } },
     '4': { type: 'dict', meta: { default: {} }, inner: 3, sKey: 5 },
     '5': { type: 'string', meta: {} },
@@ -61,6 +78,17 @@ function item(overrides: Partial<InventoryItem> = {}): InventoryItem {
     inOverrides: false,
     ...overrides,
   }
+}
+
+function runtimeCompat(
+  identity: { provider: string; model?: string },
+  overrides: Partial<Record<GatewayCompatFieldKey, GatewayCompatFieldResolution<unknown>>>,
+): TakeoverRuntimeResolution['compat'][number] {
+  const fields = Object.fromEntries(GATEWAY_COMPAT_FIELD_KEYS.map((key) => [key, {
+    value: undefined,
+    source: 'unknown' as const,
+  }]))
+  return { ...identity, ...fields, ...overrides } as TakeoverRuntimeResolution['compat'][number]
 }
 
 describe('model source conflict protection', () => {
@@ -367,6 +395,44 @@ describe('model inventory and operations', () => {
     expect(opsForModelArrayCompat([other, target, { ...target, inOverrides: true, index: -1 }], target, { supportsDeveloperRole: 'unsupported' }, editable)).toEqual([])
   })
 
+  it('models[] compat writes add and delete boolean and enum new fields by kind', () => {
+    const target = item({ model: 'model-b', index: 1, raw: { id: 'model-b', compat: { supportsStore: false, thinkingFormat: 'openai', keep: 'yes' } } })
+    const other = item({ model: 'model-a', index: 0, raw: { id: 'model-a', custom: 'keep-a' } })
+    const editable: GatewayCompatEditability = { supportsStore: true, thinkingFormat: true, editableFields: ['supportsStore', 'thinkingFormat'] }
+
+    expect(opsForModelArrayCompat([other, target], target, {
+      supportsStore: 'supported',
+      thinkingFormat: 'deepseek',
+    }, editable)).toEqual([{
+      op: 'set', path: ['providers', 'provider', 'models'], value: [
+        other.raw,
+        { id: 'model-b', compat: { supportsStore: true, thinkingFormat: 'deepseek', keep: 'yes' } },
+      ],
+    }])
+
+    expect(opsForModelArrayCompat([other, target], target, {
+      supportsStore: 'auto',
+      thinkingFormat: 'auto',
+    }, editable)).toEqual([{
+      op: 'set', path: ['providers', 'provider', 'models'], value: [
+        other.raw,
+        { id: 'model-b', compat: { keep: 'yes' } },
+      ],
+    }])
+  })
+
+  it('models[] compat writes reject invalid new-field values fail-closed', () => {
+    const target = item({ model: 'model-b', index: 1, raw: { id: 'model-b', compat: { supportsStore: false } } })
+    const other = item({ model: 'model-a', index: 0, raw: { id: 'model-a', custom: 'keep-a' } })
+    const editable: GatewayCompatEditability = { supportsStore: true, thinkingFormat: true, editableFields: ['supportsStore', 'thinkingFormat'] }
+
+    expect(opsForModelArrayCompat([other, target], target, { supportsStore: 'supported', thinkingFormat: 'not-official' as never }, editable)).toEqual([])
+    expect(opsForModelArrayCompat([other, target], target, { supportsStore: 'supported' }, {
+      supportsStore: false,
+      thinkingFormat: true,
+    })).toEqual([])
+  })
+
   it('writes provider compat fields independently for supported and unsupported values', () => {
     const editable: GatewayCompatEditability = { supportsDeveloperRole: true, maxTokensField: true, editableFields: ['supportsDeveloperRole', 'maxTokensField'] }
     expect(opsForProviderCompat('local', {
@@ -383,6 +449,29 @@ describe('model inventory and operations', () => {
     }, editable)).toEqual([
       { op: 'unset', path: ['providers', 'local', 'compat', 'supportsDeveloperRole'] },
       { op: 'unset', path: ['providers', 'local', 'compat', 'maxTokensField'] },
+    ])
+  })
+
+  it('writes a boolean new field as set true / unset / set false by kind', () => {
+    const editable = editableProviderCompatFields('modern', realGatewaySchema)
+    expect(opsForProviderCompat('local', { supportsStore: 'supported' }, editable)).toEqual([
+      { op: 'set', path: ['providers', 'local', 'compat', 'supportsStore'], value: true },
+    ])
+    expect(opsForProviderCompat('local', { supportsStore: 'auto' }, editable)).toEqual([
+      { op: 'unset', path: ['providers', 'local', 'compat', 'supportsStore'] },
+    ])
+    expect(opsForProviderCompat('local', { supportsStore: 'unsupported' }, editable)).toEqual([
+      { op: 'set', path: ['providers', 'local', 'compat', 'supportsStore'], value: false },
+    ])
+  })
+
+  it('writes an enum new field as its literal value and auto as unset', () => {
+    const editable = editableProviderCompatFields('modern', realGatewaySchema)
+    expect(opsForProviderCompat('local', { thinkingFormat: 'deepseek' }, editable)).toEqual([
+      { op: 'set', path: ['providers', 'local', 'compat', 'thinkingFormat'], value: 'deepseek' },
+    ])
+    expect(opsForProviderCompat('local', { thinkingFormat: 'auto' }, editable)).toEqual([
+      { op: 'unset', path: ['providers', 'local', 'compat', 'thinkingFormat'] },
     ])
   })
 
@@ -409,6 +498,94 @@ describe('model inventory and operations', () => {
     expect(result.thinkingFormat).toEqual({ value: 'deepseek', source: 'catalog' })
     expect(result.supportsReasoningEffort).toEqual({ value: false, source: 'catalog' })
     expect(result.model).toBe('model-a')
+  })
+
+  it('resolves the new scalar fields from catalog and protocol layers', () => {
+    const result = resolveGatewayCompat({
+      provider: 'local',
+      model: 'model-a',
+      providerCompat: { supportsStore: true, requiresThinkingAsText: true },
+      catalogCompat: { supportsStore: false, supportsThinkingTokenBudget: true, thinkingFormat: 'deepseek' },
+      protocolDefault: { thinkingFormat: 'openai', supportsUsageInStreaming: true },
+    })
+    expect(result.supportsStore).toEqual({ value: true, source: 'provider' })
+    expect(result.requiresThinkingAsText).toEqual({ value: true, source: 'provider' })
+    expect(result.supportsThinkingTokenBudget).toEqual({ value: true, source: 'catalog' })
+    expect(result.thinkingFormat).toEqual({ value: 'deepseek', source: 'catalog' })
+    expect(result.supportsUsageInStreaming).toEqual({ value: true, source: 'protocol' })
+  })
+
+  it('respects an explicit false editability flag over a resolved value', () => {
+    const view = resolveModelGatewayCompat({
+      provider: 'provider',
+      model: 'model-a',
+      catalogCompat: { supportsStore: true },
+    }, {
+      supportsStore: false,
+    })
+    expect(view.supportsStoreAvailable).toBe(false)
+    expect(view.supportsStoreResolved).toBe(true)
+  })
+
+  it('treats an empty editableFields array as unavailable even when a value is resolved', () => {
+    const view = resolveModelGatewayCompat({
+      provider: 'provider',
+      model: 'model-a',
+      catalogCompat: { supportsStore: true },
+    }, {
+      editableFields: [],
+    })
+    expect(view.supportsStoreAvailable).toBe(false)
+    expect(view.supportsStoreResolved).toBe(true)
+  })
+
+  it('falls back to resolved availability when editability is omitted', () => {
+    const view = resolveModelGatewayCompat({
+      provider: 'provider',
+      model: 'model-a',
+      catalogCompat: { supportsStore: true },
+    })
+    expect(view.supportsStoreAvailable).toBe(true)
+    expect(view.supportsStoreResolved).toBe(true)
+  })
+
+  it('uses editableFields to decide availability for fields not listed in it', () => {
+    const view = resolveModelGatewayCompat({
+      provider: 'provider',
+      model: 'model-a',
+      catalogCompat: { supportsStore: true, maxTokensField: 'max_tokens' },
+    }, {
+      editableFields: ['maxTokensField'],
+    })
+    expect(view.supportsStoreAvailable).toBe(false)
+    expect(view.maxTokensFieldAvailable).toBe(true)
+  })
+
+  it('projects resolved values onto the provider view alongside sources and availability', () => {
+    expect(resolveProviderGatewayCompat({
+      provider: 'local',
+      providerCompat: { supportsStore: true, maxTokensField: 'max_tokens' },
+      catalogCompat: { supportsStore: false },
+    })).toMatchObject({
+      provider: 'local',
+      supportsStore: 'supported',
+      supportsStoreResolved: true,
+      maxTokensField: 'max_tokens',
+      maxTokensFieldResolved: 'max_tokens',
+    })
+  })
+
+  it('projects every registered scalar field when version and schema admit it', () => {
+    const view = providerGatewayCompatViewFrom({
+      value: { providers: { provider: { compat: { supportsStore: true } } } },
+      schema: realGatewaySchema,
+    }, 'provider', 'modern')
+
+    expect(view.supportsStore).toBe('auto')
+    expect(view.supportsStoreSource).toBe('catalog')
+    expect(view.supportsStoreAvailable).toBe(true)
+    expect(view.supportsThinkingTokenBudgetAvailable).toBe(true)
+    expect(view.cacheControlFormatAvailable).toBe(true)
   })
 
   it('keeps model-b compat isolated from model-a and the provider view', () => {
@@ -481,14 +658,10 @@ describe('model inventory and operations', () => {
     }
     const runtime: TakeoverRuntimeResolution = {
       providers: ['other-provider'],
-      compat: [{
-        provider: 'other-provider',
-        model: 'model-a',
-        thinkingFormat: { value: undefined, source: 'unknown' },
-        supportsReasoningEffort: { value: undefined, source: 'unknown' },
+      compat: [runtimeCompat({ provider: 'other-provider', model: 'model-a' }, {
         supportsDeveloperRole: { value: true, source: 'model' },
         maxTokensField: { value: 'max_completion_tokens', source: 'model' },
-      }],
+      })],
     }
     const model = inventoryFrom(namespace)[0]
     expect(model).toBeDefined()
@@ -540,24 +713,16 @@ describe('model inventory and operations', () => {
     const malformed = { gatewayCompatFields: 'supportsDeveloperRole' } as unknown as Parameters<typeof editableProviderCompatFields>[0]
     const nullCapabilities = null as unknown as Parameters<typeof editableProviderCompatFields>[0]
     expect(editableProviderCompatFields(malformed, realGatewaySchema)).toEqual({
-      supportsDeveloperRole: false,
-      maxTokensField: false,
       editableFields: [],
     })
     expect(validateProviderCompat(malformed, realGatewaySchema)).toMatchObject({
-      supportsDeveloperRole: false,
-      maxTokensField: false,
       editableFields: [],
       available: false,
     })
     expect(editableProviderCompatFields(nullCapabilities, realGatewaySchema)).toEqual({
-      supportsDeveloperRole: false,
-      maxTokensField: false,
       editableFields: [],
     })
     expect(validateProviderCompat(nullCapabilities, realGatewaySchema)).toMatchObject({
-      supportsDeveloperRole: false,
-      maxTokensField: false,
       editableFields: [],
       available: false,
     })
@@ -873,14 +1038,10 @@ describe('model inventory and operations', () => {
     }
     const runtime: TakeoverRuntimeResolution = {
       providers: ['qwen-gateway'],
-      compat: [{
-        provider: 'qwen-gateway',
-        model: 'qwen-thinking',
-        thinkingFormat: { value: undefined, source: 'unknown' },
-        supportsReasoningEffort: { value: undefined, source: 'unknown' },
+      compat: [runtimeCompat({ provider: 'qwen-gateway', model: 'qwen-thinking' }, {
         supportsDeveloperRole: { value: true, source: 'protocol' },
         maxTokensField: { value: 'max_completion_tokens', source: 'protocol' },
-      }],
+      })],
     }
 
     expect(modelGatewayCompatViewFrom(
@@ -898,17 +1059,53 @@ describe('model inventory and operations', () => {
     })
   })
 
-  it('uses namespace compat when takeover runtime has no matching model', () => {
+  it('does not crash on a partial takeover runtime resolution and falls back for unprojected fields', () => {
+    const namespace = {
+      value: { providers: { 'qwen-gateway': { models: [{ id: 'qwen-thinking' }], compat: { supportsStore: false } } } },
+      schema: realGatewaySchema,
+    }
     const runtime: TakeoverRuntimeResolution = {
       providers: ['qwen-gateway'],
       compat: [{
         provider: 'qwen-gateway',
-        model: 'other-model',
-        thinkingFormat: { value: undefined, source: 'unknown' },
-        supportsReasoningEffort: { value: undefined, source: 'unknown' },
+        model: 'qwen-thinking',
+        // Simulate a DSH runtime entry that projects only two fields.
+        supportsDeveloperRole: { value: true, source: 'protocol' },
+        maxTokensField: { value: 'max_completion_tokens', source: 'protocol' },
+      } as unknown as TakeoverRuntimeResolution['compat'][number]],
+    }
+
+    const view = modelGatewayCompatViewFrom(
+      namespace,
+      item({ route: 'qwen-gateway', model: 'qwen-thinking', raw: { id: 'qwen-thinking' } }),
+      'modern',
+      runtime,
+    )
+    // 仅协议条目的字段按 protocol 投影，其余字段不受影响
+    expect(view).toMatchObject({
+      supportsDeveloperRole: 'auto',
+      supportsDeveloperRoleSource: 'protocol',
+      supportsDeveloperRoleResolved: true,
+      maxTokensField: 'auto',
+      maxTokensFieldSource: 'protocol',
+      maxTokensFieldResolved: 'max_completion_tokens',
+    })
+    // 缺失字段不会以 protocol 来源泄漏，且正常走 catalog fallback
+    expect(view.supportsStoreSource).toBe('catalog')
+    expect(view.thinkingFormatSource).toBe('unknown')
+    expect(view.cacheControlFormatSource).toBe('unknown')
+    // 批量视图复用同一防御路径
+    expect(modelGatewayCompatViewsFrom(namespace, inventoryFrom(namespace), 'modern', runtime)[modelCompatKey('qwen-gateway', 'qwen-thinking')])
+      .toMatchObject({ supportsDeveloperRoleSource: 'protocol', supportsStoreSource: 'catalog' })
+  })
+
+  it('uses namespace compat when takeover runtime has no matching model', () => {
+    const runtime: TakeoverRuntimeResolution = {
+      providers: ['qwen-gateway'],
+      compat: [runtimeCompat({ provider: 'qwen-gateway', model: 'other-model' }, {
         supportsDeveloperRole: { value: true, source: 'model' },
         maxTokensField: { value: 'max_completion_tokens', source: 'model' },
-      }],
+      })],
     }
     const namespace = {
       value: { providers: { 'qwen-gateway': { models: [{ id: 'qwen-thinking', compat: { supportsDeveloperRole: false } }] } } },
@@ -934,14 +1131,10 @@ describe('model inventory and operations', () => {
     }
     const runtime: TakeoverRuntimeResolution = {
       providers: ['provider'],
-      compat: [{
-        provider: 'provider',
-        model: 'model-a',
-        thinkingFormat: { value: undefined, source: 'unknown' },
-        supportsReasoningEffort: { value: undefined, source: 'unknown' },
+      compat: [runtimeCompat({ provider: 'provider', model: 'model-a' }, {
         supportsDeveloperRole: { value: true, source: 'model' },
         maxTokensField: { value: 'max_completion_tokens', source: 'provider' },
-      }],
+      })],
     }
 
     expect(modelGatewayCompatViewFrom(namespace, inventoryFrom(namespace)[0]!, 'modern', runtime)).toMatchObject({
@@ -960,7 +1153,7 @@ describe('model inventory and operations', () => {
       model: 'model-a',
       modelCompat: { maxTokensField: 'max_tokens' },
       providerCompat: { maxTokensField: 'max_completion_tokens', supportsDeveloperRole: true },
-    })).toEqual({
+    })).toMatchObject({
       provider: 'local',
       supportsDeveloperRole: 'supported',
       maxTokensField: 'max_completion_tokens',
@@ -973,11 +1166,9 @@ describe('model inventory and operations', () => {
   })
 
   it('recognizes gateway fields in the real Settings schema.toJSON envelope', () => {
-    expect(editableProviderCompatFields('modern', realGatewaySchema)).toEqual({
-      supportsDeveloperRole: true,
-      maxTokensField: true,
-      editableFields: ['supportsDeveloperRole', 'maxTokensField'],
-    })
+    const result = editableProviderCompatFields('modern', realGatewaySchema)
+    expect(result.editableFields).toEqual(GATEWAY_COMPAT_FIELD_KEYS)
+    expect(result).toMatchObject(Object.fromEntries(GATEWAY_COMPAT_FIELD_KEYS.map((field) => [field, true])))
   })
 
   it('shows only user overrides as explicit provider values and retains field provenance', () => {
@@ -1113,16 +1304,34 @@ describe('model inventory and operations', () => {
       editableFields: ['supportsDeveloperRole', 'maxTokensField'],
     })
     expect(validateProviderCompat(capabilitiesForVersion('0.1.0-rc.7'), schema)).toMatchObject({
-      supportsDeveloperRole: false,
-      maxTokensField: false,
       editableFields: [],
       available: false,
     })
     expect(validateProviderCompat(capabilitiesForVersion('0.1.0-rc.8'), {})).toMatchObject({
-      supportsDeveloperRole: false,
-      maxTokensField: false,
+      editableFields: [],
       available: false,
     })
+    const rc8Schema = {
+      properties: {
+        providers: {
+          additionalProperties: {
+            properties: {
+              compat: { properties: Object.fromEntries(RC8_COMPAT_FIELDS.map((field) => [field, {}])) },
+            },
+          },
+        },
+      },
+    }
+    expect(editableProviderCompatFields(capabilitiesForVersion('0.1.0-rc.8'), rc8Schema).editableFields)
+      .toEqual(GATEWAY_COMPAT_FIELD_KEYS.filter((field) => RC8_COMPAT_FIELDS.includes(field as typeof RC8_COMPAT_FIELDS[number])))
+  })
+
+  it('keeps aggregate provider availability true for rc8 with alpha-only schema fields excluded', () => {
+    const result = validateProviderCompat(capabilitiesForVersion('0.1.0-rc.8'), realGatewaySchema)
+    expect(result.available).toBe(true)
+    expect(result.editableFields).toEqual(GATEWAY_COMPAT_FIELD_KEYS.filter((field) => RC8_COMPAT_FIELDS.includes(field as typeof RC8_COMPAT_FIELDS[number])))
+    expect(result.supportsFinishReason).toBeUndefined()
+    expect(result.supportsThinkingTokenBudget).toBeUndefined()
   })
 
   it('refuses provider compat writes when editability is missing or unclear', () => {
@@ -1192,6 +1401,46 @@ describe('model inventory and operations', () => {
     ])
   })
 
+  it('model compat operations write boolean and enum new fields by kind to modelOverrides paths', () => {
+    const model = item({ index: -1, model: 'qwen-thinking', inOverrides: true })
+    const editable: GatewayCompatEditability = {
+      supportsStore: true,
+      thinkingFormat: true,
+      editableFields: ['supportsStore', 'thinkingFormat'],
+    }
+
+    expect(opsForModelCompat(model, {
+      supportsStore: 'unsupported',
+      thinkingFormat: 'deepseek',
+    }, editable)).toEqual([
+      { op: 'set', path: ['providers', 'provider', 'modelOverrides', 'qwen-thinking', 'compat', 'thinkingFormat'], value: 'deepseek' },
+      { op: 'set', path: ['providers', 'provider', 'modelOverrides', 'qwen-thinking', 'compat', 'supportsStore'], value: false },
+    ])
+
+    expect(opsForModelCompat(model, {
+      supportsStore: 'auto',
+      thinkingFormat: 'auto',
+    }, editable)).toEqual([
+      { op: 'unset', path: ['providers', 'provider', 'modelOverrides', 'qwen-thinking', 'compat', 'thinkingFormat'] },
+      { op: 'unset', path: ['providers', 'provider', 'modelOverrides', 'qwen-thinking', 'compat', 'supportsStore'] },
+    ])
+  })
+
+  it('model compat operations reject invalid new-field values fail-closed', () => {
+    const model = item({ index: -1, model: 'qwen-thinking', inOverrides: true })
+    const editable: GatewayCompatEditability = {
+      supportsStore: true,
+      thinkingFormat: true,
+      editableFields: ['supportsStore', 'thinkingFormat'],
+    }
+
+    expect(opsForModelCompat(model, { supportsStore: 'supported', thinkingFormat: 'not-official' as never }, editable)).toEqual([])
+    expect(opsForModelCompat(model, { supportsStore: 'supported' }, {
+      supportsStore: false,
+      thinkingFormat: true,
+    })).toEqual([])
+  })
+
   it('modelOverrides helper rejects models[] items and fails closed for invalid input', () => {
     const editable: GatewayCompatEditability = {
       supportsDeveloperRole: true,
@@ -1230,7 +1479,6 @@ describe('model inventory and operations', () => {
     const schema = { properties: { maxTokensField: {} } }
     const result = editableProviderCompatFields(capabilitiesForVersion('0.1.0-rc.8'), schema)
     expect(result).toEqual({
-      supportsDeveloperRole: false,
       maxTokensField: true,
       editableFields: ['maxTokensField'],
     })

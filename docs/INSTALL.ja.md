@@ -38,20 +38,31 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 この 2 つは別の互換レイヤーです。
 
 - **DSH Runtime：** Settings の transport は新しい DSH では `remote.settings`、古い DSH では `connection.api.settings` です。プラグインは実行時 capability を検出し、古い経路へのフォールバックをオプションとして扱います。
-- **Gateway Protocol：** DSH の schema が提供する場合、公式の `llm-pi-ai.compat` フィールド `supportsDeveloperRole` と `maxTokensField` を使用します。オプションの `dsh-llm-openai-completions` transport をインストールして有効にすると、条件を満たすカスタム OpenAI 互換の思考プロバイダーを takeover できます。
+- **Gateway Protocol：** DSH の schema が提供する場合、公式の `llm-pi-ai.compat` フィールドを使用します。オプションの `dsh-llm-openai-completions` transport をインストールして有効にすると、条件を満たすカスタム OpenAI 互換の思考プロバイダーを takeover できます。
 
 version-map はゲートウェイ capability を次のように判定します。
 
 | DSH 範囲 | Gateway compat フィールド | Takeover transport |
 | --- | --- | --- |
-| `0.1.0-rc.7` | `supportsDeveloperRole` と `maxTokensField` は非対応 | 非対応 |
-| `0.1.0-rc.8` 以降の対応範囲 | DSH schema が公開する場合は両フィールドに対応 | オプション |
+| `0.1.0-rc.7` | 非対応 | 非対応 |
+| `0.1.0-rc.8` から `<0.1.2-alpha.1` | schema が公開する場合は対応。ただし `supportsFinishReason` と `supportsThinkingTokenBudget` はありません | オプション |
+| `0.1.2-alpha.1` 以降の対応範囲 | schema が公開する場合は 15 フィールドに対応 | オプション |
 
-どちらのフィールドでも `Auto` はユーザーの上書きを unset し、公式プロトコルの既定値へ戻します。オプションの transport が未インストールまたは無効の場合、takeover は適用されません。
+DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行時 schema の公開内容に従います。
+実行時 schema が公開しないフィールドは UI に表示されません。オプションの transport が未インストールまたは無効の場合、takeover は適用されません。
 
 ## ゲートウェイ互換設定
 
-Settings の provider グローバル領域では、その provider 配下のすべてのモデルの `compat` 既定値を編集します。モデルを 1 つ展開すると単一モデル領域が開きます。カタログモデルと `models[]` エントリの両方で compat を編集できます。前者は `modelOverrides.<model>.compat`、後者は `models[].compat` を使用します。
+Settings の provider グローバル領域では、その provider 配下のすべてのモデルの `compat` 既定値を編集します。モデルを 1 つ展開すると単一モデル領域が開きます。4 グループは既定で折りたたまれています。
+
+| グループ | boolean フィールド（`Auto` / 対応 / 非対応） | enum フィールド（`Auto` / 具体的な値） |
+| --- | --- | --- |
+| ロールと推論 | `supportsDeveloperRole`、`supportsReasoningEffort`、`supportsThinkingTokenBudget` | — |
+| 形式と出力 | `requiresThinkingAsText`、`requiresReasoningContentOnAssistantMessages` | `thinkingFormat`：`openai`、`openrouter`、`deepseek`、`together`、`baseten`、`zai`、`qwen`、`chat-template`、`qwen-chat-template`、`string-thinking`、`ant-ling`；`maxTokensField`：`max_tokens`、`max_completion_tokens` |
+| ストリーミングとツール | `supportsUsageInStreaming`、`supportsFinishReason`、`requiresToolResultName`、`requiresAssistantAfterToolResult`、`supportsStrictMode` | — |
+| 保存とキャッシュ | `supportsStore`、`supportsLongCacheRetention` | `cacheControlFormat`：`anthropic` |
+
+カタログモデルと `models[]` エントリの両方で compat を編集できます。前者は `modelOverrides.<model>.compat`、後者は `models[].compat` を使用します。
 
 ```yaml
 providers:
@@ -66,11 +77,9 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-モデルの `compat` は provider の既定値をフィールドごとに上書きします。モデル層にないフィールドは provider の値を継承します。`Auto` は現在の層のフィールドを削除し、provider からの継承へ戻します。同じルート（provider）に非空の `models[]` と非空の `modelOverrides` が同時に存在する場合は無効な設定です。公式 schema はこの無効な設定を拒否し、プラグインは異常なデータに対して fail closed します。
+フィールドごとに独立して、model → provider → base/catalog → protocol の順で解決されます。URL/hostname は compat のソースとして使用しません。モデルの値はそのフィールドだけを上書きします。`Auto` は現在の層の値を削除して provider の継承を復元し、チェーンの次の値を有効にします。provider の既定値はそのルートの全モデルに適用され、モデルの変更は現在のモデルだけに反映されます。同じルート（provider）では、非空の `models[]` と非空の `modelOverrides` は併用できません。公式 schema はこの無効な設定を拒否し、プラグインは異常なデータに対して fail closed します。
 
-現在の DSH Settings API は配列インデックスの path op に対応していません。そのため `models[]` の compat 保存は `providers.<route>.models` 全体を 1 回の配列 set で書き戻し、他のモデル、未知フィールド、他の compat フィールドを保持します。`modelOverrides` の編集は従来どおり正確なフィールド単位の操作を使用します。実行時 schema が公開しないフィールドも編集できません。古い DSH では既存の基本設定を引き続き利用できます。
-
-これらの値はコントロールプレーンの設定だけを行います。このプラグインはゲートウェイの transport を実装または置き換えず、ネットワーク要求は外部 transport が担当します。
+現在の DSH Settings API は配列インデックスの path op に対応していません。そのため `modelOverrides` の編集はフィールド単位の `set`/`unset` を使い、選択したフィールドだけを変更します。`models[]` の保存は `providers.<route>.models` 全体を 1 回の配列 set で書き戻し、他のモデル、未知フィールド、他の compat フィールドを保持します。実行時 schema が公開しないフィールドは表示されません。これらの値はコントロールプレーン設定だけで、ネットワーク要求は外部 transport が担当します。
 
 ## 1. 公式インストール
 
@@ -83,7 +92,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 今回のリリースを明示してインストールします。
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 ```
 
 公式 CLI は profile の依存関係、lockfile、`dsh.profile.bundles` を自動的に更新します。YAML の行を手動で追加しないでください。
@@ -99,7 +108,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 特定バージョンへ更新する場合：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 ```
 
 Host の変更には DSH を再起動し、Client の変更には Web ページを更新してください。
@@ -117,7 +126,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 ```
 
 依存関係は別のツールで削除済みですが、古い bundle が残っている場合は次で composition を確認します。
@@ -131,7 +140,7 @@ dsh --profile <profile> --dump-default-config
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 ```
 
 新しい bundle リストに旧パッケージ名を追加しないでください。
@@ -146,7 +155,7 @@ grep -n "@hytime/dsh-thinking-effort" \
 node -p "require('${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/node_modules/@hytime/dsh-thinking-effort/package.json').version"
 ```
 
-このリリースではバージョンが `0.1.14` である必要があります。
+このリリースではバージョンが `0.2.0` である必要があります。
 
 ## 日本語と韓国語の対応状況
 

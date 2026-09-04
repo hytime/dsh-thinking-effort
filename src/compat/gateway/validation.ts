@@ -1,7 +1,8 @@
-import type { DshVersionCapabilities, GatewayCompatEditableField } from '../version-map.js'
+import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS } from './fields.js'
+import type { GatewayCompatFieldKey } from './fields.js'
+import type { DshVersionCapabilities } from '../version-map.js'
 import type { GatewayCompatEditability, GatewayCompatValidationResult } from './types.js'
 
-const editableFields = ['supportsDeveloperRole', 'maxTokensField'] as const
 type RuntimeProfile = 'modern' | 'legacy' | 'unknown'
 type EditabilityCapabilities = DshVersionCapabilities | RuntimeProfile
 
@@ -70,10 +71,10 @@ function schemaProperties(value: unknown): Record<string, unknown> | undefined {
 function compatProperties(schema: unknown): Record<string, unknown> | undefined {
   const pathNode = schemaNodeAtPath(schema, ['providers', '*', 'compat'])
   const pathProperties = schemaProperties(pathNode)
-  if (pathProperties && editableFields.some((field) => hasProperty(pathProperties, field))) return pathProperties
+  if (pathProperties && GATEWAY_COMPAT_FIELD_KEYS.some((field) => hasProperty(pathProperties, field))) return pathProperties
 
   const direct = schemaProperties(schema)
-  if (direct && editableFields.some((field) => hasProperty(direct, field))) return direct
+  if (direct && GATEWAY_COMPAT_FIELD_KEYS.some((field) => hasProperty(direct, field))) return direct
 
   const providers = direct?.providers
   const providerProperties = schemaProperties(providers)
@@ -90,14 +91,14 @@ function compatProperties(schema: unknown): Record<string, unknown> | undefined 
   return undefined
 }
 
-function schemaAllowsField(schema: unknown, field: GatewayCompatEditableField): boolean {
+function schemaAllowsField(schema: unknown, field: GatewayCompatFieldKey): boolean {
   const properties = compatProperties(schema)
   return properties !== undefined && hasProperty(properties, field)
 }
 
 function runtimeAllowsField(
   capabilities: EditabilityCapabilities | undefined,
-  field: GatewayCompatEditableField,
+  field: GatewayCompatFieldKey,
 ): boolean {
   if (capabilities === 'modern' || capabilities === 'legacy') return true
   if (capabilities === 'unknown' || capabilities === undefined || capabilities === null || typeof capabilities !== 'object') return false
@@ -108,18 +109,13 @@ export function editableProviderCompatFields(
   capabilities: EditabilityCapabilities | undefined,
   descriptorSchema: unknown,
 ): GatewayCompatEditability {
-  const supportsDeveloperRole = runtimeAllowsField(capabilities, 'supportsDeveloperRole')
-    && schemaAllowsField(descriptorSchema, 'supportsDeveloperRole')
-  const maxTokensField = runtimeAllowsField(capabilities, 'maxTokensField')
-    && schemaAllowsField(descriptorSchema, 'maxTokensField')
-  const editableFieldsResult = editableFields.filter((field) => (
-    field === 'supportsDeveloperRole' ? supportsDeveloperRole : maxTokensField
+  const editableFieldsResult = GATEWAY_COMPAT_FIELD_KEYS.filter((field) => (
+    runtimeAllowsField(capabilities, field) && schemaAllowsField(descriptorSchema, field)
   ))
-  return {
-    supportsDeveloperRole,
-    maxTokensField,
-    editableFields: editableFieldsResult,
-  }
+  const availability = Object.fromEntries(
+    editableFieldsResult.map((field) => [field, true]),
+  ) as Partial<Record<GatewayCompatFieldKey, boolean>>
+  return { ...availability, editableFields: editableFieldsResult }
 }
 
 export function validateProviderCompat(
@@ -129,16 +125,16 @@ export function validateProviderCompat(
   const fields = editableProviderCompatFields(capabilities, descriptorSchema)
   return {
     ...fields,
-    available: fields.editableFields.length === editableFields.length,
+    available: fields.supportsDeveloperRole === true && fields.maxTokensField === true,
   }
 }
 
 export function canEditProviderCompatField(
   capabilities: EditabilityCapabilities | undefined,
   descriptorSchema: unknown,
-  field: GatewayCompatEditableField,
+  field: GatewayCompatFieldKey,
 ): boolean {
-  return editableProviderCompatFields(capabilities, descriptorSchema)[field]
+  return editableProviderCompatFields(capabilities, descriptorSchema)[field] === true
 }
 
 export const providerCompatEditability = editableProviderCompatFields

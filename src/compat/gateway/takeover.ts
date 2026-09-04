@@ -7,6 +7,7 @@ import {
 import type { DshVersionCapabilities } from '../version-map.js'
 import { editableProviderCompatFields } from './validation.js'
 import { hasModelSourceConflict } from '../model-source.js'
+import { GATEWAY_COMPAT_FIELD_KEYS } from './fields.js'
 
 export const TAKEOVER_NAMESPACE = 'llm-openai-completions'
 export const PI_AI_NAMESPACE = 'llm-pi-ai'
@@ -51,12 +52,12 @@ function runtimeCapabilities(input: TakeoverProvidersInput): DshVersionCapabilit
 
   if (input.runtimeProfile !== 'legacy' && input.runtimeProfile !== 'modern') return undefined
   const editability = editableProviderCompatFields(input.runtimeProfile, input.descriptorSchema)
-  if (!editability.supportsDeveloperRole || !editability.maxTokensField) return undefined
+  if (editability.supportsDeveloperRole !== true || editability.maxTokensField !== true) return undefined
   return {
     settingsTransport: input.runtimeProfile,
     settingsApi: input.runtimeProfile === 'modern' ? 'remote.settings' : 'connection.api.settings',
     baseModelFields: ['reasoningEfforts'],
-    gatewayCompatFields: ['supportsDeveloperRole', 'maxTokensField'],
+    gatewayCompatFields: GATEWAY_COMPAT_FIELD_KEYS,
     externalLanguages: input.runtimeProfile === 'modern',
     takeoverTransport: 'optional',
   }

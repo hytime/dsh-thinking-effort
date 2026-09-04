@@ -2,6 +2,7 @@ import type { InventoryItem, InputModality, ModelGatewayCompatView, ProviderGate
 import type { TakeoverRuntimeResolution } from './takeover-runtime.js'
 import { resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../compat/gateway/resolve.js'
 import { editableProviderCompatFields } from '../compat/gateway/validation.js'
+import { GATEWAY_COMPAT_FIELD_KEYS } from '../compat/gateway/fields.js'
 import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '../compat/model-source.js'
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -83,17 +84,12 @@ function protocolCompatFrom(
   resolution: TakeoverRuntimeResolution['compat'][number] | undefined,
 ): Record<string, unknown> | undefined {
   if (resolution === undefined) return undefined
-  const supportsDeveloperRole = resolution.supportsDeveloperRole.source === 'protocol'
-    ? resolution.supportsDeveloperRole.value
-    : undefined
-  const maxTokensField = resolution.maxTokensField.source === 'protocol'
-    ? resolution.maxTokensField.value
-    : undefined
-  if (supportsDeveloperRole === undefined && maxTokensField === undefined) return undefined
-  return {
-    ...(supportsDeveloperRole === undefined ? {} : { supportsDeveloperRole }),
-    ...(maxTokensField === undefined ? {} : { maxTokensField }),
+  const projection: Record<string, unknown> = {}
+  for (const key of GATEWAY_COMPAT_FIELD_KEYS) {
+    const field = record(record(resolution)?.[key])
+    if (field?.source === 'protocol' && field.value !== undefined) projection[key] = field.value
   }
+  return Object.keys(projection).length > 0 ? projection : undefined
 }
 
 export function modelGatewayCompatViewFrom(
@@ -124,10 +120,7 @@ export function modelGatewayCompatViewFrom(
     baseCompat: [baseModel, baseProvider],
     catalogCompat: [catalogModel, catalogProvider],
     protocolDefault: protocolCompatFrom(runtimeModel),
-  }, {
-    supportsDeveloperRoleAvailable: editability.supportsDeveloperRole,
-    maxTokensFieldAvailable: editability.maxTokensField,
-  })
+  }, editability)
   return resolved
 }
 
@@ -175,11 +168,11 @@ export function providerGatewayCompatViewFrom(
     protocolDefault: protocolCompatFrom(runtime),
   })
   const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema)
-  return {
-    ...resolved,
-    supportsDeveloperRoleAvailable: editability.supportsDeveloperRole,
-    maxTokensFieldAvailable: editability.maxTokensField,
+  const out: Record<string, unknown> = { ...resolved }
+  for (const key of GATEWAY_COMPAT_FIELD_KEYS) {
+    out[`${key}Available`] = editability[key] === true
   }
+  return out as unknown as ProviderGatewayCompatView
 }
 
 export const providerCompatViewFrom = providerGatewayCompatViewFrom

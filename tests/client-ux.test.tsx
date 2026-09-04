@@ -6,10 +6,12 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SectionEditor } from '../src/client/SectionEditor.js'
 import { createTakeoverRuntimeStore, type TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
+import { resolveGatewayCompat } from '../src/compat/gateway/resolve.js'
 import { GatewayCompatControls, renderGatewayCompatControls } from '../src/client/components/GatewayCompatControls.js'
 import { ModelEditor } from '../src/client/components/ModelEditor.js'
 import { inventoryFrom, modelGatewayCompatViewFrom, providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
 import { en, ja, ko, zh } from '../src/client/locales.js'
+import { modelView, providerView } from './gateway-compat-test-helpers.js'
 import { iosPalette } from '../src/client/theme.js'
 import type {
   ClientLocale,
@@ -33,7 +35,23 @@ const realGatewaySchema = {
   refs: {
     '0': { type: 'boolean', meta: {} },
     '1': { type: 'string', meta: {} },
-    '2': { type: 'object', meta: { default: {} }, dict: { supportsDeveloperRole: 0, maxTokensField: 1 } },
+    '2': { type: 'object', meta: { default: {} }, dict: {
+      supportsStore: 0,
+      supportsDeveloperRole: 0,
+      supportsReasoningEffort: 0,
+      supportsUsageInStreaming: 0,
+      supportsFinishReason: 0,
+      requiresToolResultName: 0,
+      requiresAssistantAfterToolResult: 0,
+      requiresThinkingAsText: 0,
+      requiresReasoningContentOnAssistantMessages: 0,
+      supportsThinkingTokenBudget: 0,
+      supportsStrictMode: 0,
+      supportsLongCacheRetention: 0,
+      maxTokensField: 1,
+      thinkingFormat: 1,
+      cacheControlFormat: 1,
+    } },
     '3': { type: 'object', meta: { default: {} }, dict: { compat: 2 } },
     '4': { type: 'dict', meta: { default: {} }, inner: 3, sKey: 5 },
     '5': { type: 'string', meta: {} },
@@ -170,22 +188,22 @@ afterEach(() => {
 
 describe('SectionEditor user behavior', () => {
   it('renders provider gateway compatibility controls and emits only a view change', () => {
-    const view = {
+    const view = providerView({
       provider: 'provider',
       supportsDeveloperRole: 'auto' as const,
       maxTokensField: 'max_tokens' as const,
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
       supportsDeveloperRoleSource: 'unknown' as const,
-       maxTokensFieldSource: 'unknown' as const,
-       source: 'unknown' as const,
-    }
+      maxTokensFieldSource: 'unknown' as const,
+      source: 'unknown' as const,
+    })
     const onChange = vi.fn()
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(<GatewayCompatControls view={view} onChange={onChange} />)
+      root.render(<GatewayCompatControls view={view} onChange={onChange} availableCount={0} />)
     })
 
     expect(container.textContent).toContain('Gateway compatibility')
@@ -201,7 +219,7 @@ describe('SectionEditor user behavior', () => {
   })
 
   it('renders model compat controls with field sources and Auto inheritance', () => {
-    const view = {
+    const view = modelView({
       provider: 'provider',
       model: 'model-b',
       supportsDeveloperRole: 'auto' as const,
@@ -210,13 +228,13 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'model' as const,
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
-    }
+    })
     const onChange = vi.fn()
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(<GatewayCompatControls scope="model" view={view} onChange={onChange} />)
+      root.render(<GatewayCompatControls scope="model" view={view} onChange={onChange} availableCount={0} />)
     })
 
     expect(container.textContent).toContain('model-b')
@@ -236,7 +254,7 @@ describe('SectionEditor user behavior', () => {
   })
 
   it('renders a distinct base source label instead of the protocol source label', () => {
-    const view = {
+    const view = modelView({
       provider: 'provider',
       model: 'model-b',
       supportsDeveloperRole: 'auto' as const,
@@ -245,12 +263,12 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'unknown' as const,
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
-    }
+    })
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(<GatewayCompatControls scope="model" view={view} onChange={vi.fn()} />)
+      root.render(<GatewayCompatControls scope="model" view={view} onChange={vi.fn()} availableCount={0} />)
     })
 
     expect(container.textContent).toContain(en.compatSourceBase)
@@ -260,7 +278,7 @@ describe('SectionEditor user behavior', () => {
   })
 
   it('keeps the other model compat field editable when one field is unavailable', () => {
-    const view = {
+    const view = modelView({
       provider: 'provider',
       model: 'model-b',
       supportsDeveloperRole: 'auto' as const,
@@ -269,13 +287,13 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'model' as const,
       supportsDeveloperRoleAvailable: false,
       maxTokensFieldAvailable: true,
-    }
+    })
     const onChange = vi.fn()
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(<GatewayCompatControls scope="model" view={view} onChange={onChange} />)
+      root.render(<GatewayCompatControls scope="model" view={view} onChange={onChange} availableCount={0} />)
     })
 
     const selects = [...container.querySelectorAll('select')] as HTMLSelectElement[]
@@ -290,7 +308,7 @@ describe('SectionEditor user behavior', () => {
   it('renders model compatibility copy from every locale without key fallbacks', () => {
     const locales: readonly [string, Record<string, string>][] = [['en', en], ['zh', zh], ['ja', ja], ['ko', ko]]
     const keys = ['modelGatewayCompatTitle', 'compatSourceBase', 'compatSourceModel', 'compatSourceProvider', 'compatSourceCatalog', 'compatSourceProtocol', 'compatSourceUnknown', 'inheritProviderCompat', 'saveModelGatewayCompat', 'modelGatewayCompatSaved']
-    const view = {
+    const view = modelView({
       provider: 'provider',
       model: 'model-b',
       supportsDeveloperRole: 'auto' as const,
@@ -299,7 +317,7 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'unknown' as const,
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
-    }
+    })
     for (const [locale, dictionary] of locales) {
       for (const key of keys) {
         expect(dictionary[key], `${locale} missing ${key}`).toBeTruthy()
@@ -309,7 +327,7 @@ describe('SectionEditor user behavior', () => {
       document.body.append(container)
       const root = createRoot(container)
       act(() => {
-        root.render(renderGatewayCompatControls({ scope: 'model', view, onChange: vi.fn() }, { palette: iosPalette(), t: (key) => dictionary[key] ?? key }))
+        root.render(renderGatewayCompatControls({ scope: 'model', view, onChange: vi.fn(), availableCount: 0 }, { palette: iosPalette(), t: (key) => dictionary[key] ?? key }))
       })
       expect(container.textContent).toContain(dictionary.modelGatewayCompatTitle)
       expect(container.textContent).toContain(dictionary.compatSourceBase)
@@ -323,7 +341,7 @@ describe('SectionEditor user behavior', () => {
   it('renders the models[] save note from every locale in the model editor', () => {
     const locales: readonly [string, Record<string, string>][] = [['en', en], ['zh', zh], ['ja', ja], ['ko', ko]]
     const item: InventoryItem = { route: 'provider', model: 'model-a', name: 'Model A', levels: { off: null }, input: ['text'], raw: { id: 'model-a' }, index: 0, inOverrides: false }
-    const compatView = {
+    const compatView = modelView({
       provider: 'provider',
       model: 'model-a',
       supportsDeveloperRole: 'auto' as const,
@@ -332,7 +350,7 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'provider' as const,
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
-    }
+    })
     for (const [locale, dictionary] of locales) {
       const container = document.createElement('div')
       document.body.append(container)
@@ -358,7 +376,7 @@ describe('SectionEditor user behavior', () => {
       index: 1,
       inOverrides: true,
     }
-    const compatView = {
+    const compatView = modelView({
       provider: 'provider',
       model: 'model-b',
       supportsDeveloperRole: 'auto' as const,
@@ -367,7 +385,7 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'model' as const,
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
-    }
+    })
     const onCompatChange = vi.fn()
     const onSaveCompat = vi.fn()
     const container = document.createElement('div')
@@ -401,7 +419,7 @@ describe('SectionEditor user behavior', () => {
       index: 0,
       inOverrides: false,
     }
-    const compatView = {
+    const compatView = modelView({
       provider: 'provider',
       model: 'model-a',
       supportsDeveloperRole: 'auto' as const,
@@ -410,7 +428,7 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'protocol' as const,
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
-    }
+    })
     const onCompatChange = vi.fn()
     const onSaveCompat = vi.fn()
     const container = document.createElement('div')
@@ -431,7 +449,7 @@ describe('SectionEditor user behavior', () => {
 
   it('hides models[] compat controls when the source is not editable', () => {
     const item: InventoryItem = { route: 'provider', model: 'legacy-model', name: 'Legacy Model', levels: { off: null }, input: ['text'], raw: { id: 'legacy-model' }, index: 0, inOverrides: false }
-    const compatView = {
+    const compatView = modelView({
       provider: 'provider',
       model: 'legacy-model',
       supportsDeveloperRole: 'auto' as const,
@@ -440,12 +458,12 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'unknown' as const,
       supportsDeveloperRoleAvailable: false,
       maxTokensFieldAvailable: false,
-    }
+    })
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '', oneMillion: false, previousValue: '', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onCompatChange={vi.fn()} onSaveCompat={vi.fn()} compatDirty />)
+      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '', oneMillion: false, previousValue: '', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onCompatChange={vi.fn()} onSaveCompat={vi.fn()} compatDirty={{}} />)
     })
     expect(container.querySelector('[data-scope="model"]')).toBeNull()
     expect(container.textContent).not.toContain(text('saveModelGatewayCompat'))
@@ -465,7 +483,7 @@ describe('SectionEditor user behavior', () => {
       index: -1,
       inOverrides: true,
     }
-    const compatView = {
+    const compatView = modelView({
       provider: 'provider',
       model: 'legacy-model',
       supportsDeveloperRole: 'auto' as const,
@@ -474,13 +492,13 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'unknown' as const,
       supportsDeveloperRoleAvailable: false,
       maxTokensFieldAvailable: false,
-    }
+    })
     const onSaveCompat = vi.fn()
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '', oneMillion: false, previousValue: '', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onSaveCompat={onSaveCompat} compatDirty />)
+      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '', oneMillion: false, previousValue: '', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onSaveCompat={onSaveCompat} compatDirty={{}} />)
     })
 
     expect(container.querySelector('[data-scope="model"]')).toBeNull()
@@ -569,6 +587,42 @@ describe('SectionEditor user behavior', () => {
       { op: 'set', path: ['providers', 'provider', 'compat', 'supportsDeveloperRole'], value: false },
       { op: 'set', path: ['providers', 'provider', 'compat', 'maxTokensField'], value: 'max_tokens' },
     ], 2)
+    view.unmount()
+  })
+
+  it('saves a new scalar field and leaves already-changed fields pending', async () => {
+    const providerNamespace = namespace({
+      value: { providers: { provider: { models: [{ id: 'model-a' }] } } },
+      schema: realGatewaySchema,
+    })
+    let capturedOps: readonly SettingsOp[] | undefined
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      describe: async () => ({ ok: true, value: { namespaces: [providerNamespace] } }),
+      mutate: async (_ns, ops) => {
+        capturedOps = ops
+        return { ok: true as const, value: providerNamespace }
+      },
+    })
+    await settle()
+
+    const providerControls = view.container.querySelector('[data-scope="provider"]') as HTMLElement
+    expect(providerControls).not.toBeNull()
+    act(() => button(providerControls, text('gatewayMoreFields', { count: 13 })).click())
+    const supportsStore = providerControls.querySelector(`select[aria-label="${text('supportsStore')}"]`) as HTMLSelectElement
+    const thinkingFormat = providerControls.querySelector(`select[aria-label="${text('thinkingFormat')}"]`) as HTMLSelectElement
+    expect(supportsStore).not.toBeNull()
+    expect(thinkingFormat).not.toBeNull()
+    act(() => setValue(supportsStore, 'unsupported'))
+    act(() => setValue(thinkingFormat, 'deepseek'))
+    act(() => button(providerControls.parentElement!, text('saveGatewayCompat')).click())
+    await settle()
+
+    expect(capturedOps).toEqual([
+      { op: 'set', path: ['providers', 'provider', 'compat', 'thinkingFormat'], value: 'deepseek' },
+      { op: 'set', path: ['providers', 'provider', 'compat', 'supportsStore'], value: false },
+    ])
+    expect(view.mutate).toHaveBeenCalledTimes(1)
     view.unmount()
   })
 
@@ -693,14 +747,12 @@ describe('SectionEditor user behavior', () => {
   it('renders provider controls from the runtime takeover projection', async () => {
     const takeoverResolution: TakeoverRuntimeResolution = {
       providers: ['provider'],
-      compat: [{
+      compat: [resolveGatewayCompat({
         provider: 'provider',
         model: 'model-a',
-        thinkingFormat: { value: 'qwen', source: 'model' },
-        supportsReasoningEffort: { value: true, source: 'model' },
-        supportsDeveloperRole: { value: false, source: 'provider' },
-        maxTokensField: { value: 'max_completion_tokens', source: 'provider' },
-      }],
+        modelCompat: { thinkingFormat: 'qwen', supportsReasoningEffort: true },
+        providerCompat: { supportsDeveloperRole: false, maxTokensField: 'max_completion_tokens' },
+      })],
     }
     const view = renderEditor({
       compatibilityProfile: 'modern',
@@ -826,6 +878,53 @@ describe('SectionEditor user behavior', () => {
     expect(view.container.querySelector('[role="alert"]')?.textContent).toContain('stale revision')
     expect((view.container.querySelector(`[data-scope="model"] select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement).value).toBe('max_tokens')
     expect(view.container.textContent).toContain(text('unsaved'))
+    view.unmount()
+  })
+
+  it('saves a new model override scalar field via the model group expansion', async () => {
+    const modelNamespace = namespace({
+      value: {
+        providers: {
+          provider: {
+            modelOverrides: {
+              'model-a': { id: 'model-a', name: 'Model A', input: ['text'] },
+            },
+          },
+        },
+      },
+      schema: realGatewaySchema,
+    })
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      describe: async () => ({ ok: true, value: { namespaces: [modelNamespace] } }),
+      mutate: async (_ns, _ops, _revision) => ({ ok: true as const, value: modelNamespace }),
+    })
+    await settle()
+
+    act(() => providerButton(view.container).click())
+    const modelAButton = [...view.container.querySelectorAll<HTMLButtonElement>(`button[aria-label="${text('openModelSettings')}"]`)]
+      .find((candidate) => candidate.parentElement?.parentElement?.parentElement?.textContent?.includes('model-a'))
+    expect(modelAButton).toBeDefined()
+    act(() => modelAButton!.click())
+
+    const modelControls = view.container.querySelector('[data-scope="model"]') as HTMLElement
+    expect(modelControls).not.toBeNull()
+    expect(modelControls.querySelector(`select[aria-label="${text('supportsStore')}"]`)).toBeNull()
+    act(() => button(modelControls, text('gatewayMoreFields', { count: 13 })).click())
+    const supportsStore = modelControls.querySelector(`select[aria-label="${text('supportsStore')}"]`) as HTMLSelectElement
+    const thinkingFormat = modelControls.querySelector(`select[aria-label="${text('thinkingFormat')}"]`) as HTMLSelectElement
+    expect(supportsStore).not.toBeNull()
+    expect(thinkingFormat).not.toBeNull()
+    act(() => setValue(supportsStore, 'unsupported'))
+    act(() => setValue(thinkingFormat, 'deepseek'))
+    expect(view.container.textContent).toContain(text('unsaved'))
+    act(() => button(view.container, text('saveModelGatewayCompat')).click())
+    await settle()
+
+    expect(view.mutate).toHaveBeenCalledWith('llm-pi-ai', [
+      { op: 'set', path: ['providers', 'provider', 'modelOverrides', 'model-a', 'compat', 'thinkingFormat'], value: 'deepseek' },
+      { op: 'set', path: ['providers', 'provider', 'modelOverrides', 'model-a', 'compat', 'supportsStore'], value: false },
+    ], 2)
     view.unmount()
   })
 
