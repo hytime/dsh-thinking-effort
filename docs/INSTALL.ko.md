@@ -92,7 +92,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 현재 릴리스 버전을 명시하여 설치합니다.
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 ```
 
 공식 CLI가 profile 의존성, lockfile 및 `dsh.profile.bundles`를 자동으로 업데이트합니다. YAML 행을 수동으로 추가하지 마세요.
@@ -108,7 +108,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 특정 버전으로 업데이트하려면 다음을 사용합니다.
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 ```
 
 Host 변경에는 DSH를 재시작하고 Client 변경에는 Web 페이지를 새로 고치세요.
@@ -126,7 +126,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 ```
 
 다른 도구로 의존성을 제거했지만 이전 bundle이 남아 있으면 composition을 확인합니다.
@@ -140,7 +140,7 @@ dsh --profile <profile> --dump-default-config
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 ```
 
 새 bundle 목록에 이전 패키지 이름을 추가하지 마세요.
@@ -155,7 +155,7 @@ grep -n "@hytime/dsh-thinking-effort" \
 node -p "require('${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/node_modules/@hytime/dsh-thinking-effort/package.json').version"
 ```
 
-이 릴리스의 버전은 `0.1.14`이어야 합니다.
+이 릴리스의 버전은 `0.2.0`이어야 합니다.
 
 ## 일본어 및 한국어 지원 상태
 

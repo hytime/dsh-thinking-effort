@@ -101,7 +101,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 ```
 
 官方 CLI 会同时更新 profile 依赖、锁文件和 `dsh.profile.bundles`，无需手工追加 YAML。
@@ -136,7 +136,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 ```
 
 如果旧依赖已经被其他工具移除，但 profile 的 bundle 列表仍残留旧名称，先从旧 profile 的 `pnpm-lock.yaml` 找到旧 GitHub commit，再使用官方命令恢复并移除：
@@ -144,7 +144,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 ```
 
 不要把 `dsh-thinking-effort` 添加到新的 `dsh.profile.bundles` 中。

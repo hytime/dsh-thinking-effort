@@ -75,7 +75,7 @@ profile の管理には公式 DSH CLI を使用してください。通常の `n
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 特定バージョンをインストール
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.1.14
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
 
 # 更新
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort

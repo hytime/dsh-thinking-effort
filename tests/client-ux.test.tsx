@@ -595,14 +595,12 @@ describe('SectionEditor user behavior', () => {
       value: { providers: { provider: { models: [{ id: 'model-a' }] } } },
       schema: realGatewaySchema,
     })
+    let capturedOps: readonly SettingsOp[] | undefined
     const view = renderEditor({
       compatibilityProfile: 'modern',
       describe: async () => ({ ok: true, value: { namespaces: [providerNamespace] } }),
       mutate: async (_ns, ops) => {
-        expect(ops).toEqual([
-          { op: 'set', path: ['providers', 'provider', 'compat', 'supportsStore'], value: false },
-          { op: 'set', path: ['providers', 'provider', 'compat', 'thinkingFormat'], value: 'deepseek' },
-        ])
+        capturedOps = ops
         return { ok: true as const, value: providerNamespace }
       },
     })
@@ -620,6 +618,10 @@ describe('SectionEditor user behavior', () => {
     act(() => button(providerControls.parentElement!, text('saveGatewayCompat')).click())
     await settle()
 
+    expect(capturedOps).toEqual([
+      { op: 'set', path: ['providers', 'provider', 'compat', 'thinkingFormat'], value: 'deepseek' },
+      { op: 'set', path: ['providers', 'provider', 'compat', 'supportsStore'], value: false },
+    ])
     expect(view.mutate).toHaveBeenCalledTimes(1)
     view.unmount()
   })
