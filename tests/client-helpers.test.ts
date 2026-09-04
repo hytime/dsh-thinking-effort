@@ -403,6 +403,29 @@ describe('model inventory and operations', () => {
     ])
   })
 
+  it('writes a boolean new field as set true / unset / set false by kind', () => {
+    const editable = editableProviderCompatFields('modern', realGatewaySchema)
+    expect(opsForProviderCompat('local', { supportsStore: 'supported' }, editable)).toEqual([
+      { op: 'set', path: ['providers', 'local', 'compat', 'supportsStore'], value: true },
+    ])
+    expect(opsForProviderCompat('local', { supportsStore: 'auto' }, editable)).toEqual([
+      { op: 'unset', path: ['providers', 'local', 'compat', 'supportsStore'] },
+    ])
+    expect(opsForProviderCompat('local', { supportsStore: 'unsupported' }, editable)).toEqual([
+      { op: 'set', path: ['providers', 'local', 'compat', 'supportsStore'], value: false },
+    ])
+  })
+
+  it('writes an enum new field as its literal value and auto as unset', () => {
+    const editable = editableProviderCompatFields('modern', realGatewaySchema)
+    expect(opsForProviderCompat('local', { thinkingFormat: 'deepseek' }, editable)).toEqual([
+      { op: 'set', path: ['providers', 'local', 'compat', 'thinkingFormat'], value: 'deepseek' },
+    ])
+    expect(opsForProviderCompat('local', { thinkingFormat: 'auto' }, editable)).toEqual([
+      { op: 'unset', path: ['providers', 'local', 'compat', 'thinkingFormat'] },
+    ])
+  })
+
   it('does not replace unrelated provider compat fields', () => {
     expect(opsForProviderCompat('local', { supportsDeveloperRole: 'supported' }, {
       supportsDeveloperRole: true,
@@ -1281,7 +1304,7 @@ describe('model inventory and operations', () => {
   it('refuses provider compat writes when editability is missing or unclear', () => {
     const update = { supportsDeveloperRole: 'supported' as const, maxTokensField: 'max_tokens' as const }
     expect(opsForProviderCompat('local', update)).toEqual([])
-    expect(opsForProviderCompat('local', update, { supportsDeveloperRole: true })).toEqual([])
+    expect(opsForProviderCompat('local', update, { supportsDeveloperRole: true, editableFields: [] })).toEqual([])
   })
 
   it('validates provider compat updates atomically and keeps fields independent', () => {
