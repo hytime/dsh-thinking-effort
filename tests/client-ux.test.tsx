@@ -611,8 +611,8 @@ describe('SectionEditor user behavior', () => {
     const providerControls = view.container.querySelector('[data-scope="provider"]') as HTMLElement
     expect(providerControls).not.toBeNull()
     act(() => button(providerControls, text('gatewayMoreFields', { count: 13 })).click())
-    const supportsStore = providerControls.querySelector('select[aria-label="supportsStore"]') as HTMLSelectElement
-    const thinkingFormat = providerControls.querySelector('select[aria-label="thinkingFormat"]') as HTMLSelectElement
+    const supportsStore = providerControls.querySelector(`select[aria-label="${text('supportsStore')}"]`) as HTMLSelectElement
+    const thinkingFormat = providerControls.querySelector(`select[aria-label="${text('thinkingFormat')}"]`) as HTMLSelectElement
     expect(supportsStore).not.toBeNull()
     expect(thinkingFormat).not.toBeNull()
     act(() => setValue(supportsStore, 'unsupported'))
@@ -907,10 +907,10 @@ describe('SectionEditor user behavior', () => {
 
     const modelControls = view.container.querySelector('[data-scope="model"]') as HTMLElement
     expect(modelControls).not.toBeNull()
-    expect(modelControls.querySelector('select[aria-label="supportsStore"]')).toBeNull()
+    expect(modelControls.querySelector(`select[aria-label="${text('supportsStore')}"]`)).toBeNull()
     act(() => button(modelControls, text('gatewayMoreFields', { count: 13 })).click())
-    const supportsStore = modelControls.querySelector('select[aria-label="supportsStore"]') as HTMLSelectElement
-    const thinkingFormat = modelControls.querySelector('select[aria-label="thinkingFormat"]') as HTMLSelectElement
+    const supportsStore = modelControls.querySelector(`select[aria-label="${text('supportsStore')}"]`) as HTMLSelectElement
+    const thinkingFormat = modelControls.querySelector(`select[aria-label="${text('thinkingFormat')}"]`) as HTMLSelectElement
     expect(supportsStore).not.toBeNull()
     expect(thinkingFormat).not.toBeNull()
     act(() => setValue(supportsStore, 'unsupported'))

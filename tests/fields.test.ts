@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ALPHA1_PLUS_COMPAT_FIELDS, GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, GATEWAY_COMPAT_GROUPS, RC8_COMPAT_FIELDS, SUPPORTED_THINKING_FORMATS } from '../src/compat/gateway/fields.js'
+import { LOCALE_DATA } from '../src/client/locales.js'
 
 describe('gateway compat field registry', () => {
   it('keeps every field key unique and non-empty', () => {
@@ -12,6 +13,22 @@ describe('gateway compat field registry', () => {
       expect(spec.labelKey.length).toBeGreaterThan(0)
       expect(GATEWAY_COMPAT_GROUPS.map((g) => g.id)).toContain(spec.group)
       if (spec.kind === 'enum') expect(spec.enumValues.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('provides non-empty labels for every field and enum option in all locales', () => {
+    for (const spec of Object.values(GATEWAY_COMPAT_FIELDS)) {
+      for (const [locale, dictionary] of Object.entries(LOCALE_DATA)) {
+        expect(dictionary[spec.labelKey], `${locale}.${spec.labelKey}`).toBeTruthy()
+      }
+      if (spec.kind === 'enum') {
+        for (const option of spec.enumOptions ?? []) {
+          expect(option.labelKey, `enum option ${option.value} must define a label key`).toBeTruthy()
+          for (const [locale, dictionary] of Object.entries(LOCALE_DATA)) {
+            expect(dictionary[option.labelKey!], `${locale}.${option.labelKey}`).toBeTruthy()
+          }
+        }
+      }
     }
   })
 
