@@ -384,6 +384,44 @@ describe('model inventory and operations', () => {
     expect(opsForModelArrayCompat([other, target, { ...target, inOverrides: true, index: -1 }], target, { supportsDeveloperRole: 'unsupported' }, editable)).toEqual([])
   })
 
+  it('models[] compat writes add and delete boolean and enum new fields by kind', () => {
+    const target = item({ model: 'model-b', index: 1, raw: { id: 'model-b', compat: { supportsStore: false, thinkingFormat: 'openai', keep: 'yes' } } })
+    const other = item({ model: 'model-a', index: 0, raw: { id: 'model-a', custom: 'keep-a' } })
+    const editable: GatewayCompatEditability = { supportsStore: true, thinkingFormat: true, editableFields: ['supportsStore', 'thinkingFormat'] }
+
+    expect(opsForModelArrayCompat([other, target], target, {
+      supportsStore: 'supported',
+      thinkingFormat: 'deepseek',
+    }, editable)).toEqual([{
+      op: 'set', path: ['providers', 'provider', 'models'], value: [
+        other.raw,
+        { id: 'model-b', compat: { supportsStore: true, thinkingFormat: 'deepseek', keep: 'yes' } },
+      ],
+    }])
+
+    expect(opsForModelArrayCompat([other, target], target, {
+      supportsStore: 'auto',
+      thinkingFormat: 'auto',
+    }, editable)).toEqual([{
+      op: 'set', path: ['providers', 'provider', 'models'], value: [
+        other.raw,
+        { id: 'model-b', compat: { keep: 'yes' } },
+      ],
+    }])
+  })
+
+  it('models[] compat writes reject invalid new-field values fail-closed', () => {
+    const target = item({ model: 'model-b', index: 1, raw: { id: 'model-b', compat: { supportsStore: false } } })
+    const other = item({ model: 'model-a', index: 0, raw: { id: 'model-a', custom: 'keep-a' } })
+    const editable: GatewayCompatEditability = { supportsStore: true, thinkingFormat: true, editableFields: ['supportsStore', 'thinkingFormat'] }
+
+    expect(opsForModelArrayCompat([other, target], target, { supportsStore: 'supported', thinkingFormat: 'not-official' as never }, editable)).toEqual([])
+    expect(opsForModelArrayCompat([other, target], target, { supportsStore: 'supported' }, {
+      supportsStore: false,
+      thinkingFormat: true,
+    })).toEqual([])
+  })
+
   it('writes provider compat fields independently for supported and unsupported values', () => {
     const editable: GatewayCompatEditability = { supportsDeveloperRole: true, maxTokensField: true, editableFields: ['supportsDeveloperRole', 'maxTokensField'] }
     expect(opsForProviderCompat('local', {
@@ -1304,7 +1342,7 @@ describe('model inventory and operations', () => {
   it('refuses provider compat writes when editability is missing or unclear', () => {
     const update = { supportsDeveloperRole: 'supported' as const, maxTokensField: 'max_tokens' as const }
     expect(opsForProviderCompat('local', update)).toEqual([])
-    expect(opsForProviderCompat('local', update, { supportsDeveloperRole: true, editableFields: [] })).toEqual([])
+    expect(opsForProviderCompat('local', update, { supportsDeveloperRole: true })).toEqual([])
   })
 
   it('validates provider compat updates atomically and keeps fields independent', () => {
@@ -1366,6 +1404,46 @@ describe('model inventory and operations', () => {
       { op: 'unset', path: ['providers', 'provider', 'modelOverrides', 'qwen-thinking', 'compat', 'supportsDeveloperRole'] },
       { op: 'unset', path: ['providers', 'provider', 'modelOverrides', 'qwen-thinking', 'compat', 'maxTokensField'] },
     ])
+  })
+
+  it('model compat operations write boolean and enum new fields by kind to modelOverrides paths', () => {
+    const model = item({ index: -1, model: 'qwen-thinking', inOverrides: true })
+    const editable: GatewayCompatEditability = {
+      supportsStore: true,
+      thinkingFormat: true,
+      editableFields: ['supportsStore', 'thinkingFormat'],
+    }
+
+    expect(opsForModelCompat(model, {
+      supportsStore: 'unsupported',
+      thinkingFormat: 'deepseek',
+    }, editable)).toEqual([
+      { op: 'set', path: ['providers', 'provider', 'modelOverrides', 'qwen-thinking', 'compat', 'thinkingFormat'], value: 'deepseek' },
+      { op: 'set', path: ['providers', 'provider', 'modelOverrides', 'qwen-thinking', 'compat', 'supportsStore'], value: false },
+    ])
+
+    expect(opsForModelCompat(model, {
+      supportsStore: 'auto',
+      thinkingFormat: 'auto',
+    }, editable)).toEqual([
+      { op: 'unset', path: ['providers', 'provider', 'modelOverrides', 'qwen-thinking', 'compat', 'thinkingFormat'] },
+      { op: 'unset', path: ['providers', 'provider', 'modelOverrides', 'qwen-thinking', 'compat', 'supportsStore'] },
+    ])
+  })
+
+  it('model compat operations reject invalid new-field values fail-closed', () => {
+    const model = item({ index: -1, model: 'qwen-thinking', inOverrides: true })
+    const editable: GatewayCompatEditability = {
+      supportsStore: true,
+      thinkingFormat: true,
+      editableFields: ['supportsStore', 'thinkingFormat'],
+    }
+
+    expect(opsForModelCompat(model, { supportsStore: 'supported', thinkingFormat: 'not-official' as never }, editable)).toEqual([])
+    expect(opsForModelCompat(model, { supportsStore: 'supported' }, {
+      supportsStore: false,
+      thinkingFormat: true,
+    })).toEqual([])
   })
 
   it('modelOverrides helper rejects models[] items and fails closed for invalid input', () => {
