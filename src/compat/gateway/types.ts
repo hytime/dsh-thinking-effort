@@ -64,7 +64,7 @@ export type ModelGatewayCompatView = SourceNamed & AvailableNamed & ResolvedName
 
 export type ModelGatewayCompatUpdate = SelectionFieldUpdate
 
-export type ProviderGatewayCompatView = SourceNamed & AvailableNamed & SelectionFieldRecord & {
+export type ProviderGatewayCompatView = SourceNamed & AvailableNamed & ResolvedNamed & SelectionFieldRecord & {
   readonly provider: string
   readonly source: ProviderGatewayCompatSource
 }

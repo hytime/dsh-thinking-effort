@@ -426,6 +426,32 @@ describe('model inventory and operations', () => {
     expect(result.supportsUsageInStreaming).toEqual({ value: true, source: 'protocol' })
   })
 
+  it('respects an explicit false editability flag over a resolved value', () => {
+    const view = resolveModelGatewayCompat({
+      provider: 'provider',
+      model: 'model-a',
+      catalogCompat: { supportsStore: true },
+    }, {
+      supportsStore: false,
+    })
+    expect(view.supportsStoreAvailable).toBe(false)
+    expect(view.supportsStoreResolved).toBe(true)
+  })
+
+  it('projects resolved values onto the provider view alongside sources and availability', () => {
+    expect(resolveProviderGatewayCompat({
+      provider: 'local',
+      providerCompat: { supportsStore: true, maxTokensField: 'max_tokens' },
+      catalogCompat: { supportsStore: false },
+    })).toMatchObject({
+      provider: 'local',
+      supportsStore: 'supported',
+      supportsStoreResolved: true,
+      maxTokensField: 'max_tokens',
+      maxTokensFieldResolved: 'max_tokens',
+    })
+  })
+
   it('keeps model-b compat isolated from model-a and the provider view', () => {
     const namespace = {
       value: {

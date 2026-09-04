@@ -131,12 +131,14 @@ function selectionFor(modelCompatValue: unknown, kind: 'boolean' | 'enum'): stri
 }
 
 function isFieldAvailable(editability: GatewayCompatEditability | Record<string, unknown>, key: string, resolved: unknown): boolean {
-  const editabilityRecord = editability as Record<string, unknown>
-  // 新形状: editability[key] === true
-  if (editabilityRecord[key] === true) return true
-  // 旧形状: editability[`${key}Available`] === true
-  if (editabilityRecord[`${key}Available`] === true) return true
-  // 兜底: resolved 有值
+  const record = editability as Record<string, unknown>
+  // 显式标志优先（own property），尊重 false
+  if (Object.prototype.hasOwnProperty.call(record, key)) return record[key] === true
+  if (Object.prototype.hasOwnProperty.call(record, `${key}Available`)) return record[`${key}Available`] === true
+  // 新形状 editableFields 语义：列出即视为可编辑
+  const ef = record.editableFields
+  if (Array.isArray(ef) && ef.includes(key)) return true
+  // 完全未提供标志才 fallback 到 resolved
   return resolved !== undefined
 }
 
@@ -174,6 +176,7 @@ export function resolveProviderGatewayCompat(input: GatewayCompatResolveInput): 
     const explicit = resolution[key].source === 'provider' ? resolution[key].value : undefined
     out[key] = selectionFor(explicit, spec.kind)
     out[`${key}Source`] = resolution[key].source
+    out[`${key}Resolved`] = resolution[key].value
     out[`${key}Available`] = explicit !== undefined
   }
   out.source = providerSource(resolution)
