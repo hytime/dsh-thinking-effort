@@ -30,9 +30,10 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 | DSH range | Gateway compatibility settings |
 | --- | --- |
 | `0.1.0-rc.7` | Not available |
-| `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available except `supportsFinishReason` and `supportsThinkingTokenBudget` |
+| `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available when exposed by the DSH schema, but without `supportsFinishReason` and `supportsThinkingTokenBudget` |
 | `0.1.2-alpha.1` to `<0.1.3-0` | All 15 fields when exposed by the DSH schema |
 
+From DSH `0.1.0-rc.8` onward, field availability follows the runtime schema.
 ## Why use it?
 
 The `llm-pi-ai` adapter supports hand-declared third-party models, but those entries often do not declare `reasoningEfforts`. As a result, Composer does not show a reasoning effort selector, and gateway-specific values such as `ultra` cannot be mapped to DSH's standard levels.
@@ -125,7 +126,7 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-Field-by-field, each value resolves independently in this order: model → provider → base/catalog → protocol → URL detection. A model value overrides only that field. `Auto` removes the current-layer value, restores provider inheritance when applicable, and lets the next value in the chain take effect. Provider defaults apply to every model on the route; a model edit changes only the current model. For a route/provider, non-empty `models[]` and non-empty `modelOverrides` are mutually exclusive; the official schema rejects this invalid configuration, and the plugin fails closed for malformed data.
+Field-by-field, each value resolves independently in this order: model → provider → base/catalog → protocol. URL/hostname detection is not used as a compat source. A model value overrides only that field. `Auto` removes the current-layer value, restores provider inheritance when applicable, and lets the next value in the chain take effect. Provider defaults apply to every model on the route; a model edit changes only the current model. For a route/provider, non-empty `models[]` and non-empty `modelOverrides` are mutually exclusive; the official schema rejects this invalid configuration, and the plugin fails closed for malformed data.
 
 The provider area in Settings edits defaults for all models. Both catalog models and custom YAML `models[]` entries expose a single-model compat editor: catalog models write only the target fields with field-level `set`/`unset` operations under `modelOverrides.<model>.compat`, while `models[]` models write one complete `providers.<route>.models` array set while preserving other entries and fields. A model edit does not change other models.
 

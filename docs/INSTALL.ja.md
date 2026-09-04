@@ -45,9 +45,10 @@ version-map はゲートウェイ capability を次のように判定します�
 | DSH 範囲 | Gateway compat フィールド | Takeover transport |
 | --- | --- | --- |
 | `0.1.0-rc.7` | 非対応 | 非対応 |
-| `0.1.0-rc.8` から `<0.1.2-alpha.1`（以降の範囲は次の行を参照） | 対応。ただし `supportsFinishReason` と `supportsThinkingTokenBudget` はありません | オプション |
+| `0.1.0-rc.8` から `<0.1.2-alpha.1` | schema が公開する場合は対応。ただし `supportsFinishReason` と `supportsThinkingTokenBudget` はありません | オプション |
 | `0.1.2-alpha.1` 以降の対応範囲 | schema が公開する場合は 15 フィールドに対応 | オプション |
 
+DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行時 schema の公開内容に従います。
 実行時 schema が公開しないフィールドは UI に表示されません。オプションの transport が未インストールまたは無効の場合、takeover は適用されません。
 
 ## ゲートウェイ互換設定
@@ -76,7 +77,7 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-フィールドごとに独立して、model → provider → base/catalog → protocol → URL 検出の順で解決されます。モデルの値はそのフィールドだけを上書きします。`Auto` は現在の層の値を削除して provider の継承を復元し、チェーンの次の値を有効にします。provider の既定値はそのルートの全モデルに適用され、モデルの変更は現在のモデルだけに反映されます。同じルート（provider）では、非空の `models[]` と非空の `modelOverrides` は併用できません。公式 schema はこの無効な設定を拒否し、プラグインは異常なデータに対して fail closed します。
+フィールドごとに独立して、model → provider → base/catalog → protocol の順で解決されます。URL/hostname は compat のソースとして使用しません。モデルの値はそのフィールドだけを上書きします。`Auto` は現在の層の値を削除して provider の継承を復元し、チェーンの次の値を有効にします。provider の既定値はそのルートの全モデルに適用され、モデルの変更は現在のモデルだけに反映されます。同じルート（provider）では、非空の `models[]` と非空の `modelOverrides` は併用できません。公式 schema はこの無効な設定を拒否し、プラグインは異常なデータに対して fail closed します。
 
 現在の DSH Settings API は配列インデックスの path op に対応していません。そのため `modelOverrides` の編集はフィールド単位の `set`/`unset` を使い、選択したフィールドだけを変更します。`models[]` の保存は `providers.<route>.models` 全体を 1 回の配列 set で書き戻し、他のモデル、未知フィールド、他の compat フィールドを保持します。実行時 schema が公開しないフィールドは表示されません。これらの値はコントロールプレーン設定だけで、ネットワーク要求は外部 transport が担当します。
 

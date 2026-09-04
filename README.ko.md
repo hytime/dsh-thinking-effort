@@ -29,9 +29,10 @@
 | DSH 범위 | 게이트웨이 호환 설정 |
 | --- | --- |
 | `0.1.0-rc.7` | 지원하지 않음 |
-| `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 (이후 지원 범위는 다음 행 참조) | `supportsFinishReason` 및 `supportsThinkingTokenBudget`를 제외하고 지원 |
-| `0.1.2-alpha.1`부터 `<0.1.3-0`까지 | DSH schema가 노출하는 경우 15개 필드 모두 지원 |
+| `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 | schema가 노출하는 경우 지원하지만 `supportsFinishReason` 및 `supportsThinkingTokenBudget`는 없음 |
+| `0.1.2-alpha.1`부터 `<0.1.3-0`까지 | schema가 노출하는 경우 15개 필드 모두 지원 |
 
+DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 런타임 schema 노출에 따라 결정됩니다.
 ## 왜 필요한가요?
 
 `llm-pi-ai` 어댑터는 타사 모델을 수동으로 선언할 수 있지만, 모델에 `reasoningEfforts`가 없는 경우가 많습니다. 그러면 Composer에 추론 강도 선택기가 표시되지 않고, `ultra`와 같은 게이트웨이 전용 값을 DSH 표준 단계에 매핑할 수도 없습니다.
@@ -122,7 +123,7 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-필드별로 각 값은 model → provider → base/catalog → protocol → URL 감지 순서로 독립적으로 결정됩니다. 모델 값은 해당 필드만 덮어씁니다. `Auto`는 현재 계층의 필드를 삭제해 provider 상속을 복원하고 상속 체인의 다음 값을 사용합니다. provider 기본값은 해당 라우트의 모든 모델에 적용되며 모델 편집은 현재 모델만 변경합니다. 같은 라우트(provider)에서는 비어 있지 않은 `models[]`와 비어 있지 않은 `modelOverrides`를 함께 사용할 수 없습니다. 공식 schema는 이 잘못된 구성을 거부하며 플러그인은 비정상 데이터에서 fail closed로 동작합니다.
+필드별로 각 값은 model → provider → base/catalog → protocol 순서로 독립적으로 결정됩니다. URL/hostname은 compat 소스로 사용하지 않습니다. 모델 값은 해당 필드만 덮어씁니다. `Auto`는 현재 계층의 필드를 삭제해 provider 상속을 복원하고 상속 체인의 다음 값을 사용합니다. provider 기본값은 해당 라우트의 모든 모델에 적용되며 모델 편집은 현재 모델만 변경합니다. 같은 라우트(provider)에서는 비어 있지 않은 `models[]`와 비어 있지 않은 `modelOverrides`를 함께 사용할 수 없습니다. 공식 schema는 이 잘못된 구성을 거부하며 플러그인은 비정상 데이터에서 fail closed로 동작합니다.
 
 Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델의 기본값을 수정합니다. catalog/modelOverrides 모델과 사용자 지정 YAML `models[]` 모델 모두 단일 모델 compat 편집기를 제공합니다. 전자는 `modelOverrides.<model>.compat`에서 대상 필드만 `set`/`unset`하고, 후자는 `providers.<route>.models` 전체를 하나의 배열 set으로 저장하며 다른 모델과 필드를 보존합니다. 모델 편집은 다른 모델에 영향을 주지 않습니다.
 

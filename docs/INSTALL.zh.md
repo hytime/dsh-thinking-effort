@@ -51,9 +51,10 @@ version-map 按以下规则判断网关能力：
 | DSH 范围 | Gateway compat 字段 | Takeover transport |
 | --- | --- | --- |
 | `0.1.0-rc.7` | 不支持 | 不支持 |
-| `0.1.0-rc.8` 至 `<0.1.2-alpha.1`（后续范围见下一行） | 支持，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget` | 可选 |
-| `0.1.2-alpha.1` 及后续受支持范围 | DSH schema 暴露时支持全部 15 个字段 | 可选 |
+| `0.1.0-rc.8` 至 `<0.1.2-alpha.1` | schema 暴露时可用，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget` | 可选 |
+| `0.1.2-alpha.1` 及后续受支持范围 | schema 暴露时支持全部 15 个字段 | 可选 |
 
+从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。
 运行时 schema 没有暴露的字段不会在界面中显示。可选 transport 未安装或未启用时，不会执行 takeover。
 
 ## 网关兼容设置
@@ -82,7 +83,7 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-逐字段独立按以下顺序取值：model → provider → base/catalog → protocol → URL 检测。模型值只覆盖当前字段。「自动」（`Auto`）会删除当前层字段，恢复 provider 继承，并让继承链中的下一层生效。provider 默认值会应用到该路由的所有模型，模型级修改只影响当前模型。对同一路由（provider）而言，非空的 `models[]` 和非空的 `modelOverrides` 互斥；官方 schema 会拒绝该无效配置，插件遇到异常数据时 fail closed。
+逐字段独立按以下顺序取值：model → provider → base/catalog → protocol。URL/hostname 不会作为 compat 来源。模型值只覆盖当前字段。「自动」（`Auto`）会删除当前层字段，恢复 provider 继承，并让继承链中的下一层生效。provider 默认值会应用到该路由的所有模型，模型级修改只影响当前模型。对同一路由（provider）而言，非空的 `models[]` 和非空的 `modelOverrides` 互斥；官方 schema 会拒绝该无效配置，插件遇到异常数据时 fail closed。
 
 当前 DSH Settings API 不支持数组索引 path op。因此，`modelOverrides` 修改使用字段级 `set`/`unset`，只操作选中的字段；`models[]` 修改通过一个完整的 `providers.<route>.models` 数组 set 写回，并保留其他模型条目、未知字段和其他 compat 字段。运行时 schema 未暴露的字段不会显示。这些值只属于控制面配置，网络请求仍由外部 transport 负责。
 

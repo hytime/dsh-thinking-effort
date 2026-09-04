@@ -30,9 +30,10 @@
 | DSH 范围 | 网关兼容设置 |
 | --- | --- |
 | `0.1.0-rc.7` | 不支持 |
-| `0.1.0-rc.8` 至 `<0.1.2-alpha.1` | 支持，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget`（后续范围见下一行） |
+| `0.1.0-rc.8` 至 `<0.1.2-alpha.1` | schema 暴露时可用，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget` |
 | `0.1.2-alpha.1` 至 `<0.1.3-0` | schema 暴露时支持全部 15 个字段 |
 
+从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。
 ## 为什么需要它？
 
 DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模型通常没有 `reasoningEfforts` 配置。因此，Composer 的模型选择器不会显示「推理等级」，你也无法把网关实际支持的值（例如 `ultra`）映射到 DSH 的标准档位。
@@ -184,7 +185,7 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-逐字段独立按以下顺序取值：model → provider → base/catalog → protocol → URL 检测。模型值只覆盖当前字段。「自动」（`Auto`）会删除当前层字段，恢复 provider 继承，并让继承链中的下一层生效。provider 默认值会应用到该路由的所有模型，模型级修改只影响当前模型。对同一路由（provider）而言，非空的 `models[]` 和非空的 `modelOverrides` 互斥；官方 schema 会拒绝该无效配置，插件遇到异常数据时 fail closed。
+逐字段独立按以下顺序取值：model → provider → base/catalog → protocol。URL/hostname 不会作为 compat 来源。模型值只覆盖当前字段。「自动」（`Auto`）会删除当前层字段，恢复 provider 继承，并让继承链中的下一层生效。provider 默认值会应用到该路由的所有模型，模型级修改只影响当前模型。对同一路由（provider）而言，非空的 `models[]` 和非空的 `modelOverrides` 互斥；官方 schema 会拒绝该无效配置，插件遇到异常数据时 fail closed。
 
 设置页的 provider 全局区域用于修改该 provider 下全部模型的默认值。catalog/modelOverrides 模型和 `models[]` 模型都能展开后编辑单模型 compat：前者只对目标字段使用 `modelOverrides.<model>.compat` 下的字段级 `set`/`unset`，后者通过一个完整的 `providers.<route>.models` 数组 set 写回，同时保留其他模型和字段。模型级修改不会影响其他模型。
 

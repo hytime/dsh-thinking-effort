@@ -45,9 +45,10 @@ version-map은 다음 규칙으로 게이트웨이 capability를 판정합니다
 | DSH 범위 | Gateway compat 필드 | Takeover transport |
 | --- | --- | --- |
 | `0.1.0-rc.7` | 지원하지 않음 | 지원하지 않음 |
-| `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 (이후 지원 범위는 다음 행 참조) | 지원하지만 `supportsFinishReason` 및 `supportsThinkingTokenBudget`는 없음 | 선택 사항 |
-| `0.1.2-alpha.1` 이상 지원 범위 | DSH schema가 노출하는 경우 15개 필드 모두 지원 | 선택 사항 |
+| `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 | schema가 노출하는 경우 지원하지만 `supportsFinishReason` 및 `supportsThinkingTokenBudget`는 없음 | 선택 사항 |
+| `0.1.2-alpha.1` 이상 지원 범위 | schema가 노출하는 경우 15개 필드 모두 지원 | 선택 사항 |
 
+DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 런타임 schema 노출에 따라 결정됩니다.
 런타임 schema가 노출하지 않는 필드는 UI에 표시되지 않습니다. 선택 사항인 transport가 설치되지 않았거나 비활성화된 경우 takeover를 적용하지 않습니다.
 
 ## 게이트웨이 호환성 설정
@@ -76,7 +77,7 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-필드별로 각 값은 model → provider → base/catalog → protocol → URL 감지 순서로 독립적으로 결정됩니다. 모델 값은 해당 필드만 덮어씁니다. `Auto`는 현재 계층의 값을 삭제해 provider 상속을 복원하고 상속 체인의 다음 값을 사용합니다. provider 기본값은 해당 라우트의 모든 모델에 적용되며 모델 편집은 현재 모델만 변경합니다. 같은 라우트(provider)에서는 비어 있지 않은 `models[]`와 비어 있지 않은 `modelOverrides`를 함께 사용할 수 없습니다. 공식 schema는 이 잘못된 구성을 거부하며 플러그인은 비정상 데이터에서 fail closed로 동작합니다.
+필드별로 각 값은 model → provider → base/catalog → protocol 순서로 독립적으로 결정됩니다. URL/hostname은 compat 소스로 사용하지 않습니다. 모델 값은 해당 필드만 덮어씁니다. `Auto`는 현재 계층의 값을 삭제해 provider 상속을 복원하고 상속 체인의 다음 값을 사용합니다. provider 기본값은 해당 라우트의 모든 모델에 적용되며 모델 편집은 현재 모델만 변경합니다. 같은 라우트(provider)에서는 비어 있지 않은 `models[]`와 비어 있지 않은 `modelOverrides`를 함께 사용할 수 없습니다. 공식 schema는 이 잘못된 구성을 거부하며 플러그인은 비정상 데이터에서 fail closed로 동작합니다.
 
 현재 DSH Settings API는 배열 인덱스 path op를 지원하지 않습니다. 따라서 `modelOverrides` 편집은 필드 단위 `set`/`unset`을 사용해 선택한 필드만 변경합니다. `models[]` 저장은 `providers.<route>.models` 전체를 하나의 배열 set으로 기록하며 다른 모델 항목, 알 수 없는 필드 및 다른 compat 필드를 보존합니다. 런타임 schema가 노출하지 않는 필드는 표시되지 않습니다. 이 값은 제어면 설정만 담당하며 네트워크 요청은 외부 transport가 처리합니다.
 

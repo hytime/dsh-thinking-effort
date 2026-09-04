@@ -45,9 +45,10 @@ The version map applies these gateway capability rules:
 | DSH range | Gateway compat fields | Takeover transport |
 | --- | --- | --- |
 | `0.1.0-rc.7` | Not available | Unsupported |
-| `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available except `supportsFinishReason` and `supportsThinkingTokenBudget` | Optional |
+| `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available when exposed by the DSH schema, but without `supportsFinishReason` and `supportsThinkingTokenBudget` | Optional |
 | `0.1.2-alpha.1` and later supported ranges | All 15 fields when exposed by the DSH schema | Optional |
 
+From DSH `0.1.0-rc.8` onward, field availability follows the runtime schema.
 DSH `0.1.0-rc.8` and later supported ranges follow the field availability shown above. The UI does not show fields that the runtime schema does not expose. If the optional transport is absent or disabled, no takeover is applied.
 
 ## Gateway compatibility settings
@@ -76,7 +77,7 @@ providers:
           maxTokensField: max_completion_tokens
 ```
 
-Field-by-field, each value resolves independently in this order: model → provider → base/catalog → protocol → URL detection. A model value overrides only that field. `Auto` deletes or unsets the current-layer value, restores provider inheritance when applicable, and lets the next value in the chain take effect. Provider defaults apply to every model on the route; a model edit changes only the current model. For a route/provider, non-empty `models[]` and non-empty `modelOverrides` are mutually exclusive; the official schema rejects this invalid configuration, and the plugin fails closed for malformed data.
+Field-by-field, each value resolves independently in this order: model → provider → base/catalog → protocol. URL/hostname detection is not used as a compat source. A model value overrides only that field. `Auto` deletes or unsets the current-layer value, restores provider inheritance when applicable, and lets the next value in the chain take effect. Provider defaults apply to every model on the route; a model edit changes only the current model. For a route/provider, non-empty `models[]` and non-empty `modelOverrides` are mutually exclusive; the official schema rejects this invalid configuration, and the plugin fails closed for malformed data.
 
 The current DSH Settings API does not support array-index path operations. `modelOverrides` edits therefore use field-level `set`/`unset` operations and touch only the selected field. A `models[]` edit writes one complete `providers.<route>.models` array set, preserving other model entries, unknown fields, and compat fields. These values are control plane configuration only; an external transport remains responsible for network requests.
 
