@@ -28,7 +28,7 @@ import { iosPalette } from '../src/client/theme.js'
 import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '../src/compat/model-source.js'
 import { resolveGatewayCompat, resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../src/compat/gateway/resolve.js'
 import { editableProviderCompatFields, validateProviderCompat } from '../src/compat/gateway/validation.js'
-import type { GatewayCompatEditability } from '../src/compat/gateway/types.js'
+import type { GatewayCompatEditability, GatewayCompatFieldKey, GatewayCompatFieldResolution } from '../src/compat/gateway/types.js'
 import { capabilitiesForVersion } from '../src/compat/version-map.js'
 import { GATEWAY_COMPAT_FIELD_KEYS, ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS } from '../src/compat/gateway/fields.js'
 import type { InventoryItem, ModelGatewayCompatUpdate, Translation } from '../src/client/types.js'
@@ -78,6 +78,17 @@ function item(overrides: Partial<InventoryItem> = {}): InventoryItem {
     inOverrides: false,
     ...overrides,
   }
+}
+
+function runtimeCompat(
+  identity: { provider: string; model?: string },
+  overrides: Partial<Record<GatewayCompatFieldKey, GatewayCompatFieldResolution<unknown>>>,
+): TakeoverRuntimeResolution['compat'][number] {
+  const fields = Object.fromEntries(GATEWAY_COMPAT_FIELD_KEYS.map((key) => [key, {
+    value: undefined,
+    source: 'unknown' as const,
+  }]))
+  return { ...identity, ...fields, ...overrides } as TakeoverRuntimeResolution['compat'][number]
 }
 
 describe('model source conflict protection', () => {
@@ -647,14 +658,10 @@ describe('model inventory and operations', () => {
     }
     const runtime: TakeoverRuntimeResolution = {
       providers: ['other-provider'],
-      compat: [{
-        provider: 'other-provider',
-        model: 'model-a',
-        thinkingFormat: { value: undefined, source: 'unknown' },
-        supportsReasoningEffort: { value: undefined, source: 'unknown' },
+      compat: [runtimeCompat({ provider: 'other-provider', model: 'model-a' }, {
         supportsDeveloperRole: { value: true, source: 'model' },
         maxTokensField: { value: 'max_completion_tokens', source: 'model' },
-      }],
+      })],
     }
     const model = inventoryFrom(namespace)[0]
     expect(model).toBeDefined()
@@ -1031,14 +1038,10 @@ describe('model inventory and operations', () => {
     }
     const runtime: TakeoverRuntimeResolution = {
       providers: ['qwen-gateway'],
-      compat: [{
-        provider: 'qwen-gateway',
-        model: 'qwen-thinking',
-        thinkingFormat: { value: undefined, source: 'unknown' },
-        supportsReasoningEffort: { value: undefined, source: 'unknown' },
+      compat: [runtimeCompat({ provider: 'qwen-gateway', model: 'qwen-thinking' }, {
         supportsDeveloperRole: { value: true, source: 'protocol' },
         maxTokensField: { value: 'max_completion_tokens', source: 'protocol' },
-      }],
+      })],
     }
 
     expect(modelGatewayCompatViewFrom(
@@ -1099,14 +1102,10 @@ describe('model inventory and operations', () => {
   it('uses namespace compat when takeover runtime has no matching model', () => {
     const runtime: TakeoverRuntimeResolution = {
       providers: ['qwen-gateway'],
-      compat: [{
-        provider: 'qwen-gateway',
-        model: 'other-model',
-        thinkingFormat: { value: undefined, source: 'unknown' },
-        supportsReasoningEffort: { value: undefined, source: 'unknown' },
+      compat: [runtimeCompat({ provider: 'qwen-gateway', model: 'other-model' }, {
         supportsDeveloperRole: { value: true, source: 'model' },
         maxTokensField: { value: 'max_completion_tokens', source: 'model' },
-      }],
+      })],
     }
     const namespace = {
       value: { providers: { 'qwen-gateway': { models: [{ id: 'qwen-thinking', compat: { supportsDeveloperRole: false } }] } } },
@@ -1132,14 +1131,10 @@ describe('model inventory and operations', () => {
     }
     const runtime: TakeoverRuntimeResolution = {
       providers: ['provider'],
-      compat: [{
-        provider: 'provider',
-        model: 'model-a',
-        thinkingFormat: { value: undefined, source: 'unknown' },
-        supportsReasoningEffort: { value: undefined, source: 'unknown' },
+      compat: [runtimeCompat({ provider: 'provider', model: 'model-a' }, {
         supportsDeveloperRole: { value: true, source: 'model' },
         maxTokensField: { value: 'max_completion_tokens', source: 'provider' },
-      }],
+      })],
     }
 
     expect(modelGatewayCompatViewFrom(namespace, inventoryFrom(namespace)[0]!, 'modern', runtime)).toMatchObject({
