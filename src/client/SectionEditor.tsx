@@ -1,11 +1,12 @@
 import React from 'react'
+import { GATEWAY_COMPAT_FIELD_KEYS, type GatewayCompatFieldKey } from '../compat/gateway/fields.js'
 import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
 import { DEFAULT_LEVELS, INPUT_MODALITIES, LEVEL_LABEL_KEYS, NS, PRESETS, ALL_LEVELS, CONTEXT_1M } from './constants.js'
 import { inventoryFrom, modelCompatKey, modelGatewayCompatViewsFrom, providerGatewayCompatViewsFrom } from './model-inventory.js'
 import { emptyTakeoverRuntimeResolution } from './takeover-runtime.js'
 import { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from './model-ops.js'
 import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, validateContextWindow, validateLevels } from './validation.js'
-import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
+import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
 import type { Palette } from './theme.js'
 import type { TakeoverRuntimeStore } from './takeover-runtime.js'
 import { iosPalette } from './theme.js'
@@ -25,9 +26,11 @@ interface EditorState {
   providerViews: Record<string, ProviderGatewayCompatView>
   providerDrafts: Record<string, ProviderGatewayCompatView>
   providerDirty: Record<string, boolean>
+  providerCompatExpanded: Record<string, boolean>
   modelCompatViews: Record<string, ModelGatewayCompatView>
   modelCompatDrafts: Record<string, ModelGatewayCompatView>
   modelCompatDirty: Record<string, ModelCompatDirtyFields>
+  modelCompatExpanded: Record<string, boolean>
   revision: number
   expanded: Record<string, boolean>
   expandedProviders: Record<string, boolean>
@@ -55,11 +58,19 @@ export interface SectionEditorProps {
 }
 
 const initialState: EditorState = {
-  loading: true, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
+  loading: true, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
 }
 
 function keyOf(item: InventoryItem): string { return modelCompatKey(item.route, item.model) }
 function revisionOf(namespace: SettingsNamespace): number { return typeof namespace.revision === 'number' ? namespace.revision : 0 }
+function availableCompatFieldCount(view: ProviderGatewayCompatView | ModelGatewayCompatView): number {
+  const values = view as unknown as Record<string, unknown>
+  return GATEWAY_COMPAT_FIELD_KEYS.filter((key) => key !== 'supportsDeveloperRole' && key !== 'maxTokensField' && values[`${key}Available`] === true).length
+}
+function compatEditability(view: ProviderGatewayCompatView | ModelGatewayCompatView): Partial<Record<GatewayCompatFieldKey, boolean>> {
+  const values = view as unknown as Record<string, unknown>
+  return Object.fromEntries(GATEWAY_COMPAT_FIELD_KEYS.filter((key) => values[`${key}Available`] === true).map((key) => [key, true])) as Partial<Record<GatewayCompatFieldKey, boolean>>
+}
 function removeDirtyFields<T extends object>(dirty: Record<string, T>, key: string, fields: readonly (keyof T)[]): Record<string, T> {
   const next = { ...dirty }
   const entry = { ...(next[key] ?? {}) }
@@ -102,10 +113,12 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       const view = modelCompatViews[key]
       if (view === undefined) continue
       if (!dirty) modelCompatDrafts[key] = view
-      else if (draft) modelCompatDrafts[key] = {
-        ...view,
-        supportsDeveloperRole: draft.supportsDeveloperRole,
-        maxTokensField: draft.maxTokensField,
+      else if (draft) {
+        const preserved = { ...view }
+        for (const field of GATEWAY_COMPAT_FIELD_KEYS) {
+          if (dirty[field] === true) Object.assign(preserved, { [field]: draft[field] })
+        }
+        modelCompatDrafts[key] = preserved
       }
     }
     const providerDrafts = { ...current.providerDrafts }
@@ -153,7 +166,13 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
         const view = modelCompatViews[key]
         if (view === undefined) continue
         if (!dirty) modelCompatDrafts[key] = view
-        else if (draft) modelCompatDrafts[key] = { ...view, supportsDeveloperRole: draft.supportsDeveloperRole, maxTokensField: draft.maxTokensField }
+        else if (draft) {
+          const preserved = { ...view }
+          for (const field of GATEWAY_COMPAT_FIELD_KEYS) {
+            if (dirty[field] === true) Object.assign(preserved, { [field]: draft[field] })
+          }
+          modelCompatDrafts[key] = preserved
+        }
       }
       return { ...current, providerViews, providerDrafts, modelCompatViews, modelCompatDrafts }
     })
@@ -201,22 +220,20 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     const current = state.modelCompatViews[key]
     const dirty = state.modelCompatDirty[key]
     if (!draft || !current || !dirty) return
-    const update: { supportsDeveloperRole?: ModelGatewayCompatUpdate['supportsDeveloperRole']; maxTokensField?: ModelGatewayCompatUpdate['maxTokensField'] } = {}
-    if (dirty.supportsDeveloperRole === true && draft.supportsDeveloperRole !== current.supportsDeveloperRole) update.supportsDeveloperRole = draft.supportsDeveloperRole
-    if (dirty.maxTokensField === true && draft.maxTokensField !== current.maxTokensField) update.maxTokensField = draft.maxTokensField
-    const editability = {
-      supportsDeveloperRole: draft.supportsDeveloperRoleAvailable,
-      maxTokensField: draft.maxTokensFieldAvailable,
+    const update: Partial<ModelGatewayCompatUpdate> = {}
+    for (const field of GATEWAY_COMPAT_FIELD_KEYS) {
+      if (dirty[field] === true && draft[field] !== current[field]) Object.assign(update, { [field]: draft[field] })
     }
+    const editability = compatEditability(draft)
     const ops = item.inOverrides
       ? opsForModelCompat(item, update, editability)
       : opsForModelArrayCompat(state.inventory, item, update, editability)
     if (ops.length === 0) {
-      setState((currentState) => ({ ...currentState, modelCompatDirty: removeDirtyFields(currentState.modelCompatDirty, key, ['supportsDeveloperRole', 'maxTokensField']) }))
+      setState((currentState) => ({ ...currentState, modelCompatDirty: removeDirtyFields(currentState.modelCompatDirty, key, GATEWAY_COMPAT_FIELD_KEYS) }))
       return
     }
     runOps(ops, t('modelGatewayCompatSaved'), () => {
-      setState((currentState) => ({ ...currentState, modelCompatDirty: removeDirtyFields(currentState.modelCompatDirty, key, ['supportsDeveloperRole', 'maxTokensField']) }))
+      setState((currentState) => ({ ...currentState, modelCompatDirty: removeDirtyFields(currentState.modelCompatDirty, key, GATEWAY_COMPAT_FIELD_KEYS) }))
     })
   }
 
@@ -226,7 +243,11 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       const draft = current.modelCompatDrafts[key] ?? current.modelCompatViews[key]
       if (!draft) return current
       const modelCompatDrafts = { ...current.modelCompatDrafts, [key]: { ...draft, ...next } }
-      const modelCompatDirty = { ...current.modelCompatDirty, [key]: { ...current.modelCompatDirty[key], ...(Object.prototype.hasOwnProperty.call(next, 'supportsDeveloperRole') ? { supportsDeveloperRole: true } : {}), ...(Object.prototype.hasOwnProperty.call(next, 'maxTokensField') ? { maxTokensField: true } : {}) } }
+      const nextDirty: ModelCompatDirtyFields = { ...current.modelCompatDirty[key] }
+      for (const field of GATEWAY_COMPAT_FIELD_KEYS) {
+        if (Object.prototype.hasOwnProperty.call(next, field)) Object.assign(nextDirty, { [field]: true })
+      }
+      const modelCompatDirty = { ...current.modelCompatDirty, [key]: nextDirty }
       return { ...current, notice: null, modelCompatDrafts, modelCompatDirty }
     })
   }
@@ -276,17 +297,12 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     const draft = state.providerDrafts[route]
     const current = state.providerViews[route]
     if (!draft || !current) return
-    const update: Partial<ProviderGatewayCompatView> = {}
-    if (draft.supportsDeveloperRole !== current.supportsDeveloperRole) {
-      update.supportsDeveloperRole = draft.supportsDeveloperRole
+    const update: Partial<ProviderGatewayCompatUpdate> = {}
+    const dirtyKeys = new Set(GATEWAY_COMPAT_FIELD_KEYS.filter((key) => (draft as Record<string, unknown>)[`${key}Dirty`] === true))
+    for (const field of GATEWAY_COMPAT_FIELD_KEYS) {
+      if (dirtyKeys.has(field) && draft[field] !== current[field]) Object.assign(update, { [field]: draft[field] })
     }
-    if (draft.maxTokensField !== current.maxTokensField) {
-      update.maxTokensField = draft.maxTokensField
-    }
-    const ops = opsForProviderCompat(route, update, {
-      supportsDeveloperRole: draft.supportsDeveloperRoleAvailable,
-      maxTokensField: draft.maxTokensFieldAvailable,
-    })
+    const ops = opsForProviderCompat(route, update, compatEditability(draft) as Partial<Pick<GatewayCompatEditability, GatewayCompatFieldKey>>)
     if (ops.length === 0) {
       setState((state) => {
         const providerDirty = { ...state.providerDirty }
@@ -305,14 +321,23 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   }
 
   const patchProviderCompat = (route: string, next: ProviderGatewayCompatView): void => {
-    setState((current) => ({
-      ...current,
-      notice: null,
-      providerDrafts: { ...current.providerDrafts, [route]: next },
-      providerDirty: { ...current.providerDirty, [route]: true },
-    }))
+    setState((current) => {
+      const draft = current.providerDrafts[route] ?? current.providerViews[route]
+      if (!draft) return { ...current, notice: null, providerDrafts: { ...current.providerDrafts, [route]: next }, providerDirty: { ...current.providerDirty, [route]: true } }
+      const keysChanged = GATEWAY_COMPAT_FIELD_KEYS.filter((key) => next[key] !== draft[key])
+      const nextDirty: Record<string, boolean> = {}
+      for (const field of keysChanged) nextDirty[`${field}Dirty`] = true
+      const patched = { ...next } as unknown as Record<string, unknown>
+      for (const field of GATEWAY_COMPAT_FIELD_KEYS) {
+        if (nextDirty[`${field}Dirty`] === true) Object.assign(patched, { [`${field}Dirty`]: true })
+      }
+      const providerDraft = patched as unknown as ProviderGatewayCompatView
+      return { ...current, notice: null, providerDrafts: { ...current.providerDrafts, [route]: providerDraft }, providerDirty: { ...current.providerDirty, [route]: true } }
+    })
   }
 
+  const toggleProviderCompatExpanded = (route: string): void => setState((current) => ({ ...current, providerCompatExpanded: { ...current.providerCompatExpanded, [route]: current.providerCompatExpanded[route] !== true } }))
+  const toggleModelCompatExpanded = (key: string): void => setState((current) => ({ ...current, modelCompatExpanded: { ...current.modelCompatExpanded, [key]: current.modelCompatExpanded[key] !== true } }))
   const toggleProvider = (route: string): void => setState((current) => ({ ...current, expandedProviders: { ...current.expandedProviders, [route]: current.expandedProviders[route] !== true } }))
   const toggleExpand = (item: InventoryItem): void => {
     const key = keyOf(item)
@@ -360,8 +385,11 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       <div style={{ position: 'relative', marginBottom: '7px' }}><span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: palette.secondary, pointerEvents: 'none' }}><Icon name="search" size={15} /></span><input type="text" value={state.query} placeholder={t('searchPlaceholder')} onChange={(event) => { const value = event.currentTarget.value; setState((current) => ({ ...current, query: value })) }} style={{ boxSizing: 'border-box', width: '100%', height: '30px', padding: '0 10px 0 30px', border: `1px solid ${palette.border}`, borderRadius: '8px', fontSize: '13px', backgroundColor: palette.field, color: palette.text, outline: 'none', boxShadow: palette.shadow }} /></div>
       {state.loading ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{t('loading')}</div> : visible.length === 0 ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{state.inventory.length === 0 ? t('noModels') : t('noMatches')}</div> :
          routes.map((route) => { const providerModels = visible.filter((item) => item.route === route); const providerOpen = query !== '' || state.expandedProviders[route] === true; return <div key={route} style={{ marginBottom: '6px' }}><div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '8px', minHeight: '32px', padding: '4px 6px', marginBottom: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.raised }}><span style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}><span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', minWidth: '22px', border: `1px solid ${palette.border}`, borderRadius: '7px', color: palette.secondary, backgroundColor: palette.group }}><Icon name="layers" size={14} /></span><span style={{ display: 'grid', gap: '1px', minWidth: 0 }}><span style={{ color: palette.text, fontSize: '12px', fontWeight: 700, overflowWrap: 'anywhere' }}>{route}</span><span style={{ color: palette.accent, fontSize: '10px', lineHeight: '11px', fontWeight: 700 }}>{t('vendor')}</span></span></span><span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: palette.secondary, whiteSpace: 'nowrap' }}><span>{t('modelCount', { count: providerModels.length })}</span>{query !== '' ? <span>{t('searchResults')}</span> : <ActionButton text="" onClick={() => toggleProvider(route)} palette={palette} tone="ghost" icon={providerOpen ? 'chevronUp' : 'chevronDown'} label={providerOpen ? t('collapseProvider') : t('expandProvider')} />}</span></div>{state.providerDrafts[route] ? <>
-          {renderGatewayCompatControls({ view: state.providerDrafts[route], onChange: (next) => patchProviderCompat(route, next), disabled: state.busy }, { palette, t })}{state.providerDirty[route] ? <ActionButton text={t('saveGatewayCompat')} onClick={() => applyProviderCompat(route)} disabled={state.busy} tone="primary" palette={palette} icon="check" /> : null}</> : null}{providerOpen ? providerModels.map((item) => { const key = keyOf(item); const dirty = state.dirty[key] ?? {}; const compatAvailable = state.modelCompatViews[key] !== undefined; return <ModelRow key={`${key}-${item.inOverrides ? 'override' : item.index}`} item={item} open={state.expanded[key] === true} draft={state.drafts[key]} contextDraft={state.contextDrafts[key] ?? contextDraftFrom(item)} inputDraft={state.inputDrafts[key] ?? inputDraftFrom(item)} dirty={dirty.levels === true || dirty.context === true || dirty.input === true} busy={state.busy} palette={palette} t={t} onToggle={() => toggleExpand(item)} onLevelChange={(level, patch) => patchDraft(item, level, patch)} onContextChange={(value) => patchContextValue(item, value)} onOneMillionChange={(enabled) => setOneMillion(item, enabled)} onInputChange={(modality, enabled) => patchInputCapability(item, modality, enabled)} onSave={() => applyModel(item)} onRestoreReasoning={() => restoreReasoningDefaults(item)} onRestoreCapability={() => restoreProviderDefaults(item)}
-                         compatView={compatAvailable ? state.modelCompatDrafts[key] : undefined} compatDirty={Boolean(state.modelCompatDirty[key]?.supportsDeveloperRole || state.modelCompatDirty[key]?.maxTokensField)} onCompatChange={compatAvailable ? (next) => patchModelCompat(item, next) : undefined} onSaveCompat={compatAvailable ? () => applyModelCompat(item) : undefined} /> }) : null}</div> })}
+          {renderGatewayCompatControls({ view: state.providerDrafts[route], onChange: (next) => patchProviderCompat(route, next), disabled: state.busy, expanded: state.providerCompatExpanded[route] === true, onToggleExpanded: () => toggleProviderCompatExpanded(route), availableCount: availableCompatFieldCount(state.providerDrafts[route]) }, { palette, t })}{state.providerDirty[route] ? <ActionButton text={t('saveGatewayCompat')} onClick={() => applyProviderCompat(route)} disabled={state.busy} tone="primary" palette={palette} icon="check" /> : null}</> : null}{providerOpen ? providerModels.map((item) => { const key = keyOf(item); const dirty = state.dirty[key] ?? {}; const compatAvailable = state.modelCompatViews[key] !== undefined; return <ModelRow key={`${key}-${item.inOverrides ? 'override' : item.index}`} item={item} open={state.expanded[key] === true} draft={state.drafts[key]} contextDraft={state.contextDrafts[key] ?? contextDraftFrom(item)} inputDraft={state.inputDrafts[key] ?? inputDraftFrom(item)} dirty={dirty.levels === true || dirty.context === true || dirty.input === true} busy={state.busy} palette={palette} t={t} onToggle={() => toggleExpand(item)} onLevelChange={(level, patch) => patchDraft(item, level, patch)} onContextChange={(value) => patchContextValue(item, value)} onOneMillionChange={(enabled) => setOneMillion(item, enabled)} onInputChange={(modality, enabled) => patchInputCapability(item, modality, enabled)} onSave={() => applyModel(item)} onRestoreReasoning={() => restoreReasoningDefaults(item)} onRestoreCapability={() => restoreProviderDefaults(item)}
+                         compatView={compatAvailable ? state.modelCompatDrafts[key] : undefined}
+                          compatExpanded={state.modelCompatExpanded[key] === true}
+                          onToggleCompatExpanded={compatAvailable ? () => toggleModelCompatExpanded(key) : undefined}
+                          compatDirty={state.modelCompatDirty[key]} onCompatChange={compatAvailable ? (next) => patchModelCompat(item, next) : undefined} onSaveCompat={compatAvailable ? () => applyModelCompat(item) : undefined} /> }) : null}</div> })}
       {expandedCount > 0 ? <div style={{ fontSize: '12px', color: palette.secondary, margin: '4px 2px 0' }}>{t('expandedSettings', { count: expandedCount })}</div> : null}
     </div>}
     <span aria-label={t('versionLabel')} style={{ position: 'absolute', right: '12px', bottom: '8px', fontSize: '10px', lineHeight: '14px', opacity: 0.45, pointerEvents: 'none', userSelect: 'none' }}>v{PLUGIN_VERSION}</span>

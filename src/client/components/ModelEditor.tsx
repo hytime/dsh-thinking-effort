@@ -1,6 +1,7 @@
 import React from 'react'
 import { ALL_LEVELS, CONTEXT_1M, CONTEXT_MAX, CONTEXT_MIN, LEVEL_LABEL_KEYS } from '../constants.js'
-import type { ContextDraft, DraftCell, InputDraft, InventoryItem, ModelGatewayCompatUpdate, ModelGatewayCompatView, ReasoningDraft, Translation } from '../types.js'
+import { GATEWAY_COMPAT_FIELD_KEYS, type GatewayCompatFieldKey } from '../../compat/gateway/fields.js'
+import type { ContextDraft, DraftCell, InputDraft, InventoryItem, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ReasoningDraft, Translation } from '../types.js'
 import type { Palette } from '../theme.js'
 import { ActionButton, Icon, SwitchControl } from './Controls.js'
 import { renderGatewayCompatControls } from './GatewayCompatControls.js'
@@ -24,18 +25,21 @@ export interface ModelEditorProps {
   readonly compatView?: ModelGatewayCompatView
   readonly onCompatChange?: (next: Partial<ModelGatewayCompatUpdate>) => void
   readonly onSaveCompat?: () => void
-  readonly compatDirty?: boolean
+  readonly compatDirty?: ModelCompatDirtyFields
+  readonly compatExpanded?: boolean
+  readonly onToggleCompatExpanded?: () => void
 }
 
-export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy, palette, t, onLevelChange, onContextChange, onOneMillionChange, onInputChange, onSave, onRestoreReasoning, onRestoreCapability, compatView, onCompatChange, onSaveCompat, compatDirty }: ModelEditorProps): React.ReactElement {
+export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy, palette, t, onLevelChange, onContextChange, onOneMillionChange, onInputChange, onSave, onRestoreReasoning, onRestoreCapability, compatView, onCompatChange, onSaveCompat, compatDirty, compatExpanded, onToggleCompatExpanded }: ModelEditorProps): React.ReactElement {
   const levelLabel = (level: typeof ALL_LEVELS[number]): string => t(LEVEL_LABEL_KEYS[level])
+  const anyCompatDirty = compatDirty !== undefined && GATEWAY_COMPAT_FIELD_KEYS.some((key) => compatDirty[key] === true)
   const modelCompatControls = compatView !== undefined
-    ? renderGatewayCompatControls({ scope: 'model', view: compatView, onChange: (next) => onCompatChange?.(next as Partial<ModelGatewayCompatUpdate>), disabled: busy || onCompatChange === undefined }, { palette, t })
+    ? renderGatewayCompatControls({ scope: 'model', view: compatView, onChange: (next) => onCompatChange?.(next as Partial<ModelGatewayCompatUpdate>), disabled: busy || onCompatChange === undefined, expanded: compatExpanded === true, onToggleExpanded: onToggleCompatExpanded, availableCount: GATEWAY_COMPAT_FIELD_KEYS.filter((key) => key !== 'supportsDeveloperRole' && key !== 'maxTokensField' && compatView[`${key}Available` as keyof ModelGatewayCompatView] === true).length }, { palette, t })
     : null
   const modelCompat = modelCompatControls !== null ? <>
     {modelCompatControls}
     {!item.inOverrides ? <div style={{ color: palette.secondary, fontSize: '10px', marginBottom: '6px' }}>{t('modelsArrayCompatSaveNote')}</div> : null}
-    {onSaveCompat ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}><ActionButton text={t('saveModelGatewayCompat')} onClick={onSaveCompat} disabled={busy || compatDirty !== true} tone="primary" palette={palette} icon="check" /></div> : null}
+    {onSaveCompat ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}><ActionButton text={t('saveModelGatewayCompat')} onClick={onSaveCompat} disabled={busy || !anyCompatDirty} tone="primary" palette={palette} icon="check" /></div> : null}
   </> : null
   return <div style={{ padding: '8px', borderTop: `1px solid ${palette.divider}`, backgroundColor: palette.group }}>
     {modelCompat}

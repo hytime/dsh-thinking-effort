@@ -1,4 +1,5 @@
 import type { ALL_LEVELS } from './constants.js'
+import type { GatewayCompatFieldKey } from '../compat/gateway/fields.js'
 import type { ModelGatewayCompatView as GatewayModelGatewayCompatView } from '../compat/gateway/types.js'
 
 export type {
@@ -17,12 +18,9 @@ export type {
   ProviderGatewayCompatUpdate,
   ProviderGatewayCompatView,
 } from '../compat/gateway/types.js'
-export type ModelCompatDirtyFields = {
-  supportsDeveloperRole?: boolean
-  maxTokensField?: boolean
-}
+export type ModelCompatDirtyFields = Partial<Record<GatewayCompatFieldKey, boolean>>
 
-export type ModelGatewayCompatSelection = Pick<GatewayModelGatewayCompatView, 'supportsDeveloperRole' | 'maxTokensField'>
+export type ModelGatewayCompatSelection = Pick<GatewayModelGatewayCompatView, GatewayCompatFieldKey>
 
 export type ReasoningLevel = typeof ALL_LEVELS[number]
 export type ReasoningEffort = string | null

@@ -463,7 +463,7 @@ describe('SectionEditor user behavior', () => {
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '', oneMillion: false, previousValue: '', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onCompatChange={vi.fn()} onSaveCompat={vi.fn()} compatDirty />)
+      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '', oneMillion: false, previousValue: '', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onCompatChange={vi.fn()} onSaveCompat={vi.fn()} compatDirty={{}} />)
     })
     expect(container.querySelector('[data-scope="model"]')).toBeNull()
     expect(container.textContent).not.toContain(text('saveModelGatewayCompat'))
@@ -498,7 +498,7 @@ describe('SectionEditor user behavior', () => {
     document.body.append(container)
     const root = createRoot(container)
     act(() => {
-      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '', oneMillion: false, previousValue: '', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onSaveCompat={onSaveCompat} compatDirty />)
+      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '', oneMillion: false, previousValue: '', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} compatView={compatView} onSaveCompat={onSaveCompat} compatDirty={{}} />)
     })
 
     expect(container.querySelector('[data-scope="model"]')).toBeNull()
@@ -587,6 +587,40 @@ describe('SectionEditor user behavior', () => {
       { op: 'set', path: ['providers', 'provider', 'compat', 'supportsDeveloperRole'], value: false },
       { op: 'set', path: ['providers', 'provider', 'compat', 'maxTokensField'], value: 'max_tokens' },
     ], 2)
+    view.unmount()
+  })
+
+  it('saves a new scalar field and leaves already-changed fields pending', async () => {
+    const providerNamespace = namespace({
+      value: { providers: { provider: { models: [{ id: 'model-a' }] } } },
+      schema: realGatewaySchema,
+    })
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      describe: async () => ({ ok: true, value: { namespaces: [providerNamespace] } }),
+      mutate: async (_ns, ops) => {
+        expect(ops).toEqual([
+          { op: 'set', path: ['providers', 'provider', 'compat', 'supportsStore'], value: false },
+          { op: 'set', path: ['providers', 'provider', 'compat', 'thinkingFormat'], value: 'deepseek' },
+        ])
+        return { ok: true as const, value: providerNamespace }
+      },
+    })
+    await settle()
+
+    const providerControls = view.container.querySelector('[data-scope="provider"]') as HTMLElement
+    expect(providerControls).not.toBeNull()
+    act(() => button(providerControls, text('gatewayMoreFields', { count: 13 })).click())
+    const supportsStore = providerControls.querySelector('select[aria-label="supportsStore"]') as HTMLSelectElement
+    const thinkingFormat = providerControls.querySelector('select[aria-label="thinkingFormat"]') as HTMLSelectElement
+    expect(supportsStore).not.toBeNull()
+    expect(thinkingFormat).not.toBeNull()
+    act(() => setValue(supportsStore, 'unsupported'))
+    act(() => setValue(thinkingFormat, 'deepseek'))
+    act(() => button(providerControls.parentElement!, text('saveGatewayCompat')).click())
+    await settle()
+
+    expect(view.mutate).toHaveBeenCalledTimes(1)
     view.unmount()
   })
 
