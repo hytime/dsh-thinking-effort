@@ -135,7 +135,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       }
       const found = response.value.namespaces.find((entry) => entry.ns === NS)
       if (!found) {
-        setState((current) => ({ ...current, loading: false, busy: false, nsFound: false, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, subagent: null }))
+        setState((current) => ({ ...current, loading: false, busy: false, nsFound: false, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, subagent: null }))
         return
       }
       setState((current) => applyNamespaceView(current, found, null))
