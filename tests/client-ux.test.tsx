@@ -6,10 +6,12 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SectionEditor } from '../src/client/SectionEditor.js'
 import { createTakeoverRuntimeStore, type TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
+import { resolveGatewayCompat } from '../src/compat/gateway/resolve.js'
 import { GatewayCompatControls, renderGatewayCompatControls } from '../src/client/components/GatewayCompatControls.js'
 import { ModelEditor } from '../src/client/components/ModelEditor.js'
 import { inventoryFrom, modelGatewayCompatViewFrom, providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
 import { en, ja, ko, zh } from '../src/client/locales.js'
+import { modelView, providerView } from './gateway-compat-test-helpers.js'
 import { iosPalette } from '../src/client/theme.js'
 import type {
   ClientLocale,
@@ -186,16 +188,16 @@ afterEach(() => {
 
 describe('SectionEditor user behavior', () => {
   it('renders provider gateway compatibility controls and emits only a view change', () => {
-    const view = {
+    const view = providerView({
       provider: 'provider',
       supportsDeveloperRole: 'auto' as const,
       maxTokensField: 'max_tokens' as const,
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
       supportsDeveloperRoleSource: 'unknown' as const,
-       maxTokensFieldSource: 'unknown' as const,
-       source: 'unknown' as const,
-    }
+      maxTokensFieldSource: 'unknown' as const,
+      source: 'unknown' as const,
+    })
     const onChange = vi.fn()
     const container = document.createElement('div')
     document.body.append(container)
@@ -217,7 +219,7 @@ describe('SectionEditor user behavior', () => {
   })
 
   it('renders model compat controls with field sources and Auto inheritance', () => {
-    const view = {
+    const view = modelView({
       provider: 'provider',
       model: 'model-b',
       supportsDeveloperRole: 'auto' as const,
@@ -226,7 +228,7 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'model' as const,
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
-    }
+    })
     const onChange = vi.fn()
     const container = document.createElement('div')
     document.body.append(container)
@@ -252,7 +254,7 @@ describe('SectionEditor user behavior', () => {
   })
 
   it('renders a distinct base source label instead of the protocol source label', () => {
-    const view = {
+    const view = modelView({
       provider: 'provider',
       model: 'model-b',
       supportsDeveloperRole: 'auto' as const,
@@ -261,7 +263,7 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'unknown' as const,
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
-    }
+    })
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
@@ -276,7 +278,7 @@ describe('SectionEditor user behavior', () => {
   })
 
   it('keeps the other model compat field editable when one field is unavailable', () => {
-    const view = {
+    const view = modelView({
       provider: 'provider',
       model: 'model-b',
       supportsDeveloperRole: 'auto' as const,
@@ -285,7 +287,7 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'model' as const,
       supportsDeveloperRoleAvailable: false,
       maxTokensFieldAvailable: true,
-    }
+    })
     const onChange = vi.fn()
     const container = document.createElement('div')
     document.body.append(container)
@@ -306,7 +308,7 @@ describe('SectionEditor user behavior', () => {
   it('renders model compatibility copy from every locale without key fallbacks', () => {
     const locales: readonly [string, Record<string, string>][] = [['en', en], ['zh', zh], ['ja', ja], ['ko', ko]]
     const keys = ['modelGatewayCompatTitle', 'compatSourceBase', 'compatSourceModel', 'compatSourceProvider', 'compatSourceCatalog', 'compatSourceProtocol', 'compatSourceUnknown', 'inheritProviderCompat', 'saveModelGatewayCompat', 'modelGatewayCompatSaved']
-    const view = {
+    const view = modelView({
       provider: 'provider',
       model: 'model-b',
       supportsDeveloperRole: 'auto' as const,
@@ -315,7 +317,7 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'unknown' as const,
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
-    }
+    })
     for (const [locale, dictionary] of locales) {
       for (const key of keys) {
         expect(dictionary[key], `${locale} missing ${key}`).toBeTruthy()
@@ -339,7 +341,7 @@ describe('SectionEditor user behavior', () => {
   it('renders the models[] save note from every locale in the model editor', () => {
     const locales: readonly [string, Record<string, string>][] = [['en', en], ['zh', zh], ['ja', ja], ['ko', ko]]
     const item: InventoryItem = { route: 'provider', model: 'model-a', name: 'Model A', levels: { off: null }, input: ['text'], raw: { id: 'model-a' }, index: 0, inOverrides: false }
-    const compatView = {
+    const compatView = modelView({
       provider: 'provider',
       model: 'model-a',
       supportsDeveloperRole: 'auto' as const,
@@ -348,7 +350,7 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'provider' as const,
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
-    }
+    })
     for (const [locale, dictionary] of locales) {
       const container = document.createElement('div')
       document.body.append(container)
@@ -374,7 +376,7 @@ describe('SectionEditor user behavior', () => {
       index: 1,
       inOverrides: true,
     }
-    const compatView = {
+    const compatView = modelView({
       provider: 'provider',
       model: 'model-b',
       supportsDeveloperRole: 'auto' as const,
@@ -383,7 +385,7 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'model' as const,
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
-    }
+    })
     const onCompatChange = vi.fn()
     const onSaveCompat = vi.fn()
     const container = document.createElement('div')
@@ -417,7 +419,7 @@ describe('SectionEditor user behavior', () => {
       index: 0,
       inOverrides: false,
     }
-    const compatView = {
+    const compatView = modelView({
       provider: 'provider',
       model: 'model-a',
       supportsDeveloperRole: 'auto' as const,
@@ -426,7 +428,7 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'protocol' as const,
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
-    }
+    })
     const onCompatChange = vi.fn()
     const onSaveCompat = vi.fn()
     const container = document.createElement('div')
@@ -447,7 +449,7 @@ describe('SectionEditor user behavior', () => {
 
   it('hides models[] compat controls when the source is not editable', () => {
     const item: InventoryItem = { route: 'provider', model: 'legacy-model', name: 'Legacy Model', levels: { off: null }, input: ['text'], raw: { id: 'legacy-model' }, index: 0, inOverrides: false }
-    const compatView = {
+    const compatView = modelView({
       provider: 'provider',
       model: 'legacy-model',
       supportsDeveloperRole: 'auto' as const,
@@ -456,7 +458,7 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'unknown' as const,
       supportsDeveloperRoleAvailable: false,
       maxTokensFieldAvailable: false,
-    }
+    })
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
@@ -481,7 +483,7 @@ describe('SectionEditor user behavior', () => {
       index: -1,
       inOverrides: true,
     }
-    const compatView = {
+    const compatView = modelView({
       provider: 'provider',
       model: 'legacy-model',
       supportsDeveloperRole: 'auto' as const,
@@ -490,7 +492,7 @@ describe('SectionEditor user behavior', () => {
       maxTokensFieldSource: 'unknown' as const,
       supportsDeveloperRoleAvailable: false,
       maxTokensFieldAvailable: false,
-    }
+    })
     const onSaveCompat = vi.fn()
     const container = document.createElement('div')
     document.body.append(container)
@@ -709,14 +711,12 @@ describe('SectionEditor user behavior', () => {
   it('renders provider controls from the runtime takeover projection', async () => {
     const takeoverResolution: TakeoverRuntimeResolution = {
       providers: ['provider'],
-      compat: [{
+      compat: [resolveGatewayCompat({
         provider: 'provider',
         model: 'model-a',
-        thinkingFormat: { value: 'qwen', source: 'model' },
-        supportsReasoningEffort: { value: true, source: 'model' },
-        supportsDeveloperRole: { value: false, source: 'provider' },
-        maxTokensField: { value: 'max_completion_tokens', source: 'provider' },
-      }],
+        modelCompat: { thinkingFormat: 'qwen', supportsReasoningEffort: true },
+        providerCompat: { supportsDeveloperRole: false, maxTokensField: 'max_completion_tokens' },
+      })],
     }
     const view = renderEditor({
       compatibilityProfile: 'modern',
