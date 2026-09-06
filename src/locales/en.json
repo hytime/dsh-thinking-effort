@@ -133,6 +133,8 @@
   "seatError": "Model directory failed to load: {message}",
   "seatFollowDefault": "Follow model default",
   "seatSliderLabel": "Reasoning effort",
+  "seatReasoningLabel": "Reasoning level",
+  "seatModelLabel": "Model",
   "seatErrorAction": "Model operation failed: {message}",
   "modelsArrayCompatSaveNote": "Saving changes updates only this model; other models are not affected."
 }

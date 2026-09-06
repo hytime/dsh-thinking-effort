@@ -15,6 +15,8 @@ const dictionary: Record<string, string> = {
   seatError: '模型目录加载失败：{message}',
   seatFollowDefault: '跟随模型默认',
   seatSliderLabel: '推理档位',
+  seatReasoningLabel: '推理等级',
+  seatModelLabel: '模型',
   seatErrorAction: '模型操作失败：{message}',
   off: 'off',
   high: 'high',
@@ -142,6 +144,29 @@ describe('thinking slider composer seat', () => {
     expect(text).toContain('模型目录加载失败：catalog unreachable')
   })
 
+  it('orders reasoning controls above the model trigger in the open panel', () => {
+    const directory = createSnapshotStore(state())
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    act(() => {
+      root.render(createElement(Slider, { directory, t }))
+    })
+
+    const reasoning = container.querySelector('[data-seat-reasoning]')
+    const input = container.querySelector('[data-seat-input]')
+    const trigger = container.querySelector('[data-seat-trigger]')
+    expect(reasoning).not.toBeNull()
+    expect(input).not.toBeNull()
+    expect(trigger).not.toBeNull()
+    expect(reasoning?.compareDocumentPosition(input as Node) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+    expect(input?.compareDocumentPosition(trigger as Node) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+
+    act(() => root.unmount())
+    container.remove()
+  })
+
   it('submits a range change as a session selection with the matching reasoning effort', () => {
     const select = vi.fn().mockResolvedValue(true)
     const directory = createSnapshotStore(state())
@@ -237,7 +262,6 @@ describe('thinking slider composer seat', () => {
     act(() => {
       root.render(createElement(Slider, { directory, t }))
     })
-    const trigger = container.querySelector('[data-seat-trigger]') as HTMLButtonElement
     expect(container.querySelector('[data-seat-input]')).not.toBeNull()
 
     // Outside mousedown closes the popover.
@@ -249,18 +273,20 @@ describe('thinking slider composer seat', () => {
     expect(container.querySelector('[data-seat-input]')).toBeNull()
     outside.remove()
 
-    // Re-open through the trigger; Escape closes and restores focus.
+    // Re-query the compact chip: the expanded model row was unmounted.
+    const compactTrigger = container.querySelector('[data-seat-trigger]') as HTMLButtonElement
     act(() => {
-      trigger.click()
+      compactTrigger.click()
     })
     expect(container.querySelector('[data-seat-input]')).not.toBeNull()
+    const expandedTrigger = container.querySelector('[data-seat-trigger]') as HTMLButtonElement
     act(() => {
-      trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      expandedTrigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     })
     expect(container.querySelector('[data-seat-input]')).toBeNull()
     // Focus restoration is scheduled on a microtask, so flush it first.
     await Promise.resolve()
-    expect(document.activeElement).toBe(trigger)
+    expect(document.activeElement).toBe(container.querySelector('[data-seat-trigger]'))
 
     act(() => root.unmount())
     container.remove()

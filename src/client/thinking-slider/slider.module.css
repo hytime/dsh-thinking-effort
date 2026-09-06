@@ -1,54 +1,75 @@
 .root {
   position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
   min-width: 0;
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
   line-height: 20px;
 }
 
-.modelRow {
-  min-width: 0;
-  overflow: hidden;
-  border: 0;
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  font: inherit;
-  font-weight: 500;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.modelRow:disabled {
-  color: var(--dsw-alias-label-dimmed);
-  cursor: default;
-}
-
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  width: min(336px, calc(100vw - 32px));
+  max-width: 100%;
+  gap: 10px;
+  padding: 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--dsw-specific-menu);
+  color: var(--dsw-alias-label-primary);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-elevation-prominent);
 }
 
-.scale {
+.reasoning {
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 0;
+  gap: 12px;
 }
 
-.tick {
-  color: var(--dsw-alias-label-secondary);
+.reasoningLabel {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+}
+
+.currentEffort {
+  overflow: hidden;
+  color: var(--dsw-alias-brand-primary);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .range {
   width: 100%;
+  min-width: 0;
+  margin: 0;
   accent-color: var(--dsw-alias-brand-primary);
+}
+
+.scale {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+}
+
+.tick {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-secondary);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activeTick {
+  color: var(--dsw-alias-brand-primary);
+  font-weight: 600;
 }
 
 .followDefault {
@@ -58,6 +79,7 @@
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   font: inherit;
+  text-align: left;
   cursor: pointer;
 }
 
@@ -67,4 +89,107 @@
 
 .error {
   color: var(--dsw-alias-state-error-primary);
+}
+
+.modelRow,
+.chip {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border: 0;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.modelRow {
+  height: 44px;
+  margin: 2px -8px -4px;
+  padding: 0 8px;
+  background: transparent;
+  border-radius: 4px;
+}
+
+.modelRow:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.modelLabel {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.modelName,
+.chipModel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelName {
+  flex: 1 1 auto;
+  margin-left: auto;
+  text-align: right;
+}
+
+.chevron {
+  display: grid;
+  place-items: center;
+  flex: 0 0 14px;
+  height: 14px;
+  margin-left: 8px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.chevron::before {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  content: '';
+  transform: rotate(45deg) translateY(-2px);
+}
+
+.chip {
+  width: fit-content;
+  max-width: min(360px, calc(100vw - 80px));
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 14px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  corner-shape: round;
+}
+
+.chip:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-accent);
+}
+
+.chipModel {
+  flex: 1 1 auto;
+}
+
+.chipEffort {
+  flex: 0 0 auto;
+  margin-left: 6px;
+  padding-left: 6px;
+  border-left: 0.5px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+
+.modelRow:focus-visible,
+.chip:focus-visible,
+.followDefault:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 2px;
+}
+
+.modelRow:disabled,
+.chip:disabled,
+.followDefault:disabled {
+  color: var(--dsw-alias-label-dimmed);
+  cursor: default;
 }

@@ -92,8 +92,8 @@ function currentModelOf(state: ModelDirectoryState): ModelCatalogModel | undefin
 }
 
 /**
- * Render the composer model seat: a model trigger and an initially expanded
- * discrete-effort panel. The host directory remains the authoritative state.
+ * Render the composer model seat. The expanded panel presents reasoning before
+ * the model row; the compact trigger preserves both model and effort labels.
  */
 export function Slider({ directory, select, locked = false, t }: SliderProps): ReactNode {
   const state = useSyncExternalStore(
@@ -114,6 +114,9 @@ export function Slider({ directory, select, locked = false, t }: SliderProps): R
   const effortIndex = efforts.findIndex(({ id }) => id === effectiveEffort)
   const rangeValue = effortIndex < 0 ? 0 : effortIndex
   const rangeEffort = efforts[rangeValue]
+  const currentEffortLabel = rangeEffort?.name ?? t('seatNoEfforts')
+  const hasDirectoryError = state.status === 'error' && state.error !== null
+  const busy = locked || state.status === 'selecting' || select === undefined
 
   useEffect(() => {
     if (!open) return
@@ -138,7 +141,8 @@ export function Slider({ directory, select, locked = false, t }: SliderProps): R
 
   const submit = (selection: ModelSelection): void => {
     if (locked || select === undefined) return
-    void select(selection).then(() => {}, () => {})
+    const pending = select(selection)
+    void pending.then(() => {}, () => {})
   }
 
   const onRangeChange = (event: ChangeEvent<HTMLInputElement>): void => {
@@ -148,60 +152,94 @@ export function Slider({ directory, select, locked = false, t }: SliderProps): R
     submit({ provider: current.provider, model: current.model, reasoningEffort: effort.id })
   }
 
-  const hasDirectoryError = state.status === 'error' && state.error !== null
-  const panel = !open
-    ? null
-    : efforts.length === 0
-      ? hasDirectoryError
-        ? createElement('div', { className: css.error, 'data-seat-panel': true }, t('seatError', { message: state.error }))
-        : createElement('div', { className: css.empty, 'data-seat-panel': true }, t('seatNoEfforts'))
-      : createElement(
-        'div',
-        { className: css.panel, 'data-seat-panel': true },
-        createElement(
-          'div',
-          { className: css.scale, 'data-seat-scale': true },
-          ...efforts.map((effort) => createElement('span', { className: css.tick, key: effort.id }, effort.name)),
-        ),
+  const modelTrigger = (compact: boolean) => createElement(
+    'button',
+    {
+      className: compact ? css.chip : css.modelRow,
+      'data-seat-trigger': 'true',
+      ref: triggerRef,
+      type: 'button',
+      disabled: locked,
+      'aria-expanded': open,
+      'aria-label': compact
+        ? `${modelLabel}: ${currentEffortLabel}`
+        : `${t('seatModelLabel')}: ${modelLabel}`,
+      onClick: () => { setOpen(value => !value) },
+    },
+    compact
+      ? [
+          createElement('span', { className: css.chipModel, key: 'model', title: modelLabel }, modelLabel),
+          createElement('span', { className: css.chipEffort, key: 'effort' }, currentEffortLabel),
+          createElement('span', { className: css.chevron, key: 'chevron', 'aria-hidden': true }),
+        ]
+      : [
+          createElement('span', { className: css.modelLabel, key: 'label' }, t('seatModelLabel')),
+          createElement('span', { className: css.modelName, key: 'model', title: modelLabel }, modelLabel),
+          createElement('span', { className: css.chevron, key: 'chevron', 'aria-hidden': true }),
+        ],
+  )
+
+  const content = efforts.length === 0
+    ? hasDirectoryError
+      ? createElement('div', { className: css.error }, t('seatError', { message: state.error }))
+      : createElement('div', { className: css.empty }, t('seatNoEfforts'))
+    : [
         createElement('input', {
           className: css.range,
-          'data-seat-input': true,
+          'data-seat-input': 'true',
           type: 'range',
           min: 0,
           max: efforts.length - 1,
           step: 1,
           value: rangeValue,
-          disabled: locked,
+          disabled: busy,
           'aria-label': t('seatSliderLabel'),
-          'aria-valuetext': rangeEffort?.name ?? t('seatFollowDefault'),
+          'aria-valuetext': currentEffortLabel,
           onChange: onRangeChange,
+          key: 'range',
         }),
+        createElement(
+          'div',
+          { className: css.scale, 'data-seat-scale': 'true', key: 'scale' },
+          ...efforts.map((effort, index) => createElement(
+            'span',
+            { className: index === rangeValue ? `${css.tick} ${css.activeTick}` : css.tick, key: effort.id },
+            effort.name,
+          )),
+        ),
         reasoning?.defaultEffort === undefined && current !== null
           ? createElement('button', {
             className: css.followDefault,
-            'data-seat-default': true,
+            'data-seat-default': 'true',
             type: 'button',
-            disabled: locked,
+            disabled: busy,
             onClick: () => { submit({ provider: current.provider, model: current.model }) },
+            key: 'default',
           }, t('seatFollowDefault'))
           : null,
         hasDirectoryError
-          ? createElement('div', { className: css.error, 'data-seat-select-error': true }, t('seatErrorAction', { message: state.error }))
+          ? createElement('div', { className: css.error, 'data-seat-select-error': 'true', key: 'error' }, t('seatErrorAction', { message: state.error }))
           : null,
-      )
+      ]
+
+  const panel = open
+    ? createElement(
+      'div',
+      { className: css.panel, 'data-seat-panel': 'true' },
+      createElement(
+        'div',
+        { className: css.reasoning, 'data-seat-reasoning': 'true' },
+        createElement('span', { className: css.reasoningLabel }, t('seatReasoningLabel')),
+        createElement('span', { className: css.currentEffort }, currentEffortLabel),
+      ),
+      content,
+      modelTrigger(false),
+    )
+    : modelTrigger(true)
 
   return createElement(
     'div',
-    { className: css.root, ref: rootRef, onKeyDown, 'data-seat-root': true },
-    createElement('button', {
-      className: css.modelRow,
-      'data-seat-trigger': true,
-      ref: triggerRef,
-      type: 'button',
-      disabled: locked,
-      'aria-expanded': open,
-      onClick: () => { setOpen(value => !value) },
-    }, modelLabel),
+    { className: css.root, ref: rootRef, onKeyDown, 'data-seat-root': 'true' },
     panel,
   )
 }
