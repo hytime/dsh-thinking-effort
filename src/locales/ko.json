@@ -131,5 +131,8 @@
   "seatNoModel": "모델이 선택되지 않았습니다",
   "seatNoEfforts": "현재 모델에는 추론 수준이 제공되지 않습니다",
   "seatError": "모델 디렉터리를 불러오지 못했습니다: {message}",
+  "seatFollowDefault": "모델 기본값 따르기",
+  "seatSliderLabel": "추론 강도",
+  "seatErrorAction": "모델 작업에 실패했습니다: {message}",
   "modelsArrayCompatSaveNote": "저장하면 현재 모델의 설정만 변경되며 다른 모델에는 영향을 주지 않습니다."
 }

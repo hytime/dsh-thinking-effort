@@ -1,13 +1,12 @@
 /**
- * Composer model seat (`conversation.input.model`) — Task 2: two-tier
- * directory-backed region. The model-name row derives from the session's
- * `current` selection (handling null/loading/error states); the effort scale
- * renders exactly the levels the host catalog declares for the current model
- * (`reasoning.efforts`). Interaction (range submit through `select`) lands in
- * Task 3, so this file keeps the seat presentational and state-driven.
+ * Composer model seat (`conversation.input.model`) renders the host-provided
+ * model directory and submits discrete reasoning-effort changes through the
+ * injected session-selection callback.
  */
-import { createElement, useSyncExternalStore } from 'react'
-import type { ReactNode } from 'react'
+import {
+  createElement, useEffect, useRef, useState, useSyncExternalStore,
+} from 'react'
+import type { ChangeEvent, KeyboardEvent, ReactNode } from 'react'
 import type { Translation } from '../types.js'
 import css from './slider.module.css'
 
@@ -70,11 +69,7 @@ export interface SliderDirectory {
   subscribe(fn: () => void): () => void
 }
 
-/**
- * Seat component props: the injected directory store plus the optional
- * load/select verbs (`locked`/interaction wire up in Task 3). `t` is bound to
- * LOCALE_NS by the slot renderer through the registration's `locale` field.
- */
+/** Seat component props provided by the optional model-directory service. */
 export interface SliderProps {
   readonly directory: SliderDirectory
   readonly load?: () => void
@@ -97,34 +92,116 @@ function currentModelOf(state: ModelDirectoryState): ModelCatalogModel | undefin
 }
 
 /**
- * Render the composer model seat: the model-name row (from `current`) above a
- * scale of exactly the configured reasoning efforts, or the matching copy for
- * loading / no-selection / empty-efforts / error states.
+ * Render the composer model seat: a model trigger and an initially expanded
+ * discrete-effort panel. The host directory remains the authoritative state.
  */
-export function Slider({ directory, t }: SliderProps): ReactNode {
+export function Slider({ directory, select, locked = false, t }: SliderProps): ReactNode {
   const state = useSyncExternalStore(
     (fn: () => void) => directory.subscribe(fn),
     () => directory.getSnapshot(),
   )
+  const [open, setOpen] = useState(true)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
   const current = state.current
   const model = currentModelOf(state)
   const modelLabel = current === null
     ? state.status === 'loading' ? t('seatModelLoading') : t('seatNoModel')
     : model?.name ?? `${current.provider}/${current.model}`
-  const efforts = model?.reasoning?.efforts ?? EMPTY_EFFORTS
+  const reasoning = model?.reasoning
+  const efforts = reasoning?.efforts ?? EMPTY_EFFORTS
+  const effectiveEffort = current?.reasoningEffort ?? reasoning?.defaultEffort
+  const effortIndex = efforts.findIndex(({ id }) => id === effectiveEffort)
+  const rangeValue = effortIndex < 0 ? 0 : effortIndex
+  const rangeEffort = efforts[rangeValue]
+
+  useEffect(() => {
+    if (!open) return
+    const closeOutside = (event: MouseEvent): void => {
+      if (rootRef.current?.contains(event.target as Node)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', closeOutside)
+    return () => { document.removeEventListener('mousedown', closeOutside) }
+  }, [open])
+
+  const closeWithFocus = (): void => {
+    setOpen(false)
+    queueMicrotask(() => { triggerRef.current?.focus() })
+  }
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== 'Escape' || !open) return
+    event.preventDefault()
+    closeWithFocus()
+  }
+
+  const submit = (selection: ModelSelection): void => {
+    if (locked || select === undefined) return
+    void select(selection).then(() => {}, () => {})
+  }
+
+  const onRangeChange = (event: ChangeEvent<HTMLInputElement>): void => {
+    if (current === null) return
+    const effort = efforts[Number(event.currentTarget.value)]
+    if (effort === undefined) return
+    submit({ provider: current.provider, model: current.model, reasoningEffort: effort.id })
+  }
+
+  const hasDirectoryError = state.status === 'error' && state.error !== null
+  const panel = !open
+    ? null
+    : efforts.length === 0
+      ? hasDirectoryError
+        ? createElement('div', { className: css.error, 'data-seat-panel': true }, t('seatError', { message: state.error }))
+        : createElement('div', { className: css.empty, 'data-seat-panel': true }, t('seatNoEfforts'))
+      : createElement(
+        'div',
+        { className: css.panel, 'data-seat-panel': true },
+        createElement(
+          'div',
+          { className: css.scale, 'data-seat-scale': true },
+          ...efforts.map((effort) => createElement('span', { className: css.tick, key: effort.id }, effort.name)),
+        ),
+        createElement('input', {
+          className: css.range,
+          'data-seat-input': true,
+          type: 'range',
+          min: 0,
+          max: efforts.length - 1,
+          step: 1,
+          value: rangeValue,
+          disabled: locked,
+          'aria-label': t('seatSliderLabel'),
+          'aria-valuetext': rangeEffort?.name ?? t('seatFollowDefault'),
+          onChange: onRangeChange,
+        }),
+        reasoning?.defaultEffort === undefined && current !== null
+          ? createElement('button', {
+            className: css.followDefault,
+            'data-seat-default': true,
+            type: 'button',
+            disabled: locked,
+            onClick: () => { submit({ provider: current.provider, model: current.model }) },
+          }, t('seatFollowDefault'))
+          : null,
+        hasDirectoryError
+          ? createElement('div', { className: css.error, 'data-seat-select-error': true }, t('seatErrorAction', { message: state.error }))
+          : null,
+      )
 
   return createElement(
     'div',
-    { className: css.root },
-    createElement('div', { className: css.modelRow }, modelLabel),
-    state.status === 'error' && state.error !== null
-      ? createElement('div', { className: css.error }, t('seatError', { message: state.error }))
-      : efforts.length === 0
-        ? createElement('div', { className: css.empty }, t('seatNoEfforts'))
-        : createElement(
-          'div',
-          { className: css.scale },
-          ...efforts.map((effort) => createElement('span', { className: css.tick, key: effort.id }, effort.name)),
-        ),
+    { className: css.root, ref: rootRef, onKeyDown, 'data-seat-root': true },
+    createElement('button', {
+      className: css.modelRow,
+      'data-seat-trigger': true,
+      ref: triggerRef,
+      type: 'button',
+      disabled: locked,
+      'aria-expanded': open,
+      onClick: () => { setOpen(value => !value) },
+    }, modelLabel),
+    panel,
   )
 }

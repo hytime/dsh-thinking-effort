@@ -9,17 +9,31 @@
   line-height: 20px;
 }
 
-/* Model-name row: single line, long names ellipsize inside the seat. */
 .modelRow {
   min-width: 0;
   overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--dsw-alias-label-primary);
-  font-weight: 500;
+  cursor: pointer;
 }
 
-/* Configured effort scale: one tick per host-declared level. */
+.modelRow:disabled {
+  color: var(--dsw-alias-label-dimmed);
+  cursor: default;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .scale {
   display: flex;
   flex-direction: row;
@@ -32,7 +46,21 @@
   color: var(--dsw-alias-label-secondary);
 }
 
-/* Empty and error copy inherit the root tone; errors use the semantic token. */
+.range {
+  width: 100%;
+  accent-color: var(--dsw-alias-brand-primary);
+}
+
+.followDefault {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
 .empty {
   color: var(--dsw-alias-label-tertiary);
 }

@@ -70,7 +70,7 @@ function seatFace(
     // `directory` must be the STORE itself (subscribe/getSnapshot), not the
     // owning controller.
     directory: instance.store,
-    load: () => { void instance.load() },
+    load: () => { void instance.load().catch(() => {}) },
     select: (selection) => instance.select(selection).then(() => true, () => false),
   }
 }

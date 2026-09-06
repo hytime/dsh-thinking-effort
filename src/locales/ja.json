@@ -131,5 +131,8 @@
   "seatNoModel": "モデルが選択されていません",
   "seatNoEfforts": "現在のモデルには推論レベルの指定がありません",
   "seatError": "モデルディレクトリの読み込みに失敗しました：{message}",
+  "seatFollowDefault": "モデルの既定値に従う",
+  "seatSliderLabel": "推論強度",
+  "seatErrorAction": "モデル操作に失敗しました：{message}",
   "modelsArrayCompatSaveNote": "保存すると、このモデルの設定だけが変更され、他のモデルには影響しません。"
 }
