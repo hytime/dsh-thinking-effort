@@ -4,6 +4,7 @@ import { settingsBridge } from './settings-bridge.js'
 import { createTakeoverRuntimeStore, observeTakeoverSettings } from './takeover-runtime.js'
 import { LOCALE_NS } from './constants.js'
 import { SectionEditor } from './SectionEditor.js'
+import { apply as registerComposerSeat } from './thinking-slider/index.js'
 import type { ClientContext, ClientLocale, ClientSlots } from './types.js'
 
 export const name = '@hytime/dsh-thinking-effort'
@@ -67,6 +68,11 @@ export function apply(context: ClientContext): void {
       },
       () => createElement(SectionEditor, { settings: observedSettings, locale, t: translate, takeoverRuntime: runtime }),
     ))
+
+    // Second injected seat: the composer model slider. Task 2 wires the
+    // shared model directory into its closure; the placeholder occupies the
+    // seat at a negative priority so a real occupant can shadow it.
+    registerComposerSeat(context)
   }
 
   const mountFromRemote = (): void => {

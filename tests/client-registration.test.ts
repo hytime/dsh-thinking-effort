@@ -96,10 +96,15 @@ describe('client registration through the guarded context', () => {
     }
     for (const listener of listeners) listener('remote.settings')
 
-    expect(registrations).toHaveLength(1)
+    expect(registrations).toHaveLength(2)
     expect(registrations[0]?.descriptor).toMatchObject({
       name: 'settings.section',
       id: 'thinking-effort',
+    })
+    expect(registrations[1]?.descriptor).toMatchObject({
+      name: 'conversation.input.model',
+      priority: -10,
+      locale: LOCALE_NS,
     })
   })
 })
@@ -603,13 +608,29 @@ describe('client registration', () => {
     expect(harness.context.get).toHaveBeenCalledWith('remote.settings')
     expect(harness.context.on).toHaveBeenCalledWith('internal/service', expect.any(Function))
     expect(harness.slots.inject).toHaveBeenCalledWith('settings.section', expect.any(Function))
-    expect(harness.registrations).toHaveLength(1)
+    expect(harness.slots.inject).toHaveBeenCalledWith('conversation.input.model', expect.any(Function))
+    expect(harness.registrations).toHaveLength(2)
     expect(harness.registrations[0]?.descriptor).toMatchObject({
       name: 'settings.section',
       id: 'thinking-effort',
       order: 12,
       locale: LOCALE_NS,
     })
+    expect(harness.registrations[1]?.descriptor).toMatchObject({
+      name: 'conversation.input.model',
+      priority: -10,
+      locale: LOCALE_NS,
+    })
+  })
+
+  it('registers a render factory for the composer model seat placeholder', () => {
+    const harness = createHarness('modern')
+    apply(harness.context)
+
+    const render = harness.registrations[1]?.render
+    expect(render).toEqual(expect.any(Function))
+    const element = (render as () => { props?: Record<string, unknown> })()
+    expect(element.props).toEqual(expect.objectContaining({ t: expect.any(Function) }))
   })
 
   it('registers a render factory for the provider compatibility settings surface', () => {
@@ -627,7 +648,7 @@ describe('client registration', () => {
     apply(harness.context)
 
     expect(harness.context.on).toHaveBeenCalledWith('internal/service', expect.any(Function))
-    expect(harness.registrations).toHaveLength(1)
+    expect(harness.registrations).toHaveLength(2)
     const render = harness.registrations[0]?.render
     const element = (render as () => { props?: { settings?: { describe: () => Promise<unknown> } } })()
     await element.props?.settings?.describe()
