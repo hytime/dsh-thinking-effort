@@ -127,5 +127,9 @@
   "inheritProviderCompat": "자동으로 제공자 호환성 상속",
   "saveModelGatewayCompat": "모델 호환성 저장",
   "modelGatewayCompatSaved": "모델 게이트웨이 호환성이 저장되었습니다",
+  "seatModelLoading": "모델 로드 중…",
+  "seatNoModel": "모델이 선택되지 않았습니다",
+  "seatNoEfforts": "현재 모델에는 추론 수준이 제공되지 않습니다",
+  "seatError": "모델 디렉터리를 불러오지 못했습니다: {message}",
   "modelsArrayCompatSaveNote": "저장하면 현재 모델의 설정만 변경되며 다른 모델에는 영향을 주지 않습니다."
 }

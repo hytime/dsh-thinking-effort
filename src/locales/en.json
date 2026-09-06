@@ -127,5 +127,9 @@
   "inheritProviderCompat": "Auto inherits provider compatibility",
   "saveModelGatewayCompat": "Save model compatibility",
   "modelGatewayCompatSaved": "Model gateway compatibility saved",
+  "seatModelLoading": "Loading model…",
+  "seatNoModel": "No model selected",
+  "seatNoEfforts": "This model provides no reasoning effort levels",
+  "seatError": "Model directory failed to load: {message}",
   "modelsArrayCompatSaveNote": "Saving changes updates only this model; other models are not affected."
 }

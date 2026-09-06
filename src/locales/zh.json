@@ -127,5 +127,9 @@
   "inheritProviderCompat": "自动继承提供方兼容性",
   "saveModelGatewayCompat": "保存模型兼容性",
   "modelGatewayCompatSaved": "模型网关兼容性已保存",
+  "seatModelLoading": "加载模型…",
+  "seatNoModel": "未选择模型",
+  "seatNoEfforts": "当前模型未提供推理档位",
+  "seatError": "模型目录加载失败：{message}",
   "modelsArrayCompatSaveNote": "保存后只会修改当前模型的设置，不会影响其他模型。"
 }

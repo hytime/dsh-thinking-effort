@@ -126,6 +126,10 @@ describe('build artifacts', () => {
           remoteReads += 1
           return remoteSettings
         }
+        // Optional host model-directory service (ui-model-selection): the
+        // composer seat probes it once during mount and skips itself when it
+        // is absent — this profile has no such service.
+        if (name === 'modelDirectories') return undefined
         throw new Error(`Unexpected context read: ${name}`)
       },
       on(event, callback) {

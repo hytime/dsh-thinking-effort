@@ -69,9 +69,11 @@ export function apply(context: ClientContext): void {
       () => createElement(SectionEditor, { settings: observedSettings, locale, t: translate, takeoverRuntime: runtime }),
     ))
 
-    // Second injected seat: the composer model slider. Task 2 wires the
-    // shared model directory into its closure; the placeholder occupies the
-    // seat at a negative priority so a real occupant can shadow it.
+    // Second injected seat: the composer model slider. The seat registration
+    // reads the optional modelDirectories service inside its own apply and
+    // skips itself when that service is absent (profiles without the official
+    // ui-model-selection keep the settings page working); its injected face
+    // carries the per-session directory store/verbs into the component.
     registerComposerSeat(context)
   }
 

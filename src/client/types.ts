@@ -141,9 +141,12 @@ export interface RemoteContext {
   get(name: string): unknown
 }
 
+// The official SlotRegistry face (ui-renderer registry test's ErasedService):
+// register returns a disposer and inject wraps the registration callback,
+// returning its disposer — so registrations can ride `context.effect`.
 export interface ClientSlots {
-  inject(name: string, callback: () => void): unknown
-  register(descriptor: Record<string, unknown>, render: unknown): unknown
+  inject(name: string, callback: () => (() => void) | Iterable<() => void>): () => void
+  register(descriptor: Record<string, unknown>, render: unknown): () => void
 }
 
 export interface ClientContext {

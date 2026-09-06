@@ -26,6 +26,19 @@ function createHarness(mode: 'modern' | 'legacy') {
       return () => disposed.push('slot')
     }),
   }
+  // Official ui-model-selection face, mirrored minimally: per-session
+  // directory exposing store/load/select (see task-0-preflight).
+  const directory = {
+    store: {
+      getSnapshot: () => ({ status: 'idle' }),
+      subscribe: () => () => undefined,
+    },
+    load: vi.fn(),
+    select: vi.fn(),
+  }
+  const modelDirectories = {
+    directoryFor: vi.fn(() => directory),
+  }
   const remoteSettings = {
     describe: vi.fn().mockResolvedValue({ ok: true, value: { namespaces: [] } }),
     mutate: vi.fn().mockResolvedValue({ ok: true, value: { namespaces: [] } }),
@@ -35,23 +48,31 @@ function createHarness(mode: 'modern' | 'legacy') {
     mutate: vi.fn().mockResolvedValue({ result: { ok: true, value: { namespaces: [] } } }),
   }
   const connection = mode === 'legacy' ? { api: { settings: legacySettings } } : {}
-  let effectDisposer: (() => void) | undefined
+  const effectDisposers: Array<() => void> = []
   const context = {
     get: vi.fn((key: string) => key === 'remote.settings'
       ? mode === 'modern' ? remoteSettings : undefined
-      : ({ slots, connection, locale }[key as 'slots' | 'connection' | 'locale'])),
+      : key === 'modelDirectories'
+        ? modelDirectories
+        : ({ slots, connection, locale }[key as 'slots' | 'connection' | 'locale'])),
     on: vi.fn((event: string, callback: (name: string) => void) => {
       expect(event).toBe('internal/service')
       listeners.push(callback)
       return () => undefined
     }),
     effect: vi.fn((callback: () => void | (() => void)) => {
-      effectDisposer = callback() as (() => void) | undefined
-      return effectDisposer
+      const disposer = callback() as (() => void) | undefined
+      if (disposer !== undefined) effectDisposers.push(disposer)
+      return disposer
     }),
   }
 
-  return { context, slots, locale, listeners, registrations, disposed, addLanguage, register, remoteSettings, legacySettings, disposeEffect: () => effectDisposer?.() }
+  return {
+    context, slots, locale, listeners, registrations, disposed, addLanguage, register,
+    remoteSettings, legacySettings, modelDirectories, directory,
+    // Cordis tears effects down in reverse registration order.
+    disposeAllEffects: () => { for (const disposer of effectDisposers.reverse()) disposer() },
+  }
 }
 
 
@@ -76,6 +97,9 @@ describe('client registration through the guarded context', () => {
       slots,
       connection: {},
       locale,
+      // The composer seat needs the optional directory service; without it
+      // only the settings slot registers (asserted below).
+      modelDirectories: undefined,
     }
     const context = {
       get: vi.fn((key: string) => key === 'remote.settings' ? remoteSettings : services[key]),
@@ -96,15 +120,10 @@ describe('client registration through the guarded context', () => {
     }
     for (const listener of listeners) listener('remote.settings')
 
-    expect(registrations).toHaveLength(2)
+    expect(registrations).toHaveLength(1)
     expect(registrations[0]?.descriptor).toMatchObject({
       name: 'settings.section',
       id: 'thinking-effort',
-    })
-    expect(registrations[1]?.descriptor).toMatchObject({
-      name: 'conversation.input.model',
-      priority: -10,
-      locale: LOCALE_NS,
     })
   })
 })
@@ -200,7 +219,7 @@ describe('client registration', () => {
     const runtime = element.props?.takeoverRuntime as { getSnapshot: () => { providers: readonly string[]; compat: readonly unknown[] }; update: (resolution: { providers: readonly string[]; compat: readonly unknown[] }) => void }
     runtime.update({ providers: ['local'], compat: [] })
 
-    harness.disposeEffect()
+    harness.disposeAllEffects()
 
     expect(runtime.getSnapshot()).toEqual({ providers: [], compat: [] })
   })
@@ -623,14 +642,17 @@ describe('client registration', () => {
     })
   })
 
-  it('registers a render factory for the composer model seat placeholder', () => {
+  it('registers the composer seat with an injected directory face', () => {
     const harness = createHarness('modern')
     apply(harness.context)
 
-    const render = harness.registrations[1]?.render
-    expect(render).toEqual(expect.any(Function))
-    const element = (render as () => { props?: Record<string, unknown> })()
-    expect(element.props).toEqual(expect.objectContaining({ t: expect.any(Function) }))
+    const descriptor = harness.registrations[1]?.descriptor
+    expect(descriptor).toMatchObject({
+      name: 'conversation.input.model',
+      priority: -10,
+      locale: LOCALE_NS,
+    })
+    expect(harness.slots.inject).toHaveBeenCalledWith('conversation.input.model', expect.any(Function))
   })
 
   it('registers a render factory for the provider compatibility settings surface', () => {
@@ -661,8 +683,75 @@ describe('client registration', () => {
 
     expect(harness.register).toHaveBeenCalledWith(LOCALE_NS, expect.objectContaining({ zh: expect.any(Object), en: expect.any(Object), ja: expect.any(Object), ko: expect.any(Object) }))
     expect(harness.addLanguage).toHaveBeenCalledTimes(2)
-    expect(harness.context.effect).toHaveBeenCalledTimes(1)
-    harness.disposeEffect()
-    expect(harness.disposed).toEqual(['ko', 'ja', 'dictionary'])
+    // Two effects: the language-pack dictionaries and the composer seat
+    // registration (I1). Both must dispose on teardown.
+    expect(harness.context.effect).toHaveBeenCalledTimes(2)
+    harness.disposeAllEffects()
+    expect(harness.disposed).toEqual(['slot', 'ko', 'ja', 'dictionary'])
+  })
+
+  it('injects the per-session directory store and verbs into the composer seat', () => {
+    const harness = createHarness('modern')
+    apply(harness.context)
+
+    expect(harness.context.get).toHaveBeenCalledWith('modelDirectories')
+    const descriptor = harness.registrations[1]?.descriptor as { inject?: (sessionId: string) => unknown }
+    expect(descriptor?.inject).toEqual(expect.any(Function))
+
+    const face = descriptor?.inject?.('session-1') as { directory: { getSnapshot: () => { status: string } }; load: () => void; select: unknown }
+    expect(face).toEqual(expect.objectContaining({ load: expect.any(Function), select: expect.any(Function) }))
+    expect(face.directory.getSnapshot()).toEqual({ status: 'idle' })
+    expect(harness.modelDirectories.directoryFor).toHaveBeenCalledWith('session-1')
+    // The injected `directory` is the store itself — what useSyncExternalStore
+    // consumes — while load/select close over the owning controller.
+    expect(harness.directory.store).toBe(face.directory)
+  })
+
+  it('skips the composer seat when the modelDirectories service is absent', () => {
+    const registrations: Array<{ descriptor: Record<string, unknown> }> = []
+    const listeners: Array<(name: string) => void> = []
+    const calls: string[] = []
+    // `remoteSettings` starts unresolved so the settings mount path can be
+    // announced AFTER apply — the `modelDirectories` get happens only once
+    // the mount listener fires (registerComposerSeat runs inside mount()).
+    let remoteSettings: unknown
+    const slots = {
+      inject: vi.fn((_name: string, callback: () => void) => callback()),
+      register: vi.fn((descriptor: Record<string, unknown>) => {
+        registrations.push({ descriptor })
+        return () => undefined
+      }),
+    }
+    const locale = {
+      register: vi.fn(() => () => undefined),
+      bind: () => (key: string) => key,
+      getSnapshot: () => ({ locales: [{ id: 'zh' }] }),
+    }
+    const context = {
+      get: vi.fn((key: string) => {
+        calls.push(key)
+        return key === 'remote.settings' ? remoteSettings : key === 'modelDirectories' ? undefined : ({ slots, connection: {}, locale } as Record<string, unknown>)[key]
+      }),
+      on: vi.fn((event: string, callback: (name: string) => void) => {
+        listeners.push(callback)
+        return () => undefined
+      }),
+      effect: vi.fn((callback: () => void | (() => void)) => callback()),
+    }
+
+    apply(context as Parameters<typeof apply>[0])
+    expect(calls).not.toContain('modelDirectories')
+    expect(registrations).toHaveLength(0)
+
+    // Announce a working settings service: mount now runs and the optional
+    // modelDirectories seam is probed exactly once — and stays absent, so
+    // only the settings slot registers.
+    remoteSettings = { describe: vi.fn(), mutate: vi.fn() }
+    for (const listener of listeners) listener('remote.settings')
+    expect(calls).toContain('modelDirectories')
+
+    expect(registrations).toHaveLength(1)
+    expect(registrations[0]?.descriptor?.name).toBe('settings.section')
+    expect(slots.inject).not.toHaveBeenCalledWith('conversation.input.model', expect.any(Function))
   })
 })

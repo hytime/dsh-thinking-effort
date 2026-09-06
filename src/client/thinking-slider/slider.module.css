@@ -1,4 +1,42 @@
 .root {
-  /* Task 2 ships the composer slider chrome; the skeleton keeps the seat
-     styles empty and free of hardcoded colors. */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* Model-name row: single line, long names ellipsize inside the seat. */
+.modelRow {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+/* Configured effort scale: one tick per host-declared level. */
+.scale {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.tick {
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* Empty and error copy inherit the root tone; errors use the semantic token. */
+.empty {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.error {
+  color: var(--dsw-alias-state-error-primary);
 }

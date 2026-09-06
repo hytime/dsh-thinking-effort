@@ -127,5 +127,9 @@
   "inheritProviderCompat": "自動でプロバイダーの互換性を継承",
   "saveModelGatewayCompat": "モデルの互換性を保存",
   "modelGatewayCompatSaved": "モデルゲートウェイ互換性を保存しました",
+  "seatModelLoading": "モデルを読み込み中…",
+  "seatNoModel": "モデルが選択されていません",
+  "seatNoEfforts": "現在のモデルには推論レベルの指定がありません",
+  "seatError": "モデルディレクトリの読み込みに失敗しました：{message}",
   "modelsArrayCompatSaveNote": "保存すると、このモデルの設定だけが変更され、他のモデルには影響しません。"
 }
