@@ -97,9 +97,9 @@
 .rangePip {
   position: absolute;
   top: 50%;
-  width: 8px;
-  height: 8px;
-  border: 2px solid var(--dsw-alias-border-l2);
+  width: 16px;
+  height: 16px;
+  border: 3px solid var(--dsw-alias-border-l2);
   border-radius: 50%;
   background: var(--dsw-specific-menu);
   box-sizing: border-box;
@@ -107,10 +107,11 @@
 }
 
 .activePip {
-  width: 10px;
-  height: 10px;
+  width: 20px;
+  height: 20px;
+  border-width: 3px;
   border-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
-  box-shadow: 0 0 0 4px var(--dsw-alias-interactive-bg-hover-accent);
+  box-shadow: 0 0 0 5px var(--dsw-alias-interactive-bg-hover-accent);
 }
 
 .range {
