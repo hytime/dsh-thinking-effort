@@ -118,6 +118,7 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
     () => directory.getSnapshot(),
   )
   const [open, setOpen] = useState(false)
+  const [modelOpen, setModelOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const current = state.current
@@ -151,6 +152,7 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
     if (!open) return
     const closeOutside = (event: MouseEvent): void => {
       if (rootRef.current?.contains(event.target as Node)) return
+      setModelOpen(false)
       setOpen(false)
     }
     document.addEventListener('mousedown', closeOutside)
@@ -158,6 +160,7 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
   }, [open])
 
   const closeWithFocus = (): void => {
+    setModelOpen(false)
     setOpen(false)
     queueMicrotask(() => { triggerRef.current?.focus() })
   }
@@ -181,9 +184,7 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
     submit({ provider: current.provider, model: current.model, reasoningEffort: effort.id })
   }
 
-  const onModelChange = (event: ChangeEvent<HTMLSelectElement>): void => {
-    const choice = choices.find(item => item.key === event.currentTarget.value)
-    if (choice === undefined) return
+  const submitModel = (choice: ModelChoice): void => {
     const sameModel = choice.provider === current?.provider && choice.model.id === current?.model
     const reasoningEffort = sameModel
       ? current?.reasoningEffort ?? choice.model.reasoning?.defaultEffort
@@ -193,6 +194,12 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
       model: choice.model.id,
       ...reasoningEffort === undefined ? {} : { reasoningEffort },
     })
+    setModelOpen(false)
+  }
+
+  const onModelChange = (event: ChangeEvent<HTMLSelectElement>): void => {
+    const choice = choices.find(item => item.key === event.currentTarget.value)
+    if (choice !== undefined) submitModel(choice)
   }
 
   const modelTrigger = () => createElement(
@@ -220,15 +227,28 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
   const modelSelect = createElement(
     'div',
     { className: css.modelRow, 'data-seat-model-row': 'true' },
-    createElement('span', { className: css.modelLabel }, t('seatModelLabel')),
-    createElement('span', { className: css.modelName, title: modelLabel }, modelLabel),
-    createElement('span', { className: css.chevron, 'aria-hidden': true }),
+    createElement(
+      'button',
+      {
+        className: css.modelRowButton,
+        type: 'button',
+        disabled: busy,
+        'aria-haspopup': 'listbox',
+        'aria-expanded': modelOpen,
+        onClick: () => { setModelOpen(value => !value) },
+      },
+      createElement('span', { className: css.modelLabel }, t('seatModelLabel')),
+      createElement('span', { className: css.modelName, title: modelLabel }, modelLabel),
+      createElement('span', { className: css.chevron, 'aria-hidden': true }),
+    ),
     createElement(
       'select',
       {
         className: css.modelSelect,
         'data-seat-model-select': 'true',
         'aria-label': t('seatModelLabel'),
+        tabIndex: -1,
+        'aria-hidden': true,
         value: selectedChoice?.key ?? '',
         disabled: busy,
         onChange: onModelChange,
@@ -245,6 +265,32 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
       )),
     ),
   )
+
+  const modelMenu = modelOpen
+    ? createElement(
+      'div',
+      { className: css.modelMenu, role: 'listbox', 'data-seat-model-menu': 'true', 'aria-label': t('seatModelLabel') },
+      ...state.groups.map((group) => createElement(
+        'div',
+        { className: css.modelGroup, key: group.id },
+        createElement('div', { className: css.modelGroupLabel }, group.name),
+        ...group.models.map((option) => {
+          const choice = choices.find(item => item.provider === group.id && item.model.id === option.id)
+          if (choice === undefined) return null
+          const selected = choice.key === selectedChoice?.key
+          return createElement('button', {
+            className: selected ? `${css.modelOption} ${css.modelOptionSelected}` : css.modelOption,
+            type: 'button',
+            role: 'option',
+            'aria-selected': selected,
+            disabled: busy,
+            onClick: () => { submitModel(choice) },
+            key: choice.key,
+          }, option.name)
+        }),
+      )),
+    )
+    : null
 
   const content = efforts.length === 0
     ? hasDirectoryError
@@ -324,6 +370,7 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
       ),
       content,
       modelSelect,
+      modelMenu,
     )
     : modelTrigger()
 
