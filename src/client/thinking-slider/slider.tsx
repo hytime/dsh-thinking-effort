@@ -119,6 +119,8 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
   )
   const [open, setOpen] = useState(false)
   const [modelOpen, setModelOpen] = useState(false)
+  const [modelQuery, setModelQuery] = useState('')
+  const [expandedModelGroup, setExpandedModelGroup] = useState<string | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const current = state.current
@@ -132,6 +134,13 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
   const selectedChoice = choices.find(choice => (
     choice.provider === current?.provider && choice.model.id === current?.model
   ))
+  const selectedProvider = selectedChoice?.provider
+  const normalizedModelQuery = modelQuery.trim().toLocaleLowerCase()
+  const visibleModelGroups = state.groups.map((group) => ({
+    group,
+    models: group.models.filter((option) => normalizedModelQuery.length === 0
+      || `${option.name} ${option.id}`.toLocaleLowerCase().includes(normalizedModelQuery)),
+  })).filter(({ models }) => models.length > 0)
   const effectiveEffort = current?.reasoningEffort ?? reasoning?.defaultEffort
   const effortIndex = efforts.findIndex(({ id }) => id === effectiveEffort)
   const rangeValue = effortIndex < 0 ? 0 : effortIndex
@@ -153,14 +162,20 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
     const closeOutside = (event: MouseEvent): void => {
       if (rootRef.current?.contains(event.target as Node)) return
       setModelOpen(false)
+      setModelQuery('')
       setOpen(false)
     }
     document.addEventListener('mousedown', closeOutside)
     return () => { document.removeEventListener('mousedown', closeOutside) }
   }, [open])
 
+  useEffect(() => {
+    if (modelOpen) setExpandedModelGroup(selectedProvider ?? state.groups[0]?.id ?? null)
+  }, [modelOpen, selectedProvider, state.groups])
+
   const closeWithFocus = (): void => {
     setModelOpen(false)
+    setModelQuery('')
     setOpen(false)
     queueMicrotask(() => { triggerRef.current?.focus() })
   }
@@ -195,6 +210,7 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
       ...reasoningEffort === undefined ? {} : { reasoningEffort },
     })
     setModelOpen(false)
+    setModelQuery('')
   }
 
   const onModelChange = (event: ChangeEvent<HTMLSelectElement>): void => {
@@ -235,7 +251,7 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
         disabled: busy,
         'aria-haspopup': 'listbox',
         'aria-expanded': modelOpen,
-        onClick: () => { setModelOpen(value => !value) },
+        onClick: () => { setModelOpen(value => { if (value) setModelQuery(''); return !value }) },
       },
       createElement('span', { className: css.modelLabel }, t('seatModelLabel')),
       createElement('span', { className: css.modelName, title: modelLabel }, modelLabel),
@@ -270,25 +286,49 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
     ? createElement(
       'div',
       { className: css.modelMenu, role: 'listbox', 'data-seat-model-menu': 'true', 'aria-label': t('seatModelLabel') },
-      ...state.groups.map((group) => createElement(
-        'div',
-        { className: css.modelGroup, key: group.id },
-        createElement('div', { className: css.modelGroupLabel }, group.name),
-        ...group.models.map((option) => {
-          const choice = choices.find(item => item.provider === group.id && item.model.id === option.id)
-          if (choice === undefined) return null
-          const selected = choice.key === selectedChoice?.key
-          return createElement('button', {
-            className: selected ? `${css.modelOption} ${css.modelOptionSelected}` : css.modelOption,
-            type: 'button',
-            role: 'option',
-            'aria-selected': selected,
-            disabled: busy,
-            onClick: () => { submitModel(choice) },
-            key: choice.key,
-          }, option.name)
+      createElement('input', {
+        className: css.modelSearch,
+        'data-seat-model-search': 'true',
+        type: 'search',
+        value: modelQuery,
+        placeholder: t('seatSearchModels'),
+        'aria-label': t('seatSearchModels'),
+        onChange: (event: ChangeEvent<HTMLInputElement>) => { setModelQuery(event.currentTarget.value) },
+      }),
+      visibleModelGroups.length === 0
+        ? createElement('div', { className: css.modelNoResults }, t('seatNoModelResults'))
+        : visibleModelGroups.map(({ group, models }) => {
+          const expanded = modelQuery.trim().length > 0 || group.id === expandedModelGroup
+          return createElement(
+            'div',
+            { className: css.modelGroup, key: group.id },
+            createElement('button', {
+              className: css.modelGroupToggle,
+              type: 'button',
+              'aria-expanded': expanded,
+              onClick: () => { setExpandedModelGroup(value => value === group.id ? null : group.id) },
+            },
+            createElement('span', { className: css.modelGroupLabel }, group.name),
+            createElement('span', { className: expanded ? `${css.modelGroupChevron} ${css.modelGroupChevronOpen}` : css.modelGroupChevron, 'aria-hidden': true }),
+            ),
+            expanded
+              ? models.map((option) => {
+                const choice = choices.find(item => item.provider === group.id && item.model.id === option.id)
+                if (choice === undefined) return null
+                const selected = choice.key === selectedChoice?.key
+                return createElement('button', {
+                  className: selected ? `${css.modelOption} ${css.modelOptionSelected}` : css.modelOption,
+                  type: 'button',
+                  role: 'option',
+                  'aria-selected': selected,
+                  disabled: busy,
+                  onClick: () => { submitModel(choice) },
+                  key: choice.key,
+                }, option.name)
+              })
+              : null,
+          )
         }),
-      )),
     )
     : null
 

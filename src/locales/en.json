@@ -135,6 +135,8 @@
   "seatSliderLabel": "Reasoning effort",
   "seatReasoningLabel": "Reasoning level",
   "seatModelLabel": "Model",
+  "seatSearchModels": "Search models",
+  "seatNoModelResults": "No matching models",
   "seatErrorAction": "Model operation failed: {message}",
   "modelsArrayCompatSaveNote": "Saving changes updates only this model; other models are not affected."
 }

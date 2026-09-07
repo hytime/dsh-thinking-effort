@@ -135,6 +135,8 @@
   "seatSliderLabel": "推理档位",
   "seatReasoningLabel": "推理等级",
   "seatModelLabel": "模型",
+  "seatSearchModels": "搜索模型",
+  "seatNoModelResults": "没有匹配的模型",
   "seatErrorAction": "模型操作失败：{message}",
   "modelsArrayCompatSaveNote": "保存后只会修改当前模型的设置，不会影响其他模型。"
 }
