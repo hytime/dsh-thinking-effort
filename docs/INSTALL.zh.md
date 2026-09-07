@@ -287,7 +287,13 @@ curl -s http://127.0.0.1:3080/ \
 3. **设置页：** Web 界面 → 设置 → 「模型能力与档位」。页面包含顶部语言选择器、「子 agent 默认档位」卡片、「一键设置」、模型搜索、供应商/模型列表、输入能力/上下文标识和单模型设置按钮，可以编辑模型档位和线上值。
 4. **子 agent 思考强度：** 设置页配置后，`llm-pi-ai` 用户层出现 `subagentEffort`，未显式指定档位的子 agent 请求会使用它。
 5. **未设置默认值：** 插件不会自动选择 `off`、`high` 或 `max`；请求不发送 `reasoning` 参数，由第三方网关决定默认行为。
-6. **Composer：** 选择第三方模型后，模型选择器显示已声明的「推理等级」。
+6. **Composer：** Web 运行时提供 `modelDirectories` 服务时，会注册 Composer 的可选 `seat` 并显示推理档位滑块。
+
+回到 Composer 并选择已经配置档位的模型。Web 运行时提供 `modelDirectories` 服务时，插件会注册 Composer 的可选 `seat`，显示离散推理档位滑块，并且只列出当前精确 `provider/model` 在宿主侧解析后的 `reasoning.efforts`。模型未声明 `defaultEffort` 时，面板会额外显示「跟随模型默认」；它清除会话的推理档位覆盖值，不会编辑插件 Settings。滑块使用宿主 `--dsw-*` `token`，自动跟随当前浅色或深色主题。
+
+Composer `seat` 是可选能力。`modelDirectories` 服务不可用时不会注册，设置页仍通过探测到的新版或旧版 Settings 传输正常工作；插件不修改 DSH Composer 包。
+
+宿主配置变更需要重启 DSH。修改 Client bundle、Settings 或 locale 后，刷新 Web 页面再检查 Composer 滑块。
 
 ## 6. 故障排查
 

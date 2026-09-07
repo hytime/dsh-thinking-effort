@@ -14,6 +14,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 新增 / Added
+
+- 新增：Web 运行时提供 `modelDirectories` 服务时，注册 Composer 的可选 `seat`，并按当前 `provider/model` 的宿主已解析 `reasoning.efforts` 显示离散推理档位；模型未声明 `defaultEffort` 时可恢复为「跟随模型默认」。控件使用宿主深浅色主题 `token`，通过会话模型选择提交，不修改 Settings 文档。
+- Add an optional Composer `seat` when the Web runtime exposes `modelDirectories`. It renders the current `provider/model`'s host-resolved `reasoning.efforts`, offers **Follow model default** when a model lacks `defaultEffort`, follows host light/dark theme tokens, and submits through session model selection without mutating the Settings document.
+
 ## [0.2.0] - 未发布 / Unreleased
 
 ### 新增 / Added

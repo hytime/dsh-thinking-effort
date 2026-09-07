@@ -191,7 +191,7 @@ It must not contain an old bundle row with:
 name: dsh-thinking-effort
 ```
 
-## 5. Verify the settings page
+## 5. Verify the settings page and Composer
 
 Restart DSH, then refresh the Web page. Open **Settings → Model capabilities and effort**.
 
@@ -200,6 +200,12 @@ Restart DSH, then refresh the Web page. Open **Settings → Model capabilities a
 3. **Quick settings** offers the official DeepSeek and generic batch presets.
 4. The provider/model list supports search, expand/collapse, input-capability badges, context badges, and per-model settings controls.
 5. The bottom-right watermark shows `v0.1.14`.
+
+Return to Composer and choose a configured model. When the Web runtime provides `modelDirectories`, the plugin registers an optional Composer `seat` with a discrete reasoning-effort slider. It lists only the host-resolved `reasoning.efforts` for the selected exact `provider/model`. A model without `defaultEffort` also shows **Follow model default**; this clears the session's reasoning-effort override instead of editing plugin Settings. The slider follows the active light or dark theme through host `--dsw-*` tokens.
+
+The Composer `seat` is optional. It is not registered when `modelDirectories` is unavailable, and the Settings page continues to work through the detected modern or legacy Settings transport. The plugin does not modify the DSH Composer packages.
+
+Host configuration changes take effect after a DSH restart. Refresh the Web page after Client bundle, Settings, or locale changes before checking the Composer slider.
 
 The host marker can be checked with:
 

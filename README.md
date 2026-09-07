@@ -67,6 +67,7 @@ These identifiers have different responsibilities:
 | Per-model editor | Select levels and configure gateway values for both catalog/modelOverrides and `models[]` entries in Settings |
 | Gateway compatibility | Configure 15 common scalar fields globally per provider or separately per model, grouped by role/reasoning, format/output, streaming/tools, and storage/cache; groups are collapsed by default |
 | Gateway mapping | Send `ultra` when the user selects DSH `high` |
+| Composer effort slider | Registers an optional Composer `seat` when the Web runtime exposes `modelDirectories`, with host-resolved tiers for the current `provider/model` |
 | Subagent default | Apply a default effort only when a subagent request has no explicit value |
 | Multilingual settings | Includes Chinese, English, Japanese, and Korean dictionaries; Japanese/Korean switching uses DSH language-pack support |
 | Version watermark | Show the installed plugin version in the bottom-right corner |
@@ -107,7 +108,15 @@ See [INSTALL.md](./docs/INSTALL.md) for profile discovery, migration, validation
    | `high` | `ultra` |
    | `max` | `max` |
 
-7. Return to Composer and select the model to use its reasoning selector.
+7. Return to Composer, choose the configured model, then use its reasoning-effort slider.
+
+### Composer reasoning-effort slider
+
+When the DSH Web runtime exposes `modelDirectories`, the client registers an optional `conversation.input.model` `seat` with a low `shadow` priority; it does not modify Composer itself. The slider reads the host-resolved `reasoning.efforts` array for the current exact `provider/model`, so it shows only the tiers currently effective for that model. Changing a level submits the ordinary session model selection; it does not mutate the plugin Settings document.
+
+The model's `defaultEffort` is shown through the matching tier. If the host model has no `defaultEffort`, the panel also provides **Follow model default**, which submits a selection without a reasoning-effort override. The control uses the host `--dsw-*` semantic tokens and therefore follows the active light or dark theme without its own theme preference.
+
+The `seat` is not registered when the runtime does not provide `modelDirectories`; the Settings page and its legacy Settings transport behavior continue to work. This plugin does not modify the DSH Composer, `ui-conversation`, or `ui-model-selection` packages.
 
 The settings page shows the installed version as a small watermark such as `v0.1.14` in the bottom-right corner.
 
@@ -144,7 +153,7 @@ The page header contains the language selector. Below it, the Subagent default e
 ## How it works
 
 - **Host:** Scans `llm-pi-ai` `models` and `modelOverrides` on startup and settings changes, adding defaults only where `reasoningEfforts` is missing.
-- **Client:** Registers a settings page through the DSH Settings Remote (`ctx.remote.settings`) and the official DSH locale service. Chinese, English, Japanese, and Korean dictionaries are maintained separately in `src/locales/zh.json`, `src/locales/en.json`, `src/locales/ja.json`, and `src/locales/ko.json`, then generated into the client bundle before publishing.
+- **Client:** Registers the Settings page through the DSH Settings Remote (`ctx.remote.settings`) and, when the runtime exposes `modelDirectories`, registers the optional Composer `seat` with a low `shadow` priority and host-resolved effort slider. Chinese, English, Japanese, and Korean dictionaries are maintained separately in `src/locales/zh.json`, `src/locales/en.json`, `src/locales/ja.json`, and `src/locales/ko.json`, then generated into the client bundle before publishing.
 - **Subagents:** Stores the default in the `llm-pi-ai` user layer as `subagentEffort`. The `agent/request` waterfall only fills requests that do not already specify an effort.
 - **No configured default:** The plugin does not automatically choose `off`, `high`, or `max`; the request omits `reasoning` and the gateway decides its own default behavior.
 
@@ -154,7 +163,8 @@ The page header contains the language selector. Below it, the Subagent default e
 - Non-`off` levels require a gateway value. An empty `off` value means that the parameter is omitted.
 - The selected subagent level must be supported by the target model, or the gateway may return `UNSUPPORTED_REASONING_EFFORT`.
 - `off` and an unset effort may both omit `reasoning`; whether this disables thinking depends on the gateway protocol.
-- Host changes require a DSH restart. Settings and locale changes are applied in the browser, with a refresh available when needed.
+- The Composer slider is available only when the Web runtime provides the optional `modelDirectories` service. The `seat` is not registered when that service is unavailable, and the plugin leaves Composer unchanged.
+- Host changes require a DSH restart. Settings, locale, and Client bundle changes take effect after a Web page refresh.
 
 ## CI and release maintenance
 

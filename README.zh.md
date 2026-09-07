@@ -78,6 +78,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 | 网关值映射 | 例如 DSH 选择 `high` 时，实际向网关发送 `ultra` |
 | 子 agent 默认值 | 为未显式指定档位的子 agent 请求自动填入默认思考强度 |
 | 快捷预设 | 一键应用官方 DeepSeek 风格或通用档位组合 |
+| Composer 分档滑块 | 运行时提供 `modelDirectories` 服务时，注册 Composer 的可选 `seat`，显示当前 `provider/model` 的宿主已解析推理档位 |
 | 多语言设置 | 已包含中文、English、日本語和한국어字典；日语/韩语切换使用 DSH 的语言包支持 |
 
 ## 安装、升级与卸载
@@ -166,7 +167,15 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
    | `high` | `ultra` |
    | `max` | `max` |
 
-7. 回到 Composer，选择对应模型后即可使用「推理等级」。
+7. 回到 Composer，选择对应模型后即可使用推理档位滑块。
+
+### Composer 推理档位滑块
+
+当 DSH Web 运行时提供 `modelDirectories` 服务时，客户端会为可选 `conversation.input.model` `seat` 注册低优先级的 `shadow` 实现，不会修改 Composer 本身。滑块读取当前精确 `provider/model` 在宿主侧解析后的 `reasoning.efforts` 数组，因此只显示该模型当前生效的档位。选择档位提交的是普通会话模型选择，不会写入插件的 Settings 文档。
+
+模型声明了 `defaultEffort` 时，滑块会显示对应档位。模型未声明 `defaultEffort` 时，面板额外提供「跟随模型默认」；提交时不会设置推理档位覆盖值。控件使用宿主 `--dsw-*` 语义 `token`，不维护自己的主题偏好，会跟随当前浅色或深色主题。
+
+运行时未提供 `modelDirectories` 服务时，不会注册这个 `seat`；设置页和旧版 Settings 传输回退仍可使用。插件不修改 DSH Composer、`ui-conversation` 或 `ui-model-selection` 包。
 
 设置页右下角会显示当前安装版本，例如 `v0.1.14`。
 
@@ -203,7 +212,7 @@ providers:
 ## 工作方式
 
 - **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位。
-- **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页，并使用 DSH 官方 locale 服务切换和持久化中文、English、日本語、한국어。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
+- **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页；运行时提供 `modelDirectories` 服务时，为可选 Composer `seat` 注册低优先级 `shadow` 实现，并显示宿主已解析的推理档位滑块。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
 - **子 agent：** 默认值存储在 `llm-pi-ai` 用户层的 `subagentEffort`；`agent/request` waterfall 只对未显式指定档位的子 agent 请求进行补全。
 - **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.14`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
 
@@ -240,7 +249,8 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 - 非 `off` 档位必须填写线上值；`off` 留空表示不发送该参数。
 - 子 agent 使用的模型必须支持所选档位，否则网关可能返回 `UNSUPPORTED_REASONING_EFFORT`。
 - `off` 和未设置都可能表现为不发送 `reasoning` 参数，是否真正关闭思考取决于第三方网关的协议语义。
-- 宿主逻辑修改需要重启 DSH；设置页修改通常只需刷新浏览器页面。
+- Composer 滑块只在 Web 运行时提供可选 `modelDirectories` 服务时注册。该服务不可用时，不会注册 `seat`，插件也不会修改 Composer。
+- 宿主逻辑修改需要重启 DSH；Settings、locale 和 Client bundle 修改需要刷新 Web 页面。
 
 ## CI 与发布维护
 
