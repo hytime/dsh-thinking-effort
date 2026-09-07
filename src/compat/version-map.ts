@@ -59,7 +59,7 @@ const versionRanges: readonly VersionRange[] = [
   },
   {
     minimum: '0.1.2-alpha.1',
-    maximumExclusive: '0.1.3-0',
+    maximumExclusive: '0.1.4-0',
     capabilities: {
       settingsTransport: 'modern',
       settingsApi: 'remote.settings',

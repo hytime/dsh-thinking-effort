@@ -226,11 +226,11 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 
 npm パッケージには GitHub Trusted Publishing を設定してください。リポジトリは `hytime/dsh-thinking-effort`、workflow は `publish.yml` です。公開は GitHub OIDC と provenance を使い、`npm publish --provenance --access public` を実行します。`NPM_TOKEN` や長期 token は使用しません。npm に同じ version が存在する場合、公開は停止します。
 
-公開前に workflow は rc7 → rc2 → alpha3 の順で、3 つの一時的な公式 DSH capability representative checkout を作成します。公式 `dsh plugin` コマンドで現在の tarball をインストールしてから、実際の互換性テストを実行します。
+公開前に workflow は rc7 → rc2 → alpha2 の順で、3 つの一時的な公式 DSH capability representative checkout を作成します。公式 `dsh plugin` コマンドで現在の tarball をインストールしてから、実際の互換性テストを実行します。
 
 - `dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）— rc7 capability representative
 - `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）— rc2 capability representative
-- `dsh-v0.1.2-alpha.3`（`0.1.2-alpha.3`）— alpha3 capability representative
+- `dsh-v0.1.3-alpha.2`（`0.1.3-alpha.2`）— alpha2 capability representative
 
 通常の CI はテスト専用で、Pull Request と `main` への push で実行されます。`npm ci` を使うため、依存関係変更時は `package-lock.json` をコミットしてください。
 

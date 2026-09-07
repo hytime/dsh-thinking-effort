@@ -31,7 +31,7 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 | --- | --- |
 | `0.1.0-rc.7` | Not available |
 | `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available when exposed by the DSH schema, but without `supportsFinishReason` and `supportsThinkingTokenBudget` |
-| `0.1.2-alpha.1` to `<0.1.3-0` | All 15 fields when exposed by the DSH schema |
+| `0.1.2-alpha.1` to `<0.1.4-0` | All 15 fields when exposed by the DSH schema |
 
 From DSH `0.1.0-rc.8` onward, field availability follows the runtime schema. The table shows the maximum field set for each DSH version; the route protocol can further reduce it.
 
@@ -147,7 +147,9 @@ These compat values are control plane configuration. They do not implement or re
 
 The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and gateway compatibility controls in its settings area. `models[]` saves use one complete array set rather than an array-index path operation.
 
-![English Model capabilities and effort settings page](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/settings-gateway-compat-en.png)
+![English Model capabilities and effort settings page](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/screenshots/plugin-en-settings-expanded.png)
+
+See the complete Chinese, English, Japanese, and Korean screenshot gallery in [`docs/SCREENSHOTS.md`](./docs/SCREENSHOTS.md).
 
 
 ## How it works
@@ -173,7 +175,7 @@ The page header contains the language selector. Below it, the Subagent default e
 - The ordinary CI workflow does not publish to npm. Publishing is triggered only by a `v<version>` tag through `publish.yml`.
 - Before creating a release tag, update `package.json` version and `CHANGELOG.md` files, commit those changes, and create the matching `v<version>` tag. The tag must point to a commit in the `main` history.
 - npm Trusted Publishing must be configured for repository `hytime/dsh-thinking-effort` and workflow `publish.yml`. The workflow publishes provenance through GitHub OIDC and does not require `NPM_TOKEN`.
-- Before publishing, the workflow builds and tests three official DSH capability representatives in this order: `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), and `dsh-v0.1.2-alpha.3` (`0.1.2-alpha.3`), using the official `dsh plugin` command and real compatibility checks.
+- Before publishing, the workflow builds and tests three official DSH capability representatives in this order: `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), and `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`), using the official `dsh plugin` command and real compatibility checks.
 - The workflow never changes the package version or any `CHANGELOG` file automatically; an existing npm version also blocks publishing.
 
 ## License

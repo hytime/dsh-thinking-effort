@@ -31,7 +31,7 @@
 | --- | --- |
 | `0.1.0-rc.7` | 不支持 |
 | `0.1.0-rc.8` 至 `<0.1.2-alpha.1` | schema 暴露时可用，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget` |
-| `0.1.2-alpha.1` 至 `<0.1.3-0` | schema 暴露时支持全部 15 个字段 |
+| `0.1.2-alpha.1` 至 `<0.1.4-0` | schema 暴露时支持全部 15 个字段 |
 
 从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。上表表示各 DSH 版本最多可用的字段集合；当前网关协议还可能进一步缩小集合。
 
@@ -206,7 +206,9 @@ providers:
 
 页面顶部是语言选择器；其下方的「子 agent 默认档位」卡片控制没有显式档位的请求。「一键设置」负责批量应用预设。供应商和模型列表支持展开/收起；每个模型行显示输入能力、上下文长度，并在设置区域提供网关兼容控件。`models[]` 保存使用完整数组 set，而不是数组索引 path op。
 
-![中文模型能力与档位设置页](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/settings-gateway-compat-zh.png)
+![中文模型能力与档位设置页](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/screenshots/plugin-zh-settings-expanded.png)
+
+完整的中英日韩截图集见 [`docs/SCREENSHOTS.md`](./docs/SCREENSHOTS.md)。
 
 
 ## 工作方式
@@ -259,7 +261,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 - 普通 CI workflow 不会发布 npm；发布只由 `publish.yml` 接收匹配的 `v<version>` tag 后执行。
 - 创建发布 tag 前，维护者先更新 `package.json` 版本和各语言 `CHANGELOG`，提交这些变更，再创建匹配的 `v<version>` tag。tag 指向的提交必须位于 `main` 历史中。
 - npm 包必须配置 GitHub Trusted Publisher：仓库为 `hytime/dsh-thinking-effort`，workflow 为 `publish.yml`。发布使用 GitHub OIDC 生成 provenance，不需要 `NPM_TOKEN`。
-- 发布前 workflow 会按 rc7 → rc2 → alpha3 顺序构建并测试三个官方 DSH 能力代表：`dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）和 `dsh-v0.1.2-alpha.3`（`0.1.2-alpha.3`）；通过官方 `dsh plugin` 命令安装并执行真实兼容检查。
+- 发布前 workflow 会按 rc7 → rc2 → alpha2 顺序构建并测试三个官方 DSH 能力代表：`dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）和 `dsh-v0.1.3-alpha.2`（`0.1.3-alpha.2`）；通过官方 `dsh plugin` 命令安装并执行真实兼容检查。
 - workflow 不会自动修改版本或任何 `CHANGELOG`；如果 npm 中已经存在相同版本，发布也会被阻止。
 
 ## 排查

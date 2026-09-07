@@ -30,7 +30,7 @@
 | --- | --- |
 | `0.1.0-rc.7` | 지원하지 않음 |
 | `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 | schema가 노출하는 경우 지원하지만 `supportsFinishReason` 및 `supportsThinkingTokenBudget`는 없음 |
-| `0.1.2-alpha.1`부터 `<0.1.3-0`까지 | schema가 노출하는 경우 15개 필드 모두 지원 |
+| `0.1.2-alpha.1`부터 `<0.1.4-0`까지 | schema가 노출하는 경우 15개 필드 모두 지원 |
 
 DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 런타임 schema 노출에 따라 결정됩니다. 위 표는 각 DSH 버전의 최대 필드 집합이며, 라우트의 프로토콜에 따라 더 줄어들 수 있습니다.
 
@@ -135,7 +135,9 @@ Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델
 
 페이지 상단에는 언어 선택기가 있습니다. 그 아래의 **Subagent default effort** 카드는 명시적인 값이 없는 요청의 기본값을 관리합니다. **Quick settings**는 일괄 프리셋을 적용합니다. 제공자와 모델 목록은 펼치거나 접을 수 있으며, 각 모델 행에는 입력 기능, 컨텍스트 길이 및 게이트웨이 호환성 편집 영역이 표시됩니다. `models[]` 저장은 배열 인덱스 path op가 아니라 전체 배열 set을 사용합니다.
 
-![한국어 Model capabilities and effort 설정 페이지](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/settings-gateway-compat-ko.png)
+![한국어 Model capabilities and effort 설정 페이지](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/screenshots/plugin-ko-settings-expanded.png)
+
+전체 중영일한 화면은 [`docs/SCREENSHOTS.md`](./docs/SCREENSHOTS.md)에서 확인할 수 있습니다.
 
 
 ## 작동 방식
@@ -160,7 +162,7 @@ Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델
 - 일반 CI workflow는 npm에 게시하지 않습니다. `publish.yml`은 `v<version>` tag에서만 게시를 시작합니다.
 - 릴리스 tag를 만들기 전에 유지 관리자는 `package.json` 버전과 각 언어의 `CHANGELOG`를 업데이트하여 커밋하고 일치하는 `v<version>` tag를 만듭니다. tag가 가리키는 커밋은 `main` 기록에 포함되어야 합니다.
 - npm 패키지에 GitHub Trusted Publisher를 설정해야 합니다. 저장소는 `hytime/dsh-thinking-effort`, workflow는 `publish.yml`입니다. 게시에는 GitHub OIDC provenance가 포함되며 `NPM_TOKEN`이 필요하지 않습니다.
-- 게시 전에 workflow는 rc7 → rc2 → alpha3 순서로 세 공식 DSH capability representative를 빌드하고 테스트합니다: `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), `dsh-v0.1.2-alpha.3` (`0.1.2-alpha.3`). 공식 `dsh plugin` 명령으로 설치한 뒤 실제 호환성 테스트를 실행합니다.
+- 게시 전에 workflow는 rc7 → rc2 → alpha2 순서로 세 공식 DSH capability representative를 빌드하고 테스트합니다: `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`). 공식 `dsh plugin` 명령으로 설치한 뒤 실제 호환성 테스트를 실행합니다.
 - workflow는 버전이나 `CHANGELOG`를 자동으로 변경하지 않습니다. npm에 같은 버전이 이미 있으면 게시도 중단됩니다.
 
 ## 라이선스

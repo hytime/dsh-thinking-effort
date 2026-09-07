@@ -258,7 +258,7 @@ describe('client registration', () => {
   it.each([
     ['rc7 remains unsupported', 'legacy' as const, { properties: { providers: { additionalProperties: { properties: { compat: { properties: {} } } } } } }, [], false],
     ['rc2 accepts the optional takeover', 'legacy' as const, { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } }, ['local'], true],
-    ['alpha3 accepts the optional takeover', 'modern' as const, { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } }, ['local'], true],
+    ['alpha2 accepts the optional takeover', 'modern' as const, { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } }, ['local'], true],
   ])('%s publishes the expected runtime capability result', (_label, profile, schema, expectedProviders, includeTakeover) => {
     const piAiNamespace = {
       ns: 'llm-pi-ai',

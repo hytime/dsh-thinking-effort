@@ -35,7 +35,7 @@ const integrationEnabled = process.env.DSH_LOADER_INTEGRATION === '1'
 function parseCliRoots(raw: string): string[] {
   const values = raw.split(',').map((value) => value.trim())
   if (values.length !== 3 || values.some((value) => value === '')) {
-    throw new Error('DSH_CLI_ROOTS must contain exactly three non-empty comma-separated roots: rc7, rc2, alpha3')
+    throw new Error('DSH_CLI_ROOTS must contain exactly three non-empty comma-separated roots: rc7, rc2, alpha2')
   }
   const roots = values.map((value) => realpathSync(value))
   if (new Set(roots).size !== 3) {
@@ -56,7 +56,7 @@ function readOfficialDshVersion(cliRoot: string): string {
 const expectedOfficialDshVersions = [
   '0.1.0-rc.7',
   '0.1.1-rc.2',
-  '0.1.2-alpha.3',
+  '0.1.3-alpha.2',
 ] as const
 
 const loaderSeedProvider = {
@@ -930,7 +930,7 @@ describe('compatibility documentation and root validation', () => {
       previous = position
     }
     expect(workflow).toContain('DSH_CLI_ROOTS="$RC7_ROOT,$RC2_ROOT,$ALPHA_ROOT"')
-    expect(expectedOfficialDshVersions).toEqual(['0.1.0-rc.7', '0.1.1-rc.2', '0.1.2-alpha.3'])
+    expect(expectedOfficialDshVersions).toEqual(['0.1.0-rc.7', '0.1.1-rc.2', '0.1.3-alpha.2'])
   })
 
   it('rejects duplicate normalized DSH CLI roots', () => {
@@ -1015,7 +1015,7 @@ describe('published package composition', () => {
     expect(manifest.files).toContain('cordis.patch.yml')
     for (const documentationFile of [
       'README.md', 'README.zh.md', 'README.ja.md', 'README.ko.md',
-      'docs/INSTALL.md', 'docs/INSTALL.zh.md', 'docs/INSTALL.ja.md', 'docs/INSTALL.ko.md',
+      'docs/INSTALL.md', 'docs/INSTALL.zh.md', 'docs/INSTALL.ja.md', 'docs/INSTALL.ko.md', 'docs/SCREENSHOTS.md',
       'docs/CHANGELOG.md', 'docs/CHANGELOG.ja.md', 'docs/CHANGELOG.ko.md',
     ]) {
       expect(manifest.files).toContain(documentationFile)
@@ -1041,7 +1041,7 @@ describe('loader seed schema contract', () => {
 })
 
 integrationDescribe('official DSH loader composition', () => {
-  it('requires and verifies rc7, rc2, and alpha3 capability representatives independently', { timeout: 180000 }, async () => {
+  it('requires and verifies rc7, rc2, and alpha2 capability representatives independently', { timeout: 180000 }, async () => {
     expect(cliRoots).toHaveLength(3)
     expect(cliRoots.every((cliRoot) => cliRoot === resolve(cliRoot))).toBe(true)
     expect(new Set(cliRoots).size).toBe(3)
@@ -1179,7 +1179,7 @@ integrationDescribe('official DSH loader composition', () => {
            expect((await describePiAi()).revision).toBe(current.revision)
          } else {
            const route = `loader-compat-${version.replaceAll('.', '-')}`
-            const defaultCompat = version === '0.1.2-alpha.3'
+            const defaultCompat = version === '0.1.3-alpha.2'
               ? { chatTemplateArgs: {}, chatTemplateKwargs: {} }
               : { chatTemplateKwargs: {} }
            const seeded = await settings!.mutate(current.ns, [{
@@ -1315,9 +1315,9 @@ integrationDescribe('official DSH loader composition', () => {
          // The real-browser DOM probe validates client-side rendering of the
         // settings section. The client bundle is identical across the three
         // representative DSH versions, so launch Playwright once on the
-        // newest representative (alpha3) and keep the RPC/profile/写入
+        // newest representative (alpha2) and keep the RPC/profile/写入
         // verification for every version, which needs no browser.
-        if (version === '0.1.2-alpha.3') {
+        if (version === '0.1.3-alpha.2') {
           const domProbe = await probeOfficialSettingsDom(cliRoot, web)
           if (domProbe.blocked !== undefined) {
             if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
