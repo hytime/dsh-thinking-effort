@@ -97,21 +97,22 @@
 .rangePip {
   position: absolute;
   top: 50%;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border: 3px solid var(--dsw-alias-border-l2);
   border-radius: 50%;
+  corner-shape: round;
   background: var(--dsw-specific-menu);
   box-sizing: border-box;
   transform: translate(-50%, -50%);
 }
 
 .activePip {
-  width: 20px;
-  height: 20px;
-  border-width: 3px;
-  border-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
-  box-shadow: 0 0 0 5px var(--dsw-alias-interactive-bg-hover-accent);
+  width: 14px;
+  height: 14px;
+  border-color: transparent;
+  box-shadow: none;
+  opacity: 0;
 }
 
 .range {
