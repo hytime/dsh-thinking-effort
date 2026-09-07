@@ -80,6 +80,12 @@ export interface SliderProps {
 
 const EMPTY_EFFORTS: readonly ModelReasoningEffort[] = []
 
+interface ModelChoice {
+  readonly key: string
+  readonly provider: string
+  readonly model: ModelCatalogModel
+}
+
 /** Resolve the current selection back to its catalog model entry. */
 function currentModelOf(state: ModelDirectoryState): ModelCatalogModel | undefined {
   if (state.current === null) return undefined
@@ -91,16 +97,27 @@ function currentModelOf(state: ModelDirectoryState): ModelCatalogModel | undefin
   return undefined
 }
 
+/** Build opaque option keys without treating provider/model ids as a wire format. */
+function modelChoicesOf(state: ModelDirectoryState): readonly ModelChoice[] {
+  const choices: ModelChoice[] = []
+  state.groups.forEach((group, groupIndex) => {
+    group.models.forEach((model, modelIndex) => {
+      choices.push({ key: `choice:${groupIndex}:${modelIndex}`, provider: group.id, model })
+    })
+  })
+  return choices
+}
+
 /**
  * Render the composer model seat. The expanded panel presents reasoning before
  * the model row; the compact trigger preserves both model and effort labels.
  */
-export function Slider({ directory, select, locked = false, t }: SliderProps): ReactNode {
+export function Slider({ directory, load, select, locked = false, t }: SliderProps): ReactNode {
   const state = useSyncExternalStore(
     (fn: () => void) => directory.subscribe(fn),
     () => directory.getSnapshot(),
   )
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const current = state.current
@@ -110,11 +127,20 @@ export function Slider({ directory, select, locked = false, t }: SliderProps): R
     : model?.name ?? `${current.provider}/${current.model}`
   const reasoning = model?.reasoning
   const efforts = reasoning?.efforts ?? EMPTY_EFFORTS
+  const choices = modelChoicesOf(state)
+  const selectedChoice = choices.find(choice => (
+    choice.provider === current?.provider && choice.model.id === current?.model
+  ))
   const effectiveEffort = current?.reasoningEffort ?? reasoning?.defaultEffort
   const effortIndex = efforts.findIndex(({ id }) => id === effectiveEffort)
   const rangeValue = effortIndex < 0 ? 0 : effortIndex
   const rangeEffort = efforts[rangeValue]
-  const currentEffortLabel = rangeEffort?.name ?? t('seatNoEfforts')
+  const followingModelDefault = current !== null
+    && current.reasoningEffort === undefined
+    && reasoning?.defaultEffort === undefined
+  const currentEffortLabel = followingModelDefault
+    ? t('seatFollowDefault')
+    : rangeEffort?.name ?? t('seatNoEfforts')
   const hasDirectoryError = state.status === 'error' && state.error !== null
   const busy = locked || state.status === 'selecting' || select === undefined
 
@@ -152,31 +178,69 @@ export function Slider({ directory, select, locked = false, t }: SliderProps): R
     submit({ provider: current.provider, model: current.model, reasoningEffort: effort.id })
   }
 
-  const modelTrigger = (compact: boolean) => createElement(
+  const onModelChange = (event: ChangeEvent<HTMLSelectElement>): void => {
+    const choice = choices.find(item => item.key === event.currentTarget.value)
+    if (choice === undefined) return
+    const sameModel = choice.provider === current?.provider && choice.model.id === current?.model
+    const reasoningEffort = sameModel
+      ? current?.reasoningEffort ?? choice.model.reasoning?.defaultEffort
+      : choice.model.reasoning?.defaultEffort
+    submit({
+      provider: choice.provider,
+      model: choice.model.id,
+      ...reasoningEffort === undefined ? {} : { reasoningEffort },
+    })
+  }
+
+  const modelTrigger = () => createElement(
     'button',
     {
-      className: compact ? css.chip : css.modelRow,
+      className: css.chip,
       'data-seat-trigger': 'true',
       ref: triggerRef,
       type: 'button',
       disabled: locked,
       'aria-expanded': open,
-      'aria-label': compact
-        ? `${modelLabel}: ${currentEffortLabel}`
-        : `${t('seatModelLabel')}: ${modelLabel}`,
-      onClick: () => { setOpen(value => !value) },
+      'aria-label': `${modelLabel}: ${currentEffortLabel}`,
+      onClick: () => {
+        setOpen(true)
+        load?.()
+      },
     },
-    compact
-      ? [
-          createElement('span', { className: css.chipModel, key: 'model', title: modelLabel }, modelLabel),
-          createElement('span', { className: css.chipEffort, key: 'effort' }, currentEffortLabel),
-          createElement('span', { className: css.chevron, key: 'chevron', 'aria-hidden': true }),
-        ]
-      : [
-          createElement('span', { className: css.modelLabel, key: 'label' }, t('seatModelLabel')),
-          createElement('span', { className: css.modelName, key: 'model', title: modelLabel }, modelLabel),
-          createElement('span', { className: css.chevron, key: 'chevron', 'aria-hidden': true }),
-        ],
+    [
+      createElement('span', { className: css.chipModel, key: 'model', title: modelLabel }, modelLabel),
+      createElement('span', { className: css.chipEffort, key: 'effort' }, currentEffortLabel),
+      createElement('span', { className: css.chevron, key: 'chevron', 'aria-hidden': true }),
+    ],
+  )
+
+  const modelSelect = createElement(
+    'div',
+    { className: css.modelRow, 'data-seat-model-row': 'true' },
+    createElement('span', { className: css.modelLabel }, t('seatModelLabel')),
+    createElement('span', { className: css.modelName, title: modelLabel }, modelLabel),
+    createElement('span', { className: css.chevron, 'aria-hidden': true }),
+    createElement(
+      'select',
+      {
+        className: css.modelSelect,
+        'data-seat-model-select': 'true',
+        'aria-label': t('seatModelLabel'),
+        value: selectedChoice?.key ?? '',
+        disabled: busy,
+        onChange: onModelChange,
+      },
+      createElement('option', { value: '', disabled: true }, t('seatNoModel')),
+      ...state.groups.map((group, groupIndex) => createElement(
+        'optgroup',
+        { label: group.name, key: group.id },
+        ...group.models.map((option, modelIndex) => createElement(
+          'option',
+          { value: `choice:${groupIndex}:${modelIndex}`, key: option.id },
+          option.name,
+        )),
+      )),
+    ),
   )
 
   const content = efforts.length === 0
@@ -187,6 +251,7 @@ export function Slider({ directory, select, locked = false, t }: SliderProps): R
         createElement('input', {
           className: css.range,
           'data-seat-input': 'true',
+          ...followingModelDefault ? { 'data-seat-unset': 'true' } : {},
           type: 'range',
           min: 0,
           max: efforts.length - 1,
@@ -203,14 +268,19 @@ export function Slider({ directory, select, locked = false, t }: SliderProps): R
           { className: css.scale, 'data-seat-scale': 'true', key: 'scale' },
           ...efforts.map((effort, index) => createElement(
             'span',
-            { className: index === rangeValue ? `${css.tick} ${css.activeTick}` : css.tick, key: effort.id },
+            {
+              className: !followingModelDefault && index === effortIndex ? `${css.tick} ${css.activeTick}` : css.tick,
+              ...!followingModelDefault && index === effortIndex ? { 'data-seat-active': 'true' } : {},
+              key: effort.id,
+            },
             effort.name,
           )),
         ),
         reasoning?.defaultEffort === undefined && current !== null
           ? createElement('button', {
-            className: css.followDefault,
+            className: followingModelDefault ? `${css.followDefault} ${css.followDefaultActive}` : css.followDefault,
             'data-seat-default': 'true',
+            'aria-pressed': followingModelDefault,
             type: 'button',
             disabled: busy,
             onClick: () => { submit({ provider: current.provider, model: current.model }) },
@@ -233,9 +303,9 @@ export function Slider({ directory, select, locked = false, t }: SliderProps): R
         createElement('span', { className: css.currentEffort }, currentEffortLabel),
       ),
       content,
-      modelTrigger(false),
+      modelSelect,
     )
-    : modelTrigger(true)
+    : modelTrigger()
 
   return createElement(
     'div',
