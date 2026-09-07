@@ -206,9 +206,15 @@
 }
 
 .followDefault {
-  align-self: flex-start;
-  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: stretch;
+  min-height: 32px;
+  margin: 0;
+  padding: 4px 8px;
   border: 0;
+  border-radius: 4px;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   font: inherit;
@@ -216,9 +222,30 @@
   cursor: pointer;
 }
 
+.followDefault::before {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  border: 2px solid var(--dsw-alias-border-l1);
+  border-radius: 50%;
+  background: var(--dsw-specific-menu);
+  box-sizing: border-box;
+  content: '';
+}
+
+.followDefault:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
 .followDefaultActive {
-  color: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
   font-weight: 600;
+}
+
+.followDefaultActive::before {
+  border-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+  box-shadow: inset 0 0 0 3px var(--dsw-specific-menu);
+  background: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
 }
 
 .empty {
@@ -243,11 +270,16 @@
 
 .modelRow {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   height: 44px;
   margin: 2px -8px -4px;
   padding: 0 8px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
   background: transparent;
   border-radius: 4px;
+  box-sizing: border-box;
 }
 
 .modelRow:hover:not(:disabled) {
@@ -269,6 +301,8 @@
 
 .modelName {
   flex: 1 1 auto;
+  min-width: 0;
+  text-align: right;
 }
 
 .modelSelect {
@@ -323,6 +357,11 @@
   border-left: 0.5px solid var(--dsw-alias-border-l1);
   color: var(--dsw-alias-label-secondary);
   white-space: nowrap;
+}
+
+.modelRow:focus-within {
+  outline: 2px solid var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+  outline-offset: 2px;
 }
 
 .modelRow:focus-visible,
