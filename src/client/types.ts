@@ -151,6 +151,10 @@ export interface ClientSlots {
 
 export interface ClientContext {
   get(name: string): unknown
+  /** Declare a Cordis service dependency; the callback runs when the services are available. */
+  inject(options: string[], callback: (scope: ClientContext) => void): unknown
+  /** Mount a named Cordis plugin with its own static service dependencies. */
+  plugin(plugin: { name?: string; inject?: readonly string[]; apply: (scope: ClientContext) => void }): unknown
   on(event: 'internal/service', callback: (name: string) => void): unknown
   effect(callback: () => void | (() => void), label?: string): unknown
 }

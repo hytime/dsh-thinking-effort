@@ -7,9 +7,9 @@ export type { CompatibilitySettings, DshCompatibilityCapabilities } from '../cli
 export type { DshVersionCapabilities, GatewayCompatEditableField, SettingsApi, TakeoverTransport } from './version-map.js'
 export { takeoverSupportedForVersion, takeoverTransportForVersion } from './version-map.js'
 
-type MethodName = 'describe' | 'mutate' | 'get' | 'update'
+type MethodName = 'describe' | 'mutate' | 'get' | 'update' | 'modelCatalog'
 
-function hasMethods(value: unknown, methods: readonly MethodName[]): boolean {
+export function hasMethods(value: unknown, methods: readonly MethodName[]): boolean {
   if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return false
 
   return methods.every((method) => {

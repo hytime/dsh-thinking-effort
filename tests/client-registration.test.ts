@@ -5,7 +5,7 @@ import { LOCALE_NS } from '../src/client/constants.js'
 import { observeTakeoverSettings, resolveTakeoverDescription } from '../src/client/takeover-runtime.js'
 import { providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
 import { resolveTakeoverGatewayCompat, resolveTakeoverProviders, takeoverGatewayCompatInputs } from '../src/compat/gateway/resolve.js'
-import type { SettingsNamespace } from '../src/client/types.js'
+import type { ClientContext, SettingsNamespace } from '../src/client/types.js'
 
 function createHarness(mode: 'modern' | 'legacy') {
   const listeners: Array<(name: string) => void> = []
@@ -19,8 +19,13 @@ function createHarness(mode: 'modern' | 'legacy') {
     bind: () => (key: string) => key,
     getSnapshot: () => ({ active: 'zh', locales: [{ id: 'zh' }] }),
   }
+  const effectDisposers: Array<() => void> = []
   const slots = {
-    inject: vi.fn((_name: string, callback: () => void) => callback()),
+    inject: vi.fn((_name: string, callback: () => (() => void) | undefined) => {
+      const disposer = callback()
+      if (typeof disposer === 'function') effectDisposers.push(disposer)
+      return disposer ?? (() => undefined)
+    }),
     register: vi.fn((descriptor: Record<string, unknown>, render: unknown) => {
       registrations.push({ descriptor, render })
       return () => disposed.push('slot')
@@ -48,13 +53,31 @@ function createHarness(mode: 'modern' | 'legacy') {
     mutate: vi.fn().mockResolvedValue({ result: { ok: true, value: { namespaces: [] } } }),
   }
   const connection = mode === 'legacy' ? { api: { settings: legacySettings } } : {}
-  const effectDisposers: Array<() => void> = []
+  // Modern DSH exposes the `remote.session` Remote namespace (modelCatalog etc.);
+  // legacy transports do not. The seat probes this shape to decide whether to
+  // declare `remote.session` in its inject list.
+  const sessionRemote = mode === 'modern' ? { modelCatalog: vi.fn().mockResolvedValue({ ok: true }) } : undefined
+  const remote = {}
+  const sessions = {}
   const context = {
     get: vi.fn((key: string) => key === 'remote.settings'
       ? mode === 'modern' ? remoteSettings : undefined
       : key === 'modelDirectories'
         ? modelDirectories
-        : ({ slots, connection, locale }[key as 'slots' | 'connection' | 'locale'])),
+        : key === 'remote.session'
+          ? sessionRemote
+          : key === 'remote'
+            ? remote
+            : key === 'sessions'
+              ? sessions
+              : ({ slots, connection, locale }[key as 'slots' | 'connection' | 'locale'])),
+    plugin: vi.fn((plugin: { inject?: readonly string[]; apply: (scope: ClientContext) => void }) => {
+      const allPresent = (plugin.inject ?? []).every((name) => context.get(name) !== undefined)
+      if (!allPresent) return () => undefined
+      plugin.apply({ ...context, slots, modelDirectories } as unknown as ClientContext)
+      return () => undefined
+    }),
+    inject: vi.fn(() => () => undefined),
     on: vi.fn((event: string, callback: (name: string) => void) => {
       expect(event).toBe('internal/service')
       listeners.push(callback)
@@ -69,7 +92,7 @@ function createHarness(mode: 'modern' | 'legacy') {
 
   return {
     context, slots, locale, listeners, registrations, disposed, addLanguage, register,
-    remoteSettings, legacySettings, modelDirectories, directory,
+    remoteSettings, legacySettings, sessionRemote, modelDirectories, directory,
     // Cordis tears effects down in reverse registration order.
     disposeAllEffects: () => { for (const disposer of effectDisposers.reverse()) disposer() },
   }
@@ -103,6 +126,14 @@ describe('client registration through the guarded context', () => {
     }
     const context = {
       get: vi.fn((key: string) => key === 'remote.settings' ? remoteSettings : services[key]),
+      plugin: vi.fn((plugin: { inject?: readonly string[]; apply: (scope: ClientContext) => void }) => {
+        for (const name of plugin.inject ?? []) {
+          if (context.get(name) === undefined) return () => undefined
+        }
+        plugin.apply(context)
+        return () => undefined
+      }),
+      inject: vi.fn(() => () => undefined),
       on: vi.fn((event: string, callback: (name: string) => void) => {
         expect(event).toBe('internal/service')
         listeners.push(callback)
@@ -683,11 +714,12 @@ describe('client registration', () => {
 
     expect(harness.register).toHaveBeenCalledWith(LOCALE_NS, expect.objectContaining({ zh: expect.any(Object), en: expect.any(Object), ja: expect.any(Object), ko: expect.any(Object) }))
     expect(harness.addLanguage).toHaveBeenCalledTimes(2)
-    // Two effects: the language-pack dictionaries and the composer seat
-    // registration (I1). Both must dispose on teardown.
-    expect(harness.context.effect).toHaveBeenCalledTimes(2)
+    // One direct effect (language-pack dictionaries); the composer seat
+    // registers through slots.inject, whose teardown is the returned disposer
+    // (Cordis fiber effect). Both are torn down via disposeAllEffects.
+    expect(harness.context.effect).toHaveBeenCalledTimes(1)
     harness.disposeAllEffects()
-    expect(harness.disposed).toEqual(['slot', 'ko', 'ja', 'dictionary'])
+    expect(harness.disposed).toEqual(['slot', 'slot', 'ko', 'ja', 'dictionary'])
   })
 
   it('injects the per-session directory store and verbs into the composer seat', () => {
@@ -712,8 +744,9 @@ describe('client registration', () => {
     const listeners: Array<(name: string) => void> = []
     const calls: string[] = []
     // `remoteSettings` starts unresolved so the settings mount path can be
-    // announced AFTER apply — the `modelDirectories` get happens only once
-    // the mount listener fires (registerComposerSeat runs inside mount()).
+    // announced AFTER apply. `registerComposerSeat` runs at the top of apply and
+    // declares modelDirectories via inject; because that service is absent the
+    // inject callback never fires, so only the settings slot registers.
     let remoteSettings: unknown
     const slots = {
       inject: vi.fn((_name: string, callback: () => void) => callback()),
@@ -732,6 +765,14 @@ describe('client registration', () => {
         calls.push(key)
         return key === 'remote.settings' ? remoteSettings : key === 'modelDirectories' ? undefined : ({ slots, connection: {}, locale } as Record<string, unknown>)[key]
       }),
+      plugin: vi.fn((plugin: { inject?: readonly string[]; apply: (scope: ClientContext) => void }) => {
+        for (const name of plugin.inject ?? []) {
+          if (context.get(name) === undefined) return () => undefined
+        }
+        plugin.apply(context)
+        return () => undefined
+      }),
+      inject: vi.fn(() => () => undefined),
       on: vi.fn((event: string, callback: (name: string) => void) => {
         listeners.push(callback)
         return () => undefined
@@ -740,15 +781,15 @@ describe('client registration', () => {
     }
 
     apply(context as Parameters<typeof apply>[0])
-    expect(calls).not.toContain('modelDirectories')
+    // The seat declares modelDirectories through inject, so it is probed at
+    // apply time; because the injected service is absent, the seat is skipped.
+    expect(calls).toContain('modelDirectories')
     expect(registrations).toHaveLength(0)
 
-    // Announce a working settings service: mount now runs and the optional
-    // modelDirectories seam is probed exactly once — and stays absent, so
-    // only the settings slot registers.
+    // Announce a working settings service: mount now runs and only the
+    // settings slot registers; the seat stays absent (modelDirectories missing).
     remoteSettings = { describe: vi.fn(), mutate: vi.fn() }
     for (const listener of listeners) listener('remote.settings')
-    expect(calls).toContain('modelDirectories')
 
     expect(registrations).toHaveLength(1)
     expect(registrations[0]?.descriptor?.name).toBe('settings.section')

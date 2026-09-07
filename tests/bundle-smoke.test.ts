@@ -25,6 +25,8 @@ type ClientPlugin = {
 
 type ClientContext = {
   get(name: string): unknown
+  plugin(plugin: { inject?: readonly string[]; apply: (scope: ClientContext) => void }): unknown
+  inject(names: string[], callback: (scope: ClientContext) => void): unknown
   on(event: 'internal/service', callback: (name: string) => void): unknown
   effect(callback: () => void | (() => void), label?: string): unknown
 }
@@ -127,14 +129,30 @@ describe('build artifacts', () => {
           return remoteSettings
         }
         // Optional host model-directory service (ui-model-selection): the
-        // composer seat probes it once during mount and skips itself when it
-        // is absent — this profile has no such service.
+        // composer seat probes it once and skips itself when it is absent —
+        // this profile has no such service.
         if (name === 'modelDirectories') return undefined
+        // Older DSH transports expose no `remote.session` (the seat's modern
+        // session remote shape); a profile without it registers the base list.
+        if (name === 'remote.session') return undefined
+        if (name === 'remote') return undefined
         throw new Error(`Unexpected context read: ${name}`)
       },
       on(event, callback) {
         expect(event).toBe('internal/service')
         expect(callback).toBeTypeOf('function')
+        return () => undefined
+      },
+      plugin(plugin: { inject?: readonly string[]; apply: (scope: ClientContext) => void }) {
+        const allPresent = (plugin.inject ?? []).every((name) => context.get(name) !== undefined)
+        if (allPresent) plugin.apply(context)
+        return () => undefined
+      },
+      inject(names: string[], callback: (scope: ClientContext) => void) {
+        // Legacy compatibility path retained for older client plugins. The
+        // current seat uses the named plugin fiber above.
+        const allPresent = names.every((name) => context.get(name) !== undefined)
+        if (allPresent) callback(context)
         return () => undefined
       },
       effect(callback) {

@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { Slider } from '../src/client/thinking-slider/slider.js'
+import type { ModelDirectoryState, SliderProps } from '../src/client/thinking-slider/slider.js'
 
 const dictionary: Record<string, string> = {
   seatModelLoading: '加载模型…',
@@ -43,7 +44,7 @@ const reasoning = {
   defaultEffort: 'high',
 }
 
-function state(overrides: Record<string, unknown> = {}) {
+function state(overrides: Partial<ModelDirectoryState> = {}): ModelDirectoryState {
   return {
     current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
     routable: true,
@@ -64,7 +65,7 @@ function state(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function renderSeat(props: Record<string, unknown>) {
+function renderSeat(props: SliderProps) {
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
@@ -106,8 +107,11 @@ describe('thinking slider composer seat', () => {
     expect(reasoningHeader).not.toBeNull()
     expect(range).not.toBeNull()
     expect(modelSelect).not.toBeNull()
-    expect(reasoningHeader?.compareDocumentPosition(range as Node) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
-    expect(range?.compareDocumentPosition(modelSelect as Node) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+    const reasoningEl = reasoningHeader as Node
+    const rangeEl = range as Node
+    const modelSelectEl = modelSelect as Node
+    expect(reasoningEl.compareDocumentPosition(rangeEl) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+    expect(rangeEl.compareDocumentPosition(modelSelectEl) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
 
     dispose(root, container)
   })

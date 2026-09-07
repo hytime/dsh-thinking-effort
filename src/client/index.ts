@@ -68,13 +68,6 @@ export function apply(context: ClientContext): void {
       },
       () => createElement(SectionEditor, { settings: observedSettings, locale, t: translate, takeoverRuntime: runtime }),
     ))
-
-    // Second injected seat: the composer model slider. The seat registration
-    // reads the optional modelDirectories service inside its own apply and
-    // skips itself when that service is absent (profiles without the official
-    // ui-model-selection keep the settings page working); its injected face
-    // carries the per-session directory store/verbs into the component.
-    registerComposerSeat(context)
   }
 
   const mountFromRemote = (): void => {
@@ -84,4 +77,9 @@ export function apply(context: ClientContext): void {
   context.on('internal/service', (serviceName) => {
     if (serviceName === 'remote.settings' || serviceName === 'remote') mountFromRemote()
   })
+
+  // Register the composer model slider seat after declaring the Settings page.
+  // The seat itself uses a declared `inject` on `modelDirectories`, so it can be
+  // dispatched at the top level without waiting on the Settings bridge.
+  registerComposerSeat(context)
 }
