@@ -6,7 +6,7 @@
 import {
   createElement, useEffect, useRef, useState, useSyncExternalStore,
 } from 'react'
-import type { ChangeEvent, KeyboardEvent, ReactNode } from 'react'
+import type { ChangeEvent, CSSProperties, KeyboardEvent, ReactNode } from 'react'
 import type { Translation } from '../types.js'
 import css from './slider.module.css'
 
@@ -143,6 +143,9 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
     : rangeEffort?.name ?? t('seatNoEfforts')
   const hasDirectoryError = state.status === 'error' && state.error !== null
   const busy = locked || state.status === 'selecting' || select === undefined
+  const rangeProgress = !followingModelDefault && efforts.length > 1 && effortIndex >= 0
+    ? `${(effortIndex / (efforts.length - 1)) * 100}%`
+    : '0%'
 
   useEffect(() => {
     if (!open) return
@@ -248,21 +251,38 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
       ? createElement('div', { className: css.error }, t('seatError', { message: state.error }))
       : createElement('div', { className: css.empty }, t('seatNoEfforts'))
     : [
-        createElement('input', {
-          className: css.range,
-          'data-seat-input': 'true',
-          ...followingModelDefault ? { 'data-seat-unset': 'true' } : {},
-          type: 'range',
-          min: 0,
-          max: efforts.length - 1,
-          step: 1,
-          value: rangeValue,
-          disabled: busy,
-          'aria-label': t('seatSliderLabel'),
-          'aria-valuetext': currentEffortLabel,
-          onChange: onRangeChange,
-          key: 'range',
-        }),
+        createElement(
+          'div',
+          { className: css.rangeWrap, 'data-seat-range': 'true', key: 'range' },
+          createElement(
+            'div',
+            { className: css.rangeTrack, style: { '--range-progress': rangeProgress } as CSSProperties, 'aria-hidden': true },
+            createElement('span', { className: css.rangeFill }),
+            createElement(
+              'span',
+              { className: css.rangePips },
+              ...efforts.map((effort, index) => createElement('span', {
+                className: !followingModelDefault && index === effortIndex ? `${css.rangePip} ${css.activePip}` : css.rangePip,
+                key: effort.id,
+                style: { left: `${(index / Math.max(efforts.length - 1, 1)) * 100}%` },
+              })),
+            ),
+          ),
+          createElement('input', {
+            className: css.range,
+            'data-seat-input': 'true',
+            ...followingModelDefault ? { 'data-seat-unset': 'true' } : {},
+            type: 'range',
+            min: 0,
+            max: efforts.length - 1,
+            step: 1,
+            value: rangeValue,
+            disabled: busy,
+            'aria-label': t('seatSliderLabel'),
+            'aria-valuetext': currentEffortLabel,
+            onChange: onRangeChange,
+          }),
+        ),
         createElement(
           'div',
           { className: css.scale, 'data-seat-scale': 'true', key: 'scale' },
