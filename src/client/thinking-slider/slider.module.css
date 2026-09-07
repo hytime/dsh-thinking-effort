@@ -61,7 +61,7 @@
   left: 0;
   height: 4px;
   border-radius: 999px;
-  background: var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-border-l2);
   overflow: visible;
 }
 
@@ -99,7 +99,7 @@
   top: 50%;
   width: 8px;
   height: 8px;
-  border: 2px solid var(--dsw-alias-border-l1);
+  border: 2px solid var(--dsw-alias-border-l2);
   border-radius: 50%;
   background: var(--dsw-specific-menu);
   box-sizing: border-box;
