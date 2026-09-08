@@ -9,6 +9,7 @@ export const PRESETS = [
 ] as const
 
 export const NS = 'llm-pi-ai'
+export { OPENCODE_SESSION_NAMESPACE as OPENCODE_SESSION_NS } from '../compat/opencode-session.js'
 export const LOCALE_NS = 'settings.thinkingEffort'
 export const CONTEXT_MIN = 2000
 export const CONTEXT_1M = 1000000

@@ -18,6 +18,9 @@ export type {
   ProviderGatewayCompatUpdate,
   ProviderGatewayCompatView,
 } from '../compat/gateway/types.js'
+export type {
+  OpenCodeSessionSettings,
+} from '../compat/opencode-session.js'
 export type ModelCompatDirtyFields = Partial<Record<GatewayCompatFieldKey, boolean>>
 
 export type ModelGatewayCompatSelection = Pick<GatewayModelGatewayCompatView, GatewayCompatFieldKey>
