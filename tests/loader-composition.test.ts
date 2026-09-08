@@ -368,11 +368,19 @@ async function probeOfficialAgentRuntime(
         })
         handle.agent.followup(message)
         await handle.agent.whenIdle()
-        const turnEnd = [...handle.agent.session.events].reverse().find((event: { type: string }) => event.type === 'turn/end')
+        const session = handle.agent.session as {
+          snapshotEvents?: () => readonly { type: string }[]
+          events?: Iterable<{ type: string }>
+          header: { origin?: unknown }
+        }
+        const events = typeof session.snapshotEvents === 'function'
+          ? session.snapshotEvents()
+          : session.events ?? []
+        const turnEnd = [...events].reverse().find((event) => event.type === 'turn/end')
         return {
           requestCount: requests.length,
           reasoningEffort: requests.at(-1)?.reasoningEffort,
-          origin: handle.agent.session.header.origin,
+          origin: session.header.origin,
           turnEnd: turnEnd?.type,
         }
       } finally {
