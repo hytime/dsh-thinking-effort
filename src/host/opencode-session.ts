@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
+import * as settingsModule from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import {
   isOpenCodeSessionEnabled,
@@ -6,7 +7,11 @@ import {
   OPENCODE_SESSION_NAMESPACE,
   type OpenCodeSessionSettings,
 } from '../compat/opencode-session.js'
-import type { HostContext } from './types.js'
+import type {
+  HostContext,
+  SettingsInjectionContext,
+  SettingsSectionHooks,
+} from './types.js'
 
 const LOG_PREFIX = '[@hytime/dsh-thinking-effort]'
 
@@ -149,25 +154,82 @@ function fetchWithSession(
   })
 }
 
+type SettingsCompatibilityExports = {
+  readonly installSettingsSection?: (
+    context: unknown,
+    namespace: string,
+    schema: unknown,
+    entry: unknown,
+    hooks: SettingsSectionHooks,
+  ) => void
+  readonly settingsNamespace?: (value: string) => string
+}
+
+const compatibilityExports = settingsModule as unknown as SettingsCompatibilityExports
+
+function settingsNamespace(): string {
+  return typeof compatibilityExports.settingsNamespace === 'function'
+    ? compatibilityExports.settingsNamespace(OPENCODE_SESSION_NAMESPACE)
+    : OPENCODE_SESSION_NAMESPACE
+}
+
+function installLegacySettingsSection(
+  ctx: HostContext,
+  namespace: string,
+  hooks: SettingsSectionHooks,
+): void {
+  if (typeof ctx.inject !== 'function') {
+    throw new Error(`${LOG_PREFIX} Settings compatibility helper is unavailable: context injection is missing`)
+  }
+  ctx.inject(['settings'], (settingsContext: SettingsInjectionContext) => {
+    const register = settingsContext.settings.register
+    if (typeof register !== 'function') {
+      throw new Error(`${LOG_PREFIX} Settings compatibility helper is unavailable: register is missing`)
+    }
+    const scope = register.call(settingsContext.settings, namespace, OPENCODE_SESSION_SETTINGS_SCHEMA, { base: {} })
+    hooks.setSource(() => scope.get())
+    settingsContext.effect(() => () => {
+      hooks.setSource(() => ({}))
+      hooks.onChange()
+    }, `${LOG_PREFIX}: legacy OpenCode session settings`)
+    hooks.onChange()
+    const unwatch = scope.watch(() => { hooks.onChange() })
+    ctx.effect(() => () => {
+      unwatch()
+    }, `${LOG_PREFIX}: legacy OpenCode session watcher`)
+  })
+}
+
+function installSettingsSectionCompat(ctx: HostContext, hooks: SettingsSectionHooks): void {
+  const namespace = settingsNamespace()
+  if (typeof compatibilityExports.installSettingsSection === 'function') {
+    compatibilityExports.installSettingsSection(ctx, namespace, OPENCODE_SESSION_SETTINGS_SCHEMA, {}, hooks)
+    return
+  }
+
+  const settings = ctx.settings
+  const installSection = settings?.installSection
+  if (typeof installSection === 'function') {
+    installSection.call(settings, ctx, namespace, OPENCODE_SESSION_SETTINGS_SCHEMA, {}, hooks)
+    return
+  }
+
+  installLegacySettingsSection(ctx, namespace, hooks)
+}
+
 /** Install the optional OpenCode session namespace and request Header bridge. */
-export function installOpenCodeSession(ctx: Pick<HostContext, 'on' | 'effect' | 'settings'>): void {
+export function installOpenCodeSession(ctx: HostContext): void {
   let settingsSource: () => unknown = () => ({})
   let settingsSnapshot: unknown = {}
 
-  ctx.settings?.installSection?.(
-    ctx,
-    OPENCODE_SESSION_NAMESPACE,
-    OPENCODE_SESSION_SETTINGS_SCHEMA,
-    {},
-    {
-      setSource(source) {
-        settingsSource = source
-      },
-      onChange() {
-        settingsSnapshot = settingsSource()
-      },
+  installSettingsSectionCompat(ctx, {
+    setSource(source) {
+      settingsSource = source
     },
-  )
+    onChange() {
+      settingsSnapshot = settingsSource()
+    },
+  })
 
   ctx.effect(() => {
     const storage = new AsyncLocalStorage<OpenCodeSessionRequest>()

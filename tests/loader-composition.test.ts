@@ -1149,6 +1149,35 @@ integrationDescribe('official DSH loader composition', () => {
          if (!liveDescription.ok) throw new Error(liveDescription.error.message)
          const piAiNamespace = liveDescription.value.namespaces.find(({ ns }) => ns === 'llm-pi-ai')
          expect(piAiNamespace).toBeDefined()
+         const sessionNamespace = liveDescription.value.namespaces.find(({ ns }) => ns === 'dsh-thinking-effort')
+         expect(sessionNamespace).toBeDefined()
+         if (sessionNamespace === undefined) throw new Error(`missing dsh-thinking-effort namespace for ${version}`)
+         const sessionRoute = `loader-opencode-${version.replaceAll('.', '-')}`
+         const sessionPath = ['opencodeSession', 'providers', sessionRoute, 'models', 'deepseek-v4-flash']
+         const sessionEnabled = await settings!.mutate(sessionNamespace.ns, [{ op: 'set', path: sessionPath, value: true }], sessionNamespace.revision)
+         expect(sessionEnabled).toMatchObject({ ok: true, value: { ns: 'dsh-thinking-effort' } })
+         if (!sessionEnabled.ok) throw new Error(`OpenCode session enable rejected for ${version}: ${sessionEnabled.error.message}`)
+         const enabledDescription = await settings!.describe()
+         const enabledSession = enabledDescription.ok
+           ? enabledDescription.value.namespaces.find(({ ns }) => ns === 'dsh-thinking-effort')
+           : undefined
+         expect((enabledSession?.value as Record<string, unknown> | undefined)).toMatchObject({
+           opencodeSession: {
+             providers: {
+               [sessionRoute]: { models: { 'deepseek-v4-flash': true } },
+             },
+           },
+         })
+         if (enabledSession === undefined) throw new Error(`missing enabled dsh-thinking-effort namespace for ${version}`)
+         const sessionDisabled = await settings!.mutate(enabledSession.ns, [{ op: 'unset', path: sessionPath }], enabledSession.revision)
+         expect(sessionDisabled).toMatchObject({ ok: true, value: { ns: 'dsh-thinking-effort' } })
+         if (!sessionDisabled.ok) throw new Error(`OpenCode session disable rejected for ${version}: ${sessionDisabled.error.message}`)
+         const disabledDescription = await settings!.describe()
+         const disabledSession = disabledDescription.ok
+           ? disabledDescription.value.namespaces.find(({ ns }) => ns === 'dsh-thinking-effort')
+           : undefined
+         expect((disabledSession?.value as Record<string, unknown> | undefined)).toEqual({ opencodeSession: { providers: {} } })
+         if (disabledSession === undefined) throw new Error(`missing disabled dsh-thinking-effort namespace for ${version}`)
          const mapped = capabilitiesForVersion(version)
          expect(mapped).toBeDefined()
          const editability = editableProviderCompatFields(mapped, piAiNamespace?.schema)

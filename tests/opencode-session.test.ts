@@ -166,6 +166,52 @@ describe('Host OpenCode session integration', () => {
     expect(JSON.stringify(json)).toContain('models')
   })
 
+  it('registers through the legacy SettingsProvider register path', () => {
+    let registerCalls = 0
+    const cleanups: Array<() => void> = []
+    const legacySettings = {
+      get: (_namespace: string) => ({}),
+      update: async (_namespace: string, _value: Record<string, unknown>) => undefined,
+      describe: () => [],
+      register: (_namespace: string, _schema: unknown, _options?: unknown) => {
+        registerCalls += 1
+        return {
+          get: () => ({}),
+          watch: () => () => undefined,
+        }
+      },
+    }
+    type LegacyContext = {
+      readonly settings: typeof legacySettings
+      readonly timeout: () => () => undefined
+      readonly on: () => () => undefined
+      readonly effect: (callback: () => void | (() => void)) => void | (() => void)
+      readonly inject: (
+        dependencies: readonly string[],
+        callback: (scope: { settings: typeof legacySettings; effect: LegacyContext['effect'] }) => void,
+      ) => void
+    }
+    let context: LegacyContext
+    context = {
+      settings: legacySettings,
+      timeout: () => () => undefined,
+      on: () => () => undefined,
+      effect(callback) {
+        const cleanup = callback()
+        if (typeof cleanup === 'function') cleanups.push(cleanup)
+        return cleanup
+      },
+      inject(_dependencies, callback) {
+        callback({ settings: legacySettings, effect: context.effect })
+      },
+    }
+
+    installOpenCodeSession(context as never)
+
+    expect(registerCalls).toBe(1)
+    for (const cleanup of cleanups.reverse()) cleanup()
+  })
+
   it('calls llm/stream next and injects the matching session id lazily', async () => {
     settingsStub.source = enabled
     const harness = createHostHarness()
