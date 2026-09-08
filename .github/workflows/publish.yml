@@ -150,9 +150,10 @@ jobs:
             git clone --depth 1 --branch dsh-v0.1.3-alpha.2 https://github.com/deepseek-ai/deepseek-harness.git "$ALPHA_ROOT"
             git clone --depth 1 --branch dsh-v0.1.1-rc.2 https://github.com/deepseek-ai/deepseek-harness.git "$RC2_ROOT"
 
-            corepack enable
+            npm install --global pnpm@11.7.0
+            pnpm --version
             for root in "$RC7_ROOT" "$RC2_ROOT" "$ALPHA_ROOT"; do
-              (cd "$root" && corepack enable && pnpm install --frozen-lockfile --ignore-scripts && pnpm run build)
+              (cd "$root" && pnpm install --frozen-lockfile --ignore-scripts && pnpm run build)
             done
             mkdir -p "$CACHE_ROOT"
             cp -R "$RC7_ROOT" "$CACHE_ROOT/dsh-v0.1.0-rc.7"
