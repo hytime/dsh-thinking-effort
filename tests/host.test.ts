@@ -166,7 +166,7 @@ describe('real Settings-backed OpenCode registration', () => {
     const host = await bootRealOpenCodeHost()
 
     try {
-      await expect(host.ctx.settings.mutate(OPENCODE_SESSION_NAMESPACE, [{
+      await expect(host.ctx.settings.mutate(OPENCODE_SESSION_NAMESPACE as SettingsNamespace, [{
         op: 'set',
         path: ['opencodeSession', 'providers', 'opencode-go', 'models', 'deepseek-v4-flash'],
         value: 'true',
@@ -191,7 +191,7 @@ describe('real Settings-backed OpenCode registration', () => {
 
     try {
       expect(host.ctx.settings.describe().map((entry) => String(entry.ns))).toContain(OPENCODE_SESSION_NAMESPACE)
-      await host.ctx.settings.mutate(OPENCODE_SESSION_NAMESPACE, [{
+      await host.ctx.settings.mutate(OPENCODE_SESSION_NAMESPACE as SettingsNamespace, [{
         op: 'set',
         path: ['opencodeSession', 'providers', 'opencode-go', 'models', 'deepseek-v4-flash'],
         value: true,

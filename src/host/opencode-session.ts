@@ -202,13 +202,16 @@ function installLegacySettingsSection(
 
 function installSettingsSectionCompat(ctx: HostContext, hooks: SettingsSectionHooks): void {
   const namespace = settingsNamespace()
-  if (typeof compatibilityExports.installSettingsSection === 'function') {
+  const settings = ctx.settings
+  const installSection = settings?.installSection
+  if (typeof installSection === 'function' && typeof ctx.inject !== 'function') {
+    installSection.call(settings, ctx, namespace, OPENCODE_SESSION_SETTINGS_SCHEMA, {}, hooks)
+    return
+  }
+  if (typeof compatibilityExports.installSettingsSection === 'function' && typeof ctx.inject === 'function') {
     compatibilityExports.installSettingsSection(ctx, namespace, OPENCODE_SESSION_SETTINGS_SCHEMA, {}, hooks)
     return
   }
-
-  const settings = ctx.settings
-  const installSection = settings?.installSection
   if (typeof installSection === 'function') {
     installSection.call(settings, ctx, namespace, OPENCODE_SESSION_SETTINGS_SCHEMA, {}, hooks)
     return

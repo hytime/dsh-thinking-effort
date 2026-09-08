@@ -12,7 +12,7 @@
 
 ### 추가
 
-- 모델별 OpenCode 세션 Header 스위치를 추가했습니다. 기본값은 꺼져 있으며 정확한 `provider/model`에만 현재 DSH `sessionId`를 `x-opencode-session`으로 동적으로 전송합니다. 고정 값은 저장하지 않고 같은 route의 GPT 등 다른 모델에도 상속하지 않습니다.
+- 모델별 OpenCode 세션 Header 스위치를 추가했습니다. 기본값은 꺼져 있으며 정확한 `provider/model`에만 현재 DSH `sessionId`를 `x-opencode-session`으로 동적으로 전송합니다. 고정 값은 저장하지 않고 같은 route의 GPT 등 다른 모델에도 상속하지 않습니다. 기존 `x-opencode-session`은 유지하며 덮어쓰지 않습니다. 이 설정은 최신 Remote Settings와 이전 `connection.api.settings` Settings transport를 모두 지원합니다.
 - Sub2API/CPA 전달, 정적 route Header의 제한, `api` 프로토콜을 변경하지 않는 동작, Host 재시작 및 Web 새로 고침 요구 사항을 문서화했습니다.
 
 ## [0.2.1] - 2026-09-08

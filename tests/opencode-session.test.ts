@@ -166,6 +166,25 @@ describe('Host OpenCode session integration', () => {
     expect(JSON.stringify(json)).toContain('models')
   })
 
+  it('prefers the settings service installSection when context injection is unavailable', () => {
+    let installCalls = 0
+    const context = {
+      settings: {
+        installSection: (_owner: unknown, _namespace: string, _schema: unknown, _entry: unknown, hooks: { setSource: (source: () => unknown) => void; onChange: () => void }) => {
+          installCalls += 1
+          hooks.setSource(() => ({}))
+          hooks.onChange()
+        },
+      },
+      on: () => () => undefined,
+      effect: (callback: () => void | (() => void)) => callback(),
+    }
+
+    installOpenCodeSession(context as never)
+
+    expect(installCalls).toBe(1)
+  })
+
   it('registers through the legacy SettingsProvider register path', () => {
     let registerCalls = 0
     const cleanups: Array<() => void> = []
@@ -182,6 +201,7 @@ describe('Host OpenCode session integration', () => {
       },
     }
     type LegacyContext = {
+      readonly fiber: { readonly state: number }
       readonly settings: typeof legacySettings
       readonly timeout: () => () => undefined
       readonly on: () => () => undefined
@@ -193,6 +213,7 @@ describe('Host OpenCode session integration', () => {
     }
     let context: LegacyContext
     context = {
+      fiber: { state: 0 },
       settings: legacySettings,
       timeout: () => () => undefined,
       on: () => () => undefined,

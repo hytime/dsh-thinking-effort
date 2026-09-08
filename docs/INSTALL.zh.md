@@ -61,7 +61,7 @@ version-map 按以下规则判断网关能力：
 
 OpenCode 会话 Header 是模型编辑器中的模型级设置，不是 provider 全局设置，默认关闭。展开精确的 `provider/model`，只有目标服务确实要求 `x-opencode-session` 时才勾选「OpenCode 会话 Header」并保存。
 
-Host 会在匹配的 `llm/stream` 请求中从当前 DSH 会话的 `sessionId` 动态生成 Header 值。用户不需要填写或保存固定值。同一路由中的 GPT 或其他非 OpenCode 模型不会继承该设置；该设置也不会修改路由的 `api` 协议。
+Host 会在匹配的 `llm/stream` 请求中从当前 DSH 会话的 `sessionId` 动态生成 Header 值。用户不需要填写或保存固定值。如果适配器或调用方已经提供 `x-opencode-session`，插件会保留原值，绝不覆盖。该设置同时支持新版 Remote Settings transport 和旧版 `connection.api.settings` transport。同一路由中的 GPT 或其他非 OpenCode 模型不会继承该设置；该设置也不会修改路由的 `api` 协议。
 
 如果请求经过 Sub2API、CPA 或其他中转服务，请确认它保留 `x-opencode-session` 并继续转发给 OpenCode 上游。`llm-pi-ai.providers.<route>.headers.x-opencode-session` 这类静态 route 设置不能替代本功能，因为所有会话会共用一个固定值。
 

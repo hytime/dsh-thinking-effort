@@ -55,7 +55,7 @@ DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 �
 
 OpenCode 세션 Header는 모델 편집기의 모델별 설정이며 provider 전체 설정이 아닙니다. 기본값은 꺼져 있습니다. 정확한 `provider/model`을 펼치고 대상 서비스가 `x-opencode-session`을 요구할 때만 **OpenCode 세션 Header**를 활성화하여 저장하세요.
 
-Host는 일치하는 `llm/stream` 요청마다 현재 DSH 대화의 `sessionId`에서 Header 값을 동적으로 만듭니다. 고정 값을 입력하거나 저장할 필요가 없습니다. 같은 route의 GPT 등 OpenCode가 아닌 모델에는 상속되지 않으며 route의 `api` 프로토콜도 변경하지 않습니다.
+Host는 일치하는 `llm/stream` 요청마다 현재 DSH 대화의 `sessionId`에서 Header 값을 동적으로 만듭니다. 고정 값을 입력하거나 저장할 필요가 없습니다. adapter 또는 호출자가 이미 `x-opencode-session`을 제공한 경우 해당 값을 유지하며 덮어쓰지 않습니다. 이 설정은 최신 Remote Settings transport와 이전 `connection.api.settings` transport를 모두 지원합니다. 같은 route의 GPT 등 OpenCode가 아닌 모델에는 상속되지 않으며 route의 `api` 프로토콜도 변경하지 않습니다.
 
 요청이 Sub2API, CPA 또는 다른 forwarding gateway를 통과한다면 `x-opencode-session`을 보존하여 OpenCode upstream으로 전달하는지 확인하세요. `llm-pi-ai.providers.<route>.headers.x-opencode-session`과 같은 정적 route 설정은 모든 대화가 같은 고정 값을 공유하므로 대체할 수 없습니다.
 
