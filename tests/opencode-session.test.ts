@@ -1,19 +1,9 @@
-import { describe, expect, it, vi, afterEach } from 'vitest'
+import { describe, expect, it, afterEach } from 'vitest'
 
-const settingsStub = vi.hoisted(() => ({
+const settingsStub = {
   source: {} as unknown,
   onChange: undefined as (() => void) | undefined,
-}))
-
-vi.mock('@deepseek-ai/dsh-settings', () => ({
-  settingsNamespace: (value: string) => value,
-  installSettingsSection: (_ctx: unknown, _namespace: string, _schema: unknown, _entry: unknown, hooks: { setSource: (source: () => unknown) => void; onChange: () => void }) => {
-    hooks.setSource(() => settingsStub.source)
-    settingsStub.onChange = hooks.onChange
-    hooks.onChange()
-  },
-// @ts-expect-error Vitest runtime supports virtual mocks for optional peer modules.
-}), { virtual: true })
+}
 
 import { installOpenCodeSession, OPENCODE_SESSION_SETTINGS_SCHEMA } from '../src/host/opencode-session.ts'
 import {
@@ -57,11 +47,24 @@ function createHostHarness(): Harness {
     return new Response('ok')
   }) as typeof fetch
   const ctx = {
-    settings: {},
+    settings: {
+      get: (_namespace: string) => settingsStub.source,
+      update: async () => undefined,
+      describe: () => [],
+      installSection(_owner: unknown, _namespace: string, _schema: unknown, _entry: unknown, hooks: { setSource: (source: () => unknown) => void; onChange: () => void }) {
+        hooks.setSource(() => settingsStub.source)
+        settingsStub.onChange = hooks.onChange
+        hooks.onChange()
+      },
+    },
     timeout: () => () => undefined,
     on(name: string, callback: (...args: any[]) => unknown, options?: unknown) {
-      listeners.push({ name, callback, options })
-      return () => undefined
+      const listener = { name, callback, options }
+      listeners.push(listener)
+      return () => {
+        const index = listeners.indexOf(listener)
+        if (index >= 0) listeners.splice(index, 1)
+      }
     },
     effect(callback: () => void | (() => void)) {
       const cleanup = callback()
@@ -76,7 +79,10 @@ function createHostHarness(): Harness {
     listeners,
     cleanups,
     fetchCalls,
-    stream: (options, next) => listener.callback(options, next) as AsyncIterable<unknown>,
+    stream: (options, next) => {
+      const current = listeners.find((entry) => entry.name === 'llm/stream')
+      return current === undefined ? next() : current.callback(options, next) as AsyncIterable<unknown>
+    },
     dispose() {
       for (const cleanup of cleanups) cleanup()
     },
@@ -212,6 +218,102 @@ describe('Host OpenCode session integration', () => {
     harness.dispose()
   })
 
+  it('does not retain the session Header after normal iterator completion', async () => {
+    settingsStub.source = enabled
+    const harness = createHostHarness()
+    let delayed: Promise<void> | undefined
+    const iterator = harness.stream({ provider: 'opencode-go', model: 'deepseek-v4-flash', sessionId: 'session-normal' }, () => ({
+      async *[Symbol.asyncIterator](): AsyncIterableIterator<unknown> {
+        try {
+          await fetch('https://provider.test/during-normal')
+          yield 'done'
+        } finally {
+          delayed = new Promise<void>((resolve) => {
+            setTimeout(() => { void fetch('https://provider.test/after-normal').then(() => resolve()) }, 0)
+          })
+        }
+      },
+    }))[Symbol.asyncIterator]()
+
+    await iterator.next()
+    await iterator.next()
+    await delayed
+
+    const headers = harness.fetchCalls.map((call) => new Headers(call.init?.headers).get(OPENCODE_SESSION_HEADER))
+    expect(headers).toEqual(['session-normal', null])
+    harness.dispose()
+  })
+
+  it('does not retain the session Header after consumer return cancellation', async () => {
+    settingsStub.source = enabled
+    const harness = createHostHarness()
+    let delayed: Promise<void> | undefined
+    const iterator = harness.stream({ provider: 'opencode-go', model: 'deepseek-v4-flash', sessionId: 'session-return' }, () => ({
+      async *[Symbol.asyncIterator](): AsyncIterableIterator<unknown> {
+        try {
+          await fetch('https://provider.test/during-return')
+          yield 'pending'
+        } finally {
+          delayed = new Promise<void>((resolve) => {
+            setTimeout(() => { void fetch('https://provider.test/after-return').then(() => resolve()) }, 0)
+          })
+        }
+      },
+    }))[Symbol.asyncIterator]()
+
+    await iterator.next()
+    await iterator.return?.()
+    await delayed
+
+    const headers = harness.fetchCalls.map((call) => new Headers(call.init?.headers).get(OPENCODE_SESSION_HEADER))
+    expect(headers).toEqual(['session-return', null])
+    harness.dispose()
+  })
+
+  it('does not retain the session Header after an underlying iterator throw', async () => {
+    settingsStub.source = enabled
+    const harness = createHostHarness()
+    let delayed: Promise<void> | undefined
+    const iterator = harness.stream({ provider: 'opencode-go', model: 'deepseek-v4-flash', sessionId: 'session-throw' }, () => ({
+      async *[Symbol.asyncIterator](): AsyncIterableIterator<unknown> {
+        try {
+          await fetch('https://provider.test/during-throw')
+          yield 'pending'
+        } finally {
+          delayed = new Promise<void>((resolve) => {
+            setTimeout(() => { void fetch('https://provider.test/after-throw').then(() => resolve()) }, 0)
+          })
+        }
+      },
+    }))[Symbol.asyncIterator]()
+
+    await iterator.next()
+    await expect(iterator.throw?.(new Error('stop stream'))).rejects.toThrow('stop stream')
+    await delayed
+
+    const headers = harness.fetchCalls.map((call) => new Headers(call.init?.headers).get(OPENCODE_SESSION_HEADER))
+    expect(headers).toEqual(['session-throw', null])
+    harness.dispose()
+  })
+
+  it('merges Request input and init headers without losing either source', async () => {
+    settingsStub.source = enabled
+    const harness = createHostHarness()
+    await drain(harness.stream({ provider: 'opencode-go', model: 'deepseek-v4-flash', sessionId: 'session-headers' }, async function* () {
+      const input = new Request('https://provider.test/chat/completions', { headers: { 'x-input': 'input-value' } })
+      await fetch(input, { headers: [['x-init', 'init-value']] })
+      yield 'done'
+    }))
+
+    const call = harness.fetchCalls[0]
+    const headers = new Headers(call?.input instanceof Request ? call.input.headers : undefined)
+    new Headers(call?.init?.headers).forEach((value, name) => headers.set(name, value))
+    expect(headers.get('x-input')).toBe('input-value')
+    expect(headers.get('x-init')).toBe('init-value')
+    expect(headers.get(OPENCODE_SESSION_HEADER)).toBe('session-headers')
+    harness.dispose()
+  })
+
   it('does not inject disabled models or requests without a session id', async () => {
     settingsStub.source = enabled
     const harness = createHostHarness()
@@ -238,6 +340,7 @@ describe('Host OpenCode session integration', () => {
     const laterPatch = (async () => new Response('later')) as typeof fetch
     globalThis.fetch = laterPatch
     harness.dispose()
+    expect(harness.listeners.some((entry) => entry.name === 'llm/stream')).toBe(false)
     expect(globalThis.fetch).toBe(laterPatch)
     globalThis.fetch = patched
     harness.dispose()

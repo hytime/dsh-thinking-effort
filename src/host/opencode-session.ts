@@ -1,6 +1,4 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import type { Context as CordisContext } from '@deepseek-ai/cordis'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import {
   isOpenCodeSessionEnabled,
@@ -28,6 +26,7 @@ type OpenCodeSessionRequest = {
   readonly provider: string
   readonly model: string
   readonly sessionId: string
+  active: boolean
 }
 
 type FetchInput = Parameters<typeof fetch>[0]
@@ -49,7 +48,7 @@ function requestContext(options: unknown, settings: unknown): OpenCodeSessionReq
   const sessionId = nonEmptyString(options.sessionId)
   if (provider === undefined || model === undefined || sessionId === undefined) return undefined
   if (!isOpenCodeSessionEnabled(settings, provider, model)) return undefined
-  return { provider, model, sessionId }
+  return { provider, model, sessionId, active: true }
 }
 
 function wrapStream<T>(
@@ -60,18 +59,55 @@ function wrapStream<T>(
   return {
     [Symbol.asyncIterator](): AsyncIterableIterator<T> {
       const iterator = source[Symbol.asyncIterator]() as AsyncIterator<T, unknown, unknown>
-      const run = <R>(operation: () => R): R => storage.run(request, operation)
+      const iteratorRequest: OpenCodeSessionRequest = { ...request, active: true }
+      const deactivate = (): void => {
+        iteratorRequest.active = false
+      }
+      const run = <R>(operation: () => R): R => storage.run(iteratorRequest, operation)
       const wrapped: AsyncIterableIterator<T> = {
         next(value?: unknown): Promise<IteratorResult<T>> {
-          return run(async () => await iterator.next(value))
+          return run(async () => {
+            try {
+              const result = await iterator.next(value)
+              if (result.done) deactivate()
+              return result
+            } catch (error) {
+              deactivate()
+              throw error
+            }
+          })
         },
         return(value?: unknown): Promise<IteratorResult<T>> {
-          if (iterator.return === undefined) return Promise.resolve({ done: true, value: value as T })
-          return run(async () => await iterator.return!(value))
+          if (iterator.return === undefined) {
+            deactivate()
+            return Promise.resolve({ done: true, value: value as T })
+          }
+          return run(async () => {
+            try {
+              const result = await iterator.return!(value)
+              deactivate()
+              return result
+            } catch (error) {
+              deactivate()
+              throw error
+            }
+          })
         },
         throw(error?: unknown): Promise<IteratorResult<T>> {
-          if (iterator.throw === undefined) return Promise.reject(error)
-          return run(async () => await iterator.throw!(error))
+          if (iterator.throw === undefined) {
+            deactivate()
+            return Promise.reject(error)
+          }
+          return run(async () => {
+            try {
+              const result = await iterator.throw!(error)
+              if (result.done) deactivate()
+              return result
+            } catch (caught) {
+              deactivate()
+              throw caught
+            }
+          })
         },
         [Symbol.asyncIterator](): AsyncIterableIterator<T> {
           return this
@@ -101,7 +137,7 @@ function fetchWithSession(
   init: FetchInit | undefined,
 ): ReturnType<typeof fetch> {
   const request = storage.getStore()
-  if (request === undefined) return originalFetch(input, init)
+  if (request === undefined || request.active !== true) return originalFetch(input, init)
 
   const headers = headersForFetch(input, init)
   if (headers.has(OPENCODE_SESSION_HEADER)) return originalFetch(input, init)
@@ -114,13 +150,13 @@ function fetchWithSession(
 }
 
 /** Install the optional OpenCode session namespace and request Header bridge. */
-export function installOpenCodeSession(ctx: Pick<HostContext, 'on' | 'effect'>): void {
+export function installOpenCodeSession(ctx: Pick<HostContext, 'on' | 'effect' | 'settings'>): void {
   let settingsSource: () => unknown = () => ({})
   let settingsSnapshot: unknown = {}
 
-  installSettingsSection(
-    ctx as unknown as CordisContext,
-    settingsNamespace(OPENCODE_SESSION_NAMESPACE),
+  ctx.settings?.installSection?.(
+    ctx,
+    OPENCODE_SESSION_NAMESPACE,
     OPENCODE_SESSION_SETTINGS_SCHEMA,
     {},
     {

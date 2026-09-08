@@ -1,9 +1,55 @@
+import { Context } from '@deepseek-ai/cordis'
+import type { Fiber } from '@deepseek-ai/cordis'
+import { SettingsProvider } from '@deepseek-ai/dsh-settings'
+import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import { describe, expect, it, vi } from 'vitest'
 
 import { apply } from '../src/index.ts'
+import { installOpenCodeSession } from '../src/host/opencode-session.ts'
+import { OPENCODE_SESSION_NAMESPACE } from '../src/compat/opencode-session.ts'
 import { hasModelSourceConflict } from '../src/compat/model-source.ts'
 
 type SettingsSection = Record<string, unknown> | undefined
+
+class MemorySettings extends SettingsProvider {
+  readonly doc: Record<string, unknown>
+
+  constructor(ctx: ConstructorParameters<typeof SettingsProvider>[0], options?: { doc?: Record<string, unknown> }) {
+    super(ctx)
+    this.doc = structuredClone(options?.doc ?? {})
+  }
+
+  get writable(): boolean {
+    return true
+  }
+
+  protected load(): Promise<Record<string, unknown>> {
+    return Promise.resolve(structuredClone(this.doc))
+  }
+
+  protected persist(ns: SettingsNamespace, section: Record<string, unknown>): Promise<void> {
+    this.doc[ns] = structuredClone(section)
+    return Promise.resolve()
+  }
+}
+
+async function bootRealOpenCodeHost(): Promise<{
+  ctx: Context
+  settingsFiber: Fiber
+  consumerFiber: Fiber
+}> {
+  const ctx = new Context()
+  const settingsFiber = ctx.plugin(MemorySettings)
+  await settingsFiber.await()
+  const consumerFiber = ctx.plugin({
+    inject: ['settings'],
+    apply: (child: Context) => {
+      installOpenCodeSession(child as never)
+    },
+  })
+  await consumerFiber.await()
+  return { ctx, settingsFiber, consumerFiber }
+}
 
 type HarnessOptions = {
   writable?: boolean
@@ -22,7 +68,7 @@ function createHarness(options: HarnessOptions = {}) {
   const updates: Array<{ ns: string; value: Record<string, unknown> }> = []
   const scheduled: Array<{ callback: () => void; delay: number }> = []
   const listeners: Array<{ name: string; callback: (...args: any[]) => unknown; options?: unknown }> = []
-  let effectCleanup: (() => void) | undefined
+  const cleanups: Array<() => void> = []
   const ctx = {
     settings: {
       writable: options.writable ?? true,
@@ -43,18 +89,27 @@ function createHarness(options: HarnessOptions = {}) {
         }
       },
       describe: () => descriptors,
+      installSection: (_owner: unknown, _namespace: string, _schema: unknown, _entry: unknown, hooks: { setSource: (source: () => unknown) => void; onChange: () => void }) => {
+        hooks.setSource(() => ({}))
+        hooks.onChange()
+      },
     },
     timeout: (callback: () => void, delay: number) => {
       scheduled.push({ callback, delay })
       return () => {}
     },
     on: (name: string, callback: (...args: any[]) => unknown, options?: unknown) => {
-      listeners.push({ name, callback, options })
-      return () => {}
+      const listener = { name, callback, options }
+      listeners.push(listener)
+      return () => {
+        const index = listeners.indexOf(listener)
+        if (index >= 0) listeners.splice(index, 1)
+      }
     },
     effect: (callback: () => void | (() => void)) => {
-      effectCleanup = callback() as (() => void) | undefined
-      return effectCleanup
+      const cleanup = callback()
+      if (typeof cleanup === 'function') cleanups.push(cleanup)
+      return cleanup
     },
   }
 
@@ -74,7 +129,7 @@ function createHarness(options: HarnessOptions = {}) {
     updates,
     scheduled,
     dispose() {
-      effectCleanup?.()
+      for (const cleanup of cleanups.splice(0).reverse()) cleanup()
     },
     resolvePendingUpdate() {
       pendingUpdateResolve?.()
@@ -92,6 +147,109 @@ function createHarness(options: HarnessOptions = {}) {
   }
 }
 
+async function drainRealStream(ctx: Context, options: Record<string, unknown>): Promise<void> {
+  const waterfall = ctx.waterfall.bind(ctx) as unknown as (
+    thisArg: unknown,
+    name: string,
+    value: unknown,
+    next: () => AsyncIterable<unknown>,
+  ) => AsyncIterable<unknown>
+  const stream = waterfall(ctx, 'llm/stream', options, async function* () {
+    await fetch('https://provider.test/chat/completions')
+    yield 'done'
+  })
+  for await (const _chunk of stream) { /* consume */ }
+}
+
+describe('real Settings-backed OpenCode registration', () => {
+  it('rejects non-boolean model values through the real Settings schema', async () => {
+    const host = await bootRealOpenCodeHost()
+
+    try {
+      await expect(host.ctx.settings.mutate(OPENCODE_SESSION_NAMESPACE, [{
+        op: 'set',
+        path: ['opencodeSession', 'providers', 'opencode-go', 'models', 'deepseek-v4-flash'],
+        value: 'true',
+      }])).rejects.toThrow()
+      expect(host.ctx.settings.describe().find((entry) => entry.ns === OPENCODE_SESSION_NAMESPACE)?.value).toEqual({
+        opencodeSession: { providers: {} },
+      })
+    } finally {
+      await host.consumerFiber.dispose()
+      await host.settingsFiber.dispose()
+    }
+  })
+
+  it('describes and mutates the namespace, watches changes, and falls back on provider detach', async () => {
+    const originalFetch = globalThis.fetch
+    const calls: Array<{ init?: RequestInit }> = []
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      calls.push({ init })
+      return new Response('ok')
+    }) as typeof fetch
+    const host = await bootRealOpenCodeHost()
+
+    try {
+      expect(host.ctx.settings.describe().map((entry) => String(entry.ns))).toContain(OPENCODE_SESSION_NAMESPACE)
+      await host.ctx.settings.mutate(OPENCODE_SESSION_NAMESPACE, [{
+        op: 'set',
+        path: ['opencodeSession', 'providers', 'opencode-go', 'models', 'deepseek-v4-flash'],
+        value: true,
+      }])
+      expect(host.ctx.settings.describe().find((entry) => entry.ns === OPENCODE_SESSION_NAMESPACE)?.value).toEqual({
+        opencodeSession: {
+          providers: {
+            'opencode-go': { models: { 'deepseek-v4-flash': true } },
+          },
+        },
+      })
+
+      await drainRealStream(host.ctx, {
+        provider: 'opencode-go',
+        model: 'deepseek-v4-flash',
+        sessionId: 'real-session',
+      })
+      expect(new Headers(calls[0]?.init?.headers).get('x-opencode-session')).toBe('real-session')
+
+      await host.settingsFiber.dispose()
+      expect(host.ctx.get('settings')).toBeUndefined()
+      calls.length = 0
+      await drainRealStream(host.ctx, {
+        provider: 'opencode-go',
+        model: 'deepseek-v4-flash',
+        sessionId: 'detached-session',
+      })
+      expect(new Headers(calls[0]?.init?.headers).has('x-opencode-session')).toBe(false)
+    } finally {
+      await host.consumerFiber.dispose()
+      globalThis.fetch = originalFetch
+    }
+  })
+
+  it('removes the namespace, watcher, and llm listener when the owner plugin disposes', async () => {
+    const originalFetch = globalThis.fetch
+    const calls: Array<{ init?: RequestInit }> = []
+    globalThis.fetch = (async (_input: unknown, init?: RequestInit) => {
+      calls.push({ init })
+      return new Response('ok')
+    }) as typeof fetch
+    const host = await bootRealOpenCodeHost()
+
+    try {
+      await host.consumerFiber.dispose()
+      expect(host.ctx.settings.describe().map((entry) => String(entry.ns))).not.toContain(OPENCODE_SESSION_NAMESPACE)
+      await drainRealStream(host.ctx, {
+        provider: 'opencode-go',
+        model: 'deepseek-v4-flash',
+        sessionId: 'disposed-session',
+      })
+      expect(new Headers(calls[0]?.init?.headers).has('x-opencode-session')).toBe(false)
+    } finally {
+      await host.settingsFiber.dispose()
+      globalThis.fetch = originalFetch
+    }
+  })
+})
 const defaults = { off: null, high: 'high', max: 'max' }
 
 async function runInitial(harness: ReturnType<typeof createHarness>) {

@@ -25,11 +25,24 @@ export interface AgentRequestConfig extends UnknownRecord {
   readonly reasoningEffort?: unknown
 }
 
+export interface SettingsSectionHooks {
+  readonly setSource: (source: () => unknown) => void
+  readonly onChange: () => void
+  readonly validate?: (value: unknown) => void
+}
+
 export interface HostSettings {
   readonly writable?: unknown
   readonly get: (namespace: string) => unknown
   readonly update: (namespace: string, value: UnknownRecord) => unknown
   readonly describe: () => unknown
+  readonly installSection?: (
+    owner: unknown,
+    namespace: string,
+    schema: unknown,
+    entry: unknown,
+    hooks: SettingsSectionHooks,
+  ) => void
 }
 
 export interface HostContext {
