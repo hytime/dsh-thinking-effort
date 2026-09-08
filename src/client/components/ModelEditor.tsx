@@ -46,13 +46,14 @@ export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy
     {!item.inOverrides ? <div style={{ color: palette.secondary, fontSize: '10px', marginBottom: '6px' }}>{t('modelsArrayCompatSaveNote')}</div> : null}
     {onSaveCompat ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}><ActionButton text={t('saveModelGatewayCompat')} onClick={onSaveCompat} disabled={busy || !anyCompatDirty} tone="primary" palette={palette} icon="check" /></div> : null}
   </> : null
-  const openCodeSessionControls = openCodeSessionAvailable ? <div data-scope="opencode-session" style={{ display: 'grid', gap: '5px', marginBottom: '8px', padding: '8px', border: `0.5px solid ${palette.border}`, borderRadius: '6px', backgroundColor: palette.field }}>
+  const openCodeSessionEditable = openCodeSessionAvailable && item.modelSourceConflict !== true
+  const openCodeSessionControls = openCodeSessionEditable ? <div data-scope="opencode-session" style={{ display: 'grid', gap: '5px', marginBottom: '8px', padding: '8px', border: `0.5px solid ${palette.border}`, borderRadius: '6px', backgroundColor: palette.field }}>
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-      <span style={{ fontSize: '13px', fontWeight: 650 }}>{t('opencodeSessionHeader')}</span>
-      <SwitchControl checked={openCodeSession === true} onChange={(enabled) => onOpenCodeSessionChange?.(enabled)} disabled={busy || onOpenCodeSessionChange === undefined} label={t('opencodeSessionHeader')} palette={palette} />
+      <span style={{ fontSize: '13px', fontWeight: 650 }}>{t('opencodeSessionHeaderTitle')}</span>
+      <SwitchControl checked={openCodeSession === true} onChange={(enabled) => onOpenCodeSessionChange?.(enabled)} disabled={busy || onOpenCodeSessionChange === undefined} label={t('opencodeSessionHeaderTitle')} palette={palette} />
     </div>
     <span style={{ color: palette.secondary, fontSize: '11px', lineHeight: '15px' }}>{t('opencodeSessionHeaderDescription')}</span>
-    {onSaveOpenCodeSession ? <ActionButton text={t('saveOpenCodeSession')} onClick={onSaveOpenCodeSession} disabled={busy || !openCodeSessionDirty} tone="primary" palette={palette} icon="check" label={t('saveOpenCodeSession')} /> : null}
+    {onSaveOpenCodeSession ? <ActionButton text={t('saveOpenCodeSession')} onClick={onSaveOpenCodeSession} disabled={busy || !openCodeSessionDirty} tone="primary" palette={palette} icon="check" label={t('saveOpenCodeSessionAria')} /> : null}
   </div> : null
   return <div style={{ padding: '10px 12px 12px', borderTop: `0.5px solid ${palette.divider}`, backgroundColor: palette.canvas }}>
     {openCodeSessionControls}

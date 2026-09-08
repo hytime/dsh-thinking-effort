@@ -113,8 +113,33 @@ const openCodeNamespace = (overrides: Partial<SettingsNamespace> = {}): Settings
 const modelItem = (source: SettingsNamespace = namespace()): InventoryItem => {
   const item = inventoryFrom(source).find((candidate) => candidate.route === 'provider' && candidate.model === 'model-a')
   if (item === undefined) throw new Error('missing provider/model-a fixture')
-  return item
+  return { ...item, modelSourceConflict: false }
 }
+
+const openCodeLlmNamespace = (overrides: Partial<SettingsNamespace> = {}): SettingsNamespace => namespace({
+  value: {
+    providers: {
+      provider: {
+        models: [
+          {
+            id: 'model-a',
+            name: 'Model A',
+            reasoningEfforts: { off: null },
+            input: ['text'],
+            contextWindow: 8192,
+          },
+          {
+            id: 'model-b',
+            name: 'Model B',
+            reasoningEfforts: { off: null, high: 'high' },
+            input: ['text', 'image'],
+          },
+        ],
+      },
+    },
+  },
+  ...overrides,
+})
 
 function localeSnapshot(locales: readonly string[] = ['zh', 'en', 'ja']): ClientLocale {
   return {
@@ -128,6 +153,7 @@ function localeSnapshot(locales: readonly string[] = ['zh', 'en', 'ja']): Client
 function renderEditor(options: {
   describe?: () => Promise<ClientResult<{ namespaces: readonly SettingsNamespace[] }>>
   mutate?: (ns: string, ops: readonly SettingsOp[], revision: number) => Promise<ClientResult<SettingsNamespace>>
+  baseNamespace?: SettingsNamespace
   namespaces?: readonly SettingsNamespace[]
   locales?: readonly string[]
   compatibilityProfile?: 'modern' | 'legacy' | 'unknown'
@@ -146,7 +172,7 @@ function renderEditor(options: {
   const settings: SettingsApi = {
     externalLanguages: false,
     compatibilityProfile: options.compatibilityProfile ?? 'unknown',
-    describe: options.describe ?? (async () => ({ ok: true, value: { namespaces: [namespace(), ...(options.namespaces ?? [])] } })),
+    describe: options.describe ?? (async () => ({ ok: true, value: { namespaces: [options.baseNamespace ?? namespace(), ...(options.namespaces ?? [])] } })),
     mutate,
   }
   const root = createRoot(container)
@@ -334,7 +360,7 @@ describe('OpenCode session Client namespace state', () => {
   })
 
   it('keeps plugin dirty state and reports missing namespace when SectionEditor receives an invalid mutation response', async () => {
-    const llm = namespace({ schema: realGatewaySchema })
+    const llm = openCodeLlmNamespace({ schema: realGatewaySchema })
     const plugin = openCodeNamespace({
       value: { opencodeSession: { providers: { provider: { models: { 'model-a': false } } } } },
     })
@@ -352,20 +378,20 @@ describe('OpenCode session Client namespace state', () => {
     })
     await settle()
     openFirstModel(view.container)
-    const headerSwitch = view.container.querySelector(`[data-scope="opencode-session"] button[role="switch"][aria-label="${text('opencodeSessionHeader')}"]`) as HTMLButtonElement
+    const headerSwitch = view.container.querySelector(`[data-scope="opencode-session"] button[role="switch"][aria-label="${text('opencodeSessionHeaderTitle')}"]`) as HTMLButtonElement
     act(() => headerSwitch.click())
     act(() => button(view.container, text('saveOpenCodeSession')).click())
     await settle()
 
     expect(view.container.querySelector('[role="alert"]')?.textContent).toContain(text('saveMissingNamespace'))
-    const retry = view.container.querySelector(`[data-scope="opencode-session"] button[aria-label="${text('saveOpenCodeSession')}"]`) as HTMLButtonElement
+    const retry = view.container.querySelector(`[data-scope="opencode-session"] button[aria-label="${text('saveOpenCodeSessionAria')}"]`) as HTMLButtonElement
     expect(retry.disabled).toBe(false)
     expect(mutate).toHaveBeenCalledWith('dsh-thinking-effort', expect.any(Array), plugin.revision)
     view.unmount()
   })
 
   it('saves through SectionEditor with both namespaces and refreshes plugin state without changing llm state', async () => {
-    const llm = namespace({
+    const llm = openCodeLlmNamespace({
       schema: realGatewaySchema,
       user: { providers: { provider: { compat: { supportsDeveloperRole: false } } } },
     })
@@ -401,7 +427,7 @@ describe('OpenCode session Client namespace state', () => {
     ) as HTMLSelectElement
     expect(beforeSupportsDeveloperRole).not.toBeNull()
     expect(beforeSupportsDeveloperRole.value).toBe('unsupported')
-    const headerSwitch = view.container.querySelector(`[data-scope="opencode-session"] button[role="switch"][aria-label="${text('opencodeSessionHeader')}"]`) as HTMLButtonElement
+    const headerSwitch = view.container.querySelector(`[data-scope="opencode-session"] button[role="switch"][aria-label="${text('opencodeSessionHeaderTitle')}"]`) as HTMLButtonElement
     expect(headerSwitch).not.toBeNull()
     act(() => headerSwitch.click())
     act(() => button(view.container, text('saveOpenCodeSession')).click())
@@ -421,6 +447,126 @@ describe('OpenCode session Client namespace state', () => {
     expect(afterSupportsDeveloperRole.value).toBe(beforeSupportsDeveloperRole.value)
     expect(view.container.querySelector('[data-scope="provider"]')).not.toBeNull()
     view.unmount()
+  })
+
+  it('renders the OpenCode transport setting only inside the model editor with an independent save action', () => {
+    const item = modelItem()
+    const onSave = vi.fn()
+    const onOpenCodeSessionChange = vi.fn()
+    const onSaveOpenCodeSession = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    act(() => {
+      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '', oneMillion: false, previousValue: '', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={onSave} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} openCodeSession={false} openCodeSessionDirty openCodeSessionAvailable onOpenCodeSessionChange={onOpenCodeSessionChange} onSaveOpenCodeSession={onSaveOpenCodeSession} />)
+    })
+
+    const modelScope = container
+    const transport = modelScope.querySelector('[data-scope="opencode-session"]') as HTMLElement
+    expect(transport).not.toBeNull()
+    expect(container.querySelector('[data-scope="provider"]')).toBeNull()
+    expect(transport.textContent).toContain(text('opencodeSessionHeaderTitle'))
+    expect(transport.textContent).toContain(text('opencodeSessionHeaderDescription'))
+
+    const headerSwitch = transport.querySelector('button[role="switch"]') as HTMLButtonElement
+    expect(headerSwitch.getAttribute('aria-label')).toBe(text('opencodeSessionHeaderTitle'))
+    act(() => headerSwitch.click())
+    expect(onOpenCodeSessionChange).toHaveBeenCalledWith(true)
+
+    act(() => button(transport, text('saveOpenCodeSession')).click())
+    expect(onSaveOpenCodeSession).toHaveBeenCalledTimes(1)
+    expect(onSave).not.toHaveBeenCalled()
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('hides unavailable transport settings and disables non-editable transport controls', () => {
+    const item = modelItem()
+    const render = (available: boolean, onChange?: (enabled: boolean) => void): { container: HTMLDivElement; root: Root } => {
+      const container = document.createElement('div')
+      document.body.append(container)
+      const root = createRoot(container)
+      act(() => {
+        root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '', oneMillion: false, previousValue: '', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} openCodeSession={false} openCodeSessionAvailable={available} onOpenCodeSessionChange={onChange} />)
+      })
+      return { container, root }
+    }
+
+    const unavailable = render(false)
+    expect(unavailable.container.querySelector('[data-scope="opencode-session"]')).toBeNull()
+    act(() => unavailable.root.unmount())
+    unavailable.container.remove()
+
+    const nonEditable = render(true)
+    const headerSwitch = nonEditable.container.querySelector('[data-scope="opencode-session"] button[role="switch"]') as HTMLButtonElement
+    expect(headerSwitch.disabled).toBe(true)
+    act(() => nonEditable.root.unmount())
+    nonEditable.container.remove()
+  })
+
+  it('isolates Header drafts by exact provider and model in the rendered editor', async () => {
+    const plugin = openCodeNamespace({
+      value: { opencodeSession: { providers: { provider: { models: { 'model-a': true, 'model-b': false } } } } },
+    })
+    const view = renderEditor({ baseNamespace: openCodeLlmNamespace(), namespaces: [plugin] })
+    await settle()
+    act(() => providerButton(view.container).click())
+
+    const modelButtons = [...view.container.querySelectorAll<HTMLButtonElement>(`button[aria-label="${text('openModelSettings')}"]`)]
+    const modelAButton = modelButtons.find((candidate) => candidate.parentElement?.parentElement?.parentElement?.textContent?.includes('model-a'))
+    const modelBButton = modelButtons.find((candidate) => candidate.parentElement?.parentElement?.parentElement?.textContent?.includes('model-b'))
+    expect(modelAButton).toBeDefined()
+    expect(modelBButton).toBeDefined()
+    act(() => modelAButton!.click())
+    const modelA = [...view.container.querySelectorAll('[data-scope="opencode-session"]')][0] as HTMLElement
+    expect((modelA.querySelector('button[role="switch"]') as HTMLButtonElement).getAttribute('aria-checked')).toBe('true')
+
+    act(() => modelBButton!.click())
+    const modelControls = [...view.container.querySelectorAll('[data-scope="opencode-session"]')]
+    expect(modelControls).toHaveLength(2)
+    expect((modelControls[1]!.querySelector('button[role="switch"]') as HTMLButtonElement).getAttribute('aria-checked')).toBe('false')
+    view.unmount()
+  })
+
+  it('retains a dirty Header draft and retryable save after a failed mutation', async () => {
+    const plugin = openCodeNamespace({
+      value: { opencodeSession: { providers: { provider: { models: { 'model-a': false } } } } },
+    })
+    const view = renderEditor({
+      baseNamespace: openCodeLlmNamespace(),
+      namespaces: [plugin],
+      mutate: async () => ({ ok: false as const, error: { message: 'conflict' } }),
+    })
+    await settle()
+    openFirstModel(view.container)
+
+    const transport = view.container.querySelector('[data-scope="opencode-session"]') as HTMLElement
+    const headerSwitch = transport.querySelector('button[role="switch"]') as HTMLButtonElement
+    act(() => headerSwitch.click())
+    expect(headerSwitch.getAttribute('aria-checked')).toBe('true')
+    act(() => button(transport, text('saveOpenCodeSession')).click())
+    await settle()
+
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain('conflict')
+    const retrySwitch = transport.querySelector('button[role="switch"]') as HTMLButtonElement
+    const retryButton = button(transport, text('saveOpenCodeSession'))
+    expect(retrySwitch.getAttribute('aria-checked')).toBe('true')
+    expect(retryButton.disabled).toBe(false)
+    view.unmount()
+  })
+
+  it('provides OpenCode-specific copy for every supported locale without GPT or generic gateway wording', () => {
+    const locales: readonly [string, Record<string, string>][] = [['en', en], ['zh', zh], ['ja', ja], ['ko', ko]]
+    const keys = ['opencodeSessionHeaderTitle', 'opencodeSessionHeaderDescription', 'saveOpenCodeSession', 'saveOpenCodeSessionAria', 'opencodeSessionSaved', 'opencodeSessionSaveFailed']
+    for (const [locale, dictionary] of locales) {
+      for (const key of keys) {
+        expect(dictionary[key], `${locale} missing ${key}`).toBeTruthy()
+        expect(dictionary[key], `${locale} fell back to ${key}`).not.toBe(key)
+      }
+      expect(dictionary.opencodeSessionHeaderDescription).toContain('x-opencode-session')
+      expect(dictionary.opencodeSessionHeaderDescription.toLowerCase()).not.toContain('gpt')
+      expect(dictionary.opencodeSessionHeaderDescription.toLowerCase()).not.toContain('gateway compatibility')
+    }
   })
 })
 
