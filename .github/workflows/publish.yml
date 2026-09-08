@@ -153,7 +153,7 @@ jobs:
             npm install --global pnpm@11.7.0
             pnpm --version
             for root in "$RC7_ROOT" "$RC2_ROOT" "$ALPHA_ROOT"; do
-              (cd "$root" && pnpm install --frozen-lockfile --ignore-scripts && pnpm run build)
+              (cd "$root" && pnpm install --frozen-lockfile --ignore-scripts && pnpm rebuild fs-ext && pnpm run build)
             done
             mkdir -p "$CACHE_ROOT"
             cp -R "$RC7_ROOT" "$CACHE_ROOT/dsh-v0.1.0-rc.7"
