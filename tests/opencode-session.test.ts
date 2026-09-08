@@ -1,4 +1,21 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi, afterEach } from 'vitest'
+
+const settingsStub = vi.hoisted(() => ({
+  source: {} as unknown,
+  onChange: undefined as (() => void) | undefined,
+}))
+
+vi.mock('@deepseek-ai/dsh-settings', () => ({
+  settingsNamespace: (value: string) => value,
+  installSettingsSection: (_ctx: unknown, _namespace: string, _schema: unknown, _entry: unknown, hooks: { setSource: (source: () => unknown) => void; onChange: () => void }) => {
+    hooks.setSource(() => settingsStub.source)
+    settingsStub.onChange = hooks.onChange
+    hooks.onChange()
+  },
+// @ts-expect-error Vitest runtime supports virtual mocks for optional peer modules.
+}), { virtual: true })
+
+import { installOpenCodeSession, OPENCODE_SESSION_SETTINGS_SCHEMA } from '../src/host/opencode-session.ts'
 import {
   isOpenCodeSessionEnabled,
   modelPath,
@@ -6,6 +23,8 @@ import {
   OPENCODE_SESSION_NAMESPACE,
 } from '../src/compat/opencode-session.ts'
 import { openCodeSessionOp } from '../src/client/model-header-ops.ts'
+
+const baseFetch = globalThis.fetch
 
 const enabled = {
   opencodeSession: {
@@ -18,6 +37,61 @@ const enabled = {
     },
   },
 }
+
+type HostListener = { name: string; callback: (...args: any[]) => unknown; options?: unknown }
+
+type Harness = {
+  listeners: HostListener[]
+  cleanups: Array<() => void>
+  fetchCalls: Array<{ input: unknown; init?: RequestInit }>
+  dispose: () => void
+  stream: (options: Record<string, unknown>, next: () => AsyncIterable<unknown>) => AsyncIterable<unknown>
+}
+
+function createHostHarness(): Harness {
+  const listeners: HostListener[] = []
+  const cleanups: Array<() => void> = []
+  const fetchCalls: Array<{ input: unknown; init?: RequestInit }> = []
+  globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
+    fetchCalls.push({ input, init })
+    return new Response('ok')
+  }) as typeof fetch
+  const ctx = {
+    settings: {},
+    timeout: () => () => undefined,
+    on(name: string, callback: (...args: any[]) => unknown, options?: unknown) {
+      listeners.push({ name, callback, options })
+      return () => undefined
+    },
+    effect(callback: () => void | (() => void)) {
+      const cleanup = callback()
+      if (typeof cleanup === 'function') cleanups.push(cleanup)
+      return cleanup
+    },
+  }
+  installOpenCodeSession(ctx)
+  const listener = listeners.find((entry) => entry.name === 'llm/stream')
+  if (listener === undefined) throw new Error('missing llm/stream listener')
+  return {
+    listeners,
+    cleanups,
+    fetchCalls,
+    stream: (options, next) => listener.callback(options, next) as AsyncIterable<unknown>,
+    dispose() {
+      for (const cleanup of cleanups) cleanup()
+    },
+  }
+}
+
+async function drain(stream: AsyncIterable<unknown>): Promise<void> {
+  for await (const _chunk of stream) { /* consume */ }
+}
+
+afterEach(() => {
+  settingsStub.source = {}
+  settingsStub.onChange = undefined
+  globalThis.fetch = baseFetch
+})
 
 describe('OpenCode session settings', () => {
   it('matches an exact provider/model pair', () => {
@@ -70,9 +144,103 @@ describe('OpenCode session Settings operations', () => {
       path: ['opencodeSession', 'providers', 'opencode-go', 'models', 'deepseek-v4-flash'],
     })
   })
-
   it('does not create operations for an empty route or model', () => {
     expect(openCodeSessionOp('', 'model', true)).toBeUndefined()
     expect(openCodeSessionOp('route', '', true)).toBeUndefined()
+  })
+})
+
+describe('Host OpenCode session integration', () => {
+  it('registers the plugin namespace with nested boolean defaults', () => {
+    const schema = OPENCODE_SESSION_SETTINGS_SCHEMA as unknown as { toJSON?: () => unknown }
+    const json = schema.toJSON?.() as Record<string, unknown> | undefined
+    expect(json).toBeDefined()
+    expect(JSON.stringify(json)).toContain('opencodeSession')
+    expect(JSON.stringify(json)).toContain('providers')
+    expect(JSON.stringify(json)).toContain('models')
+  })
+
+  it('calls llm/stream next and injects the matching session id lazily', async () => {
+    settingsStub.source = enabled
+    const harness = createHostHarness()
+    let nextCalls = 0
+    await drain(harness.stream({ provider: 'opencode-go', model: 'deepseek-v4-flash', sessionId: 'session-a' }, () => {
+      nextCalls += 1
+      return {
+        async *[Symbol.asyncIterator](): AsyncIterableIterator<unknown> {
+          await fetch('https://provider.test/chat/completions')
+          yield 'done'
+        },
+      }
+    }))
+
+    expect(nextCalls).toBe(1)
+    expect(harness.fetchCalls).toHaveLength(1)
+    const headers = new Headers(harness.fetchCalls[0]?.init?.headers)
+    expect(headers.get(OPENCODE_SESSION_HEADER)).toBe('session-a')
+    harness.dispose()
+  })
+
+  it('isolates concurrent session ids and preserves explicit headers', async () => {
+    settingsStub.source = enabled
+    const harness = createHostHarness()
+    const barrier: Array<() => void> = []
+    const waitForBarrier = (): Promise<void> => new Promise((resolve) => barrier.push(resolve))
+    const makeStream = (sessionId: string, explicit?: string): AsyncIterable<unknown> => harness.stream(
+      { provider: 'opencode-go', model: 'deepseek-v4-flash', sessionId },
+      () => ({
+        async *[Symbol.asyncIterator](): AsyncIterableIterator<unknown> {
+          await waitForBarrier()
+          if (explicit === undefined) await fetch('https://provider.test/chat/completions')
+          else await fetch('https://provider.test/chat/completions', { headers: { 'X-OPENCODE-SESSION': explicit } })
+          yield 'done'
+        },
+      }),
+    )
+
+    const first = drain(makeStream('session-a'))
+    const second = drain(makeStream('session-b', 'caller-value'))
+    await Promise.resolve()
+    expect(harness.fetchCalls).toHaveLength(0)
+    for (const resolve of barrier.splice(0)) resolve()
+    await Promise.all([first, second])
+
+    expect(harness.fetchCalls).toHaveLength(2)
+    const received = harness.fetchCalls.map((call) => new Headers(call.init?.headers).get(OPENCODE_SESSION_HEADER))
+    expect(received).toContain('session-a')
+    expect(received).toContain('caller-value')
+    harness.dispose()
+  })
+
+  it('does not inject disabled models or requests without a session id', async () => {
+    settingsStub.source = enabled
+    const harness = createHostHarness()
+    const requests = [
+      { provider: 'opencode-go', model: 'other-model' },
+      { provider: 'opencode', model: 'deepseek-v4-flash', sessionId: 'session-b' },
+      { provider: 'opencode-go', model: 'deepseek-v4-flash' },
+    ]
+    for (const options of requests) {
+      await drain(harness.stream(options, async function* () {
+        await fetch('https://provider.test/chat/completions')
+        yield 'done'
+      }))
+    }
+    expect(harness.fetchCalls).toHaveLength(3)
+    expect(harness.fetchCalls.every((call) => !new Headers(call.init?.headers).has(OPENCODE_SESSION_HEADER))).toBe(true)
+    harness.dispose()
+  })
+
+  it('restores only its own fetch patch and stops injecting after disposal', async () => {
+    settingsStub.source = enabled
+    const harness = createHostHarness()
+    const patched = globalThis.fetch
+    const laterPatch = (async () => new Response('later')) as typeof fetch
+    globalThis.fetch = laterPatch
+    harness.dispose()
+    expect(globalThis.fetch).toBe(laterPatch)
+    globalThis.fetch = patched
+    harness.dispose()
+    expect(globalThis.fetch).not.toBe(patched)
   })
 })
