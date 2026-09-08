@@ -131,6 +131,22 @@ function removeDirtyFields<T extends object>(dirty: Record<string, T>, key: stri
   return next
 }
 
+function clearOpenCodeSessionState(current: EditorState, key: string): EditorState {
+  const openCodeSessionDrafts = { ...current.openCodeSessionDrafts }; delete openCodeSessionDrafts[key]
+  const openCodeSessionDirty = { ...current.openCodeSessionDirty }; delete openCodeSessionDirty[key]
+  return { ...current, openCodeSessionDrafts, openCodeSessionDirty }
+}
+
+function clearModelEditorState(current: EditorState, key: string): EditorState {
+  const next = clearOpenCodeSessionState(current, key)
+  const expanded = { ...next.expanded }; delete expanded[key]
+  const drafts = { ...next.drafts }; delete drafts[key]
+  const contextDrafts = { ...next.contextDrafts }; delete contextDrafts[key]
+  const inputDrafts = { ...next.inputDrafts }; delete inputDrafts[key]
+  const dirty = { ...next.dirty }; delete dirty[key]
+  return { ...next, expanded, drafts, contextDrafts, inputDrafts, dirty }
+}
+
 function subagentView(namespace: SettingsNamespace | null): { subagent: SubagentState | null; draft: string; custom: string; revision: number } {
   if (!namespace) return { subagent: null, draft: 'default', custom: '', revision: 0 }
   const revision = revisionOf(namespace)
@@ -406,16 +422,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
 
   const closeModelEditor = (item: InventoryItem): void => {
     const key = keyOf(item)
-    setState((current) => {
-      const expanded = { ...current.expanded }; delete expanded[key]
-      const drafts = { ...current.drafts }; delete drafts[key]
-      const contextDrafts = { ...current.contextDrafts }; delete contextDrafts[key]
-      const inputDrafts = { ...current.inputDrafts }; delete inputDrafts[key]
-      const dirty = { ...current.dirty }; delete dirty[key]
-      const openCodeSessionDrafts = { ...current.openCodeSessionDrafts }; delete openCodeSessionDrafts[key]
-      const openCodeSessionDirty = { ...current.openCodeSessionDirty }; delete openCodeSessionDirty[key]
-      return { ...current, expanded, drafts, contextDrafts, inputDrafts, dirty, openCodeSessionDrafts, openCodeSessionDirty }
-    })
+    setState((current) => clearModelEditorState(current, key))
   }
 
   const restoreReasoningDefaults = (item: InventoryItem): void => {
@@ -525,7 +532,10 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   const toggleExpand = (item: InventoryItem): void => {
     const key = keyOf(item)
     setState((current) => {
-      if (current.expanded[key]) { const expanded = { ...current.expanded }; delete expanded[key]; return { ...current, expanded } }
+      if (current.expanded[key]) {
+        const expanded = { ...current.expanded }; delete expanded[key]
+        return { ...clearOpenCodeSessionState(current, key), expanded }
+      }
       return { ...current, expanded: { ...current.expanded, [key]: true }, drafts: current.drafts[key] ? current.drafts : { ...current.drafts, [key]: draftFrom(item.levels) }, contextDrafts: current.contextDrafts[key] ? current.contextDrafts : { ...current.contextDrafts, [key]: contextDraftFrom(item) }, inputDrafts: current.inputDrafts[key] ? current.inputDrafts : { ...current.inputDrafts, [key]: inputDraftFrom(item) } }
     })
   }

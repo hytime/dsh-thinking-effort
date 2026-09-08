@@ -504,6 +504,21 @@ describe('OpenCode session Client namespace state', () => {
     nonEditable.container.remove()
   })
 
+  it('hides the transport setting for conflicting model sources', () => {
+    const item = { ...modelItem(), modelSourceConflict: true }
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    act(() => {
+      root.render(<ModelEditor item={item} draft={{ off: { on: true, wire: '' } }} contextDraft={{ value: '', oneMillion: false, previousValue: '', touched: false }} inputDraft={{ text: true, image: false, touched: false }} dirty={false} busy={false} palette={iosPalette()} t={text as Translation} onLevelChange={vi.fn()} onContextChange={vi.fn()} onOneMillionChange={vi.fn()} onInputChange={vi.fn()} onSave={vi.fn()} onRestoreReasoning={vi.fn()} onRestoreCapability={vi.fn()} openCodeSession={false} openCodeSessionAvailable onOpenCodeSessionChange={vi.fn()} onSaveOpenCodeSession={vi.fn()} />)
+    })
+
+    expect(container.querySelector('[data-scope="opencode-session"]')).toBeNull()
+    expect(container.textContent).toContain(text('reasoningLevels'))
+    act(() => root.unmount())
+    container.remove()
+  })
+
   it('isolates Header drafts by exact provider and model in the rendered editor', async () => {
     const plugin = openCodeNamespace({
       value: { opencodeSession: { providers: { provider: { models: { 'model-a': true, 'model-b': false } } } } },
@@ -525,6 +540,35 @@ describe('OpenCode session Client namespace state', () => {
     const modelControls = [...view.container.querySelectorAll('[data-scope="opencode-session"]')]
     expect(modelControls).toHaveLength(2)
     expect((modelControls[1]!.querySelector('button[role="switch"]') as HTMLButtonElement).getAttribute('aria-checked')).toBe('false')
+    view.unmount()
+  })
+
+  it('clears a dirty Header draft when collapsing the model editor', async () => {
+    const plugin = openCodeNamespace({
+      value: { opencodeSession: { providers: { provider: { models: { 'model-a': false } } } } },
+    })
+    const view = renderEditor({
+      baseNamespace: openCodeLlmNamespace(),
+      namespaces: [plugin],
+    })
+    await settle()
+    openFirstModel(view.container)
+
+    const transport = view.container.querySelector('[data-scope="opencode-session"]') as HTMLElement
+    const headerSwitch = transport.querySelector('button[role="switch"]') as HTMLButtonElement
+    act(() => headerSwitch.click())
+    expect(headerSwitch.getAttribute('aria-checked')).toBe('true')
+    expect(view.container.textContent).toContain(text('unsaved'))
+
+    act(() => button(view.container, text('closeModelSettings')).click())
+    expect(view.container.querySelector('[data-scope="opencode-session"]')).toBeNull()
+    expect(view.container.textContent).not.toContain(text('unsaved'))
+
+    act(() => modelSettingsButton(view.container).click())
+    const reopenedTransport = view.container.querySelector('[data-scope="opencode-session"]') as HTMLElement
+    const reopenedSwitch = reopenedTransport.querySelector('button[role="switch"]') as HTMLButtonElement
+    expect(reopenedSwitch.getAttribute('aria-checked')).toBe('false')
+    expect(button(reopenedTransport, text('saveOpenCodeSession')).disabled).toBe(true)
     view.unmount()
   })
 
