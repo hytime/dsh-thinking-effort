@@ -80,6 +80,15 @@ export interface SettingsNamespace {
   readonly user?: Record<string, unknown>
 }
 
+export interface OpenCodeSessionState {
+  readonly namespace: SettingsNamespace | null
+  readonly views: Record<string, boolean>
+  readonly drafts: Record<string, boolean>
+  readonly dirty: Record<string, boolean>
+  readonly found: boolean
+  readonly available: boolean
+}
+
 export interface SettingsDescribeValue {
   readonly namespaces: readonly SettingsNamespace[]
 }

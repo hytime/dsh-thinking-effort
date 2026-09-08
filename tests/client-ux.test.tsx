@@ -11,6 +11,8 @@ import { GatewayCompatControls, renderGatewayCompatControls } from '../src/clien
 import { ModelEditor } from '../src/client/components/ModelEditor.js'
 import { inventoryFrom, modelGatewayCompatViewFrom, providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
 import { en, ja, ko, zh } from '../src/client/locales.js'
+import { isOpenCodeSessionNamespace, openCodeSessionKey, openCodeSessionView } from '../src/client/model-header-ops.js'
+import { applyOpenCodeSessionMutation, createOpenCodeSessionState, saveOpenCodeSession, type OpenCodeSessionState } from '../src/client/SectionEditor.js'
 import { modelView, providerView } from './gateway-compat-test-helpers.js'
 import { iosPalette } from '../src/client/theme.js'
 import type {
@@ -94,6 +96,25 @@ const namespace = (overrides: Partial<SettingsNamespace> = {}): SettingsNamespac
   user: { subagentEffort: 'high' },
   ...overrides,
 })
+
+const openCodeNamespace = (overrides: Partial<SettingsNamespace> = {}): SettingsNamespace => ({
+  ns: 'dsh-thinking-effort',
+  revision: 17,
+  value: {
+    opencodeSession: {
+      providers: {
+        provider: { models: { 'model-a': true } },
+      },
+    },
+  },
+  ...overrides,
+})
+
+const modelItem = (source: SettingsNamespace = namespace()): InventoryItem => {
+  const item = inventoryFrom(source).find((candidate) => candidate.route === 'provider' && candidate.model === 'model-a')
+  if (item === undefined) throw new Error('missing provider/model-a fixture')
+  return item
+}
 
 function localeSnapshot(locales: readonly string[] = ['zh', 'en', 'ja']): ClientLocale {
   return {
@@ -184,6 +205,110 @@ function openFirstModel(container: HTMLElement): void {
 
 afterEach(() => {
   document.body.replaceChildren()
+})
+
+describe('OpenCode session Client namespace state', () => {
+  it('reads an exact provider/model view without inheriting sibling settings', () => {
+    const item = modelItem()
+    const plugin = openCodeNamespace()
+
+    expect(isOpenCodeSessionNamespace(plugin)).toBe(true)
+    expect(openCodeSessionKey(item)).toBe(JSON.stringify(['provider', 'model-a']))
+    expect(openCodeSessionView(plugin, item)).toBe(true)
+    expect(openCodeSessionView(plugin, { ...item, model: 'model-b' })).toBe(false)
+    expect(openCodeSessionView(plugin, { ...item, route: 'other-provider' })).toBe(false)
+  })
+
+  it('marks missing or malformed plugin namespaces unavailable without changing the model UI source', async () => {
+    const item = modelItem()
+    const missing = createOpenCodeSessionState(undefined, [item])
+    const malformed = createOpenCodeSessionState({
+      ...openCodeNamespace(),
+      revision: undefined as never,
+      value: [] as never,
+    }, [item])
+
+    expect(missing).toMatchObject({ found: false, available: false, namespace: null, views: {}, drafts: {}, dirty: {} })
+    expect(malformed).toMatchObject({ found: true, available: false, namespace: null, views: {}, drafts: {}, dirty: {} })
+
+    const view = renderEditor()
+    await settle()
+    expect(view.container.textContent).toContain(text('pageTitle'))
+    openFirstModel(view.container)
+    expect(view.container.textContent).toContain(text('reasoningLevels'))
+    view.unmount()
+  })
+
+  it('keeps the plugin revision independent and retains a dirty draft after a failed save', () => {
+    const item = modelItem()
+    const key = openCodeSessionKey(item)
+    const initial = createOpenCodeSessionState(openCodeNamespace(), [item])
+    const dirty: OpenCodeSessionState = {
+      ...initial,
+      drafts: { [key]: false },
+      dirty: { [key]: true },
+    }
+    const failed = applyOpenCodeSessionMutation(dirty, {
+      ok: false,
+      error: { message: 'stale revision' },
+    }, [item], key)
+
+    expect(failed).toBe(dirty)
+    expect(failed.namespace?.revision).toBe(17)
+    expect(failed.drafts[key]).toBe(false)
+    expect(failed.dirty[key]).toBe(true)
+  })
+
+  it('uses the plugin namespace revision and preserves a failed mutate result', async () => {
+    const item = modelItem()
+    const mutate = vi.fn<SettingsApi['mutate']>(async (ns, ops, revision) => {
+      expect(ns).toBe('dsh-thinking-effort')
+      expect(ops).toEqual([{
+        op: 'set',
+        path: ['opencodeSession', 'providers', 'provider', 'models', 'model-a'],
+        value: true,
+      }])
+      expect(revision).toBe(17)
+      return { ok: false as const, error: { message: 'stale revision' } }
+    })
+
+    await expect(saveOpenCodeSession({ mutate }, openCodeNamespace(), item, true)).resolves.toEqual({
+      ok: false,
+      error: { message: 'stale revision' },
+    })
+    expect(mutate).toHaveBeenCalledTimes(1)
+  })
+
+  it('refreshes a clean draft and only the saved key after a successful plugin mutation', () => {
+    const item = modelItem()
+    const other = { ...item, model: 'model-b' }
+    const key = openCodeSessionKey(item)
+    const otherKey = openCodeSessionKey(other)
+    const initial = createOpenCodeSessionState(openCodeNamespace(), [item, other])
+    const dirty: OpenCodeSessionState = {
+      ...initial,
+      drafts: { [key]: false, [otherKey]: true },
+      dirty: { [key]: true, [otherKey]: true },
+    }
+    const saved = openCodeNamespace({
+      revision: 18,
+      value: {
+        opencodeSession: {
+          providers: {
+            provider: { models: { 'model-a': false, 'model-b': true } },
+          },
+        },
+      },
+    })
+    const refreshed = applyOpenCodeSessionMutation(dirty, { ok: true, value: saved }, [item, other], key)
+
+    expect(refreshed.namespace?.revision).toBe(18)
+    expect(refreshed.views[key]).toBe(false)
+    expect(refreshed.drafts[key]).toBe(false)
+    expect(refreshed.dirty[key]).toBeUndefined()
+    expect(refreshed.drafts[otherKey]).toBe(true)
+    expect(refreshed.dirty[otherKey]).toBe(true)
+  })
 })
 
 describe('SectionEditor user behavior', () => {

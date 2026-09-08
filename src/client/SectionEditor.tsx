@@ -2,12 +2,13 @@ import React from 'react'
 import { GATEWAY_COMPAT_FIELD_KEYS, type GatewayCompatFieldKey } from '../compat/gateway/fields.js'
 import { editableProviderCompatFields } from '../compat/gateway/validation.js'
 import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
-import { DEFAULT_LEVELS, INPUT_MODALITIES, LEVEL_LABEL_KEYS, NS, PRESETS, ALL_LEVELS, CONTEXT_1M } from './constants.js'
+import { DEFAULT_LEVELS, INPUT_MODALITIES, LEVEL_LABEL_KEYS, NS, OPENCODE_SESSION_NS, PRESETS, ALL_LEVELS, CONTEXT_1M } from './constants.js'
 import { inventoryFrom, modelCompatKey, modelGatewayCompatViewsFrom, providerGatewayCompatViewsFrom } from './model-inventory.js'
 import { emptyTakeoverRuntimeResolution } from './takeover-runtime.js'
+import { openCodeSessionOp, openCodeSessionStateFor } from './model-header-ops.js'
 import { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from './model-ops.js'
 import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, validateContextWindow, validateLevels } from './validation.js'
-import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
+import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, OpenCodeSessionState, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
 import type { Palette } from './theme.js'
 import type { TakeoverRuntimeStore } from './takeover-runtime.js'
 import { iosPalette } from './theme.js'
@@ -19,10 +20,23 @@ import { renderGatewayCompatControls } from './components/GatewayCompatControls.
 const PLUGIN_VERSION = packageJson.version
 
 type DirtyFields = { levels?: boolean; context?: boolean; input?: boolean }
+interface RunOpsRequest {
+  readonly ns: string
+  readonly revision: number
+  readonly ops: readonly SettingsOp[]
+  readonly successMessage: string
+  readonly onSuccess?: () => void
+}
 interface SubagentState { effort: string | null; revision: number }
 interface EditorState {
   loading: boolean
   namespace: SettingsNamespace | null
+  openCodeSessionNamespace: SettingsNamespace | null
+  openCodeSessionViews: Record<string, boolean>
+  openCodeSessionDrafts: Record<string, boolean>
+  openCodeSessionDirty: Record<string, boolean>
+  openCodeSessionFound: boolean
+  openCodeSessionAvailable: boolean
   inventory: InventoryItem[]
   providerViews: Record<string, ProviderGatewayCompatView>
   providerDrafts: Record<string, ProviderGatewayCompatView>
@@ -60,7 +74,45 @@ export interface SectionEditorProps {
 }
 
 const initialState: EditorState = {
-  loading: true, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
+  loading: true, namespace: null, openCodeSessionNamespace: null, openCodeSessionViews: {}, openCodeSessionDrafts: {}, openCodeSessionDirty: {}, openCodeSessionFound: false, openCodeSessionAvailable: false, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
+}
+
+export type { OpenCodeSessionState } from './types.js'
+
+export function createOpenCodeSessionState(
+  namespace: SettingsNamespace | undefined,
+  inventory: readonly InventoryItem[],
+  previous?: OpenCodeSessionState,
+): OpenCodeSessionState {
+  return openCodeSessionStateFor(namespace, inventory, previous)
+}
+
+export function applyOpenCodeSessionMutation(
+  state: OpenCodeSessionState,
+  response: ClientResult<SettingsNamespace>,
+  inventory: readonly InventoryItem[],
+  savedKey: string,
+): OpenCodeSessionState {
+  if (!response.ok) return state
+  const previous: OpenCodeSessionState = {
+    ...state,
+    dirty: { ...state.dirty },
+  }
+  delete previous.dirty[savedKey]
+  return openCodeSessionStateFor(response.value, inventory, previous)
+}
+
+export async function saveOpenCodeSession(
+  settings: Pick<SettingsApi, 'mutate'>,
+  namespace: SettingsNamespace,
+  item: InventoryItem,
+  enabled: boolean,
+): Promise<ClientResult<SettingsNamespace>> {
+  const operation = openCodeSessionOp(item.route, item.model, enabled)
+  if (operation === undefined) {
+    return { ok: false, error: { message: 'OpenCode session settings require a provider and model' } }
+  }
+  return settings.mutate(OPENCODE_SESSION_NS, [operation], namespace.revision)
 }
 
 function keyOf(item: InventoryItem): string { return modelCompatKey(item.route, item.model) }
@@ -126,6 +178,27 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     return { ...current, loading: false, namespace: nextNamespace, busy: false, nsFound: true, inventory: nextInventory, providerViews, providerDrafts, modelCompatViews, modelCompatDrafts, revision: revisionOf(nextNamespace), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom, notice }
   }
 
+  const applyOpenCodeSessionNamespace = (current: EditorState, nextNamespace: SettingsNamespace | undefined): EditorState => {
+    const previous: OpenCodeSessionState = {
+      namespace: current.openCodeSessionNamespace,
+      views: current.openCodeSessionViews,
+      drafts: current.openCodeSessionDrafts,
+      dirty: current.openCodeSessionDirty,
+      found: current.openCodeSessionFound,
+      available: current.openCodeSessionAvailable,
+    }
+    const next = createOpenCodeSessionState(nextNamespace, current.inventory, previous)
+    return {
+      ...current,
+      openCodeSessionNamespace: next.namespace,
+      openCodeSessionViews: next.views,
+      openCodeSessionDrafts: next.drafts,
+      openCodeSessionDirty: next.dirty,
+      openCodeSessionFound: next.found,
+      openCodeSessionAvailable: next.available,
+    }
+  }
+
   const load = (): void => {
     setState((current) => ({ ...current, loading: true, error: null }))
     settings.describe().then((response) => {
@@ -134,11 +207,15 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
         return
       }
       const found = response.value.namespaces.find((entry) => entry.ns === NS)
+      const openCodeFound = response.value.namespaces.find((entry) => entry.ns === OPENCODE_SESSION_NS)
       if (!found) {
-        setState((current) => ({ ...current, loading: false, busy: false, nsFound: false, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, subagent: null }))
+        setState((current) => {
+          const next = { ...current, loading: false, busy: false, nsFound: false, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, subagent: null }
+          return applyOpenCodeSessionNamespace(next, openCodeFound)
+        })
         return
       }
-      setState((current) => applyNamespaceView(current, found, null))
+      setState((current) => applyOpenCodeSessionNamespace(applyNamespaceView(current, found, null), openCodeFound))
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       setState((current) => ({ ...current, loading: false, busy: false, error: t('readSettingsFailed', { message }) }))
@@ -176,9 +253,9 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     })
   }, [takeoverResolution])
 
-  const runOps = (ops: readonly SettingsOp[], successMessage: string, onSuccess?: () => void): void => {
+  const runOps = ({ ns, revision, ops, successMessage, onSuccess }: RunOpsRequest): void => {
     setState((current) => ({ ...current, busy: true, error: null, notice: null }))
-    settings.mutate(NS, ops, state.revision).then((response) => {
+    settings.mutate(ns, ops, revision).then((response) => {
       if (!response.ok) {
         setState((current) => ({ ...current, busy: false, error: t('writeError', { message: response.error.message }) }))
         return
@@ -188,7 +265,10 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
         return
       }
       onSuccess?.()
-      setState((current) => applyNamespaceView(current, response.value, successMessage))
+      setState((current) => ns === NS
+        ? applyNamespaceView(current, response.value, successMessage)
+        : { ...applyOpenCodeSessionNamespace(current, response.value), notice: successMessage, busy: false }
+      )
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       setState((current) => ({ ...current, busy: false, error: message.length > 0 ? t('writeError', { message }) : t('writeFailed') }))
@@ -207,8 +287,14 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     const input = inputDraft.touched ? buildInput(inputDraft, t) : { value: undefined }
     if (input.error) { const error = input.error; setState((current) => ({ ...current, error })); return }
     const update: ModelUpdate = { item, levels, contextWindow: context.value, contextWindowTouched: contextDraft.touched, input: input.value, inputTouched: inputDraft.touched }
-    runOps(setOps(state.inventory, [update]), t('modelSettingsSaved'), () => {
-      setState((current) => ({ ...current, dirty: removeDirtyFields(current.dirty, key, ['levels', 'context', 'input']) }))
+    runOps({
+      ns: NS,
+      revision: state.revision,
+      ops: setOps(state.inventory, [update]),
+      successMessage: t('modelSettingsSaved'),
+      onSuccess: () => {
+        setState((current) => ({ ...current, dirty: removeDirtyFields(current.dirty, key, ['levels', 'context', 'input']) }))
+      },
     })
   }
 
@@ -230,8 +316,14 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       setState((currentState) => ({ ...currentState, modelCompatDirty: removeDirtyFields(currentState.modelCompatDirty, key, GATEWAY_COMPAT_FIELD_KEYS) }))
       return
     }
-    runOps(ops, t('modelGatewayCompatSaved'), () => {
-      setState((currentState) => ({ ...currentState, modelCompatDirty: removeDirtyFields(currentState.modelCompatDirty, key, GATEWAY_COMPAT_FIELD_KEYS) }))
+    runOps({
+      ns: NS,
+      revision: state.revision,
+      ops,
+      successMessage: t('modelGatewayCompatSaved'),
+      onSuccess: () => {
+        setState((currentState) => ({ ...currentState, modelCompatDirty: removeDirtyFields(currentState.modelCompatDirty, key, GATEWAY_COMPAT_FIELD_KEYS) }))
+      },
     })
   }
 
@@ -264,23 +356,41 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
 
   const restoreReasoningDefaults = (item: InventoryItem): void => {
     const key = keyOf(item)
-    runOps(setOps(state.inventory, [{ item, levels: DEFAULT_LEVELS }]), t('restoreReasoning'), () => {
-      setState((current) => ({ ...current, drafts: current.drafts[key] ? { ...current.drafts, [key]: draftFrom(DEFAULT_LEVELS) } : current.drafts, dirty: removeDirtyFields(current.dirty, key, ['levels']) }))
+    runOps({
+      ns: NS,
+      revision: state.revision,
+      ops: setOps(state.inventory, [{ item, levels: DEFAULT_LEVELS }]),
+      successMessage: t('restoreReasoning'),
+      onSuccess: () => {
+        setState((current) => ({ ...current, drafts: current.drafts[key] ? { ...current.drafts, [key]: draftFrom(DEFAULT_LEVELS) } : current.drafts, dirty: removeDirtyFields(current.dirty, key, ['levels']) }))
+      },
     })
   }
 
   const restoreProviderDefaults = (item: InventoryItem): void => {
-    runOps(setOps(state.inventory, [{ item, contextWindow: undefined, contextWindowTouched: true, input: undefined, inputTouched: true }]), t('restoreCapability'), () => closeModelEditor(item))
+    runOps({
+      ns: NS,
+      revision: state.revision,
+      ops: setOps(state.inventory, [{ item, contextWindow: undefined, contextWindowTouched: true, input: undefined, inputTouched: true }]),
+      successMessage: t('restoreCapability'),
+      onSuccess: () => closeModelEditor(item),
+    })
   }
 
   const applyPreset = (levels: typeof PRESETS[number]['levels']): void => {
-    runOps(setOps(state.inventory, state.inventory.map((item): ModelUpdate => ({ item, levels }))), t('settingsUpdated'), () => {
-      setState((current) => {
-        let dirty = current.dirty
-        const drafts = { ...current.drafts }
-        current.inventory.forEach((item) => { const key = keyOf(item); if (drafts[key]) drafts[key] = draftFrom(levels); dirty = removeDirtyFields(dirty, key, ['levels']) })
-        return { ...current, drafts, dirty }
-      })
+    runOps({
+      ns: NS,
+      revision: state.revision,
+      ops: setOps(state.inventory, state.inventory.map((item): ModelUpdate => ({ item, levels }))),
+      successMessage: t('settingsUpdated'),
+      onSuccess: () => {
+        setState((current) => {
+          let dirty = current.dirty
+          const drafts = { ...current.drafts }
+          current.inventory.forEach((item) => { const key = keyOf(item); if (drafts[key]) drafts[key] = draftFrom(levels); dirty = removeDirtyFields(dirty, key, ['levels']) })
+          return { ...current, drafts, dirty }
+        })
+      },
     })
   }
 
@@ -288,7 +398,12 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     const value = state.subagentDraft === 'default' ? undefined : state.subagentDraft === 'custom' ? state.subagentCustom.trim() : state.subagentDraft
     if (state.subagentDraft !== 'default' && !value) { setState((current) => ({ ...current, notice: null, error: t('customEffortRequired') })); return }
     const ops: SettingsOp[] = state.subagentDraft === 'default' ? [{ op: 'unset', path: ['subagentEffort'] }] : [{ op: 'set', path: ['subagentEffort'], value }]
-    runOps(ops, t('subagentSaved'))
+    runOps({
+      ns: NS,
+      revision: state.revision,
+      ops,
+      successMessage: t('subagentSaved'),
+    })
   }
 
   const applyProviderCompat = (route: string): void => {
@@ -312,8 +427,14 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       setState((currentState) => clearProviderDirty(currentState))
       return
     }
-    runOps(ops, t('gatewayCompatSaved'), () => {
-      setState((currentState) => clearProviderDirty(currentState))
+    runOps({
+      ns: NS,
+      revision: state.revision,
+      ops,
+      successMessage: t('gatewayCompatSaved'),
+      onSuccess: () => {
+        setState((currentState) => clearProviderDirty(currentState))
+      },
     })
   }
 
