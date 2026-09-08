@@ -527,7 +527,7 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
     'DSH_CLI_ROOTS="$RC7_ROOT,$RC2_ROOT,$ALPHA_ROOT"',
     'npm install --global pnpm@11.7.0',
     'pnpm --version',
-    'pnpm install --frozen-lockfile --ignore-scripts',
+    'pnpm install --frozen-lockfile',
     'pnpm rebuild --pending fs-ext',
     'pnpm run build',
     'CHROME_PATH',
