@@ -259,22 +259,44 @@ type ProbeRequestFacts = {
   readonly sessionId: unknown
   readonly reasoningEffort: unknown
   readonly messages: unknown
+  readonly system: unknown
+  readonly tools: unknown
+  readonly temperature: unknown
+  readonly maxTokens: unknown
+  readonly stop: unknown
+  readonly purpose: unknown
+  readonly hasSignal: boolean
   readonly body: string
 }
 
-async function probeOfficialAgentRuntime(
+type ProbeRequestRecord = {
+  readonly key: string
+  readonly options: ProbeRequestFacts
+  readonly wire: ProbeWireRequest
+}
+
+type ProbeAgentRun = {
+  readonly requestKey: string
+  readonly requestCount: number
+  readonly reasoningEffort: unknown
+  readonly origin: unknown
+  readonly turnEnd: string | undefined
+  readonly requests: readonly ProbeRequestRecord[]
+}
+
+async function probePackagedArtifactHandMountedRuntime(
   cliRoot: string,
   hostEntry: string,
 ): Promise<{
   settingsHome: string
   settingsPath: string
-  markerPath: string
-  marker: { event?: string; name?: string; at?: string; pid?: number }
-  withoutProduct: { requestCount: number; reasoningEffort: unknown; origin: unknown; turnEnd: string | undefined }
-  withProduct: { requestCount: number; reasoningEffort: unknown; origin: unknown; turnEnd: string | undefined }
+  handMountedMarkerPath: string
+  handMountedMarker: { event?: string; name?: string; at?: string; pid?: number }
+  withoutProduct: ProbeAgentRun
+  withProduct: ProbeAgentRun
   outbound: {
-    readonly baseline: { readonly wire: readonly ProbeWireRequest[]; readonly options: readonly ProbeRequestFacts[] }
-    readonly product: { readonly wire: readonly ProbeWireRequest[]; readonly options: readonly ProbeRequestFacts[] }
+    readonly baseline: readonly ProbeRequestRecord[]
+    readonly product: readonly ProbeRequestRecord[]
   }
 }> {
   const importOfficial = (relativePath: string): Promise<Record<string, unknown>> => import(
@@ -313,15 +335,20 @@ async function probeOfficialAgentRuntime(
   process.env.DSH_HOME = agentHome
   const markerPath = join(agentHome, 'thinking-effort-loaded.json')
   const originalFetch = globalThis.fetch
-  const wireRequests: ProbeWireRequest[] = []
-  const requestFacts: ProbeRequestFacts[] = []
+  const wireRequestsByKey = new Map<string, ProbeWireRequest[]>()
+  const requestRecordsByKey = new Map<string, ProbeRequestRecord[]>()
   globalThis.fetch = (async (input, init) => {
     const headers = new Headers(init?.headers)
-    wireRequests.push({
+    const key = headers.get('x-probe-request-key')
+    if (key === null) throw new Error('probe request did not carry its request key')
+    const wire: ProbeWireRequest = {
       url: String(input),
       headers: Object.fromEntries(headers.entries()),
       body: typeof init?.body === 'string' ? init.body : '',
-    })
+    }
+    const queued = wireRequestsByKey.get(key) ?? []
+    queued.push(wire)
+    wireRequestsByKey.set(key, queued)
     return new Response('ok')
   }) as typeof fetch
   try {
@@ -356,7 +383,15 @@ async function probeOfficialAgentRuntime(
       stream(options: Record<string, unknown>): AsyncIterable<Record<string, unknown>>
     }
     const ReasoningEffortId = llm.ReasoningEffortId as (value: string) => unknown
-    const requests: Record<string, unknown>[] = []
+    const requestKeyOf = (sessionId: string, provider: string, model: string): string => (
+      JSON.stringify([sessionId, provider, model])
+    )
+    const requestKeyFromOptions = (options: Record<string, unknown>): string => {
+      if (typeof options.sessionId !== 'string' || typeof options.provider !== 'string' || typeof options.model !== 'string') {
+        throw new Error('probe GenerateOptions lacks sessionId/provider/model')
+      }
+      return requestKeyOf(options.sessionId, options.provider, options.model)
+    }
     class ProbeAdapter extends LlmAdapter {
       override resolveModel(provider: string, model: string): Promise<Record<string, unknown>> {
         const lowEffort = ReasoningEffortId('low')
@@ -370,7 +405,7 @@ async function probeOfficialAgentRuntime(
       }
 
       override async * stream(options: Record<string, unknown>): AsyncIterable<Record<string, unknown>> {
-        requests.push(options)
+        const requestKey = requestKeyFromOptions(options)
         const body = JSON.stringify({
            api: 'openai-completions',
            provider: options.provider,
@@ -379,17 +414,34 @@ async function probeOfficialAgentRuntime(
          })
          await fetch('http://gateway.test/v1/chat/completions', {
            method: 'POST',
-           headers: { 'content-type': 'application/json' },
+           headers: { 'content-type': 'application/json', 'x-probe-request-key': requestKey },
            body,
          })
-         requestFacts.push({
+         const wire = wireRequestsByKey.get(requestKey)?.shift()
+          if (wire === undefined) throw new Error(`missing wire record for ${requestKey}`)
+          const record: ProbeRequestRecord = {
+            key: requestKey,
+            wire,
+            options: {
+
            provider: options.provider,
            model: options.model,
            sessionId: options.sessionId,
            reasoningEffort: options.reasoningEffort,
            messages: options.messages,
+           system: options.system,
+           tools: options.tools,
+           temperature: options.temperature,
+           maxTokens: options.maxTokens,
+           stop: options.stop,
+           purpose: options.purpose,
+           hasSignal: options.signal instanceof AbortSignal,
            body,
-         })
+         },
+         }
+         const records = requestRecordsByKey.get(requestKey) ?? []
+         records.push(record)
+         requestRecordsByKey.set(requestKey, records)
         const text = 'real agent runtime probe'
         yield { type: 'block-start', index: 0, blockType: 'text' }
         yield { type: 'text-delta', index: 0, text }
@@ -406,8 +458,8 @@ async function probeOfficialAgentRuntime(
     await ctx.plugin(agentLoop.default, { agents: [] }).await()
     ctx.llm.registerAdapter(['probe', 'other'], new ProbeAdapter())
 
-    const runAgent = async (sessionId: string, provider = 'probe', model = 'probe-model'): Promise<{ requestCount: number; reasoningEffort: unknown; origin: unknown; turnEnd: string | undefined }> => {
-       const requestsBefore = requests.length
+    const runAgent = async (sessionId: string, provider = 'probe', model = 'probe-model'): Promise<ProbeAgentRun> => {
+       const requestKey = requestKeyOf(sessionId, provider, model)
       const handle = await ctx.agents.create({
         sessionId,
         meta: { origin: 'subagent' },
@@ -429,11 +481,14 @@ async function probeOfficialAgentRuntime(
           ? session.snapshotEvents()
           : session.events ?? []
         const turnEnd = [...events].reverse().find((event) => event.type === 'turn/end')
+        const requests = [...(requestRecordsByKey.get(requestKey) ?? [])]
         return {
-          requestCount: requests.length - requestsBefore,
-          reasoningEffort: requests.at(-1)?.reasoningEffort,
+          requestKey,
+          requestCount: requests.length,
+          reasoningEffort: requests.at(-1)?.options.reasoningEffort,
           origin: session.header.origin,
           turnEnd: turnEnd?.type,
+          requests,
         }
       } finally {
         await handle.dispose()
@@ -441,11 +496,11 @@ async function probeOfficialAgentRuntime(
     }
 
     const withoutProduct = await runAgent(`agent-probe-baseline-${Date.now()}`, 'probe', 'model-a')
-    const baselineWire = wireRequests.splice(0)
-    const baselineOptions = requestFacts.splice(0)
 
     const host = await import(pathToFileURL(hostEntry).href) as { apply: (context: unknown) => void }
     host.apply(ctx)
+    const productionFetch = globalThis.fetch
+    expect(productionFetch).not.toBe(originalFetch)
 
 
     const sessionNamespace = settings.describe().find(entry => entry.ns === 'dsh-thinking-effort')
@@ -460,8 +515,6 @@ async function probeOfficialAgentRuntime(
        runAgent(`agent-probe-product-sibling-${Date.now()}`, 'probe', 'model-b'),
        runAgent(`agent-probe-product-provider-${Date.now()}`, 'other', 'model-a'),
      ])
-    const productWire = wireRequests.splice(0)
-    const productOptions = requestFacts.splice(0)
     const withProduct = productRuns[0]!
 
 
@@ -477,18 +530,22 @@ async function probeOfficialAgentRuntime(
     return {
        settingsHome: agentHome,
        settingsPath,
-       markerPath,
-       marker,
+       handMountedMarkerPath: markerPath,
+       handMountedMarker: marker,
        withoutProduct,
        withProduct,
        outbound: {
-         baseline: { wire: baselineWire, options: baselineOptions },
-         product: { wire: productWire, options: productOptions },
+         baseline: withoutProduct.requests,
+         product: productRuns.flatMap((run) => run.requests),
        },
      }
     } finally {
       await ctx.fiber.dispose()
-       globalThis.fetch = originalFetch
+      try {
+        expect(globalThis.fetch).toBe(originalFetch)
+      } finally {
+        globalThis.fetch = originalFetch
+      }
     }
   } finally {
     if (previousHome === undefined) delete process.env.DSH_HOME
@@ -1176,8 +1233,11 @@ integrationDescribe('official DSH loader composition', () => {
     expect(existsSync(clientEntry)).toBe(true)
 
     execFileSync(process.execPath, ['--input-type=module', '-e', [
+      `const cordis = await import(${JSON.stringify(pathToFileURL(join(cliRoot, 'vendor/cordis/lib/index.js')).href)})`,
       `const host = await import(${JSON.stringify(pathToFileURL(hostEntry).href)})`,
-      'host.apply({ settings: undefined, timeout: () => {}, on: () => {} })',
+      'const ctx = new cordis.Context()',
+      'host.apply(ctx)',
+      'await ctx.fiber.dispose()',
     ].join(';')], {
       cwd: cliRoot,
       env: { ...process.env, DSH_HOME: home },
@@ -1213,6 +1273,17 @@ integrationDescribe('official DSH loader composition', () => {
         const mutateEndpoint = legacyRpc ? 'settings.mutate' : 'settings/mutate'
         const settingsDescribe = await callOfficialRpc(web.url, headers, describeEndpoint, {}, !legacyRpc)
         expect(settingsDescribe.status).toBe(200)
+         const webMarkerPath = join(webHome, 'thinking-effort-loaded.json')
+         expect(existsSync(webMarkerPath)).toBe(true)
+         const webMarker = JSON.parse(readFileSync(webMarkerPath, 'utf8')) as {
+           event?: string
+           name?: string
+           at?: string
+           pid?: number
+         }
+         expect(webMarker).toMatchObject({ event: 'apply', name: '@hytime/dsh-thinking-effort' })
+         expect(webMarker.at).toEqual(expect.any(String))
+         expect(webMarker.pid).toEqual(expect.any(Number))
          const liveResult = (endpoint: string, args: Record<string, unknown>): Promise<unknown> => (
           callOfficialRpc(web.url, headers, endpoint, args, !legacyRpc).then((response) => (
             legacyRpc ? { result: response.body.result } : response.body.result
@@ -1476,33 +1547,30 @@ integrationDescribe('official DSH loader composition', () => {
     })
     const runtimeProbe = await probeOfficialClientRuntime(cliRoot, packagedClient)
     const previousHome = process.env.DSH_HOME
-    const agentProbe = await probeOfficialAgentRuntime(cliRoot, hostEntry)
+    // This is a packaged-artifact probe in a manually assembled real Cordis
+    // Context. Official Loader activation is asserted by the Web marker and
+    // Settings RPC above.
+    const handMountedProbe = await probePackagedArtifactHandMountedRuntime(cliRoot, hostEntry)
     expect(process.env.DSH_HOME).toBe(previousHome)
-    expect(agentProbe.withoutProduct).toMatchObject({
+    expect(handMountedProbe.withoutProduct).toMatchObject({
       requestCount: 1,
       reasoningEffort: 'low',
       origin: 'subagent',
       turnEnd: 'turn/end',
     })
-    expect(agentProbe.withProduct).toMatchObject({
+    expect(handMountedProbe.withProduct).toMatchObject({
       requestCount: 1,
       reasoningEffort: 'high',
       origin: 'subagent',
       turnEnd: 'turn/end',
     })
-         const baselineWire = agentProbe.outbound.baseline.wire
-     const baselineOptions = agentProbe.outbound.baseline.options
-     expect(baselineWire).toHaveLength(1)
-     expect(baselineOptions).toHaveLength(1)
-     expect(agentProbe.outbound.product.wire).toHaveLength(3)
-     expect(agentProbe.outbound.product.options).toHaveLength(3)
-     const productRequests = agentProbe.outbound.product.options.map((options) => ({
-       options,
-       wire: agentProbe.outbound.product.wire.find(({ body }) => body === options.body),
-     }))
-     const enabledRequest = productRequests.find(({ options }) => options.provider === 'probe' && options.model === 'model-a')
-     const siblingRequest = productRequests.find(({ options }) => options.provider === 'probe' && options.model === 'model-b')
-     const otherProviderRequest = productRequests.find(({ options }) => options.provider === 'other' && options.model === 'model-a')
+         const baselineRecords = handMountedProbe.outbound.baseline
+     const productRecords = handMountedProbe.outbound.product
+     expect(baselineRecords).toHaveLength(1)
+     expect(productRecords).toHaveLength(3)
+     const enabledRequest = productRecords.find(({ options }) => options.provider === 'probe' && options.model === 'model-a')
+     const siblingRequest = productRecords.find(({ options }) => options.provider === 'probe' && options.model === 'model-b')
+     const otherProviderRequest = productRecords.find(({ options }) => options.provider === 'other' && options.model === 'model-a')
      expect(enabledRequest?.wire).toBeDefined()
      expect(siblingRequest?.wire).toBeDefined()
      expect(otherProviderRequest?.wire).toBeDefined()
@@ -1510,24 +1578,38 @@ integrationDescribe('official DSH loader composition', () => {
      expect(enabledRequest?.wire?.headers['x-opencode-session']).toBe(enabledRequest?.options.sessionId)
      expect(siblingRequest?.wire?.headers['x-opencode-session']).toBeUndefined()
      expect(otherProviderRequest?.wire?.headers['x-opencode-session']).toBeUndefined()
-     expect(enabledRequest?.wire?.body).toBe(baselineWire[0]?.body)
-     expect(enabledRequest?.wire?.url).toBe(baselineWire[0]?.url)
+     expect(enabledRequest?.wire?.body).toBe(baselineRecords[0]?.wire.body)
+     expect(enabledRequest?.wire?.url).toBe(baselineRecords[0]?.wire.url)
      expect(JSON.parse(enabledRequest?.wire?.body ?? '{}').api).toBe('openai-completions')
      expect({
        provider: enabledRequest?.options.provider,
        model: enabledRequest?.options.model,
        reasoningEffort: enabledRequest?.options.reasoningEffort,
        messages: enabledRequest?.options.messages,
+        system: enabledRequest?.options.system,
+        tools: enabledRequest?.options.tools,
+        temperature: enabledRequest?.options.temperature,
+        maxTokens: enabledRequest?.options.maxTokens,
+        stop: enabledRequest?.options.stop,
+        purpose: enabledRequest?.options.purpose,
+        hasSignal: enabledRequest?.options.hasSignal,
      }).toEqual({
-       provider: baselineOptions[0]?.provider,
-       model: baselineOptions[0]?.model,
-       reasoningEffort: baselineOptions[0]?.reasoningEffort,
-       messages: baselineOptions[0]?.messages,
+       provider: baselineRecords[0]?.options.provider,
+       model: baselineRecords[0]?.options.model,
+       reasoningEffort: baselineRecords[0]?.options.reasoningEffort,
+       messages: baselineRecords[0]?.options.messages,
+        system: baselineRecords[0]?.options.system,
+        tools: baselineRecords[0]?.options.tools,
+        temperature: baselineRecords[0]?.options.temperature,
+        maxTokens: baselineRecords[0]?.options.maxTokens,
+        stop: baselineRecords[0]?.options.stop,
+        purpose: baselineRecords[0]?.options.purpose,
+        hasSignal: baselineRecords[0]?.options.hasSignal,
      })
-     expect(existsSync(agentProbe.settingsHome)).toBe(false)
-    expect(existsSync(agentProbe.settingsPath)).toBe(false)
-    expect(existsSync(agentProbe.markerPath)).toBe(false)
-    expect(agentProbe.marker).toMatchObject({ event: 'apply', name: '@hytime/dsh-thinking-effort' })
+     expect(existsSync(handMountedProbe.settingsHome)).toBe(false)
+    expect(existsSync(handMountedProbe.settingsPath)).toBe(false)
+    expect(existsSync(handMountedProbe.handMountedMarkerPath)).toBe(false)
+    expect(handMountedProbe.handMountedMarker).toMatchObject({ event: 'apply', name: '@hytime/dsh-thinking-effort' })
     if (runtimeProbe.modern.supportsExternalLanguages) {
       expect(runtimeProbe.modern.languages).toEqual(expect.arrayContaining(['ja', 'ko']))
     } else {
