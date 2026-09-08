@@ -162,7 +162,7 @@ jobs:
           fi
 
           for root in "$RC7_ROOT" "$RC2_ROOT" "$ALPHA_ROOT"; do
-            (cd "$root" && pnpm rebuild fs-ext)
+            (cd "$root" && pnpm rebuild --pending fs-ext)
           done
 
           npm pack --json --pack-destination "$RUN_ROOT" > "$RUN_ROOT/pack.json"
