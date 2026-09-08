@@ -57,6 +57,16 @@ version-map 按以下规则判断网关能力：
 从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。
 运行时 schema 没有暴露的字段不会在界面中显示。可选 transport 未安装或未启用时，不会执行 takeover。
 
+## OpenCode 会话 Header
+
+OpenCode 会话 Header 是模型编辑器中的模型级设置，不是 provider 全局设置，默认关闭。展开精确的 `provider/model`，只有目标服务确实要求 `x-opencode-session` 时才勾选「OpenCode 会话 Header」并保存。
+
+Host 会在匹配的 `llm/stream` 请求中从当前 DSH 会话的 `sessionId` 动态生成 Header 值。用户不需要填写或保存固定值。同一路由中的 GPT 或其他非 OpenCode 模型不会继承该设置；该设置也不会修改路由的 `api` 协议。
+
+如果请求经过 Sub2API、CPA 或其他中转服务，请确认它保留 `x-opencode-session` 并继续转发给 OpenCode 上游。`llm-pi-ai.providers.<route>.headers.x-opencode-session` 这类静态 route 设置不能替代本功能，因为所有会话会共用一个固定值。
+
+修改 Host 或插件包后需要重启 DSH；修改 Settings 或 Client 后需要刷新 Web 页面，再测试模型请求。
+
 ## 网关兼容设置
 
 设置页的 provider 全局区域用于修改该 provider 下全部模型的 `compat` 默认值。展开单个模型后进入单模型区域。4 组字段默认收起。

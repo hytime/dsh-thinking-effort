@@ -66,6 +66,7 @@ These identifiers have different responsibilities:
 | Default levels | Adds `off`, `high`, and `max` without overwriting custom values |
 | Per-model editor | Select levels and configure gateway values for both catalog/modelOverrides and `models[]` entries in Settings |
 | Gateway compatibility | Configure 15 common scalar fields globally per provider or separately per model, grouped by role/reasoning, format/output, streaming/tools, and storage/cache; groups are collapsed by default |
+| OpenCode session Header | Enable a dynamic `x-opencode-session` per exact model, using the current DSH session ID without storing a fixed Header value |
 | Gateway mapping | Send `ultra` when the user selects DSH `high` |
 | Composer effort slider | Registers an optional Composer `seat` when the Web runtime exposes `modelDirectories`, with host-resolved tiers for the current `provider/model` |
 | Subagent default | Apply a default effort only when a subagent request has no explicit value |
@@ -108,7 +109,8 @@ See [INSTALL.md](./docs/INSTALL.md) for profile discovery, migration, validation
    | `high` | `ultra` |
    | `max` | `max` |
 
-7. Return to Composer, choose the configured model, then use its reasoning-effort slider.
+7. In the model editor, optionally enable **OpenCode session Header** for the exact model that needs `x-opencode-session`. It is off by default, uses the current DSH session ID dynamically, and does not inherit across models or providers.
+8. Return to Composer, choose the configured model, then use its reasoning-effort slider.
 
 ### Composer reasoning-effort slider
 
@@ -143,6 +145,14 @@ The provider area in Settings edits defaults for all models. Both catalog models
 
 These compat values are control plane configuration. They do not implement or replace the gateway transport; an external transport remains responsible for network requests.
 
+### OpenCode session Header compatibility
+
+The model editor has a separate **OpenCode session Header** switch. It is off by default and is stored in the plugin's own `dsh-thinking-effort` Settings namespace, not in `llm-pi-ai.compat`. Enable it only for the exact `provider/model` that requires `x-opencode-session`; another model on the same route, including a GPT model, does not inherit it.
+
+When enabled, the Host sends `x-opencode-session: <current DSH session ID>` on matching `llm/stream` requests. The value follows the current conversation and is not stored in Settings or replaced with a fixed value. An existing `x-opencode-session` supplied by the adapter or caller is preserved. The setting does not choose or change `openai-completions`, `openai-responses`, or `anthropic-messages`.
+
+Sub2API, CPA, and other forwarding gateways must preserve and forward `x-opencode-session` to the OpenCode upstream. A static route setting such as `llm-pi-ai.providers.<route>.headers.x-opencode-session` is not an equivalent replacement: it uses one value for every conversation and cannot provide per-conversation routing or prompt-cache affinity. Restart DSH after Host changes and refresh the Web page after Settings or Client changes.
+
 ### Settings page layout
 
 The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and gateway compatibility controls in its settings area. `models[]` saves use one complete array set rather than an array-index path operation.
@@ -154,8 +164,8 @@ See the complete Chinese, English, Japanese, and Korean screenshot gallery in [`
 
 ## How it works
 
-- **Host:** Scans `llm-pi-ai` `models` and `modelOverrides` on startup and settings changes, adding defaults only where `reasoningEfforts` is missing.
-- **Client:** Registers the Settings page through the DSH Settings Remote (`ctx.remote.settings`) and, when the runtime exposes `modelDirectories`, registers the optional Composer `seat` with a low `shadow` priority and host-resolved effort slider. Chinese, English, Japanese, and Korean dictionaries are maintained separately in `src/locales/zh.json`, `src/locales/en.json`, `src/locales/ja.json`, and `src/locales/ko.json`, then generated into the client bundle before publishing.
+- **Host:** Scans `llm-pi-ai` `models` and `modelOverrides` on startup and settings changes, adding defaults only where `reasoningEfforts` is missing. It also observes the model-level OpenCode session setting and injects the current DSH session ID only into matching `llm/stream` requests.
+- **Client:** Registers the Settings page through the DSH Settings Remote (`ctx.remote.settings`) and, when the runtime exposes `modelDirectories`, registers the optional Composer `seat` with a low `shadow` priority and host-resolved effort slider. The model editor stores OpenCode session Header settings in the plugin namespace, separately from `llm-pi-ai.compat`. Chinese, English, Japanese, and Korean dictionaries are maintained separately in `src/locales/zh.json`, `src/locales/en.json`, `src/locales/ja.json`, and `src/locales/ko.json`, then generated into the client bundle before publishing.
 - **Subagents:** Stores the default in the `llm-pi-ai` user layer as `subagentEffort`. The `agent/request` waterfall only fills requests that do not already specify an effort.
 - **No configured default:** The plugin does not automatically choose `off`, `high`, or `max`; the request omits `reasoning` and the gateway decides its own default behavior.
 
