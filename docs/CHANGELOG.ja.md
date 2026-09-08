@@ -10,7 +10,19 @@
 
 ## [Unreleased]
 
-## [0.2.0] - 未リリース
+## [0.2.1] - 2026-09-08
+
+### 追加
+
+- Web runtime が `modelDirectories` を提供する場合、Composer に任意の `seat` を登録し、現在の `provider/model` に対する Host 解決済み `reasoning.efforts` を離散的な推論強度として表示します。`defaultEffort` がないモデルでは「モデルの既定値に従う」を選択でき、Host の light/dark theme token に追従します。
+- 中英韓日の Settings、Composer、モデルグループ折りたたみ、モデル検索画面のスクリーンショットギャラリーを追加しました。
+
+### 互換性と UI
+
+- 公式 DSH の最新互換性代表を `dsh-v0.1.3-alpha.2` に更新し、modern capability の範囲を `<0.1.4-0` まで拡張しました。
+- Settings の switch、モデル編集行、light/dark theme、未選択の推論マーカー、既定値追従状態を改善しました。
+
+## [0.2.0] - 2026-09-04
 
 ### 追加
 

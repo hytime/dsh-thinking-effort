@@ -10,7 +10,19 @@
 
 ## [Unreleased]
 
-## [0.2.0] - 미출시
+## [0.2.1] - 2026-09-08
+
+### 추가
+
+- Web runtime이 `modelDirectories`를 제공하면 Composer에 선택적 `seat`를 등록하고 현재 `provider/model`의 Host 해석 `reasoning.efforts`를 이산 추론 강도로 표시합니다. `defaultEffort`가 없는 모델은 「모델 기본값 따르기」를 선택할 수 있으며 Host light/dark theme token을 따릅니다.
+- 중국어, 영어, 일본어, 한국어 Settings, Composer, 모델 그룹 접기, 모델 검색 화면의 스크린샷 갤러리를 추가했습니다.
+
+### 호환성 및 UI
+
+- 공식 DSH 최신 호환성 대표를 `dsh-v0.1.3-alpha.2`로 업데이트하고 modern capability 범위를 `<0.1.4-0`까지 확장했습니다.
+- Settings switch, 모델 편집 행, light/dark theme, 선택되지 않은 추론 마커와 기본값 따르기 상태를 개선했습니다.
+
+## [0.2.0] - 2026-09-04
 
 ### 추가
 

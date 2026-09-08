@@ -14,12 +14,23 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-08
+
 ### 新增 / Added
 
-- 新增：Web 运行时提供 `modelDirectories` 服务时，注册 Composer 的可选 `seat`，并按当前 `provider/model` 的宿主已解析 `reasoning.efforts` 显示离散推理档位；模型未声明 `defaultEffort` 时可恢复为「跟随模型默认」。控件使用宿主深浅色主题 `token`，通过会话模型选择提交，不修改 Settings 文档。
-- Add an optional Composer `seat` when the Web runtime exposes `modelDirectories`. It renders the current `provider/model`'s host-resolved `reasoning.efforts`, offers **Follow model default** when a model lacks `defaultEffort`, follows host light/dark theme tokens, and submits through session model selection without mutating the Settings document.
+- 新增：Web 运行时提供 `modelDirectories` 服务时，注册 Composer 的可选 `seat`，按当前 `provider/model` 的宿主已解析 `reasoning.efforts` 显示离散推理档位；模型未声明 `defaultEffort` 时可恢复为「跟随模型默认」。控件使用宿主深浅色主题 token，通过会话模型选择提交，不修改 Settings 文档。
+- Add an optional Composer `seat` when the Web runtime exposes `modelDirectories`. It renders host-resolved reasoning efforts for the current `provider/model`, supports **Follow model default**, follows host light/dark theme tokens, and submits through session model selection without mutating the Settings document.
+- 新增中英日韩四语设置页、Composer、模型分组折叠和搜索截图画廊。
+- Add a four-language screenshot gallery covering Settings, Composer, grouped model selection, and model search.
 
-## [0.2.0] - 未发布 / Unreleased
+### 兼容性与界面 / Compatibility and UI
+
+- 将官方 DSH 最新兼容代表更新为 `dsh-v0.1.3-alpha.2`，并扩展现代能力范围至 `<0.1.4-0`。
+- Update the official DSH compatibility representative to `dsh-v0.1.3-alpha.2` and extend the modern capability range to `<0.1.4-0`.
+- 优化设置页开关、模型编辑行、浅色/深色主题、未选档位圆点和 Follow model default 状态。
+- Refine settings switches, model editor rows, light/dark theme states, unselected effort markers, and the Follow model default state.
+
+## [0.2.0] - 2026-09-04
 
 ### 新增 / Added
 
