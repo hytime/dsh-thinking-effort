@@ -5,7 +5,7 @@ import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 
 import { DEFAULT_LEVELS, INPUT_MODALITIES, LEVEL_LABEL_KEYS, NS, OPENCODE_SESSION_NS, PRESETS, ALL_LEVELS, CONTEXT_1M } from './constants.js'
 import { inventoryFrom, modelCompatKey, modelGatewayCompatViewsFrom, providerGatewayCompatViewsFrom } from './model-inventory.js'
 import { emptyTakeoverRuntimeResolution } from './takeover-runtime.js'
-import { openCodeSessionOp, openCodeSessionStateFor } from './model-header-ops.js'
+import { openCodeSessionOp, openCodeSessionStateFor, isOpenCodeSessionNamespace } from './model-header-ops.js'
 import { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from './model-ops.js'
 import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, validateContextWindow, validateLevels } from './validation.js'
 import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, OpenCodeSessionState, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
@@ -26,6 +26,7 @@ interface RunOpsRequest {
   readonly ops: readonly SettingsOp[]
   readonly successMessage: string
   readonly onSuccess?: () => void
+  readonly openCodeSessionSavedKey?: string
 }
 interface SubagentState { effort: string | null; revision: number }
 interface EditorState {
@@ -93,7 +94,7 @@ export function applyOpenCodeSessionMutation(
   inventory: readonly InventoryItem[],
   savedKey: string,
 ): OpenCodeSessionState {
-  if (!response.ok) return state
+  if (!response.ok || !isOpenCodeSessionNamespace(response.value)) return state
   const previous: OpenCodeSessionState = {
     ...state,
     dirty: { ...state.dirty },
@@ -253,7 +254,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     })
   }, [takeoverResolution])
 
-  const runOps = ({ ns, revision, ops, successMessage, onSuccess }: RunOpsRequest): void => {
+  const runOps = ({ ns, revision, ops, successMessage, onSuccess, openCodeSessionSavedKey }: RunOpsRequest): void => {
     setState((current) => ({ ...current, busy: true, error: null, notice: null }))
     settings.mutate(ns, ops, revision).then((response) => {
       if (!response.ok) {
@@ -264,11 +265,40 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
         setState((current) => ({ ...current, busy: false, error: t('saveMissingNamespace') }))
         return
       }
+      const savedKey = openCodeSessionSavedKey
+      if (ns !== NS && (savedKey === undefined || !isOpenCodeSessionNamespace(response.value))) {
+        setState((current) => ({ ...current, busy: false, error: t('saveMissingNamespace') }))
+        return
+      }
       onSuccess?.()
-      setState((current) => ns === NS
-        ? applyNamespaceView(current, response.value, successMessage)
-        : { ...applyOpenCodeSessionNamespace(current, response.value), notice: successMessage, busy: false }
-      )
+      setState((current) => {
+        if (ns === NS) return applyNamespaceView(current, response.value, successMessage)
+        const previous: OpenCodeSessionState = {
+          namespace: current.openCodeSessionNamespace,
+          views: current.openCodeSessionViews,
+          drafts: current.openCodeSessionDrafts,
+          dirty: current.openCodeSessionDirty,
+          found: current.openCodeSessionFound,
+          available: current.openCodeSessionAvailable,
+        }
+        const refreshed = applyOpenCodeSessionMutation(
+          previous,
+          { ok: true, value: response.value },
+          current.inventory,
+          savedKey!,
+        )
+        return {
+          ...current,
+          openCodeSessionNamespace: refreshed.namespace,
+          openCodeSessionViews: refreshed.views,
+          openCodeSessionDrafts: refreshed.drafts,
+          openCodeSessionDirty: refreshed.dirty,
+          openCodeSessionFound: refreshed.found,
+          openCodeSessionAvailable: refreshed.available,
+          notice: successMessage,
+          busy: false,
+        }
+      })
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       setState((current) => ({ ...current, busy: false, error: message.length > 0 ? t('writeError', { message }) : t('writeFailed') }))
@@ -339,6 +369,35 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       }
       const modelCompatDirty = { ...current.modelCompatDirty, [key]: nextDirty }
       return { ...current, notice: null, modelCompatDrafts, modelCompatDirty }
+    })
+  }
+
+  const patchOpenCodeSession = (item: InventoryItem, enabled: boolean): void => {
+    const key = keyOf(item)
+    setState((current) => {
+      if (!current.openCodeSessionAvailable || current.openCodeSessionDrafts[key] === undefined) return current
+      return {
+        ...current,
+        notice: null,
+        openCodeSessionDrafts: { ...current.openCodeSessionDrafts, [key]: enabled },
+        openCodeSessionDirty: { ...current.openCodeSessionDirty, [key]: true },
+      }
+    })
+  }
+
+  const applyOpenCodeSession = (item: InventoryItem): void => {
+    const key = keyOf(item)
+    const namespace = state.openCodeSessionNamespace
+    const enabled = state.openCodeSessionDrafts[key]
+    if (!namespace || enabled === undefined) return
+    const operation = openCodeSessionOp(item.route, item.model, enabled)
+    if (operation === undefined) return
+    runOps({
+      ns: OPENCODE_SESSION_NS,
+      revision: namespace.revision,
+      ops: [operation],
+      successMessage: t('opencodeSessionSaved'),
+      openCodeSessionSavedKey: key,
     })
   }
 
@@ -508,7 +567,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
                          compatView={compatAvailable ? state.modelCompatDrafts[key] : undefined}
                           compatExpanded={state.modelCompatExpanded[key] === true}
                           onToggleCompatExpanded={compatAvailable ? () => toggleModelCompatExpanded(key) : undefined}
-                          compatDirty={state.modelCompatDirty[key]} onCompatChange={compatAvailable ? (next) => patchModelCompat(item, next) : undefined} onSaveCompat={compatAvailable ? () => applyModelCompat(item) : undefined} /> }) : null}</div> })}
+                          compatDirty={state.modelCompatDirty[key]} onCompatChange={compatAvailable ? (next) => patchModelCompat(item, next) : undefined} onSaveCompat={compatAvailable ? () => applyModelCompat(item) : undefined} openCodeSession={state.openCodeSessionDrafts[key]} openCodeSessionDirty={state.openCodeSessionDirty[key] === true} openCodeSessionAvailable={state.openCodeSessionAvailable} onOpenCodeSessionChange={(enabled) => patchOpenCodeSession(item, enabled)} onSaveOpenCodeSession={() => applyOpenCodeSession(item)} /> }) : null}</div> })}
       {expandedCount > 0 ? <div style={{ fontSize: '12px', color: palette.secondary, margin: '4px 2px 0' }}>{t('expandedSettings', { count: expandedCount })}</div> : null}
     </div>}
     <span aria-label={t('versionLabel')} style={{ position: 'absolute', right: '12px', bottom: '8px', fontSize: '10px', lineHeight: '14px', opacity: 0.45, pointerEvents: 'none', userSelect: 'none' }}>v{PLUGIN_VERSION}</span>

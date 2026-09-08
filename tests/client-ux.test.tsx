@@ -128,6 +128,7 @@ function localeSnapshot(locales: readonly string[] = ['zh', 'en', 'ja']): Client
 function renderEditor(options: {
   describe?: () => Promise<ClientResult<{ namespaces: readonly SettingsNamespace[] }>>
   mutate?: (ns: string, ops: readonly SettingsOp[], revision: number) => Promise<ClientResult<SettingsNamespace>>
+  namespaces?: readonly SettingsNamespace[]
   locales?: readonly string[]
   compatibilityProfile?: 'modern' | 'legacy' | 'unknown'
   takeoverResolution?: TakeoverRuntimeResolution
@@ -141,11 +142,11 @@ function renderEditor(options: {
   const container = document.createElement('div')
   document.body.append(container)
   const locale = localeSnapshot(options.locales)
-  const mutate = vi.fn<SettingsApi['mutate']>(options.mutate ?? (async (_ns, _ops, _revision) => ({ ok: true as const, value: namespace() })))
+  const mutate = vi.fn<SettingsApi['mutate']>(options.mutate ?? (async (ns, _ops, _revision) => ({ ok: true as const, value: ns === 'dsh-thinking-effort' ? openCodeNamespace() : namespace() })))
   const settings: SettingsApi = {
     externalLanguages: false,
     compatibilityProfile: options.compatibilityProfile ?? 'unknown',
-    describe: options.describe ?? (async () => ({ ok: true, value: { namespaces: [namespace()] } })),
+    describe: options.describe ?? (async () => ({ ok: true, value: { namespaces: [namespace(), ...(options.namespaces ?? [])] } })),
     mutate,
   }
   const root = createRoot(container)
@@ -308,6 +309,108 @@ describe('OpenCode session Client namespace state', () => {
     expect(refreshed.dirty[key]).toBeUndefined()
     expect(refreshed.drafts[otherKey]).toBe(true)
     expect(refreshed.dirty[otherKey]).toBe(true)
+  })
+
+  it('preserves a dirty draft when the plugin mutation returns an invalid namespace descriptor', () => {
+    const item = modelItem()
+    const key = openCodeSessionKey(item)
+    const initial = createOpenCodeSessionState(openCodeNamespace(), [item])
+    const dirty: OpenCodeSessionState = {
+      ...initial,
+      drafts: { [key]: false },
+      dirty: { [key]: true },
+    }
+    const invalid = openCodeNamespace({
+      ns: 'llm-pi-ai',
+      revision: 18,
+      value: { opencodeSession: { providers: { provider: { models: { 'model-a': 'yes' } } } } },
+    })
+    const refreshed = applyOpenCodeSessionMutation(dirty, { ok: true, value: invalid }, [item], key)
+
+    expect(refreshed).toBe(dirty)
+    expect(refreshed.drafts[key]).toBe(false)
+    expect(refreshed.dirty[key]).toBe(true)
+    expect(refreshed.namespace?.revision).toBe(17)
+  })
+
+  it('keeps plugin dirty state and reports missing namespace when SectionEditor receives an invalid mutation response', async () => {
+    const llm = namespace({ schema: realGatewaySchema })
+    const plugin = openCodeNamespace({
+      value: { opencodeSession: { providers: { provider: { models: { 'model-a': false } } } } },
+    })
+    const mutate = vi.fn<SettingsApi['mutate']>(async () => ({
+      ok: true as const,
+      value: openCodeNamespace({
+        ns: 'llm-pi-ai',
+        value: { opencodeSession: { providers: { provider: { models: { 'model-a': 'invalid' } } } } },
+      }) as never,
+    }))
+    const view = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [llm, plugin] } }),
+      mutate,
+      compatibilityProfile: 'modern',
+    })
+    await settle()
+    openFirstModel(view.container)
+    const headerSwitch = view.container.querySelector(`[data-scope="opencode-session"] button[role="switch"][aria-label="${text('opencodeSessionHeader')}"]`) as HTMLButtonElement
+    act(() => headerSwitch.click())
+    act(() => button(view.container, text('saveOpenCodeSession')).click())
+    await settle()
+
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain(text('saveMissingNamespace'))
+    const retry = view.container.querySelector(`[data-scope="opencode-session"] button[aria-label="${text('saveOpenCodeSession')}"]`) as HTMLButtonElement
+    expect(retry.disabled).toBe(false)
+    expect(mutate).toHaveBeenCalledWith('dsh-thinking-effort', expect.any(Array), plugin.revision)
+    view.unmount()
+  })
+
+  it('saves through SectionEditor with both namespaces and refreshes plugin state without changing llm state', async () => {
+    const llm = namespace({
+      schema: realGatewaySchema,
+      user: { providers: { provider: { compat: { supportsDeveloperRole: false } } } },
+    })
+    const plugin = openCodeNamespace({
+      value: { opencodeSession: { providers: { provider: { models: { 'model-a': false } } } } },
+    })
+    const savedPlugin = openCodeNamespace({
+      revision: 18,
+      value: { opencodeSession: { providers: { provider: { models: { 'model-a': true } } } } },
+    })
+    const mutate = vi.fn<SettingsApi['mutate']>(async (ns, ops, revision) => {
+      expect(ns).toBe('dsh-thinking-effort')
+      expect(ops).toEqual([{
+        op: 'set',
+        path: ['opencodeSession', 'providers', 'provider', 'models', 'model-a'],
+        value: true,
+      }])
+      expect(revision).toBe(plugin.revision)
+      return { ok: true as const, value: savedPlugin }
+    })
+    const view = renderEditor({
+      namespaces: [plugin],
+      describe: async () => ({ ok: true, value: { namespaces: [llm, plugin] } }),
+      mutate,
+      compatibilityProfile: 'modern',
+    })
+    await settle()
+
+    expect(view.container.textContent).toContain(text('pageTitle'))
+    openFirstModel(view.container)
+    const headerSwitch = view.container.querySelector(`[data-scope="opencode-session"] button[role="switch"][aria-label="${text('opencodeSessionHeader')}"]`) as HTMLButtonElement
+    expect(headerSwitch).not.toBeNull()
+    act(() => headerSwitch.click())
+    act(() => button(view.container, text('saveOpenCodeSession')).click())
+    await settle()
+
+    expect(mutate).toHaveBeenCalledWith('dsh-thinking-effort', [{
+      op: 'set',
+      path: ['opencodeSession', 'providers', 'provider', 'models', 'model-a'],
+      value: true,
+    }], plugin.revision)
+    expect(view.container.textContent).toContain(text('opencodeSessionSaved'))
+    expect(view.container.textContent).not.toContain(text('unsaved'))
+    expect(view.container.querySelector('[data-scope="provider"]')).not.toBeNull()
+    view.unmount()
   })
 })
 
