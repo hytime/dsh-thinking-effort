@@ -396,6 +396,11 @@ describe('OpenCode session Client namespace state', () => {
 
     expect(view.container.textContent).toContain(text('pageTitle'))
     openFirstModel(view.container)
+    const beforeSupportsDeveloperRole = view.container.querySelector(
+      `[data-scope="provider"] select[aria-label="${text('supportsDeveloperRole')}"]`,
+    ) as HTMLSelectElement
+    expect(beforeSupportsDeveloperRole).not.toBeNull()
+    expect(beforeSupportsDeveloperRole.value).toBe('unsupported')
     const headerSwitch = view.container.querySelector(`[data-scope="opencode-session"] button[role="switch"][aria-label="${text('opencodeSessionHeader')}"]`) as HTMLButtonElement
     expect(headerSwitch).not.toBeNull()
     act(() => headerSwitch.click())
@@ -409,6 +414,11 @@ describe('OpenCode session Client namespace state', () => {
     }], plugin.revision)
     expect(view.container.textContent).toContain(text('opencodeSessionSaved'))
     expect(view.container.textContent).not.toContain(text('unsaved'))
+    const afterSupportsDeveloperRole = view.container.querySelector(
+      `[data-scope="provider"] select[aria-label="${text('supportsDeveloperRole')}"]`,
+    ) as HTMLSelectElement
+    expect(afterSupportsDeveloperRole).not.toBeNull()
+    expect(afterSupportsDeveloperRole.value).toBe(beforeSupportsDeveloperRole.value)
     expect(view.container.querySelector('[data-scope="provider"]')).not.toBeNull()
     view.unmount()
   })
