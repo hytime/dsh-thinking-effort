@@ -1236,7 +1236,7 @@ integrationDescribe('official DSH loader composition', () => {
       `const cordis = await import(${JSON.stringify(pathToFileURL(join(cliRoot, 'vendor/cordis/lib/index.js')).href)})`,
       `const host = await import(${JSON.stringify(pathToFileURL(hostEntry).href)})`,
       'const ctx = new cordis.Context()',
-      'await ctx.plugin(host).await()',
+      'host.apply(ctx)',
       'await ctx.fiber.dispose()',
     ].join(';')], {
       cwd: cliRoot,
