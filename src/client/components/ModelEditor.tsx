@@ -29,13 +29,11 @@ export interface ModelEditorProps {
   readonly compatExpanded?: boolean
   readonly onToggleCompatExpanded?: () => void
   readonly openCodeSession?: boolean
-  readonly openCodeSessionDirty?: boolean
   readonly openCodeSessionAvailable?: boolean
   readonly onOpenCodeSessionChange?: (enabled: boolean) => void
-  readonly onSaveOpenCodeSession?: () => void
 }
 
-export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy, palette, t, onLevelChange, onContextChange, onOneMillionChange, onInputChange, onSave, onRestoreReasoning, onRestoreCapability, compatView, onCompatChange, onSaveCompat, compatDirty, compatExpanded, onToggleCompatExpanded, openCodeSession, openCodeSessionDirty = false, openCodeSessionAvailable = false, onOpenCodeSessionChange, onSaveOpenCodeSession }: ModelEditorProps): React.ReactElement {
+export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy, palette, t, onLevelChange, onContextChange, onOneMillionChange, onInputChange, onSave, onRestoreReasoning, onRestoreCapability, compatView, onCompatChange, onSaveCompat, compatDirty, compatExpanded, onToggleCompatExpanded, openCodeSession, openCodeSessionAvailable = false, onOpenCodeSessionChange }: ModelEditorProps): React.ReactElement {
   const levelLabel = (level: typeof ALL_LEVELS[number]): string => t(LEVEL_LABEL_KEYS[level])
   const anyCompatDirty = compatDirty !== undefined && GATEWAY_COMPAT_FIELD_KEYS.some((key) => compatDirty[key] === true)
   const modelCompatControls = compatView !== undefined
@@ -53,7 +51,6 @@ export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy
       <SwitchControl checked={openCodeSession === true} onChange={(enabled) => onOpenCodeSessionChange?.(enabled)} disabled={busy || onOpenCodeSessionChange === undefined} label={t('opencodeSessionHeaderTitle')} palette={palette} />
     </div>
     <span style={{ color: palette.secondary, fontSize: '11px', lineHeight: '15px' }}>{t('opencodeSessionHeaderDescription')}</span>
-    {onSaveOpenCodeSession ? <ActionButton text={t('saveOpenCodeSession')} onClick={onSaveOpenCodeSession} disabled={busy || !openCodeSessionDirty} tone="primary" palette={palette} icon="check" label={t('saveOpenCodeSessionAria')} /> : null}
   </div> : null
   return <div style={{ padding: '10px 12px 12px', borderTop: `0.5px solid ${palette.divider}`, backgroundColor: palette.canvas }}>
     {openCodeSessionControls}

@@ -131,10 +131,11 @@ function removeDirtyFields<T extends object>(dirty: Record<string, T>, key: stri
   return next
 }
 
-function clearOpenCodeSessionState(current: EditorState, key: string): EditorState {
-  const openCodeSessionDrafts = { ...current.openCodeSessionDrafts }; delete openCodeSessionDrafts[key]
-  const openCodeSessionDirty = { ...current.openCodeSessionDirty }; delete openCodeSessionDirty[key]
-  return { ...current, openCodeSessionDrafts, openCodeSessionDirty }
+function clearOpenCodeSessionState(current: EditorState, _key: string): EditorState {
+  // The OpenCode Header toggle saves immediately, so its draft always equals
+  // the persisted namespace value. Collapsing the editor must not clear it;
+  // reopening renders the saved value.
+  return current
 }
 
 function clearModelEditorState(current: EditorState, key: string): EditorState {
@@ -393,24 +394,17 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
 
   const patchOpenCodeSession = (item: InventoryItem, enabled: boolean): void => {
     const key = keyOf(item)
-    setState((current) => {
-      if (!current.openCodeSessionAvailable || current.openCodeSessionDrafts[key] === undefined) return current
-      return {
-        ...current,
-        notice: null,
-        openCodeSessionDrafts: { ...current.openCodeSessionDrafts, [key]: enabled },
-        openCodeSessionDirty: { ...current.openCodeSessionDirty, [key]: true },
-      }
-    })
-  }
-
-  const applyOpenCodeSession = (item: InventoryItem): void => {
-    const key = keyOf(item)
     const namespace = state.openCodeSessionNamespace
-    const enabled = state.openCodeSessionDrafts[key]
-    if (!namespace || enabled === undefined) return
+    if (!namespace) return
     const operation = openCodeSessionOp(item.route, item.model, enabled)
     if (operation === undefined) return
+    // The switch saves immediately: the draft reflects the newly toggled value
+    // right away, and the mutation persists it to the plugin namespace.
+    setState((current) => ({
+      ...current,
+      notice: null,
+      openCodeSessionDrafts: { ...current.openCodeSessionDrafts, [key]: enabled },
+    }))
     runOps({
       ns: OPENCODE_SESSION_NS,
       revision: namespace.revision,
@@ -582,7 +576,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
                          compatView={compatAvailable ? state.modelCompatDrafts[key] : undefined}
                           compatExpanded={state.modelCompatExpanded[key] === true}
                           onToggleCompatExpanded={compatAvailable ? () => toggleModelCompatExpanded(key) : undefined}
-                          compatDirty={state.modelCompatDirty[key]} onCompatChange={compatAvailable ? (next) => patchModelCompat(item, next) : undefined} onSaveCompat={compatAvailable ? () => applyModelCompat(item) : undefined} openCodeSession={state.openCodeSessionDrafts[key]} openCodeSessionDirty={state.openCodeSessionDirty[key] === true} openCodeSessionAvailable={openCodeSessionEditable} onOpenCodeSessionChange={(enabled) => patchOpenCodeSession(item, enabled)} onSaveOpenCodeSession={() => applyOpenCodeSession(item)} /> }) : null}</div> })}
+                          compatDirty={state.modelCompatDirty[key]} onCompatChange={compatAvailable ? (next) => patchModelCompat(item, next) : undefined} onSaveCompat={compatAvailable ? () => applyModelCompat(item) : undefined} openCodeSession={state.openCodeSessionDrafts[key]} openCodeSessionAvailable={openCodeSessionEditable} onOpenCodeSessionChange={(enabled) => patchOpenCodeSession(item, enabled)} /> }) : null}</div> })}
       {expandedCount > 0 ? <div style={{ fontSize: '12px', color: palette.secondary, margin: '4px 2px 0' }}>{t('expandedSettings', { count: expandedCount })}</div> : null}
     </div>}
     <span aria-label={t('versionLabel')} style={{ position: 'absolute', right: '12px', bottom: '8px', fontSize: '10px', lineHeight: '14px', opacity: 0.45, pointerEvents: 'none', userSelect: 'none' }}>v{PLUGIN_VERSION}</span>
