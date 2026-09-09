@@ -1566,7 +1566,7 @@ integrationDescribe('official DSH loader composition', () => {
     })
     expect(handMountedProbe.withProduct).toMatchObject({
       requestCount: 1,
-      reasoningEffort: 'high',
+      reasoningEffort: 'low',
       origin: 'subagent',
       turnEnd: 'turn/end',
     })
