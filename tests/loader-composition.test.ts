@@ -1225,7 +1225,7 @@ integrationDescribe('official DSH loader composition', () => {
     const installedDir = join(profile, 'node_modules', '@hytime', 'dsh-thinking-effort')
     const installedManifest = JSON.parse(readFileSync(join(installedDir, 'package.json'), 'utf8')) as PackageManifest
     expect(installedManifest.name).toBe('@hytime/dsh-thinking-effort')
-    expect(installedManifest.version).toBe('0.2.1')
+    expect(installedManifest.version).toBe('0.2.2')
 
     const hostEntry = join(installedDir, 'lib', 'index.js')
     const clientEntry = join(installedDir, 'lib', 'client.js')
