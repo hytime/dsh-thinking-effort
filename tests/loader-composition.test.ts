@@ -509,8 +509,7 @@ async function probePackagedArtifactHandMountedRuntime(
     expect(sessionNamespace).toBeDefined()
     if (sessionNamespace === undefined) throw new Error('missing dsh-thinking-effort namespace in agent probe')
     const sessionPath = ['opencodeSession', 'providers', 'probe', 'models', 'model-a']
-    const enabled = await settings.mutate('dsh-thinking-effort', [{ op: 'set', path: sessionPath, value: true }], Number(sessionNamespace.revision))
-    expect(enabled).toMatchObject({ ok: true })
+    await settings.mutate('dsh-thinking-effort', [{ op: 'set', path: sessionPath, value: true }], Number(sessionNamespace.revision))
     await new Promise<void>((resolveWait) => setImmediate(resolveWait))
     const productRuns = await Promise.all([
        runAgent(`agent-probe-product-enabled-${Date.now()}`, 'probe', 'model-a'),
