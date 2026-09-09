@@ -374,9 +374,9 @@ async function probePackagedArtifactHandMountedRuntime(
       providers: z.dict(z.any()),
       subagentEffort: z.string(),
     }))
-    await settingsScope.update({ subagentEffort: 'high', providers: { probe: { models: [{ id: 'probe-model' }] } } })
+    await settingsScope.update({ subagentEffort: 'low', providers: { probe: { models: [{ id: 'probe-model' }] } } })
     const settingsDescriptor = settings.describe().find(entry => entry.ns === 'llm-pi-ai')
-    expect(settingsDescriptor?.user).toMatchObject({ subagentEffort: 'high' })
+    expect(settingsDescriptor?.user).toMatchObject({ subagentEffort: 'low' })
     const settingsPath = join(agentHome, 'settings.yaml')
     expect(existsSync(settingsPath)).toBe(true)
 
@@ -464,7 +464,7 @@ async function probePackagedArtifactHandMountedRuntime(
        const requestKey = requestKeyOf(sessionId, provider, model)
       const handle = await ctx.agents.create({
         sessionId,
-        meta: { origin: 'main' },
+        meta: { origin: 'subagent' },
         agentOptions: { provider, model },
       })
       try {
@@ -1561,13 +1561,13 @@ integrationDescribe('official DSH loader composition', () => {
     expect(handMountedProbe.withoutProduct).toMatchObject({
       requestCount: 1,
       reasoningEffort: 'low',
-      origin: 'main',
+      origin: 'subagent',
       turnEnd: 'turn/end',
     })
     expect(handMountedProbe.withProduct).toMatchObject({
       requestCount: 1,
       reasoningEffort: 'high',
-      origin: 'main',
+      origin: 'subagent',
       turnEnd: 'turn/end',
     })
          const baselineRecords = handMountedProbe.outbound.baseline
