@@ -1002,6 +1002,38 @@ describe('SectionEditor user behavior', () => {
     view.unmount()
   })
 
+  it('hides the provider gateway-compat panel while the provider is collapsed and restores dirty edits on re-expand', async () => {
+    const providerNamespace = namespace({
+      value: { providers: { provider: { models: [{ id: 'model-a' }] } } },
+      schema: realGatewaySchema,
+    })
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      describe: async () => ({ ok: true, value: { namespaces: [providerNamespace] } }),
+    })
+    await settle()
+
+    expect(view.container.querySelector('[data-scope="provider"]')).toBeNull()
+    act(() => providerButton(view.container).click())
+    const providerControls = view.container.querySelector('[data-scope="provider"]') as HTMLElement
+    expect(providerControls).not.toBeNull()
+    const supports = providerControls.querySelector(`select[aria-label="${text('supportsDeveloperRole')}"]`) as HTMLSelectElement
+    expect(supports).not.toBeNull()
+    act(() => setValue(supports, 'unsupported'))
+    expect(button(providerControls.parentElement!, text('saveGatewayCompat'))).toBeDefined()
+
+    act(() => button(view.container, text('collapseProvider')).click())
+    expect(view.container.querySelector('[data-scope="provider"]')).toBeNull()
+    expect(view.container.querySelector(`button[aria-label="${text('saveGatewayCompat')}"]`)).toBeNull()
+
+    act(() => providerButton(view.container).click())
+    const restored = view.container.querySelector('[data-scope="provider"]') as HTMLElement
+    expect(restored).not.toBeNull()
+    expect((restored.querySelector(`select[aria-label="${text('supportsDeveloperRole')}"]`) as HTMLSelectElement).value).toBe('unsupported')
+    expect(button(restored.parentElement!, text('saveGatewayCompat'))).toBeDefined()
+    view.unmount()
+  })
+
   it('projects provider compat sources and saves field-level operations', async () => {
     const provider = {
       models: [{ id: 'model-a' }],
@@ -1025,6 +1057,7 @@ describe('SectionEditor user behavior', () => {
       })] } }),
     })
     await settle()
+    act(() => providerButton(view.container).click())
     expect(view.container.textContent).toContain(text('gatewayCompatTitle'))
     const selects = [...view.container.querySelectorAll('select')].slice(2) as HTMLSelectElement[]
     expect(selects[0]?.value).toBe('unsupported')
@@ -1048,6 +1081,7 @@ describe('SectionEditor user behavior', () => {
       mutate: async (_ns, _ops, _revision) => ({ ok: true as const, value: providerNamespace }),
     })
     await settle()
+    act(() => providerButton(view.container).click())
 
     const providerControls = [...view.container.querySelectorAll('[data-scope="provider"]')]
     expect(providerControls).toHaveLength(1)
@@ -1079,6 +1113,7 @@ describe('SectionEditor user behavior', () => {
       },
     })
     await settle()
+    act(() => providerButton(view.container).click())
 
     const providerControls = view.container.querySelector('[data-scope="provider"]') as HTMLElement
     expect(providerControls).not.toBeNull()
@@ -1121,6 +1156,7 @@ describe('SectionEditor user behavior', () => {
       },
     })
     await settle()
+    for (const expand of [...view.container.querySelectorAll<HTMLButtonElement>(`button[aria-label="${text('expandProvider')}"]`)]) act(() => expand.click())
 
     const providerControls = [...view.container.querySelectorAll('[data-scope="provider"]')]
     expect(providerControls).toHaveLength(2)
@@ -1237,6 +1273,7 @@ describe('SectionEditor user behavior', () => {
       })] } }),
     })
     await settle()
+    act(() => providerButton(view.container).click())
 
     const selects = [...view.container.querySelectorAll('select')].slice(2) as HTMLSelectElement[]
     expect(selects[0]?.value).toBe('auto')
@@ -1421,8 +1458,8 @@ describe('SectionEditor user behavior', () => {
     })
     await settle()
 
-    expect(view.container.querySelector('[data-scope="provider"]')).not.toBeNull()
     act(() => providerButton(view.container).click())
+    expect(view.container.querySelector('[data-scope="provider"]')).not.toBeNull()
     const overrideModelButton = [...view.container.querySelectorAll<HTMLButtonElement>(`button[aria-label="${text('openModelSettings')}"]`)]
       .find((candidate) => candidate.parentElement?.parentElement?.parentElement?.textContent?.includes('override-model'))
     expect(overrideModelButton).toBeDefined()
