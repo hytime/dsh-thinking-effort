@@ -335,6 +335,7 @@ async function probePackagedArtifactHandMountedRuntime(
   process.env.DSH_HOME = agentHome
   const markerPath = join(agentHome, 'thinking-effort-loaded.json')
   const originalFetch = globalThis.fetch
+   let hostFiber: { dispose: () => Promise<void> } | undefined
   const wireRequestsByKey = new Map<string, ProbeWireRequest[]>()
   const requestRecordsByKey = new Map<string, ProbeRequestRecord[]>()
   globalThis.fetch = (async (input, init) => {
@@ -354,7 +355,7 @@ async function probePackagedArtifactHandMountedRuntime(
   try {
     const ctx = new Context()
     try {
-      await ctx.plugin(timer.default).await()
+       await ctx.plugin(timer.default).await()
       await ctx.plugin(settingsFile.default ?? settingsFile.FileSettingsProvider, { dshHome: agentHome, watch: false }).await()
       const z = schemastery.default as {
         object: (shape: Record<string, unknown>) => unknown
@@ -498,7 +499,7 @@ async function probePackagedArtifactHandMountedRuntime(
     const withoutProduct = await runAgent(`agent-probe-baseline-${Date.now()}`, 'probe', 'model-a')
 
     const host = await import(pathToFileURL(hostEntry).href) as { name: string; inject?: readonly string[]; apply: (context: unknown) => void }
-    await ctx.plugin(host).await()
+    hostFiber = await ctx.plugin(host).await() as { dispose: () => Promise<void> }
     const productionFetch = globalThis.fetch
     expect(productionFetch).not.toBe(originalFetch)
 
@@ -540,6 +541,7 @@ async function probePackagedArtifactHandMountedRuntime(
        },
      }
     } finally {
+      await hostFiber?.dispose()
       await ctx.fiber.dispose()
       try {
         expect(globalThis.fetch).toBe(originalFetch)
