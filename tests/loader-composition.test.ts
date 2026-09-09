@@ -464,7 +464,7 @@ async function probePackagedArtifactHandMountedRuntime(
        const requestKey = requestKeyOf(sessionId, provider, model)
       const handle = await ctx.agents.create({
         sessionId,
-        meta: { origin: 'subagent' },
+        meta: { origin: 'main' },
         agentOptions: { provider, model },
       })
       try {
@@ -1561,13 +1561,13 @@ integrationDescribe('official DSH loader composition', () => {
     expect(handMountedProbe.withoutProduct).toMatchObject({
       requestCount: 1,
       reasoningEffort: 'low',
-      origin: 'subagent',
+      origin: 'main',
       turnEnd: 'turn/end',
     })
     expect(handMountedProbe.withProduct).toMatchObject({
       requestCount: 1,
       reasoningEffort: 'high',
-      origin: 'subagent',
+      origin: 'main',
       turnEnd: 'turn/end',
     })
          const baselineRecords = handMountedProbe.outbound.baseline
