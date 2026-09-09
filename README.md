@@ -111,7 +111,7 @@ See [INSTALL.md](./docs/INSTALL.md) for profile discovery, migration, validation
    | `high` | `ultra` |
    | `max` | `max` |
 
-7. In the model editor, optionally enable **OpenCode session Header** for the exact model that needs `x-opencode-session`. It is off by default, uses the current DSH session ID dynamically, and does not inherit across models or providers.
+7. In the model editor, optionally enable **OpenCode session Header** for the exact model that needs `x-opencode-session`. It is off by default, uses the current DSH session ID dynamically, does not inherit across models or providers, and saves immediately when toggled — there is no separate save button.
 8. Return to Composer, choose the configured model, then use its reasoning-effort slider.
 
 ### Composer reasoning-effort slider
@@ -149,7 +149,7 @@ These compat values are control plane configuration. They do not implement or re
 
 ### OpenCode session Header compatibility
 
-The model editor has a separate **OpenCode session Header** switch. It is off by default and is stored in the plugin's own `dsh-thinking-effort` Settings namespace, not in `llm-pi-ai.compat`. Enable it only for the exact `provider/model` that requires `x-opencode-session`; another model on the same route, including a GPT model, does not inherit it.
+The model editor has a separate **OpenCode session Header** switch. It is off by default and is stored in the plugin's own `dsh-thinking-effort` Settings namespace, not in `llm-pi-ai.compat`. Enable it only for the exact `provider/model` that requires `x-opencode-session`; another model on the same route, including a GPT model, does not inherit it. Flipping the switch saves immediately — there is no separate save button — and reopening the model shows the persisted value.
 
 When enabled, the Host sends `x-opencode-session: <current DSH session ID>` on matching `llm/stream` requests. The value follows the current conversation and is not stored in Settings or replaced with a fixed value. An existing `x-opencode-session` supplied by the adapter or caller is preserved. The setting does not choose or change `openai-completions`, `openai-responses`, or `anthropic-messages`.
 

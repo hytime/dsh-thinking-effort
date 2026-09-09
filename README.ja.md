@@ -107,7 +107,7 @@ profile の確認、移行、検証、トラブルシューティングについ
    | `high` | `ultra` |
    | `max` | `max` |
 
-7. モデル編集で、`x-opencode-session` が必要な正確なモデルだけに **OpenCode セッション Header** を有効にします。既定では無効で、現在の DSH セッション ID を動的に使用し、同じルートの他モデルや別 provider へ継承しません。
+7. モデル編集で、`x-opencode-session` が必要な正確なモデルだけに **OpenCode セッション Header** を有効にします。既定では無効で、現在の DSH セッション ID を動的に使用し、同じルートの他モデルや別 provider へ継承しません。トグルすると即保存され、別途保存ボタンはありません。
 8. Composer に戻り、設定したモデルを選択して推論セレクターを使用します。
 
 設定ページ右下には `v0.1.14` のような小さなバージョン表示が出ます。
@@ -137,7 +137,7 @@ Settings の provider グローバル領域では、その provider の全モデ
 
 ### OpenCode セッション Header 互換性
 
-モデル編集には独立した **OpenCode セッション Header** スイッチがあります。既定では無効で、`llm-pi-ai.compat` ではなくプラグイン固有の `dsh-thinking-effort` Settings namespace に保存されます。`x-opencode-session` が必要な正確な `provider/model` だけで有効にしてください。同じルートの別モデル（GPT モデルを含む）には継承されません。
+モデル編集には独立した **OpenCode セッション Header** スイッチがあります。既定では無効で、`llm-pi-ai.compat` ではなくプラグイン固有の `dsh-thinking-effort` Settings namespace に保存されます。`x-opencode-session` が必要な正確な `provider/model` だけで有効にしてください。同じルートの別モデル（GPT モデルを含む）には継承されません。トグルすると即保存され、別途保存ボタンはありません。モデルを開き直すと永続化された値が表示されます。
 
 有効にすると、Host は一致する `llm/stream` リクエストに `x-opencode-session: <現在の DSH セッション ID>` を送信します。値は現在の会話に追従し、Settings には保存されず、固定値にも置き換えられません。アダプターまたは呼び出し元が既に指定した `x-opencode-session` は保持します。この設定は `openai-completions`、`openai-responses`、`anthropic-messages` のプロトコルを選択または変更しません。
 

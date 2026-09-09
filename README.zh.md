@@ -170,7 +170,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
    | `high` | `ultra` |
    | `max` | `max` |
 
-7. 在模型编辑器中，只有目标模型确实需要 `x-opencode-session` 时才启用「OpenCode 会话 Header」。它默认关闭，会动态使用当前 DSH 会话 ID，不会在同一路由的其他模型或不同 provider 之间继承。
+7. 在模型编辑器中，只有目标模型确实需要 `x-opencode-session` 时才启用「OpenCode 会话 Header」。它默认关闭，会动态使用当前 DSH 会话 ID，不会在同一路由的其他模型或不同 provider 之间继承；拨动开关即立即保存，没有单独的保存按钮。
 8. 回到 Composer，选择对应模型后即可使用推理档位滑块。
 
 ### Composer 推理档位滑块
@@ -208,7 +208,7 @@ providers:
 
 ### OpenCode 会话 Header 兼容
 
-模型编辑器提供独立的「OpenCode 会话 Header」开关。它默认关闭，保存在插件自有的 `dsh-thinking-effort` Settings namespace 中，不写入 `llm-pi-ai.compat`。只有确实需要 `x-opencode-session` 的精确 `provider/model` 才应启用；同一路由中的其他模型（包括 GPT 模型）不会继承该设置。
+模型编辑器提供独立的「OpenCode 会话 Header」开关。它默认关闭，保存在插件自有的 `dsh-thinking-effort` Settings namespace 中，不写入 `llm-pi-ai.compat`。只有确实需要 `x-opencode-session` 的精确 `provider/model` 才应启用；同一路由中的其他模型（包括 GPT 模型）不会继承该设置。拨动开关即立即保存，没有单独的保存按钮；重新打开模型时显示的是已持久化的值。
 
 启用后，Host 会在匹配的 `llm/stream` 请求中发送 `x-opencode-session: <当前 DSH 会话 ID>`。该值跟随当前会话，不写入 Settings，也不会替换成固定值。适配器或调用方已经提供的 `x-opencode-session` 会保留。该设置不会选择或修改 `openai-completions`、`openai-responses` 或 `anthropic-messages` 协议。
 

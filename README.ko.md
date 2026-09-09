@@ -107,7 +107,7 @@ profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](
    | `high` | `ultra` |
    | `max` | `max` |
 
-7. 모델 편집기에서 `x-opencode-session`이 필요한 정확한 모델에만 **OpenCode 세션 Header**를 활성화합니다. 기본값은 꺼져 있으며 현재 DSH 세션 ID를 동적으로 사용하고 같은 route의 다른 모델이나 다른 provider에 상속하지 않습니다.
+7. 모델 편집기에서 `x-opencode-session`이 필요한 정확한 모델에만 **OpenCode 세션 Header**를 활성화합니다. 기본값은 꺼져 있으며 현재 DSH 세션 ID를 동적으로 사용하고 같은 route의 다른 모델이나 다른 provider에 상속하지 않습니다. 토글하면 즉시 저장되며 별도의 저장 버튼이 없습니다.
 8. Composer로 돌아가 설정한 모델을 선택하고 추론 선택기를 사용합니다.
 
 설정 페이지 오른쪽 아래에는 `v0.1.14`과 같은 작은 버전 표시가 나타납니다.
@@ -137,7 +137,7 @@ Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델
 
 ### OpenCode 세션 Header 호환성
 
-모델 편집기에는 별도의 **OpenCode 세션 Header** 스위치가 있습니다. 기본값은 꺼져 있으며 `llm-pi-ai.compat`가 아니라 플러그인 전용 `dsh-thinking-effort` Settings namespace에 저장됩니다. `x-opencode-session`이 필요한 정확한 `provider/model`에만 활성화하세요. 같은 route의 다른 모델(GPT 모델 포함)에는 상속되지 않습니다.
+모델 편집기에는 별도의 **OpenCode 세션 Header** 스위치가 있습니다. 기본값은 꺼져 있으며 `llm-pi-ai.compat`가 아니라 플러그인 전용 `dsh-thinking-effort` Settings namespace에 저장됩니다. `x-opencode-session`이 필요한 정확한 `provider/model`에만 활성화하세요. 같은 route의 다른 모델(GPT 모델 포함)에는 상속되지 않습니다. 토글하면 즉시 저장되며 별도의 저장 버튼이 없습니다. 모델을 다시 열면 저장된 값이 표시됩니다.
 
 활성화하면 Host가 일치하는 `llm/stream` 요청에 `x-opencode-session: <현재 DSH 세션 ID>`를 보냅니다. 값은 현재 대화를 따르며 Settings에 저장하지 않고 고정 값으로 바꾸지도 않습니다. adapter 또는 호출자가 이미 제공한 `x-opencode-session`은 유지합니다. 이 설정은 `openai-completions`, `openai-responses` 또는 `anthropic-messages` 프로토콜을 선택하거나 변경하지 않습니다.
 

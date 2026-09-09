@@ -53,7 +53,7 @@ DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行
 
 ## OpenCode セッション Header
 
-OpenCode セッション Header はモデル編集内のモデル単位の設定であり、provider 全体の設定ではありません。既定では無効です。対象の正確な `provider/model` を展開し、サービスが `x-opencode-session` を必要とする場合だけ **OpenCode セッション Header** を有効にして保存してください。
+OpenCode セッション Header はモデル編集内のモデル単位の設定であり、provider 全体の設定ではありません。既定では無効です。対象の正確な `provider/model` を展開し、サービスが `x-opencode-session` を必要とする場合だけ **OpenCode セッション Header** を有効にしてください。トグルすると即保存され、別途保存ボタンはありません。
 
 Host は一致する `llm/stream` リクエストごとに、現在の DSH 会話の `sessionId` から Header 値を動的に生成します。固定値を入力または保存する必要はありません。アダプターまたは呼び出し元が `x-opencode-session` を既に指定している場合、その値を保持し、上書きしません。この設定は新しい Remote Settings transport と旧来の `connection.api.settings` transport の両方で動作します。同じルートの GPT など OpenCode 以外のモデルには継承されず、ルートの `api` プロトコルも変更しません。
 
