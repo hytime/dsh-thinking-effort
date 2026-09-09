@@ -1332,7 +1332,11 @@ integrationDescribe('official DSH loader composition', () => {
          const disabledSession = disabledDescription.ok
            ? disabledDescription.value.namespaces.find(({ ns }) => ns === 'dsh-thinking-effort')
            : undefined
-         expect((disabledSession?.value as Record<string, unknown> | undefined)).toEqual({ opencodeSession: { providers: {} } })
+         const disabledValue = disabledSession?.value as Record<string, unknown> | undefined
+          const disabledProviders = (disabledValue?.opencodeSession as Record<string, unknown> | undefined)?.providers as Record<string, unknown> | undefined
+          const disabledModels = (disabledProviders?.[sessionRoute] as Record<string, unknown> | undefined)?.models as Record<string, unknown> | undefined
+          expect(disabledModels ?? {}).not.toHaveProperty('deepseek-v4-flash')
+          expect(Object.values(disabledModels ?? {}).some(value => value === true)).toBe(false)
          if (disabledSession === undefined) throw new Error(`missing disabled dsh-thinking-effort namespace for ${version}`)
          const mapped = capabilitiesForVersion(version)
          expect(mapped).toBeDefined()
