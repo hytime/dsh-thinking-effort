@@ -545,7 +545,7 @@ async function probePackagedArtifactHandMountedRuntime(
       await hostFiber?.dispose()
       await ctx.fiber.dispose()
       try {
-        expect(globalThis.fetch).toBe(originalFetch)
+        expect(globalThis.fetch).toBe(probeFetch)
       } finally {
         globalThis.fetch = originalFetch
       }
