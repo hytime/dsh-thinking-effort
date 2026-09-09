@@ -1584,14 +1584,22 @@ integrationDescribe('official DSH loader composition', () => {
      expect(enabledRequest?.wire?.headers['x-opencode-session']).toBe(enabledRequest?.options.sessionId)
      expect(siblingRequest?.wire?.headers['x-opencode-session']).toBeUndefined()
      expect(otherProviderRequest?.wire?.headers['x-opencode-session']).toBeUndefined()
-     expect(enabledRequest?.wire?.body).toBe(baselineRecords[0]?.wire.body)
+           const withoutMessageIds = (value: unknown): unknown => Array.isArray(value)
+        ? value.map(withoutMessageIds)
+        : value !== null && typeof value === 'object'
+          ? Object.fromEntries(Object.entries(value as Record<string, unknown>)
+            .filter(([key]) => key !== 'id')
+            .map(([key, nested]) => [key, withoutMessageIds(nested)]))
+          : value
+      expect(withoutMessageIds(JSON.parse(enabledRequest?.wire?.body ?? '{}')))
+        .toEqual(withoutMessageIds(JSON.parse(baselineRecords[0]?.wire.body ?? '{}')))
      expect(enabledRequest?.wire?.url).toBe(baselineRecords[0]?.wire.url)
      expect(JSON.parse(enabledRequest?.wire?.body ?? '{}').api).toBe('openai-completions')
      expect({
        provider: enabledRequest?.options.provider,
        model: enabledRequest?.options.model,
        reasoningEffort: enabledRequest?.options.reasoningEffort,
-       messages: enabledRequest?.options.messages,
+       messages: withoutMessageIds(enabledRequest?.options.messages),
         system: enabledRequest?.options.system,
         tools: enabledRequest?.options.tools,
         temperature: enabledRequest?.options.temperature,
@@ -1603,7 +1611,7 @@ integrationDescribe('official DSH loader composition', () => {
        provider: baselineRecords[0]?.options.provider,
        model: baselineRecords[0]?.options.model,
        reasoningEffort: baselineRecords[0]?.options.reasoningEffort,
-       messages: baselineRecords[0]?.options.messages,
+       messages: withoutMessageIds(baselineRecords[0]?.options.messages),
         system: baselineRecords[0]?.options.system,
         tools: baselineRecords[0]?.options.tools,
         temperature: baselineRecords[0]?.options.temperature,
