@@ -23,6 +23,8 @@
 > DSH `0.1.2-alpha.1` 이상은 `LocaleRuntime`의 language-pack 확장을 지원합니다. 이 플러그인은 `ja`와 `ko`를 동적으로 등록하므로 DSH fork가 필요하지 않습니다. 고정된 내장 locale ID만 허용하는 이전 DSH에서는 `zh`와 `en`만 사용할 수 있습니다.
 >
 > 게시 패키지의 실행 진입점은 `lib/index.js`(Host)와 `lib/client.js`(Client)입니다. TypeScript 또는 locale 소스를 변경한 뒤 DSH를 실행하거나 패키지를 만들기 전에 `npm run build`를 실행하세요. 현재 DSH에는 공개된 semver metadata 계약이 없으므로 런타임 capability detection이 권위 있는 출처입니다. 선택적 버전은 명시적인 metadata 또는 테스트 입력이 있을 때만 사용하며, 알 수 없는 유효한 버전도 감지된 capability에 따라 계속 실행합니다. 최신 `remote.settings`와 이전 `connection.api.settings`를 모두 지원합니다.
+>
+> Host는 호스트가 제공하는 Settings `installSection`을 사용할 수 있으면 그것으로 플러그인 전용 `dsh-thinking-effort` namespace를 등록하고, 그렇지 않으면 이전 `register` 경로로 폴백합니다. 런타임에 `@deepseek-ai/dsh-settings`에 의존하지 않으므로 `autoInstallPeers: false`로 설정된 DSH profile에서도 Cordis 런타임을 중복 도입하지 않고 깔끔하게 설치할 수 있습니다.
 
 ## DSH 버전 호환성
 

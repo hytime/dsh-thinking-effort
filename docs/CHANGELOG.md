@@ -23,6 +23,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - 文档补充 Sub2API/CPA 转发、静态 route Header 限制、`api` 协议不变，以及 Host 重启和 Web 刷新要求。
 - Document Sub2API/CPA forwarding, the limitation of static route Headers, unchanged `api` protocol selection, and Host restart/Web refresh requirements.
 
+### 修复 / Fixed
+
+- 发布包不再把 `@deepseek-ai/dsh-settings` 作为运行时依赖；Host 直接使用宿主提供的 Settings `installSection` 或旧版 `register` 路径。这样在 `autoInstallPeers: false` 的 DSH profile 中不会引入第二份 Cordis 运行时，也不会因缺失的 peer 解析失败。
+- The published package no longer depends on `@deepseek-ai/dsh-settings` at runtime; the Host uses the host-provided Settings `installSection` or the legacy `register` path directly. This avoids introducing a second Cordis runtime and failing peer resolution in DSH profiles with `autoInstallPeers: false`.
+
 ## [0.2.1] - 2026-09-08
 
 ### 新增 / Added

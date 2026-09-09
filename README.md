@@ -24,6 +24,8 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 > DSH `0.1.2-alpha.1` and later accept language-pack locale IDs through `LocaleRuntime`. This plugin registers `ja` and `ko` dynamically, so no DSH core fork is required. Older DSH builds that only expose built-in locale IDs support `zh` and `en` only.
 >
 > The published runtime entries are `lib/index.js` (Host) and `lib/client.js` (Client). After changing TypeScript or locale sources, run `npm run build` before running DSH or packing the plugin. Current DSH does not expose a public semver metadata contract, so runtime capability detection is authoritative. An optional version is used only when explicit metadata or test input supplies it; unknown valid versions still use the detected capabilities. The plugin supports both modern `remote.settings` and legacy `connection.api.settings`.
+>
+> The Host registers its `dsh-thinking-effort` Settings namespace through the host-provided Settings `installSection` when available, and falls back to the legacy `register` path otherwise. It does not depend on `@deepseek-ai/dsh-settings` at runtime, so the package installs cleanly into DSH profiles configured with `autoInstallPeers: false` without introducing a second Cordis runtime.
 
 ## DSH compatibility
 

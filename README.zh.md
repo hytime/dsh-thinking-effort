@@ -24,6 +24,8 @@
 > DSH `0.1.2-alpha.1` 及更高版本通过 `LocaleRuntime` 支持语言包注册外部 locale ID。本插件会动态注册 `ja` 和 `ko`，无需维护 DSH fork。只支持固定内置 locale ID 的旧版 DSH 仍只能使用 `zh` 和 `en`。
 >
 > 发布包的运行入口是 `lib/index.js`（Host）和 `lib/client.js`（Client）。修改 TypeScript 或 locale 源文件后，运行 `npm run build`，再启动 DSH 或打包插件。当前 DSH 没有公开的 semver metadata 契约，因此运行时能力探测是权威来源。只有显式 metadata 或测试输入提供时才使用可选版本；未知合法版本仍按实际能力运行。插件同时支持新版 `remote.settings` 和旧版 `connection.api.settings`。
+>
+> Host 在宿主提供 Settings `installSection` 时用它注册插件自有的 `dsh-thinking-effort` namespace，否则回退到旧版 `register` 路径。插件不在运行时依赖 `@deepseek-ai/dsh-settings`，因此在配置为 `autoInstallPeers: false` 的 DSH profile 中也能干净安装，不会引入第二份 Cordis 运行时。
 
 ## DSH 版本兼容
 
