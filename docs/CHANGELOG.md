@@ -14,6 +14,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-09
+
 ### 新增 / Added
 
 - 新增模型级 OpenCode 会话 Header 开关。它默认关闭，只对精确的 `provider/model` 动态发送当前 DSH `sessionId` 作为 `x-opencode-session`，不保存固定值，也不会继承到同一路由的 GPT 或其他模型。已有的 `x-opencode-session` 会被保留，不会被覆盖；该设置支持新版 Remote Settings 和旧版 `connection.api.settings` 两种 Settings transport。

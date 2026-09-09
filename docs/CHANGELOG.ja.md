@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-09
+
 ### 追加
 
 - モデル単位の OpenCode セッション Header スイッチを追加しました。既定では無効で、正確な `provider/model` だけに現在の DSH `sessionId` を `x-opencode-session` として動的に送信します。固定値は保存せず、同じルートの GPT など他モデルにも継承しません。既存の `x-opencode-session` は保持され、上書きされません。この設定は新しい Remote Settings と旧来の `connection.api.settings` の両方の Settings transport に対応します。
