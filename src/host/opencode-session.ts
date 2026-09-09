@@ -1,5 +1,4 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import * as settingsModule from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import {
   isOpenCodeSessionEnabled,
@@ -154,25 +153,6 @@ function fetchWithSession(
   })
 }
 
-type SettingsCompatibilityExports = {
-  readonly installSettingsSection?: (
-    context: unknown,
-    namespace: string,
-    schema: unknown,
-    entry: unknown,
-    hooks: SettingsSectionHooks,
-  ) => void
-  readonly settingsNamespace?: (value: string) => string
-}
-
-const compatibilityExports = settingsModule as unknown as SettingsCompatibilityExports
-
-function settingsNamespace(): string {
-  return typeof compatibilityExports.settingsNamespace === 'function'
-    ? compatibilityExports.settingsNamespace(OPENCODE_SESSION_NAMESPACE)
-    : OPENCODE_SESSION_NAMESPACE
-}
-
 function installLegacySettingsSection(
   ctx: HostContext,
   namespace: string,
@@ -201,23 +181,14 @@ function installLegacySettingsSection(
 }
 
 function installSettingsSectionCompat(ctx: HostContext, hooks: SettingsSectionHooks): void {
-  const namespace = settingsNamespace()
   const settings = ctx.settings
   const installSection = settings?.installSection
-  if (typeof installSection === 'function' && typeof ctx.inject !== 'function') {
-    installSection.call(settings, ctx, namespace, OPENCODE_SESSION_SETTINGS_SCHEMA, {}, hooks)
-    return
-  }
-  if (typeof compatibilityExports.installSettingsSection === 'function' && typeof ctx.inject === 'function') {
-    compatibilityExports.installSettingsSection(ctx, namespace, OPENCODE_SESSION_SETTINGS_SCHEMA, {}, hooks)
-    return
-  }
   if (typeof installSection === 'function') {
-    installSection.call(settings, ctx, namespace, OPENCODE_SESSION_SETTINGS_SCHEMA, {}, hooks)
+    installSection.call(settings, ctx, OPENCODE_SESSION_NAMESPACE, OPENCODE_SESSION_SETTINGS_SCHEMA, {}, hooks)
     return
   }
 
-  installLegacySettingsSection(ctx, namespace, hooks)
+  installLegacySettingsSection(ctx, OPENCODE_SESSION_NAMESPACE, hooks)
 }
 
 /** Install the optional OpenCode session namespace and request Header bridge. */
