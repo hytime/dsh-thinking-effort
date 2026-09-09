@@ -498,7 +498,7 @@ async function probePackagedArtifactHandMountedRuntime(
     const withoutProduct = await runAgent(`agent-probe-baseline-${Date.now()}`, 'probe', 'model-a')
 
     const host = await import(pathToFileURL(hostEntry).href) as { name: string; inject?: readonly string[]; apply: (context: unknown) => void }
-    await ctx.plugin({ name: host.name, inject: host.inject, apply: host.apply }).await()
+    await ctx.plugin(host).await()
     const productionFetch = globalThis.fetch
     expect(productionFetch).not.toBe(originalFetch)
 
@@ -1236,7 +1236,7 @@ integrationDescribe('official DSH loader composition', () => {
       `const cordis = await import(${JSON.stringify(pathToFileURL(join(cliRoot, 'vendor/cordis/lib/index.js')).href)})`,
       `const host = await import(${JSON.stringify(pathToFileURL(hostEntry).href)})`,
       'const ctx = new cordis.Context()',
-      'await ctx.plugin({ name: host.name, inject: host.inject, apply: host.apply }).await()',
+      'await ctx.plugin(host).await()',
       'await ctx.fiber.dispose()',
     ].join(';')], {
       cwd: cliRoot,
