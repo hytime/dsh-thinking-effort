@@ -335,10 +335,10 @@ async function probePackagedArtifactHandMountedRuntime(
   process.env.DSH_HOME = agentHome
   const markerPath = join(agentHome, 'thinking-effort-loaded.json')
   const originalFetch = globalThis.fetch
-   let hostFiber: { dispose: () => Promise<void> } | undefined
+  let hostFiber: { dispose: () => Promise<void> } | undefined
   const wireRequestsByKey = new Map<string, ProbeWireRequest[]>()
   const requestRecordsByKey = new Map<string, ProbeRequestRecord[]>()
-  globalThis.fetch = (async (input, init) => {
+  const probeFetch = (async (input, init) => {
     const headers = new Headers(init?.headers)
     const key = headers.get('x-probe-request-key')
     if (key === null) throw new Error('probe request did not carry its request key')
@@ -352,10 +352,11 @@ async function probePackagedArtifactHandMountedRuntime(
     wireRequestsByKey.set(key, queued)
     return new Response('ok')
   }) as typeof fetch
+  globalThis.fetch = probeFetch
   try {
     const ctx = new Context()
     try {
-       await ctx.plugin(timer.default).await()
+      await ctx.plugin(timer.default).await()
       await ctx.plugin(settingsFile.default ?? settingsFile.FileSettingsProvider, { dshHome: agentHome, watch: false }).await()
       const z = schemastery.default as {
         object: (shape: Record<string, unknown>) => unknown
