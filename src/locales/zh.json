@@ -138,5 +138,12 @@
   "seatSearchModels": "搜索模型",
   "seatNoModelResults": "没有匹配的模型",
   "seatErrorAction": "模型操作失败：{message}",
-  "modelsArrayCompatSaveNote": "保存后只会修改当前模型的设置，不会影响其他模型。"
+  "modelsArrayCompatSaveNote": "保存后只会修改当前模型的设置，不会影响其他模型。",
+  "opencodeSessionHeader": "OpenCode 会话 Header",
+  "opencodeSessionHeaderTitle": "OpenCode 会话 Header",
+  "opencodeSessionHeaderDescription": "为 OpenCode、OpenCode Go 或会继续转发该 Header 的中转服务，为当前模型动态发送 DSH 会话 ID（x-opencode-session）。",
+  "saveOpenCodeSession": "保存 OpenCode 会话 Header",
+  "saveOpenCodeSessionAria": "保存 OpenCode 会话 Header 设置",
+  "opencodeSessionSaved": "OpenCode 会话 Header 已保存",
+  "opencodeSessionSaveFailed": "OpenCode 会话 Header 保存失败：{message}"
 }

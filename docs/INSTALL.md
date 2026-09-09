@@ -51,6 +51,16 @@ The version map applies these gateway capability rules:
 From DSH `0.1.0-rc.8` onward, field availability follows the runtime schema.
 DSH `0.1.0-rc.8` and later supported ranges follow the field availability shown above. The UI does not show fields that the runtime schema does not expose. If the optional transport is absent or disabled, no takeover is applied.
 
+## OpenCode session Header
+
+The OpenCode session Header setting is a model-level control in the model editor, not a provider-global option. It is off by default. Expand the exact `provider/model`, enable **OpenCode session Header**, and save it only when the target service requires `x-opencode-session`.
+
+The Host derives the Header value from the current DSH conversation's `sessionId` for each matching `llm/stream` request. You do not enter or store a fixed value. An existing `x-opencode-session` supplied by the adapter or caller is preserved and never overwritten. The setting works through both the modern Remote Settings transport and the legacy `connection.api.settings` transport. Models that share the route, including GPT or other non-OpenCode models, do not inherit the setting, and the setting does not change the route's `api` protocol.
+
+If the request passes through Sub2API, CPA, or another forwarding gateway, verify that it preserves and forwards `x-opencode-session` to the OpenCode upstream. A static route setting such as `llm-pi-ai.providers.<route>.headers.x-opencode-session` is not equivalent because one fixed value is shared by all conversations.
+
+After changing Host code or the plugin package, restart DSH. After changing Settings or Client code, refresh the Web page before testing the model request.
+
 ## Gateway compatibility settings
 
 The provider global area in the Settings page edits the default `compat` values for every model under that provider. Expanding one model opens its single-model area. The four groups are collapsed by default.

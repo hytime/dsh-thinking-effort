@@ -247,16 +247,57 @@ async function probeOfficialClientRuntime(
   return results
 }
 
-async function probeOfficialAgentRuntime(
+type ProbeWireRequest = {
+  readonly url: string
+  readonly headers: Record<string, string>
+  readonly body: string
+}
+
+type ProbeRequestFacts = {
+  readonly provider: unknown
+  readonly model: unknown
+  readonly sessionId: unknown
+  readonly reasoningEffort: unknown
+  readonly messages: unknown
+  readonly system: unknown
+  readonly tools: unknown
+  readonly temperature: unknown
+  readonly maxTokens: unknown
+  readonly stop: unknown
+  readonly purpose: unknown
+  readonly hasSignal: boolean
+  readonly body: string
+}
+
+type ProbeRequestRecord = {
+  readonly key: string
+  readonly options: ProbeRequestFacts
+  readonly wire: ProbeWireRequest
+}
+
+type ProbeAgentRun = {
+  readonly requestKey: string
+  readonly requestCount: number
+  readonly reasoningEffort: unknown
+  readonly origin: unknown
+  readonly turnEnd: string | undefined
+  readonly requests: readonly ProbeRequestRecord[]
+}
+
+async function probePackagedArtifactHandMountedRuntime(
   cliRoot: string,
   hostEntry: string,
 ): Promise<{
   settingsHome: string
   settingsPath: string
-  markerPath: string
-  marker: { event?: string; name?: string; at?: string; pid?: number }
-  withoutProduct: { requestCount: number; reasoningEffort: unknown; origin: unknown; turnEnd: string | undefined }
-  withProduct: { requestCount: number; reasoningEffort: unknown; origin: unknown; turnEnd: string | undefined }
+  handMountedMarkerPath: string
+  handMountedMarker: { event?: string; name?: string; at?: string; pid?: number }
+  withoutProduct: ProbeAgentRun
+  withProduct: ProbeAgentRun
+  outbound: {
+    readonly baseline: readonly ProbeRequestRecord[]
+    readonly product: readonly ProbeRequestRecord[]
+  }
 }> {
   const importOfficial = (relativePath: string): Promise<Record<string, unknown>> => import(
     pathToFileURL(join(cliRoot, relativePath)).href,
@@ -293,6 +334,23 @@ async function probeOfficialAgentRuntime(
   const previousHome = process.env.DSH_HOME
   process.env.DSH_HOME = agentHome
   const markerPath = join(agentHome, 'thinking-effort-loaded.json')
+  const originalFetch = globalThis.fetch
+  const wireRequestsByKey = new Map<string, ProbeWireRequest[]>()
+  const requestRecordsByKey = new Map<string, ProbeRequestRecord[]>()
+  globalThis.fetch = (async (input, init) => {
+    const headers = new Headers(init?.headers)
+    const key = headers.get('x-probe-request-key')
+    if (key === null) throw new Error('probe request did not carry its request key')
+    const wire: ProbeWireRequest = {
+      url: String(input),
+      headers: Object.fromEntries(headers.entries()),
+      body: typeof init?.body === 'string' ? init.body : '',
+    }
+    const queued = wireRequestsByKey.get(key) ?? []
+    queued.push(wire)
+    wireRequestsByKey.set(key, queued)
+    return new Response('ok')
+  }) as typeof fetch
   try {
     const ctx = new Context()
     try {
@@ -307,6 +365,7 @@ async function probeOfficialAgentRuntime(
       const settings = ctx.get('settings') as {
         register: (namespace: string, schema: unknown) => { update: (value: Record<string, unknown>) => Promise<void> }
         describe: () => Array<Record<string, unknown>>
+        mutate: (namespace: string, ops: readonly { op: 'set' | 'unset'; path: readonly string[]; value?: unknown }[], expectedRevision: number) => Promise<unknown>
         get: (namespace: string) => unknown
       }
     const settingsScope = settings.register('llm-pi-ai', z.object({
@@ -324,7 +383,15 @@ async function probeOfficialAgentRuntime(
       stream(options: Record<string, unknown>): AsyncIterable<Record<string, unknown>>
     }
     const ReasoningEffortId = llm.ReasoningEffortId as (value: string) => unknown
-    const requests: Record<string, unknown>[] = []
+    const requestKeyOf = (sessionId: string, provider: string, model: string): string => (
+      JSON.stringify([sessionId, provider, model])
+    )
+    const requestKeyFromOptions = (options: Record<string, unknown>): string => {
+      if (typeof options.sessionId !== 'string' || typeof options.provider !== 'string' || typeof options.model !== 'string') {
+        throw new Error('probe GenerateOptions lacks sessionId/provider/model')
+      }
+      return requestKeyOf(options.sessionId, options.provider, options.model)
+    }
     class ProbeAdapter extends LlmAdapter {
       override resolveModel(provider: string, model: string): Promise<Record<string, unknown>> {
         const lowEffort = ReasoningEffortId('low')
@@ -338,7 +405,43 @@ async function probeOfficialAgentRuntime(
       }
 
       override async * stream(options: Record<string, unknown>): AsyncIterable<Record<string, unknown>> {
-        requests.push(options)
+        const requestKey = requestKeyFromOptions(options)
+        const body = JSON.stringify({
+           api: 'openai-completions',
+           provider: options.provider,
+           model: options.model,
+           messages: options.messages,
+         })
+         await fetch('http://gateway.test/v1/chat/completions', {
+           method: 'POST',
+           headers: { 'content-type': 'application/json', 'x-probe-request-key': requestKey },
+           body,
+         })
+         const wire = wireRequestsByKey.get(requestKey)?.shift()
+          if (wire === undefined) throw new Error(`missing wire record for ${requestKey}`)
+          const record: ProbeRequestRecord = {
+            key: requestKey,
+            wire,
+            options: {
+
+           provider: options.provider,
+           model: options.model,
+           sessionId: options.sessionId,
+           reasoningEffort: options.reasoningEffort,
+           messages: options.messages,
+           system: options.system,
+           tools: options.tools,
+           temperature: options.temperature,
+           maxTokens: options.maxTokens,
+           stop: options.stop,
+           purpose: options.purpose,
+           hasSignal: options.signal instanceof AbortSignal,
+           body,
+         },
+         }
+         const records = requestRecordsByKey.get(requestKey) ?? []
+         records.push(record)
+         requestRecordsByKey.set(requestKey, records)
         const text = 'real agent runtime probe'
         yield { type: 'block-start', index: 0, blockType: 'text' }
         yield { type: 'text-delta', index: 0, text }
@@ -353,13 +456,14 @@ async function probeOfficialAgentRuntime(
     await ctx.plugin(tools.default, {}).await()
     await ctx.plugin(agents.default).await()
     await ctx.plugin(agentLoop.default, { agents: [] }).await()
-    ctx.llm.registerAdapter(['probe'], new ProbeAdapter())
+    ctx.llm.registerAdapter(['probe', 'other'], new ProbeAdapter())
 
-    const runAgent = async (sessionId: string): Promise<{ requestCount: number; reasoningEffort: unknown; origin: unknown; turnEnd: string | undefined }> => {
+    const runAgent = async (sessionId: string, provider = 'probe', model = 'probe-model'): Promise<ProbeAgentRun> => {
+       const requestKey = requestKeyOf(sessionId, provider, model)
       const handle = await ctx.agents.create({
         sessionId,
         meta: { origin: 'subagent' },
-        agentOptions: { provider: 'probe', model: 'probe-model' },
+        agentOptions: { provider, model },
       })
       try {
         const message = (llm.createUserMessage as (input: Record<string, unknown>) => unknown)({
@@ -377,21 +481,43 @@ async function probeOfficialAgentRuntime(
           ? session.snapshotEvents()
           : session.events ?? []
         const turnEnd = [...events].reverse().find((event) => event.type === 'turn/end')
+        const requests = [...(requestRecordsByKey.get(requestKey) ?? [])]
         return {
+          requestKey,
           requestCount: requests.length,
-          reasoningEffort: requests.at(-1)?.reasoningEffort,
+          reasoningEffort: requests.at(-1)?.options.reasoningEffort,
           origin: session.header.origin,
           turnEnd: turnEnd?.type,
+          requests,
         }
       } finally {
         await handle.dispose()
       }
     }
 
-    const withoutProduct = await runAgent(`agent-probe-baseline-${Date.now()}`)
+    const withoutProduct = await runAgent(`agent-probe-baseline-${Date.now()}`, 'probe', 'model-a')
+
     const host = await import(pathToFileURL(hostEntry).href) as { apply: (context: unknown) => void }
     host.apply(ctx)
-    const withProduct = await runAgent(`agent-probe-product-${Date.now()}`)
+    const productionFetch = globalThis.fetch
+    expect(productionFetch).not.toBe(originalFetch)
+
+
+    const sessionNamespace = settings.describe().find(entry => entry.ns === 'dsh-thinking-effort')
+    expect(sessionNamespace).toBeDefined()
+    if (sessionNamespace === undefined) throw new Error('missing dsh-thinking-effort namespace in agent probe')
+    const sessionPath = ['opencodeSession', 'providers', 'probe', 'models', 'model-a']
+    const enabled = await settings.mutate('dsh-thinking-effort', [{ op: 'set', path: sessionPath, value: true }], Number(sessionNamespace.revision))
+    expect(enabled).toMatchObject({ ok: true })
+    await new Promise<void>((resolveWait) => setImmediate(resolveWait))
+    const productRuns = await Promise.all([
+       runAgent(`agent-probe-product-enabled-${Date.now()}`, 'probe', 'model-a'),
+       runAgent(`agent-probe-product-sibling-${Date.now()}`, 'probe', 'model-b'),
+       runAgent(`agent-probe-product-provider-${Date.now()}`, 'other', 'model-a'),
+     ])
+    const withProduct = productRuns[0]!
+
+
     const marker = JSON.parse(readFileSync(markerPath, 'utf8')) as {
       event?: string
       name?: string
@@ -401,9 +527,25 @@ async function probeOfficialAgentRuntime(
     expect(marker).toMatchObject({ event: 'apply', name: '@hytime/dsh-thinking-effort' })
     expect(marker.at).toEqual(expect.any(String))
     expect(marker.pid).toEqual(expect.any(Number))
-    return { settingsHome: agentHome, settingsPath, markerPath, marker, withoutProduct, withProduct }
+    return {
+       settingsHome: agentHome,
+       settingsPath,
+       handMountedMarkerPath: markerPath,
+       handMountedMarker: marker,
+       withoutProduct,
+       withProduct,
+       outbound: {
+         baseline: withoutProduct.requests,
+         product: productRuns.flatMap((run) => run.requests),
+       },
+     }
     } finally {
       await ctx.fiber.dispose()
+      try {
+        expect(globalThis.fetch).toBe(originalFetch)
+      } finally {
+        globalThis.fetch = originalFetch
+      }
     }
   } finally {
     if (previousHome === undefined) delete process.env.DSH_HOME
@@ -1091,8 +1233,11 @@ integrationDescribe('official DSH loader composition', () => {
     expect(existsSync(clientEntry)).toBe(true)
 
     execFileSync(process.execPath, ['--input-type=module', '-e', [
+      `const cordis = await import(${JSON.stringify(pathToFileURL(join(cliRoot, 'vendor/cordis/lib/index.js')).href)})`,
       `const host = await import(${JSON.stringify(pathToFileURL(hostEntry).href)})`,
-      'host.apply({ settings: undefined, timeout: () => {}, on: () => {} })',
+      'const ctx = new cordis.Context()',
+      'host.apply(ctx)',
+      'await ctx.fiber.dispose()',
     ].join(';')], {
       cwd: cliRoot,
       env: { ...process.env, DSH_HOME: home },
@@ -1128,6 +1273,17 @@ integrationDescribe('official DSH loader composition', () => {
         const mutateEndpoint = legacyRpc ? 'settings.mutate' : 'settings/mutate'
         const settingsDescribe = await callOfficialRpc(web.url, headers, describeEndpoint, {}, !legacyRpc)
         expect(settingsDescribe.status).toBe(200)
+         const webMarkerPath = join(webHome, 'thinking-effort-loaded.json')
+         expect(existsSync(webMarkerPath)).toBe(true)
+         const webMarker = JSON.parse(readFileSync(webMarkerPath, 'utf8')) as {
+           event?: string
+           name?: string
+           at?: string
+           pid?: number
+         }
+         expect(webMarker).toMatchObject({ event: 'apply', name: '@hytime/dsh-thinking-effort' })
+         expect(webMarker.at).toEqual(expect.any(String))
+         expect(webMarker.pid).toEqual(expect.any(Number))
          const liveResult = (endpoint: string, args: Record<string, unknown>): Promise<unknown> => (
           callOfficialRpc(web.url, headers, endpoint, args, !legacyRpc).then((response) => (
             legacyRpc ? { result: response.body.result } : response.body.result
@@ -1149,6 +1305,35 @@ integrationDescribe('official DSH loader composition', () => {
          if (!liveDescription.ok) throw new Error(liveDescription.error.message)
          const piAiNamespace = liveDescription.value.namespaces.find(({ ns }) => ns === 'llm-pi-ai')
          expect(piAiNamespace).toBeDefined()
+         const sessionNamespace = liveDescription.value.namespaces.find(({ ns }) => ns === 'dsh-thinking-effort')
+         expect(sessionNamespace).toBeDefined()
+         if (sessionNamespace === undefined) throw new Error(`missing dsh-thinking-effort namespace for ${version}`)
+         const sessionRoute = `loader-opencode-${version.replaceAll('.', '-')}`
+         const sessionPath = ['opencodeSession', 'providers', sessionRoute, 'models', 'deepseek-v4-flash']
+         const sessionEnabled = await settings!.mutate(sessionNamespace.ns, [{ op: 'set', path: sessionPath, value: true }], sessionNamespace.revision)
+         expect(sessionEnabled).toMatchObject({ ok: true, value: { ns: 'dsh-thinking-effort' } })
+         if (!sessionEnabled.ok) throw new Error(`OpenCode session enable rejected for ${version}: ${sessionEnabled.error.message}`)
+         const enabledDescription = await settings!.describe()
+         const enabledSession = enabledDescription.ok
+           ? enabledDescription.value.namespaces.find(({ ns }) => ns === 'dsh-thinking-effort')
+           : undefined
+         expect((enabledSession?.value as Record<string, unknown> | undefined)).toMatchObject({
+           opencodeSession: {
+             providers: {
+               [sessionRoute]: { models: { 'deepseek-v4-flash': true } },
+             },
+           },
+         })
+         if (enabledSession === undefined) throw new Error(`missing enabled dsh-thinking-effort namespace for ${version}`)
+         const sessionDisabled = await settings!.mutate(enabledSession.ns, [{ op: 'unset', path: sessionPath }], enabledSession.revision)
+         expect(sessionDisabled).toMatchObject({ ok: true, value: { ns: 'dsh-thinking-effort' } })
+         if (!sessionDisabled.ok) throw new Error(`OpenCode session disable rejected for ${version}: ${sessionDisabled.error.message}`)
+         const disabledDescription = await settings!.describe()
+         const disabledSession = disabledDescription.ok
+           ? disabledDescription.value.namespaces.find(({ ns }) => ns === 'dsh-thinking-effort')
+           : undefined
+         expect((disabledSession?.value as Record<string, unknown> | undefined)).toEqual({ opencodeSession: { providers: {} } })
+         if (disabledSession === undefined) throw new Error(`missing disabled dsh-thinking-effort namespace for ${version}`)
          const mapped = capabilitiesForVersion(version)
          expect(mapped).toBeDefined()
          const editability = editableProviderCompatFields(mapped, piAiNamespace?.schema)
@@ -1362,24 +1547,69 @@ integrationDescribe('official DSH loader composition', () => {
     })
     const runtimeProbe = await probeOfficialClientRuntime(cliRoot, packagedClient)
     const previousHome = process.env.DSH_HOME
-    const agentProbe = await probeOfficialAgentRuntime(cliRoot, hostEntry)
+    // This is a packaged-artifact probe in a manually assembled real Cordis
+    // Context. Official Loader activation is asserted by the Web marker and
+    // Settings RPC above.
+    const handMountedProbe = await probePackagedArtifactHandMountedRuntime(cliRoot, hostEntry)
     expect(process.env.DSH_HOME).toBe(previousHome)
-    expect(agentProbe.withoutProduct).toMatchObject({
+    expect(handMountedProbe.withoutProduct).toMatchObject({
       requestCount: 1,
       reasoningEffort: 'low',
       origin: 'subagent',
       turnEnd: 'turn/end',
     })
-    expect(agentProbe.withProduct).toMatchObject({
-      requestCount: 2,
+    expect(handMountedProbe.withProduct).toMatchObject({
+      requestCount: 1,
       reasoningEffort: 'high',
       origin: 'subagent',
       turnEnd: 'turn/end',
     })
-    expect(existsSync(agentProbe.settingsHome)).toBe(false)
-    expect(existsSync(agentProbe.settingsPath)).toBe(false)
-    expect(existsSync(agentProbe.markerPath)).toBe(false)
-    expect(agentProbe.marker).toMatchObject({ event: 'apply', name: '@hytime/dsh-thinking-effort' })
+         const baselineRecords = handMountedProbe.outbound.baseline
+     const productRecords = handMountedProbe.outbound.product
+     expect(baselineRecords).toHaveLength(1)
+     expect(productRecords).toHaveLength(3)
+     const enabledRequest = productRecords.find(({ options }) => options.provider === 'probe' && options.model === 'model-a')
+     const siblingRequest = productRecords.find(({ options }) => options.provider === 'probe' && options.model === 'model-b')
+     const otherProviderRequest = productRecords.find(({ options }) => options.provider === 'other' && options.model === 'model-a')
+     expect(enabledRequest?.wire).toBeDefined()
+     expect(siblingRequest?.wire).toBeDefined()
+     expect(otherProviderRequest?.wire).toBeDefined()
+     expect(enabledRequest?.wire?.url).toBe('http://gateway.test/v1/chat/completions')
+     expect(enabledRequest?.wire?.headers['x-opencode-session']).toBe(enabledRequest?.options.sessionId)
+     expect(siblingRequest?.wire?.headers['x-opencode-session']).toBeUndefined()
+     expect(otherProviderRequest?.wire?.headers['x-opencode-session']).toBeUndefined()
+     expect(enabledRequest?.wire?.body).toBe(baselineRecords[0]?.wire.body)
+     expect(enabledRequest?.wire?.url).toBe(baselineRecords[0]?.wire.url)
+     expect(JSON.parse(enabledRequest?.wire?.body ?? '{}').api).toBe('openai-completions')
+     expect({
+       provider: enabledRequest?.options.provider,
+       model: enabledRequest?.options.model,
+       reasoningEffort: enabledRequest?.options.reasoningEffort,
+       messages: enabledRequest?.options.messages,
+        system: enabledRequest?.options.system,
+        tools: enabledRequest?.options.tools,
+        temperature: enabledRequest?.options.temperature,
+        maxTokens: enabledRequest?.options.maxTokens,
+        stop: enabledRequest?.options.stop,
+        purpose: enabledRequest?.options.purpose,
+        hasSignal: enabledRequest?.options.hasSignal,
+     }).toEqual({
+       provider: baselineRecords[0]?.options.provider,
+       model: baselineRecords[0]?.options.model,
+       reasoningEffort: baselineRecords[0]?.options.reasoningEffort,
+       messages: baselineRecords[0]?.options.messages,
+        system: baselineRecords[0]?.options.system,
+        tools: baselineRecords[0]?.options.tools,
+        temperature: baselineRecords[0]?.options.temperature,
+        maxTokens: baselineRecords[0]?.options.maxTokens,
+        stop: baselineRecords[0]?.options.stop,
+        purpose: baselineRecords[0]?.options.purpose,
+        hasSignal: baselineRecords[0]?.options.hasSignal,
+     })
+     expect(existsSync(handMountedProbe.settingsHome)).toBe(false)
+    expect(existsSync(handMountedProbe.settingsPath)).toBe(false)
+    expect(existsSync(handMountedProbe.handMountedMarkerPath)).toBe(false)
+    expect(handMountedProbe.handMountedMarker).toMatchObject({ event: 'apply', name: '@hytime/dsh-thinking-effort' })
     if (runtimeProbe.modern.supportsExternalLanguages) {
       expect(runtimeProbe.modern.languages).toEqual(expect.arrayContaining(['ja', 'ko']))
     } else {

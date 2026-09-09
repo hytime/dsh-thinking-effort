@@ -28,9 +28,14 @@ export interface ModelEditorProps {
   readonly compatDirty?: ModelCompatDirtyFields
   readonly compatExpanded?: boolean
   readonly onToggleCompatExpanded?: () => void
+  readonly openCodeSession?: boolean
+  readonly openCodeSessionDirty?: boolean
+  readonly openCodeSessionAvailable?: boolean
+  readonly onOpenCodeSessionChange?: (enabled: boolean) => void
+  readonly onSaveOpenCodeSession?: () => void
 }
 
-export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy, palette, t, onLevelChange, onContextChange, onOneMillionChange, onInputChange, onSave, onRestoreReasoning, onRestoreCapability, compatView, onCompatChange, onSaveCompat, compatDirty, compatExpanded, onToggleCompatExpanded }: ModelEditorProps): React.ReactElement {
+export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy, palette, t, onLevelChange, onContextChange, onOneMillionChange, onInputChange, onSave, onRestoreReasoning, onRestoreCapability, compatView, onCompatChange, onSaveCompat, compatDirty, compatExpanded, onToggleCompatExpanded, openCodeSession, openCodeSessionDirty = false, openCodeSessionAvailable = false, onOpenCodeSessionChange, onSaveOpenCodeSession }: ModelEditorProps): React.ReactElement {
   const levelLabel = (level: typeof ALL_LEVELS[number]): string => t(LEVEL_LABEL_KEYS[level])
   const anyCompatDirty = compatDirty !== undefined && GATEWAY_COMPAT_FIELD_KEYS.some((key) => compatDirty[key] === true)
   const modelCompatControls = compatView !== undefined
@@ -41,7 +46,17 @@ export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy
     {!item.inOverrides ? <div style={{ color: palette.secondary, fontSize: '10px', marginBottom: '6px' }}>{t('modelsArrayCompatSaveNote')}</div> : null}
     {onSaveCompat ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '6px' }}><ActionButton text={t('saveModelGatewayCompat')} onClick={onSaveCompat} disabled={busy || !anyCompatDirty} tone="primary" palette={palette} icon="check" /></div> : null}
   </> : null
+  const openCodeSessionEditable = openCodeSessionAvailable && item.modelSourceConflict !== true
+  const openCodeSessionControls = openCodeSessionEditable ? <div data-scope="opencode-session" style={{ display: 'grid', gap: '5px', marginBottom: '8px', padding: '8px', border: `0.5px solid ${palette.border}`, borderRadius: '6px', backgroundColor: palette.field }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+      <span style={{ fontSize: '13px', fontWeight: 650 }}>{t('opencodeSessionHeaderTitle')}</span>
+      <SwitchControl checked={openCodeSession === true} onChange={(enabled) => onOpenCodeSessionChange?.(enabled)} disabled={busy || onOpenCodeSessionChange === undefined} label={t('opencodeSessionHeaderTitle')} palette={palette} />
+    </div>
+    <span style={{ color: palette.secondary, fontSize: '11px', lineHeight: '15px' }}>{t('opencodeSessionHeaderDescription')}</span>
+    {onSaveOpenCodeSession ? <ActionButton text={t('saveOpenCodeSession')} onClick={onSaveOpenCodeSession} disabled={busy || !openCodeSessionDirty} tone="primary" palette={palette} icon="check" label={t('saveOpenCodeSessionAria')} /> : null}
+  </div> : null
   return <div style={{ padding: '10px 12px 12px', borderTop: `0.5px solid ${palette.divider}`, backgroundColor: palette.canvas }}>
+    {openCodeSessionControls}
     {modelCompat}
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '8px', marginBottom: '8px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto', alignItems: 'center', gap: '8px', minWidth: 0, padding: '8px', border: `0.5px solid ${palette.border}`, borderRadius: '6px', backgroundColor: palette.field }}>

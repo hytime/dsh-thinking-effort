@@ -25,15 +25,47 @@ export interface AgentRequestConfig extends UnknownRecord {
   readonly reasoningEffort?: unknown
 }
 
+export interface SettingsScope {
+  readonly get: () => unknown
+  readonly watch: (callback: (...args: unknown[]) => unknown) => () => void
+}
+
+export interface SettingsInjectionContext {
+  readonly settings: HostSettings
+  readonly effect: (callback: () => void | (() => void), label?: string) => unknown
+}
+
+export interface SettingsSectionHooks {
+  readonly setSource: (source: () => unknown) => void
+  readonly onChange: () => void
+  readonly validate?: (value: unknown) => void
+}
+
 export interface HostSettings {
   readonly writable?: unknown
   readonly get: (namespace: string) => unknown
   readonly update: (namespace: string, value: UnknownRecord) => unknown
   readonly describe: () => unknown
+  readonly installSection?: (
+    owner: unknown,
+    namespace: string,
+    schema: unknown,
+    entry: unknown,
+    hooks: SettingsSectionHooks,
+  ) => void
+  readonly register?: (
+    namespace: string,
+    schema: unknown,
+    options?: UnknownRecord,
+  ) => SettingsScope
 }
 
 export interface HostContext {
   readonly settings?: HostSettings
+  readonly inject?: (
+    dependencies: readonly string[],
+    callback: (scope: SettingsInjectionContext) => void,
+  ) => unknown
   readonly timeout: (callback: () => void, delay: number) => unknown
   readonly on: (
     event: string,

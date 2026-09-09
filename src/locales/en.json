@@ -138,5 +138,12 @@
   "seatSearchModels": "Search models",
   "seatNoModelResults": "No matching models",
   "seatErrorAction": "Model operation failed: {message}",
-  "modelsArrayCompatSaveNote": "Saving changes updates only this model; other models are not affected."
+  "modelsArrayCompatSaveNote": "Saving changes updates only this model; other models are not affected.",
+  "opencodeSessionHeader": "OpenCode session Header",
+  "opencodeSessionHeaderTitle": "OpenCode session Header",
+  "opencodeSessionHeaderDescription": "For OpenCode, OpenCode Go, or a forwarding proxy, dynamically send the current DSH session ID as x-opencode-session for this model.",
+  "saveOpenCodeSession": "Save OpenCode session Header",
+  "saveOpenCodeSessionAria": "Save OpenCode session Header setting",
+  "opencodeSessionSaved": "OpenCode session Header saved",
+  "opencodeSessionSaveFailed": "Failed to save OpenCode session Header: {message}"
 }

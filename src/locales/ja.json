@@ -138,5 +138,12 @@
   "seatSearchModels": "モデルを検索",
   "seatNoModelResults": "一致するモデルがありません",
   "seatErrorAction": "モデル操作に失敗しました：{message}",
-  "modelsArrayCompatSaveNote": "保存すると、このモデルの設定だけが変更され、他のモデルには影響しません。"
+  "modelsArrayCompatSaveNote": "保存すると、このモデルの設定だけが変更され、他のモデルには影響しません。",
+  "opencodeSessionHeader": "OpenCode セッション Header",
+  "opencodeSessionHeaderTitle": "OpenCode セッション Header",
+  "opencodeSessionHeaderDescription": "OpenCode、OpenCode Go、またはこの Header を転送するプロキシ向けに、このモデルの現在の DSH セッション ID を x-opencode-session として動的に送信します。",
+  "saveOpenCodeSession": "OpenCode セッション Header を保存",
+  "saveOpenCodeSessionAria": "OpenCode セッション Header 設定を保存",
+  "opencodeSessionSaved": "OpenCode セッション Header を保存しました",
+  "opencodeSessionSaveFailed": "OpenCode セッション Header の保存に失敗しました：{message}"
 }

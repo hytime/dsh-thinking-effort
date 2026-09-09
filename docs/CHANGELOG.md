@@ -14,6 +14,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 新增 / Added
+
+- 新增模型级 OpenCode 会话 Header 开关。它默认关闭，只对精确的 `provider/model` 动态发送当前 DSH `sessionId` 作为 `x-opencode-session`，不保存固定值，也不会继承到同一路由的 GPT 或其他模型。已有的 `x-opencode-session` 会被保留，不会被覆盖；该设置支持新版 Remote Settings 和旧版 `connection.api.settings` 两种 Settings transport。
+- Add a model-level OpenCode session Header switch. It is off by default and sends the current DSH `sessionId` as `x-opencode-session` only for the exact `provider/model`; it stores no fixed value and does not inherit to GPT or other models on the same route. An existing `x-opencode-session` is preserved and never overwritten; the setting supports both modern Remote Settings and legacy `connection.api.settings` transports.
+- 文档补充 Sub2API/CPA 转发、静态 route Header 限制、`api` 协议不变，以及 Host 重启和 Web 刷新要求。
+- Document Sub2API/CPA forwarding, the limitation of static route Headers, unchanged `api` protocol selection, and Host restart/Web refresh requirements.
+
 ## [0.2.1] - 2026-09-08
 
 ### 新增 / Added

@@ -138,5 +138,12 @@
   "seatSearchModels": "모델 검색",
   "seatNoModelResults": "일치하는 모델이 없습니다",
   "seatErrorAction": "모델 작업에 실패했습니다: {message}",
-  "modelsArrayCompatSaveNote": "저장하면 현재 모델의 설정만 변경되며 다른 모델에는 영향을 주지 않습니다."
+  "modelsArrayCompatSaveNote": "저장하면 현재 모델의 설정만 변경되며 다른 모델에는 영향을 주지 않습니다.",
+  "opencodeSessionHeader": "OpenCode 세션 Header",
+  "opencodeSessionHeaderTitle": "OpenCode 세션 Header",
+  "opencodeSessionHeaderDescription": "OpenCode, OpenCode Go 또는 이 Header를 전달하는 프록시를 위해 현재 DSH 세션 ID를 이 모델의 x-opencode-session으로 동적으로 보냅니다.",
+  "saveOpenCodeSession": "OpenCode 세션 Header 저장",
+  "saveOpenCodeSessionAria": "OpenCode 세션 Header 설정 저장",
+  "opencodeSessionSaved": "OpenCode 세션 Header를 저장했습니다",
+  "opencodeSessionSaveFailed": "OpenCode 세션 Header를 저장하지 못했습니다: {message}"
 }

@@ -75,6 +75,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 | 默认档位补齐 | 为缺少配置的模型添加 `off`、`high`、`max`，不覆盖已有自定义值 |
 | 模型级编辑 | 在「设置 → 模型能力与档位」中逐模型勾选档位并填写线上值；catalog/modelOverrides 和 `models[]` 模型都可编辑 compat |
 | 网关兼容配置 | 按 provider 全局或单个模型配置 15 个常用标量字段，按角色与推理、格式与输出、流式与工具、存储与缓存分组并默认收起 |
+| OpenCode 会话 Header | 按精确模型启用动态 `x-opencode-session`，使用当前 DSH 会话 ID，不保存固定 Header 值 |
 | 网关值映射 | 例如 DSH 选择 `high` 时，实际向网关发送 `ultra` |
 | 子 agent 默认值 | 为未显式指定档位的子 agent 请求自动填入默认思考强度 |
 | 快捷预设 | 一键应用官方 DeepSeek 风格或通用档位组合 |
@@ -167,7 +168,8 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
    | `high` | `ultra` |
    | `max` | `max` |
 
-7. 回到 Composer，选择对应模型后即可使用推理档位滑块。
+7. 在模型编辑器中，只有目标模型确实需要 `x-opencode-session` 时才启用「OpenCode 会话 Header」。它默认关闭，会动态使用当前 DSH 会话 ID，不会在同一路由的其他模型或不同 provider 之间继承。
+8. 回到 Composer，选择对应模型后即可使用推理档位滑块。
 
 ### Composer 推理档位滑块
 
@@ -202,6 +204,14 @@ providers:
 
 这些 compat 值属于控制面配置。它们不实现或替代网关 transport；网络请求仍由外部 transport 负责。
 
+### OpenCode 会话 Header 兼容
+
+模型编辑器提供独立的「OpenCode 会话 Header」开关。它默认关闭，保存在插件自有的 `dsh-thinking-effort` Settings namespace 中，不写入 `llm-pi-ai.compat`。只有确实需要 `x-opencode-session` 的精确 `provider/model` 才应启用；同一路由中的其他模型（包括 GPT 模型）不会继承该设置。
+
+启用后，Host 会在匹配的 `llm/stream` 请求中发送 `x-opencode-session: <当前 DSH 会话 ID>`。该值跟随当前会话，不写入 Settings，也不会替换成固定值。适配器或调用方已经提供的 `x-opencode-session` 会保留。该设置不会选择或修改 `openai-completions`、`openai-responses` 或 `anthropic-messages` 协议。
+
+Sub2API、CPA 和其他中转服务必须保留并继续把 `x-opencode-session` 转发给 OpenCode 上游。`llm-pi-ai.providers.<route>.headers.x-opencode-session` 这类静态 route Header 不能替代本功能：它会让所有会话共用一个值，无法提供按会话路由和提示词缓存亲和性。修改 Host 后需要重启 DSH；修改 Settings 或 Client 后需要刷新 Web 页面。
+
 ### 设置页界面
 
 页面顶部是语言选择器；其下方的「子 agent 默认档位」卡片控制没有显式档位的请求。「一键设置」负责批量应用预设。供应商和模型列表支持展开/收起；每个模型行显示输入能力、上下文长度，并在设置区域提供网关兼容控件。`models[]` 保存使用完整数组 set，而不是数组索引 path op。
@@ -213,8 +223,8 @@ providers:
 
 ## 工作方式
 
-- **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位。
-- **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页；运行时提供 `modelDirectories` 服务时，为可选 Composer `seat` 注册低优先级 `shadow` 实现，并显示宿主已解析的推理档位滑块。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
+- **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位；同时读取模型级 OpenCode 会话设置，只在匹配的 `llm/stream` 请求中注入当前 DSH 会话 ID。
+- **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页；运行时提供 `modelDirectories` 服务时，为可选 Composer `seat` 注册低优先级 `shadow` 实现，并显示宿主已解析的推理档位滑块。模型编辑器把 OpenCode 会话 Header 设置保存在插件自有 namespace，与 `llm-pi-ai.compat` 分开。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
 - **子 agent：** 默认值存储在 `llm-pi-ai` 用户层的 `subagentEffort`；`agent/request` waterfall 只对未显式指定档位的子 agent 请求进行补全。
 - **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.14`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
 

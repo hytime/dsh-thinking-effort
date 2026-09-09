@@ -2,12 +2,13 @@ import React from 'react'
 import { GATEWAY_COMPAT_FIELD_KEYS, type GatewayCompatFieldKey } from '../compat/gateway/fields.js'
 import { editableProviderCompatFields } from '../compat/gateway/validation.js'
 import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
-import { DEFAULT_LEVELS, INPUT_MODALITIES, LEVEL_LABEL_KEYS, NS, PRESETS, ALL_LEVELS, CONTEXT_1M } from './constants.js'
+import { DEFAULT_LEVELS, INPUT_MODALITIES, LEVEL_LABEL_KEYS, NS, OPENCODE_SESSION_NS, PRESETS, ALL_LEVELS, CONTEXT_1M } from './constants.js'
 import { inventoryFrom, modelCompatKey, modelGatewayCompatViewsFrom, providerGatewayCompatViewsFrom } from './model-inventory.js'
 import { emptyTakeoverRuntimeResolution } from './takeover-runtime.js'
+import { openCodeSessionOp, openCodeSessionStateFor, isOpenCodeSessionNamespace } from './model-header-ops.js'
 import { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from './model-ops.js'
 import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, validateContextWindow, validateLevels } from './validation.js'
-import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
+import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, OpenCodeSessionState, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
 import type { Palette } from './theme.js'
 import type { TakeoverRuntimeStore } from './takeover-runtime.js'
 import { iosPalette } from './theme.js'
@@ -19,10 +20,24 @@ import { renderGatewayCompatControls } from './components/GatewayCompatControls.
 const PLUGIN_VERSION = packageJson.version
 
 type DirtyFields = { levels?: boolean; context?: boolean; input?: boolean }
+interface RunOpsRequest {
+  readonly ns: string
+  readonly revision: number
+  readonly ops: readonly SettingsOp[]
+  readonly successMessage: string
+  readonly onSuccess?: () => void
+  readonly openCodeSessionSavedKey?: string
+}
 interface SubagentState { effort: string | null; revision: number }
 interface EditorState {
   loading: boolean
   namespace: SettingsNamespace | null
+  openCodeSessionNamespace: SettingsNamespace | null
+  openCodeSessionViews: Record<string, boolean>
+  openCodeSessionDrafts: Record<string, boolean>
+  openCodeSessionDirty: Record<string, boolean>
+  openCodeSessionFound: boolean
+  openCodeSessionAvailable: boolean
   inventory: InventoryItem[]
   providerViews: Record<string, ProviderGatewayCompatView>
   providerDrafts: Record<string, ProviderGatewayCompatView>
@@ -60,7 +75,45 @@ export interface SectionEditorProps {
 }
 
 const initialState: EditorState = {
-  loading: true, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
+  loading: true, namespace: null, openCodeSessionNamespace: null, openCodeSessionViews: {}, openCodeSessionDrafts: {}, openCodeSessionDirty: {}, openCodeSessionFound: false, openCodeSessionAvailable: false, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
+}
+
+export type { OpenCodeSessionState } from './types.js'
+
+export function createOpenCodeSessionState(
+  namespace: SettingsNamespace | undefined,
+  inventory: readonly InventoryItem[],
+  previous?: OpenCodeSessionState,
+): OpenCodeSessionState {
+  return openCodeSessionStateFor(namespace, inventory, previous)
+}
+
+export function applyOpenCodeSessionMutation(
+  state: OpenCodeSessionState,
+  response: ClientResult<SettingsNamespace>,
+  inventory: readonly InventoryItem[],
+  savedKey: string,
+): OpenCodeSessionState {
+  if (!response.ok || !isOpenCodeSessionNamespace(response.value)) return state
+  const previous: OpenCodeSessionState = {
+    ...state,
+    dirty: { ...state.dirty },
+  }
+  delete previous.dirty[savedKey]
+  return openCodeSessionStateFor(response.value, inventory, previous)
+}
+
+export async function saveOpenCodeSession(
+  settings: Pick<SettingsApi, 'mutate'>,
+  namespace: SettingsNamespace,
+  item: InventoryItem,
+  enabled: boolean,
+): Promise<ClientResult<SettingsNamespace>> {
+  const operation = openCodeSessionOp(item.route, item.model, enabled)
+  if (operation === undefined) {
+    return { ok: false, error: { message: 'OpenCode session settings require a provider and model' } }
+  }
+  return settings.mutate(OPENCODE_SESSION_NS, [operation], namespace.revision)
 }
 
 function keyOf(item: InventoryItem): string { return modelCompatKey(item.route, item.model) }
@@ -76,6 +129,22 @@ function removeDirtyFields<T extends object>(dirty: Record<string, T>, key: stri
   if (Object.keys(entry).length === 0) delete next[key]
   else next[key] = entry
   return next
+}
+
+function clearOpenCodeSessionState(current: EditorState, key: string): EditorState {
+  const openCodeSessionDrafts = { ...current.openCodeSessionDrafts }; delete openCodeSessionDrafts[key]
+  const openCodeSessionDirty = { ...current.openCodeSessionDirty }; delete openCodeSessionDirty[key]
+  return { ...current, openCodeSessionDrafts, openCodeSessionDirty }
+}
+
+function clearModelEditorState(current: EditorState, key: string): EditorState {
+  const next = clearOpenCodeSessionState(current, key)
+  const expanded = { ...next.expanded }; delete expanded[key]
+  const drafts = { ...next.drafts }; delete drafts[key]
+  const contextDrafts = { ...next.contextDrafts }; delete contextDrafts[key]
+  const inputDrafts = { ...next.inputDrafts }; delete inputDrafts[key]
+  const dirty = { ...next.dirty }; delete dirty[key]
+  return { ...next, expanded, drafts, contextDrafts, inputDrafts, dirty }
 }
 
 function subagentView(namespace: SettingsNamespace | null): { subagent: SubagentState | null; draft: string; custom: string; revision: number } {
@@ -126,6 +195,27 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     return { ...current, loading: false, namespace: nextNamespace, busy: false, nsFound: true, inventory: nextInventory, providerViews, providerDrafts, modelCompatViews, modelCompatDrafts, revision: revisionOf(nextNamespace), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom, notice }
   }
 
+  const applyOpenCodeSessionNamespace = (current: EditorState, nextNamespace: SettingsNamespace | undefined): EditorState => {
+    const previous: OpenCodeSessionState = {
+      namespace: current.openCodeSessionNamespace,
+      views: current.openCodeSessionViews,
+      drafts: current.openCodeSessionDrafts,
+      dirty: current.openCodeSessionDirty,
+      found: current.openCodeSessionFound,
+      available: current.openCodeSessionAvailable,
+    }
+    const next = createOpenCodeSessionState(nextNamespace, current.inventory, previous)
+    return {
+      ...current,
+      openCodeSessionNamespace: next.namespace,
+      openCodeSessionViews: next.views,
+      openCodeSessionDrafts: next.drafts,
+      openCodeSessionDirty: next.dirty,
+      openCodeSessionFound: next.found,
+      openCodeSessionAvailable: next.available,
+    }
+  }
+
   const load = (): void => {
     setState((current) => ({ ...current, loading: true, error: null }))
     settings.describe().then((response) => {
@@ -134,11 +224,15 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
         return
       }
       const found = response.value.namespaces.find((entry) => entry.ns === NS)
+      const openCodeFound = response.value.namespaces.find((entry) => entry.ns === OPENCODE_SESSION_NS)
       if (!found) {
-        setState((current) => ({ ...current, loading: false, busy: false, nsFound: false, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, subagent: null }))
+        setState((current) => {
+          const next = { ...current, loading: false, busy: false, nsFound: false, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, subagent: null }
+          return applyOpenCodeSessionNamespace(next, openCodeFound)
+        })
         return
       }
-      setState((current) => applyNamespaceView(current, found, null))
+      setState((current) => applyOpenCodeSessionNamespace(applyNamespaceView(current, found, null), openCodeFound))
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       setState((current) => ({ ...current, loading: false, busy: false, error: t('readSettingsFailed', { message }) }))
@@ -176,22 +270,57 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     })
   }, [takeoverResolution])
 
-  const runOps = (ops: readonly SettingsOp[], successMessage: string, onSuccess?: () => void): void => {
+  const runOps = ({ ns, revision, ops, successMessage, onSuccess, openCodeSessionSavedKey }: RunOpsRequest): void => {
+    const writeError = (message: string): string => ns === OPENCODE_SESSION_NS
+      ? t('opencodeSessionSaveFailed', { message })
+      : t('writeError', { message })
     setState((current) => ({ ...current, busy: true, error: null, notice: null }))
-    settings.mutate(NS, ops, state.revision).then((response) => {
+    settings.mutate(ns, ops, revision).then((response) => {
       if (!response.ok) {
-        setState((current) => ({ ...current, busy: false, error: t('writeError', { message: response.error.message }) }))
+        setState((current) => ({ ...current, busy: false, error: writeError(response.error.message) }))
         return
       }
       if (!response.value || typeof response.value !== 'object') {
         setState((current) => ({ ...current, busy: false, error: t('saveMissingNamespace') }))
         return
       }
+      const savedKey = openCodeSessionSavedKey
+      if (ns !== NS && (savedKey === undefined || !isOpenCodeSessionNamespace(response.value))) {
+        setState((current) => ({ ...current, busy: false, error: t('saveMissingNamespace') }))
+        return
+      }
       onSuccess?.()
-      setState((current) => applyNamespaceView(current, response.value, successMessage))
+      setState((current) => {
+        if (ns === NS) return applyNamespaceView(current, response.value, successMessage)
+        const previous: OpenCodeSessionState = {
+          namespace: current.openCodeSessionNamespace,
+          views: current.openCodeSessionViews,
+          drafts: current.openCodeSessionDrafts,
+          dirty: current.openCodeSessionDirty,
+          found: current.openCodeSessionFound,
+          available: current.openCodeSessionAvailable,
+        }
+        const refreshed = applyOpenCodeSessionMutation(
+          previous,
+          { ok: true, value: response.value },
+          current.inventory,
+          savedKey!,
+        )
+        return {
+          ...current,
+          openCodeSessionNamespace: refreshed.namespace,
+          openCodeSessionViews: refreshed.views,
+          openCodeSessionDrafts: refreshed.drafts,
+          openCodeSessionDirty: refreshed.dirty,
+          openCodeSessionFound: refreshed.found,
+          openCodeSessionAvailable: refreshed.available,
+          notice: successMessage,
+          busy: false,
+        }
+      })
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
-      setState((current) => ({ ...current, busy: false, error: message.length > 0 ? t('writeError', { message }) : t('writeFailed') }))
+      setState((current) => ({ ...current, busy: false, error: message.length > 0 ? writeError(message) : t('writeFailed') }))
     })
   }
 
@@ -207,8 +336,14 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     const input = inputDraft.touched ? buildInput(inputDraft, t) : { value: undefined }
     if (input.error) { const error = input.error; setState((current) => ({ ...current, error })); return }
     const update: ModelUpdate = { item, levels, contextWindow: context.value, contextWindowTouched: contextDraft.touched, input: input.value, inputTouched: inputDraft.touched }
-    runOps(setOps(state.inventory, [update]), t('modelSettingsSaved'), () => {
-      setState((current) => ({ ...current, dirty: removeDirtyFields(current.dirty, key, ['levels', 'context', 'input']) }))
+    runOps({
+      ns: NS,
+      revision: state.revision,
+      ops: setOps(state.inventory, [update]),
+      successMessage: t('modelSettingsSaved'),
+      onSuccess: () => {
+        setState((current) => ({ ...current, dirty: removeDirtyFields(current.dirty, key, ['levels', 'context', 'input']) }))
+      },
     })
   }
 
@@ -230,8 +365,14 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       setState((currentState) => ({ ...currentState, modelCompatDirty: removeDirtyFields(currentState.modelCompatDirty, key, GATEWAY_COMPAT_FIELD_KEYS) }))
       return
     }
-    runOps(ops, t('modelGatewayCompatSaved'), () => {
-      setState((currentState) => ({ ...currentState, modelCompatDirty: removeDirtyFields(currentState.modelCompatDirty, key, GATEWAY_COMPAT_FIELD_KEYS) }))
+    runOps({
+      ns: NS,
+      revision: state.revision,
+      ops,
+      successMessage: t('modelGatewayCompatSaved'),
+      onSuccess: () => {
+        setState((currentState) => ({ ...currentState, modelCompatDirty: removeDirtyFields(currentState.modelCompatDirty, key, GATEWAY_COMPAT_FIELD_KEYS) }))
+      },
     })
   }
 
@@ -250,37 +391,77 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     })
   }
 
-  const closeModelEditor = (item: InventoryItem): void => {
+  const patchOpenCodeSession = (item: InventoryItem, enabled: boolean): void => {
     const key = keyOf(item)
     setState((current) => {
-      const expanded = { ...current.expanded }; delete expanded[key]
-      const drafts = { ...current.drafts }; delete drafts[key]
-      const contextDrafts = { ...current.contextDrafts }; delete contextDrafts[key]
-      const inputDrafts = { ...current.inputDrafts }; delete inputDrafts[key]
-      const dirty = { ...current.dirty }; delete dirty[key]
-      return { ...current, expanded, drafts, contextDrafts, inputDrafts, dirty }
+      if (!current.openCodeSessionAvailable || current.openCodeSessionDrafts[key] === undefined) return current
+      return {
+        ...current,
+        notice: null,
+        openCodeSessionDrafts: { ...current.openCodeSessionDrafts, [key]: enabled },
+        openCodeSessionDirty: { ...current.openCodeSessionDirty, [key]: true },
+      }
     })
+  }
+
+  const applyOpenCodeSession = (item: InventoryItem): void => {
+    const key = keyOf(item)
+    const namespace = state.openCodeSessionNamespace
+    const enabled = state.openCodeSessionDrafts[key]
+    if (!namespace || enabled === undefined) return
+    const operation = openCodeSessionOp(item.route, item.model, enabled)
+    if (operation === undefined) return
+    runOps({
+      ns: OPENCODE_SESSION_NS,
+      revision: namespace.revision,
+      ops: [operation],
+      successMessage: t('opencodeSessionSaved'),
+      openCodeSessionSavedKey: key,
+    })
+  }
+
+  const closeModelEditor = (item: InventoryItem): void => {
+    const key = keyOf(item)
+    setState((current) => clearModelEditorState(current, key))
   }
 
   const restoreReasoningDefaults = (item: InventoryItem): void => {
     const key = keyOf(item)
-    runOps(setOps(state.inventory, [{ item, levels: DEFAULT_LEVELS }]), t('restoreReasoning'), () => {
-      setState((current) => ({ ...current, drafts: current.drafts[key] ? { ...current.drafts, [key]: draftFrom(DEFAULT_LEVELS) } : current.drafts, dirty: removeDirtyFields(current.dirty, key, ['levels']) }))
+    runOps({
+      ns: NS,
+      revision: state.revision,
+      ops: setOps(state.inventory, [{ item, levels: DEFAULT_LEVELS }]),
+      successMessage: t('restoreReasoning'),
+      onSuccess: () => {
+        setState((current) => ({ ...current, drafts: current.drafts[key] ? { ...current.drafts, [key]: draftFrom(DEFAULT_LEVELS) } : current.drafts, dirty: removeDirtyFields(current.dirty, key, ['levels']) }))
+      },
     })
   }
 
   const restoreProviderDefaults = (item: InventoryItem): void => {
-    runOps(setOps(state.inventory, [{ item, contextWindow: undefined, contextWindowTouched: true, input: undefined, inputTouched: true }]), t('restoreCapability'), () => closeModelEditor(item))
+    runOps({
+      ns: NS,
+      revision: state.revision,
+      ops: setOps(state.inventory, [{ item, contextWindow: undefined, contextWindowTouched: true, input: undefined, inputTouched: true }]),
+      successMessage: t('restoreCapability'),
+      onSuccess: () => closeModelEditor(item),
+    })
   }
 
   const applyPreset = (levels: typeof PRESETS[number]['levels']): void => {
-    runOps(setOps(state.inventory, state.inventory.map((item): ModelUpdate => ({ item, levels }))), t('settingsUpdated'), () => {
-      setState((current) => {
-        let dirty = current.dirty
-        const drafts = { ...current.drafts }
-        current.inventory.forEach((item) => { const key = keyOf(item); if (drafts[key]) drafts[key] = draftFrom(levels); dirty = removeDirtyFields(dirty, key, ['levels']) })
-        return { ...current, drafts, dirty }
-      })
+    runOps({
+      ns: NS,
+      revision: state.revision,
+      ops: setOps(state.inventory, state.inventory.map((item): ModelUpdate => ({ item, levels }))),
+      successMessage: t('settingsUpdated'),
+      onSuccess: () => {
+        setState((current) => {
+          let dirty = current.dirty
+          const drafts = { ...current.drafts }
+          current.inventory.forEach((item) => { const key = keyOf(item); if (drafts[key]) drafts[key] = draftFrom(levels); dirty = removeDirtyFields(dirty, key, ['levels']) })
+          return { ...current, drafts, dirty }
+        })
+      },
     })
   }
 
@@ -288,7 +469,12 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     const value = state.subagentDraft === 'default' ? undefined : state.subagentDraft === 'custom' ? state.subagentCustom.trim() : state.subagentDraft
     if (state.subagentDraft !== 'default' && !value) { setState((current) => ({ ...current, notice: null, error: t('customEffortRequired') })); return }
     const ops: SettingsOp[] = state.subagentDraft === 'default' ? [{ op: 'unset', path: ['subagentEffort'] }] : [{ op: 'set', path: ['subagentEffort'], value }]
-    runOps(ops, t('subagentSaved'))
+    runOps({
+      ns: NS,
+      revision: state.revision,
+      ops,
+      successMessage: t('subagentSaved'),
+    })
   }
 
   const applyProviderCompat = (route: string): void => {
@@ -312,8 +498,14 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       setState((currentState) => clearProviderDirty(currentState))
       return
     }
-    runOps(ops, t('gatewayCompatSaved'), () => {
-      setState((currentState) => clearProviderDirty(currentState))
+    runOps({
+      ns: NS,
+      revision: state.revision,
+      ops,
+      successMessage: t('gatewayCompatSaved'),
+      onSuccess: () => {
+        setState((currentState) => clearProviderDirty(currentState))
+      },
     })
   }
 
@@ -340,7 +532,10 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   const toggleExpand = (item: InventoryItem): void => {
     const key = keyOf(item)
     setState((current) => {
-      if (current.expanded[key]) { const expanded = { ...current.expanded }; delete expanded[key]; return { ...current, expanded } }
+      if (current.expanded[key]) {
+        const expanded = { ...current.expanded }; delete expanded[key]
+        return { ...clearOpenCodeSessionState(current, key), expanded }
+      }
       return { ...current, expanded: { ...current.expanded, [key]: true }, drafts: current.drafts[key] ? current.drafts : { ...current.drafts, [key]: draftFrom(item.levels) }, contextDrafts: current.contextDrafts[key] ? current.contextDrafts : { ...current.contextDrafts, [key]: contextDraftFrom(item) }, inputDrafts: current.inputDrafts[key] ? current.inputDrafts : { ...current.inputDrafts, [key]: inputDraftFrom(item) } }
     })
   }
@@ -383,11 +578,11 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       <div style={{ position: 'relative', marginBottom: '7px' }}><span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: palette.secondary, pointerEvents: 'none' }}><Icon name="search" size={15} /></span><input type="text" value={state.query} placeholder={t('searchPlaceholder')} onChange={(event) => { const value = event.currentTarget.value; setState((current) => ({ ...current, query: value })) }} style={{ boxSizing: 'border-box', width: '100%', height: '30px', padding: '0 10px 0 30px', border: `1px solid ${palette.border}`, borderRadius: '8px', fontSize: '13px', backgroundColor: palette.field, color: palette.text, outline: 'none', boxShadow: palette.shadow }} /></div>
       {state.loading ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{t('loading')}</div> : visible.length === 0 ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{state.inventory.length === 0 ? t('noModels') : t('noMatches')}</div> :
          routes.map((route) => { const providerModels = visible.filter((item) => item.route === route); const providerOpen = query !== '' || state.expandedProviders[route] === true; return <div key={route} style={{ marginBottom: '6px' }}><div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '8px', minHeight: '32px', padding: '4px 6px', marginBottom: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.raised }}><span style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}><span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', minWidth: '22px', border: `1px solid ${palette.border}`, borderRadius: '7px', color: palette.secondary, backgroundColor: palette.group }}><Icon name="layers" size={14} /></span><span style={{ display: 'grid', gap: '1px', minWidth: 0 }}><span style={{ color: palette.text, fontSize: '12px', fontWeight: 700, overflowWrap: 'anywhere' }}>{route}</span><span style={{ color: palette.accent, fontSize: '10px', lineHeight: '11px', fontWeight: 700 }}>{t('vendor')}</span></span></span><span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: palette.secondary, whiteSpace: 'nowrap' }}><span>{t('modelCount', { count: providerModels.length })}</span>{query !== '' ? <span>{t('searchResults')}</span> : <ActionButton text="" onClick={() => toggleProvider(route)} palette={palette} tone="ghost" icon={providerOpen ? 'chevronUp' : 'chevronDown'} label={providerOpen ? t('collapseProvider') : t('expandProvider')} />}</span></div>{state.providerDrafts[route] ? <>
-          {renderGatewayCompatControls({ view: state.providerDrafts[route], onChange: (next) => patchProviderCompat(route, next), disabled: state.busy, expanded: state.providerCompatExpanded[route] === true, onToggleExpanded: () => toggleProviderCompatExpanded(route), availableCount: availableCompatFieldCount(state.providerDrafts[route]) }, { palette, t })}{state.providerDirty[route] ? <ActionButton text={t('saveGatewayCompat')} onClick={() => applyProviderCompat(route)} disabled={state.busy} tone="primary" palette={palette} icon="check" /> : null}</> : null}{providerOpen ? providerModels.map((item) => { const key = keyOf(item); const dirty = state.dirty[key] ?? {}; const compatAvailable = state.modelCompatViews[key] !== undefined; return <ModelRow key={`${key}-${item.inOverrides ? 'override' : item.index}`} item={item} open={state.expanded[key] === true} draft={state.drafts[key]} contextDraft={state.contextDrafts[key] ?? contextDraftFrom(item)} inputDraft={state.inputDrafts[key] ?? inputDraftFrom(item)} dirty={dirty.levels === true || dirty.context === true || dirty.input === true} busy={state.busy} palette={palette} t={t} onToggle={() => toggleExpand(item)} onLevelChange={(level, patch) => patchDraft(item, level, patch)} onContextChange={(value) => patchContextValue(item, value)} onOneMillionChange={(enabled) => setOneMillion(item, enabled)} onInputChange={(modality, enabled) => patchInputCapability(item, modality, enabled)} onSave={() => applyModel(item)} onRestoreReasoning={() => restoreReasoningDefaults(item)} onRestoreCapability={() => restoreProviderDefaults(item)}
+          {renderGatewayCompatControls({ view: state.providerDrafts[route], onChange: (next) => patchProviderCompat(route, next), disabled: state.busy, expanded: state.providerCompatExpanded[route] === true, onToggleExpanded: () => toggleProviderCompatExpanded(route), availableCount: availableCompatFieldCount(state.providerDrafts[route]) }, { palette, t })}{state.providerDirty[route] ? <ActionButton text={t('saveGatewayCompat')} onClick={() => applyProviderCompat(route)} disabled={state.busy} tone="primary" palette={palette} icon="check" /> : null}</> : null}{providerOpen ? providerModels.map((item) => { const key = keyOf(item); const dirty = state.dirty[key] ?? {}; const compatAvailable = state.modelCompatViews[key] !== undefined; const openCodeSessionEditable = state.openCodeSessionAvailable && item.modelSourceConflict !== true; return <ModelRow key={`${key}-${item.inOverrides ? 'override' : item.index}`} item={item} open={state.expanded[key] === true} draft={state.drafts[key]} contextDraft={state.contextDrafts[key] ?? contextDraftFrom(item)} inputDraft={state.inputDrafts[key] ?? inputDraftFrom(item)} dirty={dirty.levels === true || dirty.context === true || dirty.input === true} busy={state.busy} palette={palette} t={t} onToggle={() => toggleExpand(item)} onLevelChange={(level, patch) => patchDraft(item, level, patch)} onContextChange={(value) => patchContextValue(item, value)} onOneMillionChange={(enabled) => setOneMillion(item, enabled)} onInputChange={(modality, enabled) => patchInputCapability(item, modality, enabled)} onSave={() => applyModel(item)} onRestoreReasoning={() => restoreReasoningDefaults(item)} onRestoreCapability={() => restoreProviderDefaults(item)}
                          compatView={compatAvailable ? state.modelCompatDrafts[key] : undefined}
                           compatExpanded={state.modelCompatExpanded[key] === true}
                           onToggleCompatExpanded={compatAvailable ? () => toggleModelCompatExpanded(key) : undefined}
-                          compatDirty={state.modelCompatDirty[key]} onCompatChange={compatAvailable ? (next) => patchModelCompat(item, next) : undefined} onSaveCompat={compatAvailable ? () => applyModelCompat(item) : undefined} /> }) : null}</div> })}
+                          compatDirty={state.modelCompatDirty[key]} onCompatChange={compatAvailable ? (next) => patchModelCompat(item, next) : undefined} onSaveCompat={compatAvailable ? () => applyModelCompat(item) : undefined} openCodeSession={state.openCodeSessionDrafts[key]} openCodeSessionDirty={state.openCodeSessionDirty[key] === true} openCodeSessionAvailable={openCodeSessionEditable} onOpenCodeSessionChange={(enabled) => patchOpenCodeSession(item, enabled)} onSaveOpenCodeSession={() => applyOpenCodeSession(item)} /> }) : null}</div> })}
       {expandedCount > 0 ? <div style={{ fontSize: '12px', color: palette.secondary, margin: '4px 2px 0' }}>{t('expandedSettings', { count: expandedCount })}</div> : null}
     </div>}
     <span aria-label={t('versionLabel')} style={{ position: 'absolute', right: '12px', bottom: '8px', fontSize: '10px', lineHeight: '14px', opacity: 0.45, pointerEvents: 'none', userSelect: 'none' }}>v{PLUGIN_VERSION}</span>

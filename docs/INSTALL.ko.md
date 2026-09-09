@@ -51,6 +51,16 @@ version-map은 다음 규칙으로 게이트웨이 capability를 판정합니다
 DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 런타임 schema 노출에 따라 결정됩니다.
 런타임 schema가 노출하지 않는 필드는 UI에 표시되지 않습니다. 선택 사항인 transport가 설치되지 않았거나 비활성화된 경우 takeover를 적용하지 않습니다.
 
+## OpenCode 세션 Header
+
+OpenCode 세션 Header는 모델 편집기의 모델별 설정이며 provider 전체 설정이 아닙니다. 기본값은 꺼져 있습니다. 정확한 `provider/model`을 펼치고 대상 서비스가 `x-opencode-session`을 요구할 때만 **OpenCode 세션 Header**를 활성화하여 저장하세요.
+
+Host는 일치하는 `llm/stream` 요청마다 현재 DSH 대화의 `sessionId`에서 Header 값을 동적으로 만듭니다. 고정 값을 입력하거나 저장할 필요가 없습니다. adapter 또는 호출자가 이미 `x-opencode-session`을 제공한 경우 해당 값을 유지하며 덮어쓰지 않습니다. 이 설정은 최신 Remote Settings transport와 이전 `connection.api.settings` transport를 모두 지원합니다. 같은 route의 GPT 등 OpenCode가 아닌 모델에는 상속되지 않으며 route의 `api` 프로토콜도 변경하지 않습니다.
+
+요청이 Sub2API, CPA 또는 다른 forwarding gateway를 통과한다면 `x-opencode-session`을 보존하여 OpenCode upstream으로 전달하는지 확인하세요. `llm-pi-ai.providers.<route>.headers.x-opencode-session`과 같은 정적 route 설정은 모든 대화가 같은 고정 값을 공유하므로 대체할 수 없습니다.
+
+Host 또는 플러그인 패키지를 변경한 뒤에는 DSH를 재시작하고 Settings 또는 Client를 변경한 뒤에는 Web 페이지를 새로 고친 다음 모델 요청을 확인하세요.
+
 ## 게이트웨이 호환성 설정
 
 Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델의 `compat` 기본값을 수정합니다. 모델 하나를 펼치면 단일 모델 영역이 열립니다. 4개 그룹은 기본으로 접혀 있습니다.

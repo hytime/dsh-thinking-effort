@@ -63,6 +63,7 @@ DSH 内蔵モデルだけを使用し、すでに推論コントロールが動�
 | 既定レベル | カスタム値を上書きせず `off`、`high`、`max` を追加 |
 | モデルごとの編集 | Settings からレベルとゲートウェイ値を設定し、カタログ/modelOverrides と `models[]` エントリの両方で compat を編集 |
 | ゲートウェイ互換設定 | 15 個の一般的なスカラーを provider 全体またはモデルごとに設定。ロールと推論、形式と出力、ストリーミングとツール、保存とキャッシュの 4 グループで既定は折りたたみ |
+| OpenCode セッション Header | 正確なモデルだけで動的な `x-opencode-session` を有効化し、現在の DSH セッション ID を使用。固定 Header 値は保存しません |
 | ゲートウェイ値のマッピング | DSH の `high` 選択時に `ultra` を送信可能 |
 | Subagent の既定値 | 明示値のないリクエストにだけ既定値を適用 |
 | 多言語設定 | 中文、English、日本語、한국어の辞書を同梱。日本語/韓国語の切り替えは DSH の language-pack 対応を使用 |
@@ -104,7 +105,8 @@ profile の確認、移行、検証、トラブルシューティングについ
    | `high` | `ultra` |
    | `max` | `max` |
 
-7. Composer に戻り、設定したモデルを選択して推論セレクターを使用します。
+7. モデル編集で、`x-opencode-session` が必要な正確なモデルだけに **OpenCode セッション Header** を有効にします。既定では無効で、現在の DSH セッション ID を動的に使用し、同じルートの他モデルや別 provider へ継承しません。
+8. Composer に戻り、設定したモデルを選択して推論セレクターを使用します。
 
 設定ページ右下には `v0.1.14` のような小さなバージョン表示が出ます。
 
@@ -131,6 +133,14 @@ Settings の provider グローバル領域では、その provider の全モデ
 
 これらの compat 値はコントロールプレーンの設定です。ゲートウェイの transport を実装または置き換えるものではなく、ネットワーク要求は外部 transport が担当します。
 
+### OpenCode セッション Header 互換性
+
+モデル編集には独立した **OpenCode セッション Header** スイッチがあります。既定では無効で、`llm-pi-ai.compat` ではなくプラグイン固有の `dsh-thinking-effort` Settings namespace に保存されます。`x-opencode-session` が必要な正確な `provider/model` だけで有効にしてください。同じルートの別モデル（GPT モデルを含む）には継承されません。
+
+有効にすると、Host は一致する `llm/stream` リクエストに `x-opencode-session: <現在の DSH セッション ID>` を送信します。値は現在の会話に追従し、Settings には保存されず、固定値にも置き換えられません。アダプターまたは呼び出し元が既に指定した `x-opencode-session` は保持します。この設定は `openai-completions`、`openai-responses`、`anthropic-messages` のプロトコルを選択または変更しません。
+
+Sub2API、CPA、その他の転送ゲートウェイは `x-opencode-session` を保持して OpenCode 上流へ転送する必要があります。`llm-pi-ai.providers.<route>.headers.x-opencode-session` のような静的 route Header は代替になりません。全会話で同じ値を使うため、会話ごとのルーティングや prompt cache の親和性を提供できません。Host の変更後は DSH を再起動し、Settings または Client の変更後は Web ページを更新してください。
+
 ### 設定ページの構成
 
 ページ上部に言語セレクターがあります。その下の **Subagent default effort** カードは明示値のないリクエストの既定値を管理します。**Quick settings** は一括プリセットを適用します。プロバイダーとモデルの一覧は展開/折りたたみができ、各モデル行に入力能力、コンテキスト長、ゲートウェイ互換値の編集領域が表示されます。`models[]` の保存は配列インデックス path op ではなく、配列全体の set を使用します。
@@ -142,8 +152,8 @@ Settings の provider グローバル領域では、その provider の全モデ
 
 ## 仕組み
 
-- **Host：** 起動時と設定変更時に `llm-pi-ai` の `models` と `modelOverrides` を確認し、`reasoningEfforts` がない場合だけ既定値を追加します。
-- **Client：** DSH Settings Remote（`ctx.remote.settings`）と locale service を使って設定ページを登録します。辞書は `src/locales/ja.json` と `src/locales/ko.json` などで管理し、公開前にクライアント bundle へ生成します。
+- **Host：** 起動時と設定変更時に `llm-pi-ai` の `models` と `modelOverrides` を確認し、`reasoningEfforts` がない場合だけ既定値を追加します。さらにモデル単位の OpenCode セッション設定を読み、一致する `llm/stream` リクエストにだけ現在の DSH セッション ID を注入します。
+- **Client：** DSH Settings Remote（`ctx.remote.settings`）と locale service を使って設定ページを登録します。モデル編集では OpenCode セッション Header を専用 namespace に保存し、`llm-pi-ai.compat` とは分離します。辞書は `src/locales/ja.json` と `src/locales/ko.json` などで管理し、公開前にクライアント bundle へ生成します。
 - **Subagent：** `llm-pi-ai` のユーザーレイヤーに `subagentEffort` を保存します。`agent/request` waterfall は明示値のないリクエストにだけ既定値を追加します。
 - **既定値なし：** プラグインは `off`、`high`、`max` を自動選択しません。`reasoning` を省略し、ゲートウェイの既定動作に任せます。
 
