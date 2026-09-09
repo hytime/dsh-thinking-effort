@@ -14,6 +14,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-09
+
+### 变更 / Changed
+
+- OpenCode 会话 Header 开关改为拨动即保存：切换开关时立即写入 `dsh-thinking-effort` Settings namespace，不再需要单独点击保存按钮。界面移除了该保存按钮和未保存标记；打开模型后显示的是已持久化的值。
+- The OpenCode session Header switch now saves immediately on toggle: flipping the switch writes the `dsh-thinking-effort` Settings namespace right away, with no separate save button. The save button and unsaved marker were removed from the UI; reopening a model shows the persisted value.
+
 ## [0.2.2] - 2026-09-09
 
 ### 新增 / Added
