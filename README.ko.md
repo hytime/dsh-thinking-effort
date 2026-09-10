@@ -80,7 +80,7 @@ profile은 공식 DSH CLI로 관리하세요. 일반 `npm install`은 DSH profil
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 특정 버전 설치
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
 
 # 업데이트
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort

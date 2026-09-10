@@ -125,7 +125,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
 ```
 
 官方 CLI 会自动完成以下工作：
@@ -155,7 +155,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 升级到指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
 ```
 
 升级后重新执行验证步骤。宿主侧代码需要重启 DSH；浏览器侧代码需要刷新 Web 页面。
@@ -175,7 +175,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
 ```
 
 ### 3.2 旧依赖已被移除，但旧 bundle 残留
@@ -204,7 +204,7 @@ grep -n "dsh-thinking-effort" \
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
 ```
 
 这一步的目的不是继续使用旧插件，而是让官方 CLI 识别旧依赖并自动删除残留 bundle。不要手工把旧包名重新写入新的 bundle 列表。
@@ -322,11 +322,12 @@ Composer `seat` 是可选能力。`modelDirectories` 服务不可用时不会注
 
 请为 npm 包配置 GitHub Trusted Publisher：仓库为 `hytime/dsh-thinking-effort`，workflow 为 `publish.yml`。发布使用 GitHub OIDC 和 provenance，命令为 `npm publish --provenance --access public`，不使用 `NPM_TOKEN` 或长期 token。如果 npm 中已存在相同版本，发布会被阻止。
 
-发布前 workflow 会按 rc7 → rc2 → alpha2 顺序创建三个临时官方 DSH 能力代表 checkout，使用官方 `dsh plugin` 命令安装当前 tarball，再运行真实兼容测试：
+发布前 workflow 会按 rc7 → rc2 → alpha2 → latest 顺序创建四个临时官方 DSH 能力代表 checkout，使用官方 `dsh plugin` 命令安装当前 tarball，再运行真实兼容测试：
 
 - `dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）——rc7 能力代表
 - `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）——rc2 能力代表
 - `dsh-v0.1.3-alpha.2`（`0.1.3-alpha.2`）——alpha2 能力代表
+- `dsh-v0.1.5-rc.2`（`0.1.5-rc.2`）——最新能力代表（同时执行真实浏览器 DOM 探针）
 
 普通 CI 仍然只做测试，会在 Pull Request 和推送到 `main` 时运行。它使用 `npm ci`，依赖变更时请保持 `package-lock.json` 已提交。
 

@@ -113,7 +113,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 Install the current release explicitly:
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
 ```
 
 The official CLI updates the profile dependency, lockfile, and `dsh.profile.bundles` automatically. Do not add a manual YAML row.
@@ -129,7 +129,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 Upgrade to a specific version:
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
 ```
 
 Restart DSH for host changes and refresh the Web page for client changes.
@@ -147,7 +147,7 @@ If the old dependency still exists, use the official commands:
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
 ```
 
 If the dependency was removed by another tool but the old bundle remains, inspect the composed profile:
@@ -161,7 +161,7 @@ If it still contains `name: dsh-thinking-effort`, find the old GitHub commit in 
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
 ```
 
 Do not add the old package name to a new bundle list.
@@ -209,7 +209,7 @@ Restart DSH, then refresh the Web page. Open **Settings → Model capabilities a
 2. The **Subagent default effort** card shows the current default and provides **Apply**.
 3. **Quick settings** offers the official DeepSeek and generic batch presets.
 4. The provider/model list supports search, expand/collapse, input-capability badges, context badges, and per-model settings controls.
-5. The bottom-right watermark shows `v0.1.14`.
+5. The bottom-right watermark shows the installed plugin version.
 
 Return to Composer and choose a configured model. When the Web runtime provides `modelDirectories`, the plugin registers an optional Composer `seat` with a discrete reasoning-effort slider. It lists only the host-resolved `reasoning.efforts` for the selected exact `provider/model`. A model without `defaultEffort` also shows **Follow model default**; this clears the session's reasoning-effort override instead of editing plugin Settings. The slider follows the active light or dark theme through host `--dsw-*` tokens.
 
@@ -241,11 +241,12 @@ Maintainers update the `package.json` version and all applicable `CHANGELOG` fil
 
 Configure npm GitHub Trusted Publishing for repository `hytime/dsh-thinking-effort` and workflow `publish.yml`. Publishing uses GitHub OIDC and provenance with `npm publish --provenance --access public`; no `NPM_TOKEN` or long-lived token is used. A version that already exists in npm blocks the release.
 
-Before publishing, the workflow builds three temporary official DSH capability representatives in rc7 → rc2 → alpha2 order and runs the real compatibility suite after installing the current tarball with the official `dsh plugin` command:
+Before publishing, the workflow builds four temporary official DSH capability representatives in rc7 → rc2 → alpha2 → latest order and runs the real compatibility suite after installing the current tarball with the official `dsh plugin` command:
 
 - `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`) — rc7 capability representative
 - `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`) — rc2 capability representative
 - `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`) — alpha2 capability representative
+- `dsh-v0.1.5-rc.2` (`0.1.5-rc.2`) — newest capability representative (also runs the real-browser DOM probe)
 
 The ordinary CI workflow remains test-only and runs on pull requests and `main` pushes. Keep `package-lock.json` committed for its `npm ci` installation.
 

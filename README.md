@@ -84,7 +84,7 @@ Use the official DSH CLI to manage the plugin profile. A plain `npm install` doe
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # Install a specific version
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
 
 # Upgrade
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort

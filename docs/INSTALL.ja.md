@@ -113,7 +113,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 今回のリリースを明示してインストールします。
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
 ```
 
 公式 CLI は profile の依存関係、lockfile、`dsh.profile.bundles` を自動的に更新します。YAML の行を手動で追加しないでください。
@@ -129,7 +129,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 特定バージョンへ更新する場合：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
 ```
 
 Host の変更には DSH を再起動し、Client の変更には Web ページを更新してください。
@@ -147,7 +147,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
 ```
 
 依存関係は別のツールで削除済みですが、古い bundle が残っている場合は次で composition を確認します。
@@ -161,7 +161,7 @@ dsh --profile <profile> --dump-default-config
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
 ```
 
 新しい bundle リストに旧パッケージ名を追加しないでください。
@@ -210,7 +210,7 @@ DSH を再起動し、Web ページを更新してから **Settings → Model ca
 2. **Subagent default effort** カードに現在の既定値と **Apply** が表示されます。
 3. **Quick settings** から公式 DeepSeek 形式または汎用プリセットを一括適用できます。
 4. プロバイダー/モデル一覧では検索、展開/折りたたみ、入力能力、コンテキスト長、モデル設定ボタンを確認できます。
-5. 右下のバージョン表示が `v0.1.14` になります。
+5. 右下のバージョン表示に、インストール済みプラグインのバージョンが表示されます。
 
 Host のロードマーカーは次で確認できます。
 
@@ -236,11 +236,12 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 
 npm パッケージには GitHub Trusted Publishing を設定してください。リポジトリは `hytime/dsh-thinking-effort`、workflow は `publish.yml` です。公開は GitHub OIDC と provenance を使い、`npm publish --provenance --access public` を実行します。`NPM_TOKEN` や長期 token は使用しません。npm に同じ version が存在する場合、公開は停止します。
 
-公開前に workflow は rc7 → rc2 → alpha2 の順で、3 つの一時的な公式 DSH capability representative checkout を作成します。公式 `dsh plugin` コマンドで現在の tarball をインストールしてから、実際の互換性テストを実行します。
+公開前に workflow は rc7 → rc2 → alpha2 → latest の順で、4 つの一時的な公式 DSH capability representative checkout を作成します。公式 `dsh plugin` コマンドで現在の tarball をインストールしてから、実際の互換性テストを実行します。
 
 - `dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）— rc7 capability representative
 - `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）— rc2 capability representative
 - `dsh-v0.1.3-alpha.2`（`0.1.3-alpha.2`）— alpha2 capability representative
+- `dsh-v0.1.5-rc.2`（`0.1.5-rc.2`）— 最新 capability representative（実ブラウザ DOM プローブも実行）
 
 通常の CI はテスト専用で、Pull Request と `main` への push で実行されます。`npm ci` を使うため、依存関係変更時は `package-lock.json` をコミットしてください。
 
