@@ -46,8 +46,12 @@ export interface TakeoverProvidersInput {
 
 function runtimeCapabilities(input: TakeoverProvidersInput): DshVersionCapabilities | undefined {
   if (input.version !== undefined) {
-    if (typeof input.version !== 'string' || !takeoverSupportedForVersion(input.version)) return undefined
-    return capabilitiesForVersion(input.version)
+    if (typeof input.version !== 'string') return undefined
+    const mapped = capabilitiesForVersion(input.version)
+    // A mapped version owns its takeover transport, including 'unsupported'.
+    if (mapped !== undefined) return takeoverSupportedForVersion(input.version) ? mapped : undefined
+    // A version newer than the mapped windows falls through to the capabilities
+    // the host actually reports instead of silently disabling takeover.
   }
 
   if (input.runtimeProfile !== 'legacy' && input.runtimeProfile !== 'modern') return undefined

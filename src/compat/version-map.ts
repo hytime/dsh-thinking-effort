@@ -32,6 +32,15 @@ const semverPattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:(?:
 const legacyBaseModelFields = ['reasoningEfforts'] as const
 const completeBaseModelFields = ['reasoningEfforts', 'input', 'contextWindow'] as const
 
+/**
+ * Half-open capability windows. Each `maximumExclusive` bound marks the first
+ * DSH version whose capabilities are not yet known, so a release newer than the
+ * newest window maps to nothing. An unmapped version is not an error: callers
+ * fall back to the runtime capability the host actually exposes, and
+ * `resolveCompatibility` reports the detected profile without a mismatch
+ * diagnostic. Extend the newest bound when a release is verified to stay inside
+ * the window it would otherwise fall out of.
+ */
 const versionRanges: readonly VersionRange[] = [
   {
     minimum: '0.1.0-rc.7',
@@ -59,7 +68,7 @@ const versionRanges: readonly VersionRange[] = [
   },
   {
     minimum: '0.1.2-alpha.1',
-    maximumExclusive: '0.1.4-0',
+    maximumExclusive: '0.1.6-0',
     capabilities: {
       settingsTransport: 'modern',
       settingsApi: 'remote.settings',
