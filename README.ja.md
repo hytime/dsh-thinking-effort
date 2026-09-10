@@ -32,7 +32,7 @@
 | --- | --- |
 | `0.1.0-rc.7` | 非対応 |
 | `0.1.0-rc.8` から `<0.1.2-alpha.1` | schema が公開する場合は対応。ただし `supportsFinishReason` と `supportsThinkingTokenBudget` はありません |
-| `0.1.2-alpha.1` から `<0.1.4-0` | schema が公開する場合は 15 フィールドに対応 |
+| `0.1.2-alpha.1` から `<0.1.6-0` | schema が公開する場合は 15 フィールドに対応。上限以降のリリースは未マップのまま、実行中のホストが報告する能力に従って動作を継続します |
 
 DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行時 schema の公開内容に従います。上表は各 DSH バージョンで利用できるフィールドの上限であり、ルートのプロトコルによってさらに絞り込まれます。
 
@@ -174,7 +174,7 @@ Sub2API、CPA、その他の転送ゲートウェイは `x-opencode-session` を
 - 通常の CI workflow は npm に公開しません。`publish.yml` は `v<version>` tag によってのみ公開を開始します。
 - リリース tag を作成する前に、メンテナーは `package.json` の version と各言語の `CHANGELOG` を更新してコミットし、一致する `v<version>` tag を作成します。tag の指す commit は `main` の履歴に含まれている必要があります。
 - npm パッケージには GitHub Trusted Publisher を設定してください。リポジトリは `hytime/dsh-thinking-effort`、workflow は `publish.yml` です。公開は GitHub OIDC による provenance を含み、`NPM_TOKEN` は必要ありません。
-- 公開前に workflow は rc7 → rc2 → alpha2 の順で 3 つの公式 DSH capability representative を構築・テストします：`dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）、`dsh-v0.1.3-alpha.2`（`0.1.3-alpha.2`）。公式の `dsh plugin` コマンドでインストールし、実際の互換性テストを実行します。
+- 公開前に workflow は rc7 → rc2 → alpha2 → latest の順で 4 つの公式 DSH capability representative を構築・テストします：`dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）、`dsh-v0.1.3-alpha.2`（`0.1.3-alpha.2`）、`dsh-v0.1.5-rc.2`（`0.1.5-rc.2`）。公式の `dsh plugin` コマンドでインストールし、実際の互換性テストを実行します。最新の代表では実ブラウザ DOM プローブも実行します。
 - workflow は version や `CHANGELOG` を自動変更しません。npm に同じ version が既にある場合も公開を停止します。
 
 ## ライセンス
