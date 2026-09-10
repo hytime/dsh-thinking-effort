@@ -34,12 +34,12 @@ const integrationEnabled = process.env.DSH_LOADER_INTEGRATION === '1'
 
 function parseCliRoots(raw: string): string[] {
   const values = raw.split(',').map((value) => value.trim())
-  if (values.length !== 3 || values.some((value) => value === '')) {
-    throw new Error('DSH_CLI_ROOTS must contain exactly three non-empty comma-separated roots: rc7, rc2, alpha2')
+  if (values.length !== 4 || values.some((value) => value === '')) {
+    throw new Error('DSH_CLI_ROOTS must contain exactly four non-empty comma-separated roots: rc7, rc2, alpha2, latest')
   }
   const roots = values.map((value) => realpathSync(value))
-  if (new Set(roots).size !== 3) {
-    throw new Error('DSH_CLI_ROOTS must contain three distinct roots')
+  if (new Set(roots).size !== 4) {
+    throw new Error('DSH_CLI_ROOTS must contain four distinct roots')
   }
   return roots
 }
@@ -57,6 +57,7 @@ const expectedOfficialDshVersions = [
   '0.1.0-rc.7',
   '0.1.1-rc.2',
   '0.1.3-alpha.2',
+  '0.1.5-rc.2',
 ] as const
 
 const loaderSeedProvider = {
@@ -663,9 +664,15 @@ async function probeOfficialSettingsDom(cliRoot: string, web: RunningWeb): Promi
     if ((await chooseWorkspace.count().catch(() => 0)) > 0) {
       await chooseWorkspace.click()
       const workspaceDialog = page.getByRole('dialog', { name: /^(选择工作区目录|Select Workspace Directory)$/ })
-      await workspaceDialog.waitFor({ state: 'visible', timeout: 10000 })
-      await workspaceDialog.getByRole('button', { name: /^(取消|Cancel)$/ }).click()
-      await workspaceDialog.waitFor({ state: 'hidden', timeout: 10000 })
+      // Newer hosts complete workspace selection without this in-app dialog, so
+      // treat it as an optional step and dismiss it only when it appears.
+      const dialogAppeared = await workspaceDialog.waitFor({ state: 'visible', timeout: 10000 })
+        .then(() => true)
+        .catch(() => false)
+      if (dialogAppeared) {
+        await workspaceDialog.getByRole('button', { name: /^(取消|Cancel)$/ }).click()
+        await workspaceDialog.waitFor({ state: 'hidden', timeout: 10000 })
+      }
     }
     await page.getByRole('button', { name: localizedNavigationLabels.settings }).click()
     await page.waitForTimeout(500)
@@ -1072,6 +1079,7 @@ describe('compatibility documentation and root validation', () => {
       '"rc7:$RC7_ROOT:$RUN_ROOT/homes/rc7"',
       '"rc2:$RC2_ROOT:$RUN_ROOT/homes/rc2"',
       '"alpha:$ALPHA_ROOT:$RUN_ROOT/homes/alpha"',
+      '"latest:$LATEST_ROOT:$RUN_ROOT/homes/latest"',
     ]
     const rootSpecStart = workflow.indexOf('for spec in')
     expect(rootSpecStart).toBeGreaterThanOrEqual(0)
@@ -1081,12 +1089,12 @@ describe('compatibility documentation and root validation', () => {
       expect(position, `publish workflow missing ordered root ${rootSpec}`).toBeGreaterThan(previous)
       previous = position
     }
-    expect(workflow).toContain('DSH_CLI_ROOTS="$RC7_ROOT,$RC2_ROOT,$ALPHA_ROOT"')
-    expect(expectedOfficialDshVersions).toEqual(['0.1.0-rc.7', '0.1.1-rc.2', '0.1.3-alpha.2'])
+    expect(workflow).toContain('DSH_CLI_ROOTS="$RC7_ROOT,$RC2_ROOT,$ALPHA_ROOT,$LATEST_ROOT"')
+    expect(expectedOfficialDshVersions).toEqual(['0.1.0-rc.7', '0.1.1-rc.2', '0.1.3-alpha.2', '0.1.5-rc.2'])
   })
 
   it('rejects duplicate normalized DSH CLI roots', () => {
-    const duplicateRoots = `${root},${join(root, '.')},${root}`
+    const duplicateRoots = `${root},${join(root, '.')},${root},${root}`
 
     expect(() => parseCliRoots(duplicateRoots)).toThrow(/distinct|unique/i)
   })
@@ -1193,10 +1201,10 @@ describe('loader seed schema contract', () => {
 })
 
 integrationDescribe('official DSH loader composition', () => {
-  it('requires and verifies rc7, rc2, and alpha2 capability representatives independently', { timeout: 180000 }, async () => {
-    expect(cliRoots).toHaveLength(3)
+  it('requires and verifies rc7, rc2, alpha2, and the newest host independently', { timeout: 300000 }, async () => {
+    expect(cliRoots).toHaveLength(4)
     expect(cliRoots.every((cliRoot) => cliRoot === resolve(cliRoot))).toBe(true)
-    expect(new Set(cliRoots).size).toBe(3)
+    expect(new Set(cliRoots).size).toBe(4)
     const verifiedRoots = cliRoots.map((cliRoot) => ({
       cliRoot,
       version: readOfficialDshVersion(cliRoot),
@@ -1360,9 +1368,11 @@ integrationDescribe('official DSH loader composition', () => {
            expect((await describePiAi()).revision).toBe(current.revision)
          } else {
            const route = `loader-compat-${version.replaceAll('.', '-')}`
-            const defaultCompat = version === '0.1.3-alpha.2'
-              ? { chatTemplateArgs: {}, chatTemplateKwargs: {} }
-              : { chatTemplateKwargs: {} }
+            // DSH materializes the compat fields it declares. 0.1.1-rc.2 predates
+            // chatTemplateArgs; every newer representative exposes both.
+            const defaultCompat = version === '0.1.1-rc.2'
+              ? { chatTemplateKwargs: {} }
+              : { chatTemplateArgs: {}, chatTemplateKwargs: {} }
            const seeded = await settings!.mutate(current.ns, [{
              op: 'set',
              path: ['providers', route],
@@ -1493,12 +1503,12 @@ integrationDescribe('official DSH loader composition', () => {
           },
 
         })
-         // The real-browser DOM probe validates client-side rendering of the
-        // settings section. The client bundle is identical across the three
-        // representative DSH versions, so launch Playwright once on the
-        // newest representative (alpha2) and keep the RPC/profile/写入
-        // verification for every version, which needs no browser.
-        if (version === '0.1.3-alpha.2') {
+        // The real-browser DOM probe validates client-side rendering of the
+        // settings section. The client bundle is identical across the
+        // representative DSH versions, so launch Playwright once on the newest
+        // representative (0.1.5-rc.2) and keep the RPC/profile/写入 verification
+        // for every version, which needs no browser.
+        if (version === '0.1.5-rc.2') {
           const domProbe = await probeOfficialSettingsDom(cliRoot, web)
           if (domProbe.blocked !== undefined) {
             if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
