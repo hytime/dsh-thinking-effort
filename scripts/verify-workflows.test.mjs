@@ -516,7 +516,7 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
   assert.equal(publish.concurrency?.['cancel-in-progress'], false);
 
   const compatibilityBuild = compatibility.steps.find(
-    (step) => step.name === 'Build three official DSH capability representatives and run integration tests',
+    (step) => step.name === 'Build four official DSH capability representatives and run integration tests',
   );
   assert.ok(compatibilityBuild, 'compatibility job must define its build and integration step');
   assert.equal(typeof compatibilityBuild.run, 'string', 'compatibility build step must have a run script');
@@ -524,7 +524,8 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
     'dsh-v0.1.0-rc.7',
     'dsh-v0.1.1-rc.2',
     'dsh-v0.1.3-alpha.2',
-    'DSH_CLI_ROOTS="$RC7_ROOT,$RC2_ROOT,$ALPHA_ROOT"',
+    'dsh-v0.1.5-rc.2',
+    'DSH_CLI_ROOTS="$RC7_ROOT,$RC2_ROOT,$ALPHA_ROOT,$LATEST_ROOT"',
     'npm install --global pnpm@11.7.0',
     'pnpm --version',
     'pnpm install --frozen-lockfile',
@@ -546,7 +547,8 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
   assert.match(compatibilityBuild.run, /RC7_ROOT=.*dsh-v0\.1\.0-rc\.7/);
   assert.match(compatibilityBuild.run, /RC2_ROOT=.*dsh-v0\.1\.1-rc\.2/);
   assert.match(compatibilityBuild.run, /ALPHA_ROOT=.*dsh-v0\.1\.3-alpha\.2/);
-  assert.equal((compatibilityBuild.run.match(/git clone --depth 1 --branch/g) ?? []).length, 3);
+  assert.match(compatibilityBuild.run, /LATEST_ROOT=.*dsh-v0\.1\.5-rc\.2/);
+  assert.equal((compatibilityBuild.run.match(/git clone --depth 1 --branch/g) ?? []).length, 4);
   assert.doesNotMatch(compatibilityBuild.run, /dsh-v0\.1\.2-alpha\.[12]/);
   assert.doesNotMatch(compatibilityBuild.run, /corepack enable/);
   assert.match(compatibilityBuild.run, /pnpm --version/);

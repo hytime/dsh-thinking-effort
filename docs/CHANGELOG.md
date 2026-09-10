@@ -14,6 +14,15 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 修复 / Fixed
+
+- 修复折叠供应商时「模型能力与档位」页面仍显示该供应商的网关兼容性详情面板和保存按钮的问题。现在兼容面板与模型行一样遵循 `providerOpen` 门控，折叠供应商会隐藏整个面板；未保存的兼容性草稿会在重新展开时恢复，不会丢失（[#7](https://github.com/hytime/dsh-thinking-effort/issues/7)）。
+- Fix the provider gateway-compat details panel (and its save button) staying visible under a collapsed provider header on the model capabilities settings page. The panel now follows the same `providerOpen` gate as the model rows, so collapsing a provider hides the whole panel; unsaved compat drafts are restored on re-expand and never lost ([#7](https://github.com/hytime/dsh-thinking-effort/issues/7)).
+- 兼容层的版本映射覆盖到已发布的 DSH `0.1.5`：`0.1.5-rc.1` / `0.1.5-rc.2` 现在归入既有的 modern 能力区间（modern Settings transport、全部 15 个网关兼容字段、外部语言包、可选 takeover），不再被判定为未知版本。比最新区间更新的版本保持未映射：此时按宿主实际暴露的能力工作，并回退到运行时能力探测，不再静默关闭 takeover。
+- Map the released DSH `0.1.5` line in the compatibility layer: `0.1.5-rc.1` / `0.1.5-rc.2` now fall inside the existing modern window (modern Settings transport, all 15 gateway compat fields, external language packs, optional takeover) instead of being treated as unknown. Releases newer than the newest window stay unmapped: they follow the capabilities the host exposes and fall back to runtime capability detection, so takeover is no longer silently disabled.
+- 发布前的兼容矩阵新增第四个官方代表版本 `dsh-v0.1.5-rc.2`，与 `dsh-v0.1.0-rc.7`、`dsh-v0.1.1-rc.2`、`dsh-v0.1.3-alpha.2` 一起构建并执行真实安装与兼容检查；真实浏览器 DOM 探针改在最新代表版本上执行。同时让探针适配新宿主的引导流程（工作区对话框可能不出现）（[#9](https://github.com/hytime/dsh-thinking-effort/issues/9)）。
+- The pre-publish compatibility matrix builds and tests a fourth official representative, `dsh-v0.1.5-rc.2`, alongside `dsh-v0.1.0-rc.7`, `dsh-v0.1.1-rc.2`, and `dsh-v0.1.3-alpha.2`, using the official install and real compatibility checks; the real-browser DOM probe now runs on the newest representative. The probe also tolerates the newer host's onboarding flow, where the workspace dialog may not appear ([#9](https://github.com/hytime/dsh-thinking-effort/issues/9)).
+
 ## [0.2.3] - 2026-09-09
 
 ### 变更 / Changed

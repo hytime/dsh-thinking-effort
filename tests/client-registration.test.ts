@@ -646,6 +646,31 @@ describe('client registration', () => {
     expect(resolveTakeoverProviders({ runtimeProfile: 'unknown', descriptorSchema: fullSchema, piAi })).toEqual([])
   })
 
+  it('falls back to the detected runtime profile for versions newer than the mapped windows', () => {
+    const piAi = {
+      providers: {
+        local: {
+          api: 'openai-completions',
+          baseURL: 'http://gateway.test/v1',
+          models: [{ id: 'model', reasoningEfforts: { high: 'high' }, compat: { thinkingFormat: 'qwen', supportsReasoningEffort: true } }],
+        },
+      },
+    }
+    const fullSchema = { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } }
+
+    // A mapped version keeps owning its transport, even when the profile could take over.
+    expect(resolveTakeoverProviders({ version: '0.1.0-rc.7', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual([])
+    // The newest published release is mapped, so it takes the mapped path.
+    expect(resolveTakeoverProviders({ version: '0.1.5-rc.2', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual(['local'])
+    // An unmapped newer version falls back to what the host actually reports.
+    expect(resolveTakeoverProviders({ version: '0.2.0', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual(['local'])
+    // The fallback still fails closed without a capable profile or schema.
+    expect(resolveTakeoverProviders({ version: '0.2.0', runtimeProfile: 'unknown', descriptorSchema: fullSchema, piAi })).toEqual([])
+    expect(resolveTakeoverProviders({ version: '0.2.0', runtimeProfile: 'modern', descriptorSchema: { properties: { providers: { additionalProperties: { properties: { compat: { properties: {} } } } } } }, piAi })).toEqual([])
+    // Invalid version metadata never falls back.
+    expect(resolveTakeoverProviders({ version: 42, runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual([])
+  })
+
   it('exports the scoped identity and exact hard injection list', () => {
     expect(name).toBe('@hytime/dsh-thinking-effort')
     expect(inject).toEqual(['slots', 'connection', 'locale'])

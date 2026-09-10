@@ -3,6 +3,9 @@
   "version": "0.2.3",
   "description": "为 DSH 的 pi-ai 第三方模型补充可配置的思考强度档位，并设置子 agent 默认思考强度。",
   "private": false,
+  "engines": {
+    "dsh": ">=0.1.0-rc.7"
+  },
   "scripts": {
     "build": "node scripts/check-locales.mjs && tsc -p tsconfig.json && tsdown -c tsdown.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
