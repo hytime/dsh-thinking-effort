@@ -14,6 +14,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-09-11
+
 ### 修复 / Fixed
 
 - 修复折叠供应商时「模型能力与档位」页面仍显示该供应商的网关兼容性详情面板和保存按钮的问题。现在兼容面板与模型行一样遵循 `providerOpen` 门控，折叠供应商会隐藏整个面板；未保存的兼容性草稿会在重新展开时恢复，不会丢失（[#7](https://github.com/hytime/dsh-thinking-effort/issues/7)）。
