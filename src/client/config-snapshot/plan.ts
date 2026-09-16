@@ -20,12 +20,13 @@ function has(object: SnapshotSection, key: string): boolean {
 }
 
 /**
- * Count one removed top-level entry. A dict-valued entry counts its own
- * first-level items — the unit the user reasons about is a provider, not a
- * key — while a scalar counts as one.
+ * Count one removed entry. A dict-valued entry counts its own first-level
+ * items — the unit the user reasons about is a provider, not a key — but never
+ * fewer than one: deleting a settings key is a user-visible change even when
+ * the value it held was an empty dict, so the summary must not read zero.
  */
 function countRemoved(value: unknown): number {
-  return isRecord(value) ? Object.keys(value).length : 1
+  return isRecord(value) ? Math.max(1, Object.keys(value).length) : 1
 }
 
 /**

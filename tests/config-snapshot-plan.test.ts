@@ -92,6 +92,20 @@ describe('planImport replace mode', () => {
     expect(plan.summary).toEqual({ added: 0, overwritten: 1, removed: 2 })
   })
 
+  it('counts a removed empty dict as one removal', () => {
+    const plan = planImport(
+      snapshotOf({ 'llm-pi-ai': { providers: { keep: { baseURL: 'http://file' } } } }),
+      current({ 'llm-pi-ai': { providers: { keep: { baseURL: 'http://mine' } }, emptyProviders: {} } }),
+      'replace',
+    )
+
+    expect(opsFor(plan, 'llm-pi-ai')).toEqual([
+      { op: 'unset', path: ['emptyProviders'] },
+      { op: 'set', path: ['providers'], value: { keep: { baseURL: 'http://file' } } },
+    ])
+    expect(plan.summary).toEqual({ added: 0, overwritten: 1, removed: 1 })
+  })
+
   it('produces no ops when both sides are empty', () => {
     const plan = planImport(snapshotOf({}), current({}), 'replace')
 
@@ -125,6 +139,28 @@ describe('planImport summary and emptiness', () => {
       current({}),
       'merge',
     )
+
+    expect(plan.namespaces.map((entry) => entry.ns)).toEqual(['dsh-thinking-effort', 'llm-pi-ai'])
+  })
+
+  it('keeps that order when the file itself lists the model namespace first', () => {
+    // A literal, not `snapshotOf`: this test only has teeth while the sections
+    // object genuinely carries the file's key order, the way `parse.ts` keeps it.
+    const snapshot: ConfigSnapshot = {
+      kind: 'dsh-thinking-effort/config-snapshot',
+      version: 1,
+      createdAt: '2026-09-16T12:00:00.000Z',
+      pluginVersion: '0.2.4',
+      sourceProfile: 'modern',
+      sections: {
+        'llm-pi-ai': { subagentEffort: 'off' },
+        'dsh-thinking-effort': { opencodeSession: { providers: { p: { models: { m: true } } } } },
+      },
+    }
+
+    expect(Object.keys(snapshot.sections)).toEqual(['llm-pi-ai', 'dsh-thinking-effort'])
+
+    const plan = planImport(snapshot, current({}), 'merge')
 
     expect(plan.namespaces.map((entry) => entry.ns)).toEqual(['dsh-thinking-effort', 'llm-pi-ai'])
   })
