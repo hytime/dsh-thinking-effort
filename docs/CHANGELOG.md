@@ -14,10 +14,19 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-16
+
 ### 新增 / Added
 
 - 新增「配置备份与方案」：可把 `llm-pi-ai` 与 `dsh-thinking-effort` 两个 namespace 的用户层导出成 JSON 文件，在另一台机器或重装后导入恢复；也可在设置页内保存多份命名方案并切回。导入会显示新增 / 覆盖 / 删除的条数预览，默认使用「合并」（保留文件里没有的 provider），并可在预览中改选「替换」（完全以文件为准）；第一次写入前会自动留存一份可回滚的导入前快照，写入结果需要重启时会列出对应 namespace。整个功能复用现有 Settings 通道，同时支持新版 Remote Settings 与旧版 `connection.api.settings`，不新增依赖。
 - Add "Backup and profiles": export the user layer of the `llm-pi-ai` and `dsh-thinking-effort` namespaces as a JSON file and import it on another machine or after a reinstall; save named profiles in the settings page and switch back to them. An import shows an added / overwritten / removed preview, defaults to merge (keeps providers the file omits), and can switch to replace (the file wins) in that preview; a rollback snapshot is kept automatically before the first write, and an apply that needs a restart names the namespaces involved. The feature reuses the existing Settings transport for both modern Remote Settings and the legacy `connection.api.settings`, with no new dependencies.
+
+### 变更 / Changed
+
+- 兼容层的版本映射上界由 `<0.1.6-0` 提升到 `<0.1.7-0`：已发布的 DSH `0.1.6-alpha.1` 经逐项核对后归入既有 modern 能力区间（modern Settings transport、`describe()` 返回 `user` 原始层、全部 15 个网关兼容字段、外部语言包、可选 takeover），不再被判定为未映射版本。
+- Map the newest compatibility window to `<0.1.7-0` (was `<0.1.6-0`): the released DSH `0.1.6-alpha.1` was verified field by field to stay inside the existing modern window (modern Settings transport, `user`-layer `describe()` reads, all 15 gateway compat fields, external language packs, optional takeover) instead of being treated as unmapped.
+- 发布前的兼容矩阵把最新能力代表从 `dsh-v0.1.5-rc.2` 升级为 `dsh-v0.1.6-alpha.1`，与 `dsh-v0.1.0-rc.7`、`dsh-v0.1.1-rc.2`、`dsh-v0.1.3-alpha.2` 一起构建并执行真实安装与兼容检查；真实浏览器 DOM 探针改在 `0.1.6-alpha.1` 上执行。
+- The pre-publish compatibility matrix upgrades its newest capability representative from `dsh-v0.1.5-rc.2` to `dsh-v0.1.6-alpha.1`, built and tested alongside `dsh-v0.1.0-rc.7`, `dsh-v0.1.1-rc.2`, and `dsh-v0.1.3-alpha.2` with the official install and real compatibility checks; the real-browser DOM probe now runs on `0.1.6-alpha.1`.
 
 ## [0.2.4] - 2026-09-11
 
