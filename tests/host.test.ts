@@ -161,6 +161,21 @@ async function drainRealStream(ctx: Context, options: Record<string, unknown>): 
   for await (const _chunk of stream) { /* consume */ }
 }
 
+/**
+ * The plugin namespace resolves every owned field with schema defaults, so a
+ * stored section always describes the same shape even before the user has
+ * written profiles or an auto backup. `createdAt: ''` is the client's
+ * "never written" sentinel.
+ */
+const snapshotDefaults = {
+  kind: 'dsh-thinking-effort/config-snapshot',
+  version: 1,
+  createdAt: '',
+  pluginVersion: '',
+  sourceProfile: 'unknown',
+  sections: {},
+}
+
 describe('real Settings-backed OpenCode registration', () => {
   it('rejects non-boolean model values through the real Settings schema', async () => {
     const host = await bootRealOpenCodeHost()
@@ -173,6 +188,8 @@ describe('real Settings-backed OpenCode registration', () => {
       }])).rejects.toThrow()
       expect(host.ctx.settings.describe().find((entry) => entry.ns === OPENCODE_SESSION_NAMESPACE)?.value).toEqual({
         opencodeSession: { providers: {} },
+        profiles: {},
+        autoBackup: snapshotDefaults,
       })
     } finally {
       await host.consumerFiber.dispose()
@@ -202,6 +219,8 @@ describe('real Settings-backed OpenCode registration', () => {
             'opencode-go': { models: { 'deepseek-v4-flash': true } },
           },
         },
+        profiles: {},
+        autoBackup: snapshotDefaults,
       })
 
       await drainRealStream(host.ctx, {

@@ -157,13 +157,13 @@ describe('OpenCode session Settings operations', () => {
 })
 
 describe('Host OpenCode session integration', () => {
-  it('registers the plugin namespace with nested boolean defaults', () => {
-    const schema = OPENCODE_SESSION_SETTINGS_SCHEMA as unknown as { toJSON?: () => unknown }
-    const json = schema.toJSON?.() as Record<string, unknown> | undefined
-    expect(json).toBeDefined()
-    expect(JSON.stringify(json)).toContain('opencodeSession')
-    expect(JSON.stringify(json)).toContain('providers')
-    expect(JSON.stringify(json)).toContain('models')
+  it('registers the plugin namespace with the OpenCode session, profile and auto backup fields', () => {
+    const json = JSON.stringify(OPENCODE_SESSION_SETTINGS_SCHEMA.toJSON?.())
+    expect(json).toContain('opencodeSession')
+    expect(json).toContain('providers')
+    expect(json).toContain('models')
+    expect(json).toContain('profiles')
+    expect(json).toContain('autoBackup')
   })
 
   it('prefers the settings service installSection when context injection is unavailable', () => {

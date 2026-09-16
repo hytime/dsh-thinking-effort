@@ -1,30 +1,20 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import z from '@deepseek-ai/schemastery'
 import {
   isOpenCodeSessionEnabled,
   OPENCODE_SESSION_HEADER,
   OPENCODE_SESSION_NAMESPACE,
   type OpenCodeSessionSettings,
 } from '../compat/opencode-session.js'
+import { PLUGIN_SETTINGS_SCHEMA } from './plugin-settings.js'
 import type {
   HostContext,
   SettingsInjectionContext,
   SettingsSectionHooks,
 } from './types.js'
 
+export { PLUGIN_SETTINGS_SCHEMA as OPENCODE_SESSION_SETTINGS_SCHEMA } from './plugin-settings.js'
+
 const LOG_PREFIX = '[@hytime/dsh-thinking-effort]'
-
-const openCodeSessionModels = z.dict(z.boolean()).default({})
-const openCodeSessionProvider = z.object({
-  models: openCodeSessionModels,
-}).default({ models: {} })
-const openCodeSessionProviders = z.dict(openCodeSessionProvider).default({})
-
-export const OPENCODE_SESSION_SETTINGS_SCHEMA: z<OpenCodeSessionSettings> = z.object({
-  opencodeSession: z.object({
-    providers: openCodeSessionProviders,
-  }).default({ providers: {} }),
-}).default({ opencodeSession: { providers: {} } })
 
 type OpenCodeSessionRequest = {
   readonly provider: string
@@ -166,7 +156,7 @@ function installLegacySettingsSection(
     if (typeof register !== 'function') {
       throw new Error(`${LOG_PREFIX} Settings compatibility helper is unavailable: register is missing`)
     }
-    const scope = register.call(settingsContext.settings, namespace, OPENCODE_SESSION_SETTINGS_SCHEMA, { base: {} })
+    const scope = register.call(settingsContext.settings, namespace, PLUGIN_SETTINGS_SCHEMA, { base: {} })
     hooks.setSource(() => scope.get())
     settingsContext.effect(() => () => {
       hooks.setSource(() => ({}))
@@ -184,7 +174,7 @@ function installSettingsSectionCompat(ctx: HostContext, hooks: SettingsSectionHo
   const settings = ctx.settings
   const installSection = settings?.installSection
   if (typeof installSection === 'function') {
-    installSection.call(settings, ctx, OPENCODE_SESSION_NAMESPACE, OPENCODE_SESSION_SETTINGS_SCHEMA, {}, hooks)
+    installSection.call(settings, ctx, OPENCODE_SESSION_NAMESPACE, PLUGIN_SETTINGS_SCHEMA, {}, hooks)
     return
   }
 
