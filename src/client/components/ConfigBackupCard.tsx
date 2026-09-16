@@ -1,0 +1,325 @@
+import React from 'react'
+import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
+import { downloadJson as browserDownloadJson, type DownloadJson } from '../browser-download.js'
+import { applySnapshot } from '../config-snapshot/apply.js'
+import {
+  autoBackupFromNamespaces,
+  deleteProfileOps,
+  profilesFromNamespaces,
+  saveProfileOps,
+  validateProfileName,
+} from '../config-snapshot/library.js'
+import { parseSnapshot, serializeSnapshot } from '../config-snapshot/parse.js'
+import { planImport } from '../config-snapshot/plan.js'
+import { snapshotFileName, snapshotFromNamespaces } from '../config-snapshot/snapshot.js'
+import {
+  MAX_PROFILES,
+  MAX_PROFILE_NAME,
+  PLUGIN_NAMESPACE,
+  type ConfigSnapshot,
+  type ImportMode,
+  type ParseFailure,
+  type ProfileNameError,
+} from '../config-snapshot/types.js'
+import { ActionButton, Icon } from './Controls.js'
+import type { Palette } from '../theme.js'
+import type { SettingsApi, SettingsNamespace, Translation } from '../types.js'
+
+const PLUGIN_VERSION = packageJson.version
+
+const PARSE_ERROR_KEYS: Record<ParseFailure['code'], string> = {
+  tooLarge: 'backupParseTooLarge',
+  invalidJson: 'backupParseInvalidJson',
+  notObject: 'backupParseNotObject',
+  kindMismatch: 'backupParseKindMismatch',
+  unsupportedVersion: 'backupParseVersion',
+  missingSections: 'backupParseSections',
+  invalidSection: 'backupParseSection',
+  reservedKey: 'backupParseReserved',
+}
+
+const NAME_ERROR_KEYS: Record<ProfileNameError, string> = {
+  required: 'backupNameRequired',
+  tooLong: 'backupNameTooLong',
+  reserved: 'backupNameReserved',
+  invalid: 'backupNameInvalid',
+  taken: 'backupNameTaken',
+}
+
+export interface ConfigBackupCardProps {
+  readonly settings: SettingsApi
+  readonly palette: Palette
+  readonly t: Translation
+  readonly onApplied: () => void
+  readonly download?: DownloadJson
+  readonly now?: () => Date
+}
+
+interface PendingImport {
+  readonly snapshot: ConfigSnapshot
+  readonly source: 'file' | 'profile' | 'autoBackup'
+  readonly label: string
+  readonly ignored: readonly string[]
+}
+
+interface CardState {
+  open: boolean
+  namespaces: readonly SettingsNamespace[]
+  writable: boolean
+  profiles: Record<string, ConfigSnapshot>
+  profileNames: readonly string[]
+  autoBackupAt: string | null
+  nameDraft: string
+  pendingDelete: string | null
+  preview: PendingImport | null
+  mode: ImportMode
+  busy: boolean
+  error: string | null
+  notice: string | null
+}
+
+const initialState: CardState = {
+  open: false, namespaces: [], writable: true, profiles: {}, profileNames: [],
+  autoBackupAt: null, nameDraft: '', pendingDelete: null, preview: null, mode: 'merge',
+  busy: false, error: null, notice: null,
+}
+
+export function ConfigBackupCard({ settings, palette, t, onApplied, download = browserDownloadJson, now }: ConfigBackupCardProps): React.ReactElement {
+  const [state, setState] = React.useState<CardState>(initialState)
+  const fileInput = React.useRef<HTMLInputElement>(null)
+  const clock = (): Date => (now ?? (() => new Date()))()
+
+  const load = (): void => {
+    setState((current) => ({ ...current, error: null }))
+    settings.describe().then((response) => {
+      if (!response.ok) {
+        setState((current) => ({ ...current, busy: false, error: response.error.message }))
+        return
+      }
+      const namespaces = response.value.namespaces
+      const profiles = profilesFromNamespaces(namespaces)
+      setState((current) => ({
+        ...current,
+        busy: false,
+        namespaces,
+        writable: response.value.writable !== false,
+        profiles,
+        profileNames: Object.keys(profiles).sort(),
+        autoBackupAt: autoBackupFromNamespaces(namespaces)?.createdAt ?? null,
+      }))
+    }).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error)
+      setState((current) => ({ ...current, busy: false, error: message }))
+    })
+  }
+
+  React.useEffect(() => { load() }, [])
+
+  const revisionOf = (ns: string): number => state.namespaces.find((entry) => entry.ns === ns)?.revision ?? 0
+  const fail = (message: string): void => setState((current) => ({ ...current, busy: false, notice: null, error: message }))
+
+  const currentSnapshot = (): ConfigSnapshot => snapshotFromNamespaces(state.namespaces, {
+    createdAt: clock().toISOString(),
+    pluginVersion: PLUGIN_VERSION,
+    sourceProfile: settings.compatibilityProfile,
+  })
+
+  const exportCurrent = (): void => {
+    download(snapshotFileName(clock()), serializeSnapshot(currentSnapshot()))
+  }
+
+  const exportProfile = (name: string): void => {
+    const stored = state.profiles[name]
+    if (stored === undefined) return
+    download(snapshotFileName(clock()), serializeSnapshot(stored))
+  }
+
+  const saveProfile = (): void => {
+    if (state.profileNames.length >= MAX_PROFILES) {
+      fail(t('backupProfileLimit', { max: MAX_PROFILES }))
+      return
+    }
+    const validated = validateProfileName(state.nameDraft, state.profileNames)
+    if (!validated.ok) {
+      fail(t(NAME_ERROR_KEYS[validated.error], { max: MAX_PROFILE_NAME }))
+      return
+    }
+    const name = validated.value
+    setState((current) => ({ ...current, busy: true, error: null, notice: null }))
+    settings.mutate(PLUGIN_NAMESPACE, saveProfileOps(name, currentSnapshot()), revisionOf(PLUGIN_NAMESPACE)).then((response) => {
+      if (!response.ok) {
+        fail(t('backupSaveProfileFailed', { message: response.error.message }))
+        return
+      }
+      setState((current) => ({ ...current, busy: false, nameDraft: '', notice: t('backupSavedProfile', { name }) }))
+      load()
+    }).catch((error: unknown) => {
+      fail(t('backupSaveProfileFailed', { message: error instanceof Error ? error.message : String(error) }))
+    })
+  }
+
+  const removeProfile = (name: string): void => {
+    setState((current) => ({ ...current, busy: true, error: null, notice: null }))
+    settings.mutate(PLUGIN_NAMESPACE, deleteProfileOps(name), revisionOf(PLUGIN_NAMESPACE)).then((response) => {
+      if (!response.ok) {
+        fail(t('backupDeleteProfileFailed', { message: response.error.message }))
+        return
+      }
+      setState((current) => ({ ...current, busy: false, pendingDelete: null }))
+      load()
+    }).catch((error: unknown) => {
+      fail(t('backupDeleteProfileFailed', { message: error instanceof Error ? error.message : String(error) }))
+    })
+  }
+
+  const openPreview = (snapshot: ConfigSnapshot, source: PendingImport['source'], label: string, ignored: readonly string[] = []): void => {
+    setState((current) => ({ ...current, error: null, notice: null, mode: 'merge', preview: { snapshot, source, label, ignored } }))
+  }
+
+  const onFileChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
+    const input = event.currentTarget
+    const file = input.files?.[0]
+    if (file === undefined) return
+    file.text().then((content) => {
+      const parsed = parseSnapshot(content)
+      if (!parsed.ok) {
+        fail(t(PARSE_ERROR_KEYS[parsed.error.code], parsed.error.params ?? {}))
+        return
+      }
+      openPreview(parsed.value.snapshot, 'file', t('backupSourceFile'), parsed.value.ignoredNamespaces)
+    }).catch((error: unknown) => {
+      fail(t('backupReadFailed', { message: error instanceof Error ? error.message : String(error) }))
+    }).finally(() => { input.value = '' })
+  }
+
+  const confirmImport = (): void => {
+    const pending = state.preview
+    if (pending === null) return
+    setState((current) => ({ ...current, busy: true, error: null, notice: null }))
+    void applySnapshot({
+      snapshot: pending.snapshot,
+      mode: state.mode,
+      settings,
+      autoBackup: true,
+      now: clock,
+      pluginVersion: PLUGIN_VERSION,
+    }).then((outcome) => {
+      if (outcome.skipped) {
+        setState((current) => ({ ...current, busy: false, preview: null, notice: t('backupSkipped') }))
+        return
+      }
+      const failed = outcome.outcomes.filter((entry) => !entry.ok)
+      if (failed.length > 0) {
+        const detail = failed.map((entry) => `${entry.ns}: ${entry.error ?? ''}`).join('; ')
+        const partial = t('backupAppliedPartial', { detail })
+        const conflicted = failed.some((entry) => entry.conflict === true)
+        setState((current) => ({ ...current, busy: false, preview: null, error: conflicted ? `${t('backupConflict')} — ${partial}` : partial }))
+        load()
+        return
+      }
+      setState((current) => ({ ...current, busy: false, preview: null, notice: t('backupApplied') }))
+      onApplied()
+      load()
+    }).catch((error: unknown) => {
+      setState((current) => ({ ...current, busy: false, preview: null, error: t('backupImportFailed', { message: error instanceof Error ? error.message : String(error) }) }))
+    })
+  }
+
+  const previewPlan = state.preview === null ? null : planImport(state.preview.snapshot, state.namespaces, state.mode)
+  const readOnly = !state.writable
+  const profileCount = state.profileNames.length
+  const hint = profileCount === 0 ? t('backupCollapsedHintEmpty') : t('backupCollapsedHint', { count: profileCount })
+
+  const muted: React.CSSProperties = { color: palette.secondary, fontSize: '11px', lineHeight: '16px' }
+  const sectionTitle: React.CSSProperties = { fontSize: '12px', fontWeight: 700, marginBottom: '3px' }
+  const field: React.CSSProperties = { height: '28px', padding: '0 8px', border: `1px solid ${palette.border}`, borderRadius: '8px', fontSize: '12px', backgroundColor: palette.field, color: palette.text, outline: 'none' }
+
+  return <div data-scope="config-backup" style={{ backgroundColor: palette.group, border: `1px solid ${palette.border}`, borderRadius: '8px', boxShadow: palette.shadow, overflow: 'hidden', marginBottom: '8px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '7px 8px', fontSize: '13px', fontWeight: 700 }}>
+      <Icon name="layers" size={15} />
+      <button
+        type="button"
+        aria-label={t('backupCardTitle')}
+        aria-expanded={state.open}
+        onClick={() => setState((current) => ({ ...current, open: !current.open }))}
+        style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '1 1 auto', minWidth: 0, padding: 0, border: 'none', background: 'transparent', color: palette.text, font: 'inherit', letterSpacing: 0, cursor: 'pointer', textAlign: 'left' }}
+      >
+        <span>{t('backupCardTitle')}</span>
+        <span style={{ marginLeft: 'auto', color: palette.secondary, fontSize: '11px', fontWeight: 600 }}>{hint}</span>
+        <Icon name={state.open ? 'chevronUp' : 'chevronDown'} size={14} />
+      </button>
+    </div>
+    {state.error ? <div role="alert" aria-live="assertive" style={{ fontSize: '12px', lineHeight: '18px', color: palette.danger, backgroundColor: palette.dangerBg, border: `1px solid ${palette.dangerBorder}`, borderRadius: '8px', padding: '6px 8px', margin: '0 8px 8px' }}>{state.error}</div> : null}
+    {state.notice ? <div role="status" aria-live="polite" style={{ fontSize: '12px', lineHeight: '18px', color: palette.accent, backgroundColor: palette.accentSoft, border: `1px solid ${palette.accentBorder}`, borderRadius: '8px', padding: '6px 8px', margin: '0 8px 8px' }}>{state.notice}</div> : null}
+    {state.open ? <div style={{ display: 'grid', gap: '9px', padding: '8px', borderTop: `1px solid ${palette.divider}` }}>
+      <div>
+        <div style={sectionTitle}>{t('backupProfilesTitle')}</div>
+        {profileCount === 0 ? <div style={muted}>{t('backupProfilesEmpty')}</div> : state.profileNames.map((name) => <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 0' }}>
+          <span style={{ flex: '1 1 auto', minWidth: 0, fontSize: '12px', overflowWrap: 'anywhere' }}>{name}</span>
+          <span style={muted}>{(state.profiles[name]?.createdAt ?? '').slice(0, 10)}</span>
+          <ActionButton text={t('backupApply')} onClick={() => openPreview(state.profiles[name]!, 'profile', t('backupSourceProfile', { name }))} disabled={state.busy || readOnly} palette={palette} icon="check" />
+          <ActionButton text={t('backupExportProfile')} onClick={() => exportProfile(name)} disabled={state.busy} palette={palette} />
+          {state.pendingDelete === name
+            ? <>
+              <ActionButton text={t('backupDeleteConfirm')} onClick={() => removeProfile(name)} disabled={state.busy || readOnly} tone="danger" palette={palette} />
+              <ActionButton text={t('backupCancel')} onClick={() => setState((current) => ({ ...current, pendingDelete: null }))} disabled={state.busy} palette={palette} />
+            </>
+            : <ActionButton text={t('backupDeleteProfile')} onClick={() => setState((current) => ({ ...current, pendingDelete: name }))} disabled={state.busy || readOnly} tone="danger" palette={palette} />}
+        </div>)}
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', paddingTop: '4px' }}>
+          <input
+            type="text"
+            value={state.nameDraft}
+            placeholder={t('backupProfileNamePlaceholder')}
+            aria-label={t('backupProfileNamePlaceholder')}
+            onChange={(event) => {
+              const value = event.currentTarget.value
+              setState((current) => ({ ...current, notice: null, nameDraft: value }))
+            }}
+            style={{ ...field, flex: '1 1 auto', minWidth: 0 }}
+          />
+          <ActionButton text={t('backupSaveCurrent')} onClick={saveProfile} disabled={state.busy || readOnly} tone="primary" palette={palette} icon="check" />
+        </div>
+      </div>
+      <div>
+        <div style={sectionTitle}>{t('backupExportCurrent')}</div>
+        <ActionButton text={t('backupExportCurrent')} onClick={exportCurrent} disabled={state.busy} palette={palette} />
+        <div style={{ ...muted, paddingTop: '3px' }}>{t('backupExportHint')}</div>
+      </div>
+      <div>
+        <div style={sectionTitle}>{t('backupImportTitle')}</div>
+        <input ref={fileInput} type="file" accept="application/json,.json" onChange={onFileChange} style={{ display: 'none' }} />
+        <ActionButton text={t('backupImportChoose')} onClick={() => fileInput.current?.click()} disabled={state.busy || readOnly} palette={palette} />
+      </div>
+      {readOnly ? <div style={muted}>{t('backupReadOnly')}</div> : null}
+      <div>
+        <div style={sectionTitle}>{t('backupAutoBackupTitle')}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={muted}>{state.autoBackupAt === null ? t('backupAutoBackupNone') : state.autoBackupAt}</span>
+          {state.autoBackupAt === null ? null : <ActionButton text={t('backupAutoBackupRestore')} onClick={() => openPreview(autoBackupFromNamespaces(state.namespaces)!, 'autoBackup', t('backupSourceAutoBackup'))} disabled={state.busy || readOnly} palette={palette} icon="restore" />}
+        </div>
+      </div>
+      {state.preview === null || previewPlan === null ? null : <div style={{ display: 'grid', gap: '6px', border: `1px solid ${palette.accentBorder}`, borderRadius: '8px', backgroundColor: palette.accentSoft, padding: '7px 8px' }}>
+        <div style={{ fontSize: '12px', fontWeight: 700 }}>{t('backupPreviewTitle')}</div>
+        <div style={muted}>{state.preview.label}{state.preview.snapshot.createdAt === '' ? '' : ` · ${state.preview.snapshot.createdAt.slice(0, 10)}`}</div>
+        <select
+          value={state.mode}
+          aria-label={t('backupPreviewTitle')}
+          onChange={(event) => setState((current) => ({ ...current, mode: event.currentTarget.value === 'replace' ? 'replace' : 'merge' }))}
+          style={{ ...field, colorScheme: 'light dark' }}
+        >
+          <option value="merge">{t('backupModeMerge')}</option>
+          <option value="replace">{t('backupModeReplace')}</option>
+        </select>
+        <div style={{ fontSize: '12px' }}>{previewPlan.empty
+          ? t('backupSummaryEmpty')
+          : t('backupSummary', { added: previewPlan.summary.added, overwritten: previewPlan.summary.overwritten, removed: previewPlan.summary.removed })}</div>
+        {state.preview.ignored.length === 0 ? null : <div style={muted}>{t('backupIgnored', { count: state.preview.ignored.length })}</div>}
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <ActionButton text={t('backupConfirmImport')} onClick={confirmImport} disabled={state.busy || readOnly || previewPlan.empty} tone="primary" palette={palette} icon="check" />
+          <ActionButton text={t('backupCancel')} onClick={() => setState((current) => ({ ...current, preview: null }))} disabled={state.busy} palette={palette} />
+        </div>
+      </div>}
+    </div> : null}
+  </div>
+}
