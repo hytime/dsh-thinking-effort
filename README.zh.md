@@ -79,6 +79,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 | 网关兼容配置 | 按 provider 全局或单个模型配置 15 个常用标量字段，按角色与推理、格式与输出、流式与工具、存储与缓存分组并默认收起 |
 | OpenCode 会话 Header | 按精确模型启用动态 `x-opencode-session`，使用当前 DSH 会话 ID，不保存固定 Header 值 |
 | 网关值映射 | 例如 DSH 选择 `high` 时，实际向网关发送 `ultra` |
+| 配置备份与方案 | 把当前配置导出成 JSON 文件用于跨机器迁移；在本机保存多份命名方案并一键切换；导入前可选择「合并」或「替换」并预览影响范围 |
 | 子 agent 默认值 | 为未显式指定档位的子 agent 请求自动填入默认思考强度 |
 | 快捷预设 | 一键应用官方 DeepSeek 风格或通用档位组合 |
 | Composer 分档滑块 | 运行时提供 `modelDirectories` 服务时，注册 Composer 的可选 `seat`，显示当前 `provider/model` 的宿主已解析推理档位 |
@@ -214,6 +215,17 @@ providers:
 
 Sub2API、CPA 和其他中转服务必须保留并继续把 `x-opencode-session` 转发给 OpenCode 上游。`llm-pi-ai.providers.<route>.headers.x-opencode-session` 这类静态 route Header 不能替代本功能：它会让所有会话共用一个值，无法提供按会话路由和提示词缓存亲和性。修改 Host 后需要重启 DSH；修改 Settings 或 Client 后需要刷新 Web 页面。
 
+### 配置备份与方案
+
+设置页顶部的「配置备份与方案」卡片可以导出当前配置、在本机保存命名方案，并导入先前导出的文件。
+
+1. 点击「导出当前配置」下载 `dsh-config-<时间戳>.json`。文件包含 `llm-pi-ai` 与 `dsh-thinking-effort` 的用户层配置，可能有 provider 的 `headers` 等明文内容（不包含凭据值本身），请妥善保管。
+2. 在「方案库」中输入名称后点击「保存当前配置」，即可把当前配置存为命名方案；「应用」切回该方案，「导出」写成文件，「删除」移除方案，最多保存 20 份。
+3. 点击「导入配置」中的「选择文件…」后，「导入预览」会先列出新增 / 覆盖 / 删除的条数，确认之前不会写入任何内容。
+4. 导入默认使用「合并」（保留文件里没有的配置）；「替换」必须显式选择，它会删除文件里没有的 provider。点击「确认导入」才会写入，写入前会自动保存一份「导入前的自动备份」，之后可以还原。
+
+导出与导入复用插件现有的 Settings 通道，因此新版 Remote Settings 与旧版 `connection.api.settings` 都可以使用。结果显示某个 namespace 需要重启时，重启 DSH 后生效。
+
 ### 设置页界面
 
 页面顶部是语言选择器；其下方的「子 agent 默认档位」卡片控制没有显式档位的请求。「一键设置」负责批量应用预设。供应商和模型列表支持展开/收起；每个模型行显示输入能力、上下文长度，并在设置区域提供网关兼容控件。`models[]` 保存使用完整数组 set，而不是数组索引 path op。
@@ -265,6 +277,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 - `off` 和未设置都可能表现为不发送 `reasoning` 参数，是否真正关闭思考取决于第三方网关的协议语义。
 - Composer 滑块只在 Web 运行时提供可选 `modelDirectories` 服务时注册。该服务不可用时，不会注册 `seat`，插件也不会修改 Composer。
 - 宿主逻辑修改需要重启 DSH；Settings、locale 和 Client bundle 修改需要刷新 Web 页面。
+- 「配置备份与方案」的方案库保存在插件自有的 `dsh-thinking-effort` namespace 中，不会随导出文件迁移。要把命名方案带到另一台机器，需要逐个「导出」再在目标机器上导入。
 
 ## CI 与发布维护
 

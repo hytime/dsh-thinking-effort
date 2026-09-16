@@ -70,6 +70,7 @@ These identifiers have different responsibilities:
 | Gateway compatibility | Configure 15 common scalar fields globally per provider or separately per model, grouped by role/reasoning, format/output, streaming/tools, and storage/cache; groups are collapsed by default |
 | OpenCode session Header | Enable a dynamic `x-opencode-session` per exact model, using the current DSH session ID without storing a fixed Header value |
 | Gateway mapping | Send `ultra` when the user selects DSH `high` |
+| Backup and profiles | Export the current configuration as a JSON file for migration; save named profiles locally and switch between them; choose merge or replace before importing, with an impact preview |
 | Composer effort slider | Registers an optional Composer `seat` when the Web runtime exposes `modelDirectories`, with host-resolved tiers for the current `provider/model` |
 | Subagent default | Apply a default effort only when a subagent request has no explicit value |
 | Multilingual settings | Includes Chinese, English, Japanese, and Korean dictionaries; Japanese/Korean switching uses DSH language-pack support |
@@ -155,6 +156,17 @@ When enabled, the Host sends `x-opencode-session: <current DSH session ID>` on m
 
 Sub2API, CPA, and other forwarding gateways must preserve and forward `x-opencode-session` to the OpenCode upstream. A static route setting such as `llm-pi-ai.providers.<route>.headers.x-opencode-session` is not an equivalent replacement: it uses one value for every conversation and cannot provide per-conversation routing or prompt-cache affinity. Restart DSH after Host changes and refresh the Web page after Settings or Client changes.
 
+### Backup and profiles
+
+The **Backup and profiles** card at the top of the settings page exports the current configuration, keeps named profiles on this machine, and imports a file exported earlier.
+
+1. **Export current config** downloads `dsh-config-<timestamp>.json`. The file holds the `llm-pi-ai` and `dsh-thinking-effort` user layers and can contain plaintext such as provider `headers` — but not the credential values themselves. Keep it safe.
+2. Under **Profile library**, enter a name and click **Save current config** to store the current configuration as a named profile; **Apply** switches back to it, **Export** writes it to a file, and **Delete** removes it. At most 20 profiles are kept.
+3. **Import config → Choose file…** parses the file and shows an **Import preview** with the added / overwritten / removed counts; nothing is written before you confirm.
+4. Imports default to **Merge** (keep what the file omits); **Replace** must be chosen explicitly and deletes providers the file does not contain. **Confirm import** writes the changes, and the configuration from just before the import is saved automatically under **Pre-import backup** so it can be restored.
+
+Export and import reuse the existing Settings channel, so the card works with both modern Remote Settings and the legacy `connection.api.settings`. When the result reports a namespace that takes effect on restart, restart DSH.
+
 ### Settings page layout
 
 The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and gateway compatibility controls in its settings area. `models[]` saves use one complete array set rather than an array-index path operation.
@@ -179,6 +191,7 @@ See the complete Chinese, English, Japanese, and Korean screenshot gallery in [`
 - `off` and an unset effort may both omit `reasoning`; whether this disables thinking depends on the gateway protocol.
 - The Composer slider is available only when the Web runtime provides the optional `modelDirectories` service. The `seat` is not registered when that service is unavailable, and the plugin leaves Composer unchanged.
 - Host changes require a DSH restart. Settings, locale, and Client bundle changes take effect after a Web page refresh.
+- The profile library is stored in the plugin's own `dsh-thinking-effort` namespace and is not carried by an export. To move named profiles to another machine, export each profile and import it there.
 
 ## CI and release maintenance
 
