@@ -6,7 +6,7 @@ import { ConfigBackupCard } from '../src/client/components/ConfigBackupCard.js'
 import { SNAPSHOT_KIND, SNAPSHOT_VERSION } from '../src/client/config-snapshot/types.js'
 import { zh } from '../src/client/locales.js'
 import { iosPalette } from '../src/client/theme.js'
-import type { ClientResult, SettingsApi, SettingsNamespace, SettingsOp, Translation } from '../src/client/types.js'
+import type { ClientResult, SettingsApi, SettingsDescribeValue, SettingsNamespace, SettingsOp, Translation } from '../src/client/types.js'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -32,31 +32,54 @@ interface HarnessOptions {
   describeError?: string
   /** Describe call ordinals that fail; omit to fail on every call. */
   describeErrorCalls?: readonly number[]
+  /** Message for a describe that throws synchronously instead of answering. */
+  describeThrow?: string
+  /** Describe call ordinals that throw; omit to throw on every call. */
+  describeThrowCalls?: readonly number[]
+  /** Per-describe-call namespace revisions, so a later read can answer with a revision an editor-side write bumped. */
+  revisionByCall?: readonly Record<string, number>[]
+  /** Refuse a mutate whose revision is not the one the latest describe reported, the way the host does. */
+  enforceRevisions?: boolean
 }
 
 function harness(options: HarnessOptions = {}) {
-  const mutate = vi.fn(async (ns: string, _ops: readonly SettingsOp[], revision: number): Promise<ClientResult<SettingsNamespace>> => ({
-    ok: true,
-    value: { ns, revision: revision + 1, value: {} },
-  }))
+  // The revisions the host reports: llm-pi-ai 4, plugin namespace 8. A later
+  // describe can answer with a bumped revision, and a stale mutate is then
+  // refused with settings/conflict just like the real provider.
+  const revisions: Record<string, number> = { 'llm-pi-ai': 4, 'dsh-thinking-effort': 8 }
+  const mutate = vi.fn(async (ns: string, _ops: readonly SettingsOp[], revision: number): Promise<ClientResult<SettingsNamespace>> => {
+    if (options.enforceRevisions === true && revision !== revisions[ns]) {
+      return { ok: false, error: { message: 'settings/conflict' } }
+    }
+    revisions[ns] = revision + 1
+    return { ok: true, value: { ns, revision: revision + 1, value: {} } }
+  })
   let describeCalls = 0
-  const describe = vi.fn(async (): Promise<ClientResult<{ namespaces: readonly SettingsNamespace[]; writable?: boolean }>> => {
+  // Deliberately not `async`: a synchronous throw is the failure mode under
+  // test, and an async function would turn it into an ordinary rejection.
+  const describe = vi.fn((): Promise<ClientResult<SettingsDescribeValue>> => {
     const call = describeCalls++
+    const thrown = options.describeThrow
+    if (thrown !== undefined && (options.describeThrowCalls === undefined || options.describeThrowCalls.includes(call))) {
+      throw new Error(thrown)
+    }
     const failure = options.describeError
     if (failure !== undefined && (options.describeErrorCalls === undefined || options.describeErrorCalls.includes(call))) {
-      return { ok: false, error: { message: failure } }
+      return Promise.resolve({ ok: false, error: { message: failure } })
     }
+    const bumped = options.revisionByCall?.[call]
+    if (bumped !== undefined) Object.assign(revisions, bumped)
     const user = options.userByCall?.[call] ?? options.user
-    return {
+    return Promise.resolve({
       ok: true,
       value: {
         writable: options.writable ?? true,
         namespaces: [
-          { ns: 'llm-pi-ai', revision: 4, value: {}, user: user?.['llm-pi-ai'] ?? { subagentEffort: 'off' } },
-          { ns: 'dsh-thinking-effort', revision: 8, value: {}, user: user?.['dsh-thinking-effort'] ?? {} },
+          { ns: 'llm-pi-ai', revision: revisions['llm-pi-ai'], value: {}, user: user?.['llm-pi-ai'] ?? { subagentEffort: 'off' } },
+          { ns: 'dsh-thinking-effort', revision: revisions['dsh-thinking-effort'], value: {}, user: user?.['dsh-thinking-effort'] ?? {} },
         ],
       },
-    }
+    })
   })
   const settings: SettingsApi = { externalLanguages: false, compatibilityProfile: 'modern', describe, mutate }
 
@@ -387,5 +410,105 @@ describe('ConfigBackupCard', () => {
     const [, body] = view.download.mock.calls[0] as [string, string]
     const parsed = JSON.parse(body) as { sections: Record<string, unknown> }
     expect(parsed.sections['llm-pi-ai']).toEqual({ subagentEffort: 'high' })
+  })
+
+  // The Header's OpenCode session switch writes the plugin namespace and saves
+  // on toggle, so an editor-side write can bump that namespace without
+  // remounting this card. A save or delete that guards the mount-time revision
+  // is then refused as a conflict while the fresh read it was built from is
+  // perfectly valid.
+  it('guards a profile save with the revision read alongside the fresh snapshot', async () => {
+    const view = harness({ revisionByCall: [{}, { 'dsh-thinking-effort': 9 }], enforceRevisions: true })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+
+    setProfileName(view.container, 'work')
+    act(() => button(view.container, text('backupSaveCurrent')).click())
+    await settle()
+
+    expect(view.mutate).toHaveBeenCalledWith('dsh-thinking-effort', [
+      { op: 'set', path: ['profiles', 'work'], value: expect.objectContaining({ kind: SNAPSHOT_KIND }) },
+    ], 9)
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
+    expect(view.container.textContent).toContain(text('backupSavedProfile', { name: 'work' }))
+  })
+
+  it('guards a profile delete with the revision read at delete time', async () => {
+    const view = harness({
+      user: { 'dsh-thinking-effort': { profiles: { work: storedSnapshot({ 'llm-pi-ai': { a: 1 } }) } } },
+      revisionByCall: [{}, { 'dsh-thinking-effort': 9 }],
+      enforceRevisions: true,
+    })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+
+    act(() => button(view.container, text('backupDeleteProfile')).click())
+    await settle()
+    expect(view.mutate).not.toHaveBeenCalled()
+
+    act(() => button(view.container, text('backupDeleteConfirm')).click())
+    await settle()
+
+    expect(view.mutate).toHaveBeenCalledWith('dsh-thinking-effort', [{ op: 'unset', path: ['profiles', 'work'] }], 9)
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
+    expect([...view.container.querySelectorAll('button')].some((candidate) => candidate.textContent?.includes(text('backupDeleteConfirm')))).toBe(false)
+  })
+
+  it('recovers when describe throws synchronously instead of rejecting', async () => {
+    const view = harness({ describeThrow: 'describe exploded', describeThrowCalls: [1] })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+
+    act(() => button(view.container, text('backupExportCurrent')).click())
+    await settle()
+
+    expect(view.download).not.toHaveBeenCalled()
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain('describe exploded')
+
+    // The throw must not leave `busy` set: the next click has to still work.
+    const retry = button(view.container, text('backupExportCurrent'))
+    expect(retry.disabled).toBe(false)
+    act(() => retry.click())
+    await settle()
+
+    expect(view.download).toHaveBeenCalledTimes(1)
+  })
+
+  // The preview summary is the consent surface for a replace, so it must be
+  // diffed against the configuration the apply will see: a namespace edited
+  // after mount would otherwise have its removals under-reported.
+  it('previews the summary against the settings read when the preview opened', async () => {
+    const view = harness({
+      userByCall: [
+        { 'llm-pi-ai': { subagentEffort: 'off' } },
+        { 'llm-pi-ai': { subagentEffort: 'off', gateway: 'external' } },
+      ],
+    })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+
+    await chooseFile(view.container, new File([JSON.stringify(storedSnapshot({ 'llm-pi-ai': { subagentEffort: 'high' } }))], 'snapshot.json', { type: 'application/json' }))
+
+    const select = modeSelect(view.container)
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set
+    act(() => {
+      setter?.call(select, 'replace')
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await settle()
+
+    // `gateway` exists only after mount, so a replace removes it: the mount
+    // copy reports one removal fewer than the apply will perform.
+    expect(view.container.textContent).toContain(text('backupSummary', { added: 0, overwritten: 1, removed: 1 }))
+    expect(view.container.textContent).not.toContain(text('backupSummary', { added: 0, overwritten: 1, removed: 0 }))
+    expect(view.describe).toHaveBeenCalledTimes(2)
   })
 })

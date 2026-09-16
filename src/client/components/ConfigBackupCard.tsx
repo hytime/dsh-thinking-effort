@@ -24,7 +24,7 @@ import {
 } from '../config-snapshot/types.js'
 import { ActionButton, Icon } from './Controls.js'
 import type { Palette } from '../theme.js'
-import type { SettingsApi, SettingsNamespace, Translation } from '../types.js'
+import type { SettingsApi, SettingsDescribeValue, SettingsNamespace, Translation } from '../types.js'
 
 const PLUGIN_VERSION = packageJson.version
 
@@ -63,6 +63,12 @@ interface PendingImport {
   readonly ignored: readonly string[]
 }
 
+interface FreshSettings {
+  readonly snapshot: ConfigSnapshot
+  /** The plugin namespace's revision in the same read, so a write is guarded with the data it was built from. */
+  readonly revision: number
+}
+
 interface CardState {
   open: boolean
   namespaces: readonly SettingsNamespace[]
@@ -90,6 +96,23 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   const fileInput = React.useRef<HTMLInputElement>(null)
   const clock = (): Date => (now ?? (() => new Date()))()
 
+  // One describe answer is the whole registry, and three consumers read it —
+  // the profile library, the export snapshot and the import summary — so they
+  // all take it through this mapping and cannot disagree about what the
+  // settings hold.
+  const withNamespaces = (current: CardState, value: SettingsDescribeValue): CardState => {
+    const namespaces = value.namespaces
+    const profiles = profilesFromNamespaces(namespaces)
+    return {
+      ...current,
+      namespaces,
+      writable: value.writable !== false,
+      profiles,
+      profileNames: Object.keys(profiles).sort(),
+      autoBackupAt: autoBackupFromNamespaces(namespaces)?.createdAt ?? null,
+    }
+  }
+
   const load = (): void => {
     setState((current) => ({ ...current, error: null }))
     settings.describe().then((response) => {
@@ -97,17 +120,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
         setState((current) => ({ ...current, busy: false, error: response.error.message }))
         return
       }
-      const namespaces = response.value.namespaces
-      const profiles = profilesFromNamespaces(namespaces)
-      setState((current) => ({
-        ...current,
-        busy: false,
-        namespaces,
-        writable: response.value.writable !== false,
-        profiles,
-        profileNames: Object.keys(profiles).sort(),
-        autoBackupAt: autoBackupFromNamespaces(namespaces)?.createdAt ?? null,
-      }))
+      setState((current) => ({ ...withNamespaces(current, response.value), busy: false }))
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       setState((current) => ({ ...current, busy: false, error: message }))
@@ -116,7 +129,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
 
   React.useEffect(() => { load() }, [])
 
-  const revisionOf = (ns: string): number => state.namespaces.find((entry) => entry.ns === ns)?.revision ?? 0
+  const revisionOf = (namespaces: readonly SettingsNamespace[], ns: string): number => namespaces.find((entry) => entry.ns === ns)?.revision ?? 0
   const fail = (message: string): void => setState((current) => ({ ...current, busy: false, notice: null, error: message }))
   // Import failures drop the preview: a confirmation must never apply a snapshot
   // other than the file the user just chose.
@@ -130,27 +143,36 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
 
   // An editor-side save elsewhere on the page changes the namespaces without
   // remounting this card, so every snapshot the user asks for is described
-  // again: the mount-time copy is only a view of the profile library.
-  const freshSnapshot = (): Promise<ConfigSnapshot | undefined> => {
+  // again: the mount-time copy is only a view of the profile library. The
+  // revision rides along from that same read, so a write is guarded against the
+  // configuration it was built from — the Header's OpenCode session switch
+  // writes this namespace too. `async` is load-bearing: a describe that throws
+  // instead of rejecting must be caught here, or `busy` would never clear.
+  const freshSnapshot = async (): Promise<FreshSettings | undefined> => {
     setState((current) => ({ ...current, busy: true, error: null, notice: null }))
-    return settings.describe().then((response) => {
+    try {
+      const response = await settings.describe()
       if (!response.ok) {
         fail(response.error.message)
         return undefined
       }
-      const snapshot = snapshotFromNamespaces(response.value.namespaces, snapshotMeta())
+      const namespaces = response.value.namespaces
+      const fresh: FreshSettings = {
+        snapshot: snapshotFromNamespaces(namespaces, snapshotMeta()),
+        revision: revisionOf(namespaces, PLUGIN_NAMESPACE),
+      }
       setState((current) => ({ ...current, busy: false }))
-      return snapshot
-    }).catch((error: unknown) => {
+      return fresh
+    } catch (error: unknown) {
       fail(error instanceof Error ? error.message : String(error))
       return undefined
-    })
+    }
   }
 
   const exportCurrent = (): void => {
-    void freshSnapshot().then((snapshot) => {
-      if (snapshot === undefined) return
-      download(snapshotFileName(clock()), serializeSnapshot(snapshot))
+    void freshSnapshot().then((fresh) => {
+      if (fresh === undefined) return
+      download(snapshotFileName(clock()), serializeSnapshot(fresh.snapshot))
     })
   }
 
@@ -171,10 +193,10 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
       return
     }
     const name = validated.value
-    void freshSnapshot().then((snapshot) => {
-      if (snapshot === undefined) return
+    void freshSnapshot().then((fresh) => {
+      if (fresh === undefined) return
       setState((current) => ({ ...current, busy: true, error: null, notice: null }))
-      settings.mutate(PLUGIN_NAMESPACE, saveProfileOps(name, snapshot), revisionOf(PLUGIN_NAMESPACE)).then((response) => {
+      settings.mutate(PLUGIN_NAMESPACE, saveProfileOps(name, fresh.snapshot), fresh.revision).then((response) => {
         if (!response.ok) {
           fail(t('backupSaveProfileFailed', { message: response.error.message }))
           return
@@ -188,21 +210,45 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   }
 
   const removeProfile = (name: string): void => {
-    setState((current) => ({ ...current, busy: true, error: null, notice: null }))
-    settings.mutate(PLUGIN_NAMESPACE, deleteProfileOps(name), revisionOf(PLUGIN_NAMESPACE)).then((response) => {
-      if (!response.ok) {
-        fail(t('backupDeleteProfileFailed', { message: response.error.message }))
-        return
-      }
-      setState((current) => ({ ...current, busy: false, pendingDelete: null }))
-      load()
-    }).catch((error: unknown) => {
-      fail(t('backupDeleteProfileFailed', { message: error instanceof Error ? error.message : String(error) }))
+    // The delete rewrites the namespace the profile list came from, so it needs
+    // the revision read now for the same reason the save does: anything that
+    // bumped this namespace since mount would otherwise be refused as a
+    // conflict. Only the revision is used here.
+    void freshSnapshot().then((fresh) => {
+      if (fresh === undefined) return
+      setState((current) => ({ ...current, busy: true, error: null, notice: null }))
+      settings.mutate(PLUGIN_NAMESPACE, deleteProfileOps(name), fresh.revision).then((response) => {
+        if (!response.ok) {
+          fail(t('backupDeleteProfileFailed', { message: response.error.message }))
+          return
+        }
+        setState((current) => ({ ...current, busy: false, pendingDelete: null }))
+        load()
+      }).catch((error: unknown) => {
+        fail(t('backupDeleteProfileFailed', { message: error instanceof Error ? error.message : String(error) }))
+      })
     })
+  }
+
+  // The summary is the only thing the user reads before consenting to a
+  // replace, so it is diffed against the settings read when the preview opens
+  // rather than the mount copy, which can under-report how many entries that
+  // removes. A failed refresh must not block the preview: the summary already
+  // on screen stays, and confirmation is still safe because `applySnapshot`
+  // describes again before writing.
+  const refreshNamespaces = async (): Promise<void> => {
+    try {
+      const response = await settings.describe()
+      if (!response.ok) return
+      setState((current) => withNamespaces(current, response.value))
+    } catch {
+      // Keeping the stale summary beats blocking the preview on a failed read.
+    }
   }
 
   const openPreview = (snapshot: ConfigSnapshot, source: PendingImport['source'], label: string, ignored: readonly string[] = []): void => {
     setState((current) => ({ ...current, error: null, notice: null, mode: 'merge', preview: { snapshot, source, label, ignored } }))
+    void refreshNamespaces()
   }
 
   const onFileChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
