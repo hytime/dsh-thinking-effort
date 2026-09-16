@@ -246,7 +246,7 @@ Before publishing, the workflow builds four temporary official DSH capability re
 - `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`) — rc7 capability representative
 - `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`) — rc2 capability representative
 - `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`) — alpha2 capability representative
-- `dsh-v0.1.5-rc.2` (`0.1.5-rc.2`) — newest capability representative (also runs the real-browser DOM probe)
+- `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`) — newest capability representative (also runs the real-browser DOM probe)
 
 The ordinary CI workflow remains test-only and runs on pull requests and `main` pushes. Keep `package-lock.json` committed for its `npm ci` installation.
 

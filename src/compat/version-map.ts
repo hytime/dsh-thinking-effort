@@ -40,6 +40,12 @@ const completeBaseModelFields = ['reasoningEfforts', 'input', 'contextWindow'] a
  * `resolveCompatibility` reports the detected profile without a mismatch
  * diagnostic. Extend the newest bound when a release is verified to stay inside
  * the window it would otherwise fall out of.
+ *
+ * The newest window is bounded per minor line, matching how `0.1.6-0` was
+ * chosen for the `0.1.5` line: `0.1.6-alpha.1` was verified directly (modern
+ * Settings transport, `user`-layer reads, the same 15 editable compat fields,
+ * external language packs, optional takeover) and the bound moved to `0.1.7-0`
+ * so the whole `0.1.6` line resolves instead of falling out of the map.
  */
 const versionRanges: readonly VersionRange[] = [
   {
@@ -68,7 +74,7 @@ const versionRanges: readonly VersionRange[] = [
   },
   {
     minimum: '0.1.2-alpha.1',
-    maximumExclusive: '0.1.6-0',
+    maximumExclusive: '0.1.7-0',
     capabilities: {
       settingsTransport: 'modern',
       settingsApi: 'remote.settings',

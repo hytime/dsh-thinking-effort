@@ -57,7 +57,7 @@ const expectedOfficialDshVersions = [
   '0.1.0-rc.7',
   '0.1.1-rc.2',
   '0.1.3-alpha.2',
-  '0.1.5-rc.2',
+  '0.1.6-alpha.1',
 ] as const
 
 const loaderSeedProvider = {
@@ -1090,7 +1090,7 @@ describe('compatibility documentation and root validation', () => {
       previous = position
     }
     expect(workflow).toContain('DSH_CLI_ROOTS="$RC7_ROOT,$RC2_ROOT,$ALPHA_ROOT,$LATEST_ROOT"')
-    expect(expectedOfficialDshVersions).toEqual(['0.1.0-rc.7', '0.1.1-rc.2', '0.1.3-alpha.2', '0.1.5-rc.2'])
+    expect(expectedOfficialDshVersions).toEqual(['0.1.0-rc.7', '0.1.1-rc.2', '0.1.3-alpha.2', '0.1.6-alpha.1'])
   })
 
   it('rejects duplicate normalized DSH CLI roots', () => {
@@ -1149,7 +1149,7 @@ describe('published package composition', () => {
   it('exposes built Host and Client artifacts with declarations', () => {
     const manifest = readPackage()
 
-    expect(manifest.version).toBe('0.2.4')
+    expect(manifest.version).toBe('0.3.0')
     expect(manifest.main).toBe('./lib/index.js')
     expect(manifest.types).toBe('./lib/types/index.d.ts')
     expect(manifest.exports['.']).toEqual({
@@ -1235,7 +1235,7 @@ integrationDescribe('official DSH loader composition', () => {
     const installedDir = join(profile, 'node_modules', '@hytime', 'dsh-thinking-effort')
     const installedManifest = JSON.parse(readFileSync(join(installedDir, 'package.json'), 'utf8')) as PackageManifest
     expect(installedManifest.name).toBe('@hytime/dsh-thinking-effort')
-    expect(installedManifest.version).toBe('0.2.4')
+    expect(installedManifest.version).toBe('0.3.0')
 
     const hostEntry = join(installedDir, 'lib', 'index.js')
     const clientEntry = join(installedDir, 'lib', 'client.js')
@@ -1506,9 +1506,9 @@ integrationDescribe('official DSH loader composition', () => {
         // The real-browser DOM probe validates client-side rendering of the
         // settings section. The client bundle is identical across the
         // representative DSH versions, so launch Playwright once on the newest
-        // representative (0.1.5-rc.2) and keep the RPC/profile/写入 verification
+        // representative (0.1.6-alpha.1) and keep the RPC/profile/写入 verification
         // for every version, which needs no browser.
-        if (version === '0.1.5-rc.2') {
+        if (version === '0.1.6-alpha.1') {
           const domProbe = await probeOfficialSettingsDom(cliRoot, web)
           if (domProbe.blocked !== undefined) {
             if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {

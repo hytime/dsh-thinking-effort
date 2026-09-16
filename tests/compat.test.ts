@@ -61,6 +61,8 @@ describe('version capability map', () => {
     expect(capabilitiesForVersion('0.1.5-rc.1')).toEqual(modernCapabilities)
     expect(capabilitiesForVersion('0.1.5-rc.2')).toEqual(modernCapabilities)
     expect(takeoverTransportForVersion('0.1.5-rc.2')).toBe('optional')
+    expect(capabilitiesForVersion('0.1.6-alpha.1')).toEqual(modernCapabilities)
+    expect(takeoverTransportForVersion('0.1.6-alpha.1')).toBe('optional')
   })
 
   it('keeps every half-open boundary and accepts semver build metadata', () => {
@@ -75,7 +77,9 @@ describe('version capability map', () => {
     expect(capabilitiesForVersion('0.1.3-0')).toEqual(modernCapabilities)
     expect(capabilitiesForVersion('0.1.3')).toEqual(modernCapabilities)
     expect(capabilitiesForVersion('0.1.5-rc.2+ci.1')).toEqual(modernCapabilities)
-    expect(capabilitiesForVersion('0.1.6-0')).toBeUndefined()
+    expect(capabilitiesForVersion('0.1.6-alpha.1')).toEqual(modernCapabilities)
+    expect(capabilitiesForVersion('0.1.6')).toEqual(modernCapabilities)
+    expect(capabilitiesForVersion('0.1.7-0')).toBeUndefined()
     expect(capabilitiesForVersion('0.2.0')).toBeUndefined()
   })
 
@@ -89,7 +93,7 @@ describe('version capability map', () => {
   })
 
   it('reports the newest published DSH release as the mapped modern profile', () => {
-    const report = resolveCompatibility({ version: '0.1.5-rc.2', capabilities: modern })
+    const report = resolveCompatibility({ version: '0.1.6-alpha.1', capabilities: modern })
 
     expect(report.profile).toBe('modern')
     expect(report.expected).toBe('modern')

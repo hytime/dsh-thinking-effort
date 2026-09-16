@@ -241,7 +241,7 @@ npm 패키지에 GitHub Trusted Publishing을 설정하세요. 저장소는 `hyt
 - `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`) — rc7 capability representative
 - `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`) — rc2 capability representative
 - `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`) — alpha2 capability representative
-- `dsh-v0.1.5-rc.2` (`0.1.5-rc.2`) — 최신 capability representative(실제 브라우저 DOM 프로브도 실행)
+- `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`) — 최신 capability representative(실제 브라우저 DOM 프로브도 실행)
 
 일반 CI는 테스트 전용이며 Pull Request와 `main` 푸시에서 실행됩니다. `npm ci`를 사용하므로 의존성 변경 시 `package-lock.json`을 커밋하세요.
 
