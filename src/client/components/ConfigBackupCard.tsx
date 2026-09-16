@@ -117,6 +117,9 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
 
   const revisionOf = (ns: string): number => state.namespaces.find((entry) => entry.ns === ns)?.revision ?? 0
   const fail = (message: string): void => setState((current) => ({ ...current, busy: false, notice: null, error: message }))
+  // Import failures drop the preview: a confirmation must never apply a snapshot
+  // other than the file the user just chose.
+  const failImport = (message: string): void => setState((current) => ({ ...current, busy: false, notice: null, error: message, preview: null }))
 
   const currentSnapshot = (): ConfigSnapshot => snapshotFromNamespaces(state.namespaces, {
     createdAt: clock().toISOString(),
@@ -183,12 +186,12 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
     file.text().then((content) => {
       const parsed = parseSnapshot(content)
       if (!parsed.ok) {
-        fail(t(PARSE_ERROR_KEYS[parsed.error.code], parsed.error.params ?? {}))
+        failImport(t(PARSE_ERROR_KEYS[parsed.error.code], parsed.error.params ?? {}))
         return
       }
       openPreview(parsed.value.snapshot, 'file', t('backupSourceFile'), parsed.value.ignoredNamespaces)
     }).catch((error: unknown) => {
-      fail(t('backupReadFailed', { message: error instanceof Error ? error.message : String(error) }))
+      failImport(t('backupReadFailed', { message: error instanceof Error ? error.message : String(error) }))
     }).finally(() => { input.value = '' })
   }
 
@@ -305,7 +308,10 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
         <select
           value={state.mode}
           aria-label={t('backupPreviewTitle')}
-          onChange={(event) => setState((current) => ({ ...current, mode: event.currentTarget.value === 'replace' ? 'replace' : 'merge' }))}
+          onChange={(event) => {
+            const value = event.currentTarget.value
+            setState((current) => ({ ...current, mode: value === 'replace' ? 'replace' : 'merge' }))
+          }}
           style={{ ...field, colorScheme: 'light dark' }}
         >
           <option value="merge">{t('backupModeMerge')}</option>

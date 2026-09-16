@@ -78,6 +78,19 @@ function button(container: HTMLElement, label: string): HTMLButtonElement {
   return found
 }
 
+function modeSelect(container: HTMLElement): HTMLSelectElement {
+  const found = container.querySelector('select')
+  if (found === null) throw new Error('missing preview mode select')
+  return found
+}
+
+async function chooseFile(container: HTMLElement, file: File): Promise<void> {
+  const input = container.querySelector('input[type="file"]') as HTMLInputElement
+  Object.defineProperty(input, 'files', { value: [file], configurable: true })
+  await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve() })
+  await settle()
+}
+
 let cleanup: (() => void) | undefined
 afterEach(() => { cleanup?.(); cleanup = undefined })
 
@@ -168,6 +181,7 @@ describe('ConfigBackupCard', () => {
     await settle()
 
     expect(view.container.textContent).toContain(text('backupPreviewTitle'))
+    expect(modeSelect(view.container).value).toBe('merge')
     expect(view.container.textContent).toContain(text('backupSummary', { added: 0, overwritten: 1, removed: 0 }))
     expect(view.mutate).not.toHaveBeenCalled()
 
@@ -222,5 +236,61 @@ describe('ConfigBackupCard', () => {
     act(() => button(view.container, text('backupDeleteConfirm')).click())
     await settle()
     expect(view.mutate).toHaveBeenCalledWith('dsh-thinking-effort', [{ op: 'unset', path: ['profiles', 'work'] }], 8)
+  })
+
+  it('keeps the card mounted when the preview mode switches to replace', async () => {
+    const view = harness()
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(view.container, new File([JSON.stringify(storedSnapshot({ 'llm-pi-ai': { subagentEffort: 'high' } }))], 'snapshot.json', { type: 'application/json' }))
+
+    const select = modeSelect(view.container)
+    expect(select.value).toBe('merge')
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set
+    act(() => {
+      setter?.call(select, 'replace')
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    await settle()
+
+    expect(view.container.textContent).toContain(text('backupPreviewTitle'))
+    expect(view.container.querySelectorAll('button').length).toBeGreaterThan(0)
+    expect(modeSelect(view.container).value).toBe('replace')
+  })
+
+  it('drops the preview when a later file fails to parse', async () => {
+    const view = harness()
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(view.container, new File([JSON.stringify(storedSnapshot({ 'llm-pi-ai': { subagentEffort: 'high' } }))], 'good.json', { type: 'application/json' }))
+    expect(view.container.textContent).toContain(text('backupPreviewTitle'))
+
+    await chooseFile(view.container, new File(['{"kind":"something-else"}'], 'bad.json', { type: 'application/json' }))
+
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain(text('backupParseKindMismatch'))
+    expect(view.container.textContent).not.toContain(text('backupPreviewTitle'))
+    expect([...view.container.querySelectorAll('button')].some((candidate) => candidate.textContent?.includes(text('backupConfirmImport')))).toBe(false)
+    expect(view.mutate).not.toHaveBeenCalled()
+  })
+
+  it('previews the pre-import auto backup without writing', async () => {
+    const view = harness({
+      user: { 'dsh-thinking-effort': { autoBackup: { ...storedSnapshot({ 'llm-pi-ai': { subagentEffort: 'high' } }), createdAt: '2026-09-15T08:30:00.000Z' } } },
+    })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+
+    act(() => button(view.container, text('backupAutoBackupRestore')).click())
+    await settle()
+
+    expect(view.container.textContent).toContain(text('backupSourceAutoBackup'))
+    expect(modeSelect(view.container).value).toBe('merge')
+    expect(view.mutate).not.toHaveBeenCalled()
   })
 })
