@@ -12,11 +12,26 @@ function byteLength(text: string): number {
   return typeof TextEncoder === 'function' ? new TextEncoder().encode(text).length : text.length
 }
 
-/** First reserved path segment found anywhere in the value, if any. */
-function findReservedKey(value: unknown): string | undefined {
+/**
+ * Nesting levels the reserved-key walk descends before refusing the section. A
+ * snapshot holds a handful of levels of settings objects, so the bound never
+ * rejects real configuration — it keeps the walk's recursion finite instead of
+ * leaving it to whatever stack the host happens to have.
+ */
+const MAX_SECTION_DEPTH = 100
+
+/** Walk result for a value nested `MAX_SECTION_DEPTH` levels or deeper. */
+const DEPTH_EXCEEDED = Symbol('sectionDepthExceeded')
+
+/**
+ * First reserved path segment found anywhere in the value, if any, or
+ * `DEPTH_EXCEEDED` when the value nests `MAX_SECTION_DEPTH` levels or deeper.
+ */
+function findReservedKey(value: unknown, depth = 0): string | typeof DEPTH_EXCEEDED | undefined {
+  if (depth >= MAX_SECTION_DEPTH) return DEPTH_EXCEEDED
   if (Array.isArray(value)) {
     for (const entry of value) {
-      const found = findReservedKey(entry)
+      const found = findReservedKey(entry, depth + 1)
       if (found !== undefined) return found
     }
     return undefined
@@ -24,7 +39,7 @@ function findReservedKey(value: unknown): string | undefined {
   if (!isRecord(value)) return undefined
   for (const [key, entry] of Object.entries(value)) {
     if ((RESERVED_PATH_KEYS as readonly string[]).includes(key)) return key
-    const found = findReservedKey(entry)
+    const found = findReservedKey(entry, depth + 1)
     if (found !== undefined) return found
   }
   return undefined
@@ -70,6 +85,9 @@ export function parseSnapshot(input: string): ParseResult<ParsedSnapshot> {
       continue
     }
     const reserved = findReservedKey(section)
+    if (reserved === DEPTH_EXCEEDED) {
+      return { ok: false, error: { code: 'invalidSection', params: { ns, maxDepth: MAX_SECTION_DEPTH } } }
+    }
     if (reserved !== undefined) return { ok: false, error: { code: 'reservedKey', params: { key: reserved, ns } } }
     sections[ns] = section
   }

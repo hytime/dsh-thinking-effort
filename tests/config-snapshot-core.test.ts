@@ -140,13 +140,41 @@ describe('parseSnapshot', () => {
     expect(result.error.params?.key).toBe('__proto__')
   })
 
-  it('rejects a payload over the byte budget', () => {
-    const padding = 'x'.repeat(2 * 1024 * 1024 + 1)
-    const result = parseSnapshot(JSON.stringify({ ...validSnapshot, sections: { 'llm-pi-ai': { padding } } }))
+  it('rejects a payload whose UTF-8 bytes exceed the budget while its UTF-16 units fit', () => {
+    // Each U+4E2D is one UTF-16 unit but three UTF-8 bytes, so 700k of them are
+    // under the budget counted in units and over it counted in bytes. A guard
+    // measuring String.length accepts this document; only a byte guard rejects it.
+    const padding = '中'.repeat(700_000)
+    const text = JSON.stringify({ ...validSnapshot, sections: { 'llm-pi-ai': { padding } } })
+    expect(text.length).toBeLessThan(2 * 1024 * 1024)
+    expect(Buffer.byteLength(text, 'utf8')).toBeGreaterThan(2 * 1024 * 1024)
+    const result = parseSnapshot(text)
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.error.code).toBe('tooLarge')
     expect(result.error.params?.maxBytes).toBe(2 * 1024 * 1024)
+  })
+
+  it('refuses a section nested past the walk depth instead of overflowing the stack', () => {
+    // Raw JSON: JSON.parse descends iteratively, while a JS object graph this
+    // deep would overflow inside JSON.stringify before the parser ever saw it.
+    const nested = `${'{"a":'.repeat(10_000)}1${'}'.repeat(10_000)}`
+    const text = `{"kind":"${SNAPSHOT_KIND}","version":${SNAPSHOT_VERSION},"sections":{"llm-pi-ai":${nested}}}`
+    expect(() => parseSnapshot(text)).not.toThrow()
+    const result = parseSnapshot(text)
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error.code).toBe('invalidSection')
+    expect(result.error.params?.ns).toBe('llm-pi-ai')
+  })
+
+  it('still accepts a section nested within the walk depth', () => {
+    // Guards the depth bound against refusing ordinary sections: 40 levels is far
+    // past any real snapshot but well inside the walk.
+    let nested: Record<string, unknown> = { leaf: 1 }
+    for (let level = 0; level < 40; level += 1) nested = { a: nested }
+    const result = parseSnapshot(JSON.stringify({ ...validSnapshot, sections: { 'llm-pi-ai': nested } }))
+    expect(result.ok).toBe(true)
   })
 })
 
