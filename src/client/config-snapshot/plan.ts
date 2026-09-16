@@ -1,6 +1,6 @@
 import { CONFIG_NAMESPACES } from './types.js'
 import type { ConfigSnapshot, ImportMode, ImportPlan, NamespacePlan, SnapshotSection } from './types.js'
-import { userSectionOf, isRecord } from './snapshot.js'
+import { userSectionOf, isRecord, isSnapshotLibraryKey } from './snapshot.js'
 import type { SettingsNamespace, SettingsOp } from '../types.js'
 
 export function deepEqualJson(left: unknown, right: unknown): boolean {
@@ -42,6 +42,12 @@ function countRemoved(value: unknown): number {
  * Deletions are emitted before writes so the op list reads the same way it is
  * summarized, and the summary counts only entries that actually differ — an
  * import whose file already matches reports zero across the board.
+ *
+ * The plugin namespace's own library keys are never planned, in either mode and
+ * on either side: `isSnapshotLibraryKey` drops them from the key set entirely,
+ * so no import can replace the profile library or the rollback copy, and a
+ * `replace` cannot unset them either. The summary counts ops, and no op exists
+ * for a key that never enters the loop.
  */
 export function planImport(
   snapshot: ConfigSnapshot,
@@ -57,9 +63,10 @@ export function planImport(
     const unsets: SettingsOp[] = []
     const sets: SettingsOp[] = []
 
-    const keys = mode === 'replace'
+    const keys = (mode === 'replace'
       ? [...new Set([...Object.keys(incoming), ...Object.keys(current)])]
       : Object.keys(incoming)
+    ).filter((key) => !isSnapshotLibraryKey(ns, key))
 
     for (const key of keys) {
       const inFile = has(incoming, key)

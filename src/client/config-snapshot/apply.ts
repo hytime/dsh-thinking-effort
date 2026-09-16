@@ -64,10 +64,17 @@ export async function applySnapshot(request: ApplyRequest): Promise<ApplyOutcome
 
   // Revisions are per namespace, so the copy above moved the plugin namespace's
   // revision; a plan that writes that namespace too is fenced with what the copy
-  // left behind. Every other write keeps the revision it was planned from.
-  const revisionFor = (ns: string): number => backedUpNamespace !== undefined && backedUpNamespace.ns === ns
-    ? backedUpNamespace.revision
-    : revisionOf(namespaces, ns)
+  // left behind. Every other write keeps the revision it was planned from. A
+  // copy that reports no numeric revision falls back to that read rather than
+  // passing `undefined` on: the Remote reads an absent revision as "write
+  // unconditionally", so the guard is what keeps a non-conforming transport
+  // failing closed instead of silently dropping the fence.
+  const revisionFor = (ns: string): number => {
+    if (backedUpNamespace !== undefined && backedUpNamespace.ns === ns && typeof backedUpNamespace.revision === 'number') {
+      return backedUpNamespace.revision
+    }
+    return revisionOf(namespaces, ns)
+  }
 
   const outcomes: NamespaceOutcome[] = []
   for (const namespacePlan of plan.namespaces) {

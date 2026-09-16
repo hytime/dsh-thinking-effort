@@ -129,6 +129,76 @@ describe('planImport replace mode', () => {
   })
 })
 
+describe('planImport excluded plugin keys', () => {
+  const library = { work: { kind: 'dsh-thinking-effort/config-snapshot', version: 1, sections: {} } }
+  const rollbackCopy = { createdAt: '2026-09-15T00:00:00.000Z' }
+
+  it('leaves the live profile library and rollback copy alone when the file carries its own', () => {
+    const plan = planImport(
+      snapshotOf({
+        'dsh-thinking-effort': {
+          profiles: { stolen: { kind: 'dsh-thinking-effort/config-snapshot', version: 1, sections: {} } },
+          autoBackup: { createdAt: '2020-01-01T00:00:00.000Z' },
+          opencodeSession: { a: 2 },
+        },
+      }),
+      current({
+        'dsh-thinking-effort': { profiles: library, autoBackup: rollbackCopy, opencodeSession: { a: 1 } },
+      }),
+      'merge',
+    )
+
+    // No op addresses either key, so the live library and copy cannot be moved...
+    expect(plan.namespaces).toEqual([
+      { ns: 'dsh-thinking-effort', ops: [{ op: 'set', path: ['opencodeSession'], value: { a: 2 } }] },
+    ])
+    // ...and the summary counts only the op that exists. Counting the file's two
+    // library keys would promise changes the apply never makes.
+    expect(plan.summary).toEqual({ added: 0, overwritten: 1, removed: 0 })
+  })
+
+  it('never unsets the live profile library or rollback copy in replace mode', () => {
+    const plan = planImport(
+      snapshotOf({ 'dsh-thinking-effort': { opencodeSession: { a: 2 } } }),
+      current({
+        'dsh-thinking-effort': { profiles: library, autoBackup: rollbackCopy, opencodeSession: { a: 1 } },
+      }),
+      'replace',
+    )
+
+    // The file omits both, which is exactly the case a plain replace would
+    // express as `unset` — the user's saved profiles must survive it.
+    expect(plan.namespaces).toEqual([
+      { ns: 'dsh-thinking-effort', ops: [{ op: 'set', path: ['opencodeSession'], value: { a: 2 } }] },
+    ])
+    expect(plan.summary).toEqual({ added: 0, overwritten: 1, removed: 0 })
+  })
+
+  it('never writes a file\'s profile library or rollback copy in replace mode', () => {
+    const plan = planImport(
+      snapshotOf({
+        'dsh-thinking-effort': { profiles: { stolen: { sections: {} } }, autoBackup: { createdAt: '2020-01-01T00:00:00.000Z' } },
+      }),
+      current({ 'dsh-thinking-effort': { profiles: library, autoBackup: rollbackCopy } }),
+      'replace',
+    )
+
+    expect(plan.empty).toBe(true)
+    expect(plan.namespaces).toEqual([])
+    expect(plan.summary).toEqual({ added: 0, overwritten: 0, removed: 0 })
+  })
+
+  it('excludes those names only inside the plugin namespace', () => {
+    const plan = planImport(
+      snapshotOf({ 'llm-pi-ai': { profiles: { from: 'file' } } }),
+      current({ 'llm-pi-ai': { profiles: { from: 'live' } } }),
+      'merge',
+    )
+
+    expect(opsFor(plan, 'llm-pi-ai')).toEqual([{ op: 'set', path: ['profiles'], value: { from: 'file' } }])
+  })
+})
+
 describe('planImport summary and emptiness', () => {
   it('produces no ops when the file matches the current configuration', () => {
     const sections = { 'llm-pi-ai': { providers: { a: { baseURL: 'http://a' } } } }

@@ -24,11 +24,23 @@ export function userSectionOf(namespaces: readonly SettingsNamespace[], ns: stri
   return isRecord(user) ? { ...user } : {}
 }
 
+/**
+ * Whether a key of `ns` belongs to the snapshot library itself — the profile
+ * library and the rollback copy — rather than to the configuration a snapshot
+ * carries. Both directions of a snapshot ask this one question: the export
+ * leaves these keys out of a file, and an import must never write them back. A
+ * hand-edited file that carries them would otherwise replace the user's profile
+ * library, or the rollback copy written moments before the apply.
+ */
+export function isSnapshotLibraryKey(ns: string, key: string): boolean {
+  return ns === PLUGIN_NAMESPACE && (PLUGIN_SNAPSHOT_EXCLUDED_KEYS as readonly string[]).includes(key)
+}
+
 /** The plugin section minus the snapshot library itself, which cannot nest inside its own entries. */
 export function pluginSectionOf(user: SnapshotSection): SnapshotSection {
   const next: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(user)) {
-    if ((PLUGIN_SNAPSHOT_EXCLUDED_KEYS as readonly string[]).includes(key)) continue
+    if (isSnapshotLibraryKey(PLUGIN_NAMESPACE, key)) continue
     next[key] = value
   }
   return next

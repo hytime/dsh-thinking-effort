@@ -212,6 +212,56 @@ describe('applySnapshot', () => {
     expect(backupCall?.revision).toBe(1)
   })
 
+  it('keeps the fresh rollback copy when the imported file carries a library of its own', async () => {
+    const library = { work: { kind: 'dsh-thinking-effort/config-snapshot', version: 1, createdAt: '2026-09-10T00:00:00.000Z', pluginVersion: '0.2.4', sourceProfile: 'modern', sections: {} } }
+    const { settings, calls, userState } = harness({
+      user: {
+        'llm-pi-ai': { subagentEffort: 'off' },
+        'dsh-thinking-effort': { opencodeSession: { providers: {} }, profiles: library },
+      },
+    })
+
+    const outcome = await applySnapshot({
+      snapshot: snapshotOf({
+        'llm-pi-ai': { subagentEffort: 'high' },
+        'dsh-thinking-effort': {
+          profiles: { stolen: { kind: 'dsh-thinking-effort/config-snapshot', version: 1, createdAt: 'x', pluginVersion: '0.2.4', sourceProfile: 'modern', sections: {} } },
+          autoBackup: { kind: 'dsh-thinking-effort/config-snapshot', version: 1, createdAt: '2020-01-01T00:00:00.000Z', pluginVersion: '0.2.4', sourceProfile: 'modern', sections: {} },
+        },
+      }),
+      mode: 'merge',
+      settings,
+      autoBackup: true,
+      now: () => new Date('2026-09-16T12:00:00.000Z'),
+    })
+
+    // The file's plugin section holds nothing but library keys, so it plans no
+    // write of its own: the only plugin write is the copy taken before the apply.
+    expect(calls.map((call) => call.ns)).toEqual(['dsh-thinking-effort', 'llm-pi-ai'])
+    expect(isAutoBackup(calls[0]?.ops ?? [])).toBe(true)
+    expect(isAutoBackup(calls[1]?.ops ?? [])).toBe(false)
+    expect(outcome.ok).toBe(true)
+    expect(outcome.skipped).toBe(false)
+    // The import landed its model configuration...
+    expect(userState['llm-pi-ai']).toEqual({ subagentEffort: 'high' })
+    // ...while the copy written first still describes what the configuration
+    // held before it. The file's own `autoBackup` never overwrote the rollback
+    // point this import exists to be recoverable from.
+    expect(userState['dsh-thinking-effort']?.autoBackup).toEqual({
+      kind: 'dsh-thinking-effort/config-snapshot',
+      version: 1,
+      createdAt: '2026-09-16T12:00:00.000Z',
+      pluginVersion: '',
+      sourceProfile: 'unknown',
+      sections: {
+        'dsh-thinking-effort': { opencodeSession: { providers: {} } },
+        'llm-pi-ai': { subagentEffort: 'off' },
+      },
+    })
+    // The library the file tried to hand over never reaches the live section.
+    expect(userState['dsh-thinking-effort']?.profiles).toEqual(library)
+  })
+
   it('reports a backup failure without turning the applied write into a failed apply', async () => {
     // The plugin namespace needs no write, so the plan holds only `llm-pi-ai`:
     // the refused copy is reported separately and that write still lands.
