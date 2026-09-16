@@ -87,7 +87,7 @@ export interface ImportPlan {
   readonly empty: boolean
 }
 
-export type ProfileNameError = 'required' | 'tooLong' | 'reserved' | 'taken'
+export type ProfileNameError = 'required' | 'tooLong' | 'reserved' | 'taken' | 'invalid'
 
 export type ProfileNameResult =
   | { readonly ok: true; readonly value: string }
