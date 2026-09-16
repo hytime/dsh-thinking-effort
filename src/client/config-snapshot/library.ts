@@ -33,6 +33,11 @@ export function profilesFromNamespaces(namespaces: readonly SettingsNamespace[])
 
   const profiles: Record<string, ConfigSnapshot> = {}
   for (const [name, value] of Object.entries(raw)) {
+    // The save side refuses these names, so the read side must too: a hand-edited
+    // `profiles.__proto__` entry would otherwise go through [[Set]] and rewrite
+    // this accumulator's prototype instead of becoming a key, while
+    // `constructor`/`prototype` entries would be offered as real profiles.
+    if ((RESERVED_PATH_KEYS as readonly string[]).includes(name)) continue
     if (isStoredSnapshot(value)) profiles[name] = value
   }
   return profiles

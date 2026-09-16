@@ -16,10 +16,10 @@ const text = (key: string, params?: Record<string, unknown>): string => {
   return value.replace(/\{(\w+)\}/g, (_match: string, name: string) => String(params?.[name] ?? `{${name}}`))
 }
 
-const storedSnapshot = (sections: Record<string, Record<string, unknown>>) => ({
+const storedSnapshot = (sections: Record<string, Record<string, unknown>>, createdAt = '2026-09-16T12:00:00.000Z') => ({
   kind: SNAPSHOT_KIND,
   version: SNAPSHOT_VERSION,
-  createdAt: '2026-09-16T12:00:00.000Z',
+  createdAt,
   pluginVersion: '0.2.4',
   sourceProfile: 'modern',
   sections: { 'dsh-thinking-effort': {}, 'llm-pi-ai': {}, ...sections },
@@ -41,6 +41,8 @@ interface HarnessOptions {
   revisionByCall?: readonly Record<string, number>[]
   /** Refuse a mutate whose revision is not the one the latest describe reported, the way the host does. */
   enforceRevisions?: boolean
+  /** Namespaces whose write is refused with a plain rejection, the way a rejected provider profile is. */
+  failOn?: readonly string[]
   /** `applies` flags the host reports per namespace, so a write can require a restart. */
   applies?: Readonly<Record<string, string>>
   /** Refuse the pre-import backup write, so an applied import has no rollback copy. */
@@ -60,6 +62,9 @@ function harness(options: HarnessOptions = {}) {
   const mutate = vi.fn(async (ns: string, ops: readonly SettingsOp[], revision: number): Promise<ClientResult<SettingsNamespace>> => {
     if (options.failAutoBackup === true && isAutoBackup(ops)) {
       return { ok: false, error: { message: 'settings rejected the backup' } }
+    }
+    if (options.failOn?.includes(ns) === true) {
+      return { ok: false, error: { message: `settings rejected ${ns}` } }
     }
     if (options.enforceRevisions === true && revision !== revisions[ns]) {
       return { ok: false, error: { message: 'settings/conflict' } }
@@ -89,7 +94,7 @@ function harness(options: HarnessOptions = {}) {
         writable: options.writable ?? true,
         namespaces: [
           { ns: 'llm-pi-ai', revision: revisions['llm-pi-ai'], value: {}, user: user?.['llm-pi-ai'] ?? { subagentEffort: 'off' }, applies: options.applies?.['llm-pi-ai'] },
-          { ns: 'dsh-thinking-effort', revision: revisions['dsh-thinking-effort'], value: {}, user: user?.['dsh-thinking-effort'] ?? {} },
+          { ns: 'dsh-thinking-effort', revision: revisions['dsh-thinking-effort'], value: {}, user: user?.['dsh-thinking-effort'] ?? {}, applies: options.applies?.['dsh-thinking-effort'] },
         ],
       },
     })
@@ -142,6 +147,43 @@ async function chooseFile(container: HTMLElement, file: File): Promise<void> {
   const input = container.querySelector('input[type="file"]') as HTMLInputElement
   Object.defineProperty(input, 'files', { value: [file], configurable: true })
   await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve() })
+  await settle()
+}
+
+interface DeferredRead {
+  readonly file: File
+  /** Let `file.text()` settle; does nothing until the test calls it. */
+  readonly release: () => void
+}
+
+/**
+ * A file whose read finishes only when the test says so, so two selections can
+ * complete out of order. `failure` makes the read reject instead of answering.
+ */
+function deferredFile(name: string, content: string, failure?: string): DeferredRead {
+  const file = new File([content], name, { type: 'application/json' })
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  Object.defineProperty(file, 'text', {
+    value: async (): Promise<string> => {
+      await gate
+      if (failure !== undefined) throw new Error(failure)
+      return content
+    },
+    configurable: true,
+  })
+  return { file, release: () => release() }
+}
+
+/** Select a deferred file; its read stays pending. */
+async function chooseDeferredFile(container: HTMLElement, read: DeferredRead): Promise<void> {
+  const input = container.querySelector('input[type="file"]') as HTMLInputElement
+  Object.defineProperty(input, 'files', { value: [read.file], configurable: true })
+  await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })); await Promise.resolve() })
+}
+
+async function releaseRead(read: DeferredRead): Promise<void> {
+  act(() => { read.release() })
   await settle()
 }
 
@@ -288,6 +330,36 @@ describe('ConfigBackupCard', () => {
     expect(view.onApplied).toHaveBeenCalled()
   })
 
+  // A half-applied plan is one outcome, not two: the namespaces that landed keep
+  // their consequences — a restart requirement, a rollback copy that could not be
+  // written — and dropping them here would hide them exactly where they matter,
+  // beside a failure the user is already being asked to read.
+  it('reports what applied, the restart, and the failed rollback copy when only part of the plan lands', async () => {
+    const view = harness({ applies: { 'dsh-thinking-effort': 'restart' }, failOn: ['llm-pi-ai'], failAutoBackup: true })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(view.container, new File([JSON.stringify(storedSnapshot({
+      'dsh-thinking-effort': { opencodeSession: { providers: { p: { models: { m: true } } } } },
+      'llm-pi-ai': { subagentEffort: 'high' },
+    }))], 'snapshot.json', { type: 'application/json' }))
+
+    act(() => button(view.container, text('backupConfirmImport')).click())
+    await settle()
+
+    // The failure stays an error, with the namespace and the reason.
+    const alert = view.container.querySelector('[role="alert"]')?.textContent ?? ''
+    expect(alert).toContain(text('backupAppliedPartial', { detail: 'llm-pi-ai: settings rejected llm-pi-ai' }))
+
+    // The half that applied is still reported, with the restart it needs and the
+    // copy that could not be written.
+    const status = view.container.querySelector('[role="status"]')?.textContent ?? ''
+    expect(status).toContain(text('backupAppliedPartial', { detail: 'dsh-thinking-effort' }))
+    expect(status).toContain(text('backupRestartRequired', { namespaces: 'dsh-thinking-effort' }))
+    expect(status).toContain(text('backupAutoBackupFailed', { message: 'settings rejected the backup' }))
+  })
+
   it('shows a parse error and writes nothing for a foreign file', async () => {
     const view = harness()
     cleanup = view.unmount
@@ -371,6 +443,69 @@ describe('ConfigBackupCard', () => {
     expect(view.container.textContent).not.toContain(text('backupPreviewTitle'))
     expect([...view.container.querySelectorAll('button')].some((candidate) => candidate.textContent?.includes(text('backupConfirmImport')))).toBe(false)
     expect(view.mutate).not.toHaveBeenCalled()
+  })
+
+  // Only one selection is ever the user's last one, and confirmation writes what
+  // the preview holds. Two reads can be in flight at once, so the slower earlier
+  // read must not be able to install its snapshot afterwards — that would attach
+  // consent to a file the user moved on from.
+  it('keeps the last chosen file\'s preview when an earlier read finishes later', async () => {
+    const view = harness()
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+
+    const first = deferredFile('first.json', JSON.stringify(storedSnapshot({ 'llm-pi-ai': { subagentEffort: 'low' } }, '2020-01-01T00:00:00.000Z')))
+    const second = deferredFile('second.json', JSON.stringify(storedSnapshot({ 'llm-pi-ai': { subagentEffort: 'high' } }, '2026-09-16T12:00:00.000Z')))
+
+    await chooseDeferredFile(view.container, first)
+    await chooseDeferredFile(view.container, second)
+    // Neither read has resolved, so there is nothing to preview yet.
+    expect(view.container.textContent).not.toContain(text('backupPreviewTitle'))
+
+    await releaseRead(second)
+    expect(view.container.textContent).toContain(text('backupPreviewTitle'))
+    expect(view.container.textContent).toContain('2026-09-16')
+
+    // The earlier, slower read lands last and must change nothing at all.
+    await releaseRead(first)
+    expect(view.container.textContent).toContain('2026-09-16')
+    expect(view.container.textContent).not.toContain('2020-01-01')
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
+
+    act(() => button(view.container, text('backupConfirmImport')).click())
+    await settle()
+
+    expect(view.mutate).toHaveBeenCalledWith('llm-pi-ai', [{ op: 'set', path: ['subagentEffort'], value: 'high' }], 4)
+  })
+
+  // The failure path installs state too — an alert and no preview — so it needs
+  // the same token: a superseded read that failed must not clear the preview the
+  // newer read just installed.
+  it('ignores a superseded read\'s failure instead of clearing a newer preview', async () => {
+    const view = harness()
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+
+    const failing = deferredFile('broken.json', '', 'the file could not be read')
+    const second = deferredFile('second.json', JSON.stringify(storedSnapshot({ 'llm-pi-ai': { subagentEffort: 'high' } })))
+
+    await chooseDeferredFile(view.container, failing)
+    await chooseDeferredFile(view.container, second)
+    await releaseRead(second)
+    expect(view.container.textContent).toContain(text('backupPreviewTitle'))
+
+    await releaseRead(failing)
+    expect(view.container.textContent).toContain(text('backupPreviewTitle'))
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
+
+    // The surviving preview is still the one confirmation would write.
+    act(() => button(view.container, text('backupConfirmImport')).click())
+    await settle()
+    expect(view.mutate).toHaveBeenCalledWith('llm-pi-ai', [{ op: 'set', path: ['subagentEffort'], value: 'high' }], 4)
   })
 
   it('previews the pre-import auto backup without writing', async () => {
@@ -565,5 +700,48 @@ describe('ConfigBackupCard', () => {
     expect(view.container.textContent).toContain(text('backupSummary', { added: 0, overwritten: 1, removed: 1 }))
     expect(view.container.textContent).not.toContain(text('backupSummary', { added: 0, overwritten: 1, removed: 0 }))
     expect(view.describe).toHaveBeenCalledTimes(2)
+  })
+
+  // An empty plan has two causes and they are not the same sentence. A file whose
+  // plugin section holds only the excluded library keys carried no configuration
+  // at all, so "already matches this configuration" would claim an equivalence
+  // the file never expressed — during a migration, exactly when a user is most
+  // likely to meet such a file.
+  it('says a library-only file was discarded instead of claiming it already matches', async () => {
+    const view = harness()
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+
+    const libraryOnly = {
+      profiles: { work: storedSnapshot({ 'llm-pi-ai': { a: 1 } }) },
+      autoBackup: storedSnapshot({ 'llm-pi-ai': { a: 2 } }),
+    }
+    await chooseFile(view.container, new File([JSON.stringify(storedSnapshot({ 'dsh-thinking-effort': libraryOnly }))], 'library.json', { type: 'application/json' }))
+
+    expect(view.container.textContent).toContain(text('backupSummaryLibraryOnly'))
+    expect(view.container.textContent).not.toContain(text('backupSummaryEmpty'))
+    // Nothing is discarded silently either: the file carries no writable op, so
+    // the confirmation stays out of reach.
+    expect(button(view.container, text('backupConfirmImport')).disabled).toBe(true)
+    expect(view.mutate).not.toHaveBeenCalled()
+  })
+
+  it('keeps the counts for a file that does carry writable configuration beside those keys', async () => {
+    const view = harness()
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+
+    await chooseFile(view.container, new File([JSON.stringify(storedSnapshot({
+      'dsh-thinking-effort': { profiles: { work: storedSnapshot({ 'llm-pi-ai': { a: 1 } }) } },
+      'llm-pi-ai': { subagentEffort: 'high' },
+    }))], 'mixed.json', { type: 'application/json' }))
+
+    expect(view.container.textContent).toContain(text('backupSummary', { added: 0, overwritten: 1, removed: 0 }))
+    expect(view.container.textContent).not.toContain(text('backupSummaryLibraryOnly'))
+    expect(button(view.container, text('backupConfirmImport')).disabled).toBe(false)
   })
 })

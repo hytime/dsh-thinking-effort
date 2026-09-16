@@ -273,6 +273,30 @@ describe('profilesFromNamespaces', () => {
     expect(Object.keys(profiles)).toEqual(['good'])
   })
 
+  // `settings.yaml` is user-editable, so a reserved name can reach this reader
+  // without ever passing `validateProfileName`. `profiles.__proto__ = value` goes
+  // through [[Set]] and would rewrite the accumulator's prototype instead of
+  // becoming an entry — the profile would silently vanish while the object it
+  // landed on gained a stranger's snapshot — and `constructor`/`prototype` would
+  // be offered to the card as real profiles the save side can never create.
+  it('drops reserved path keys and leaves the accumulator prototype untouched', () => {
+    const stored = { kind: 'dsh-thinking-effort/config-snapshot', version: 1, createdAt: 'x', pluginVersion: '0.2.4', sourceProfile: 'modern', sections: { 'llm-pi-ai': { a: 1 } } }
+    // Own data properties, built explicitly: a JS object literal `__proto__: x`
+    // sets the prototype instead of creating a key, so a literal would never
+    // reach the reader at all.
+    const raw: Record<string, unknown> = { work: stored }
+    for (const name of ['__proto__', 'constructor', 'prototype']) {
+      Object.defineProperty(raw, name, { value: stored, enumerable: true, writable: true, configurable: true })
+    }
+    expect(Object.keys(raw)).toEqual(['work', '__proto__', 'constructor', 'prototype'])
+
+    const profiles = profilesFromNamespaces(current({ 'dsh-thinking-effort': { profiles: raw } }))
+
+    expect(Object.keys(profiles)).toEqual(['work'])
+    expect(Object.getPrototypeOf(profiles)).toBe(Object.prototype)
+    expect(profiles.work?.sections['llm-pi-ai']).toEqual({ a: 1 })
+  })
+
   it('returns an empty library when the namespace is unconfigured', () => {
     expect(profilesFromNamespaces(current({}))).toEqual({})
   })

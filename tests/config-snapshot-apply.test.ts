@@ -22,7 +22,13 @@ interface HarnessOptions {
   /** Rejects the namespace write; a predicate also matches later writes. */
   failOn?: string | ((call: { ns: string; ops: readonly SettingsOp[] }) => boolean)
   conflictOn?: string
-  applies?: string
+  /**
+   * `applies` flags the host reports per namespace, so a write can require a
+   * restart. A bare string is the model namespace, which is all the cases
+   * written before the plugin namespace could report one needed; a record names
+   * each namespace explicitly.
+   */
+  applies?: string | Readonly<Record<string, string>>
 }
 
 /** The op list `autoBackupOps` builds — what separates the backup write from a namespace write. */
@@ -81,10 +87,13 @@ function harness(options: HarnessOptions = {}) {
   const described: DescribeRead[] = []
   const userState: Record<string, Record<string, unknown>> = structuredClone(options.user ?? {})
   const revisions: Record<string, number> = { 'llm-pi-ai': 1, 'dsh-thinking-effort': 1 }
+  const appliesOf = (ns: string): string | undefined => typeof options.applies === 'string'
+    ? (ns === 'llm-pi-ai' ? options.applies : undefined)
+    : options.applies?.[ns]
   const namespaces = (): SettingsNamespace[] => {
     const entries: SettingsNamespace[] = [
-      { ns: 'llm-pi-ai', revision: revisions['llm-pi-ai'], value: {}, user: { ...userState['llm-pi-ai'] }, applies: options.applies },
-      { ns: 'dsh-thinking-effort', revision: revisions['dsh-thinking-effort'], value: {}, user: { ...userState['dsh-thinking-effort'] } },
+      { ns: 'llm-pi-ai', revision: revisions['llm-pi-ai'], value: {}, user: { ...userState['llm-pi-ai'] }, applies: appliesOf('llm-pi-ai') },
+      { ns: 'dsh-thinking-effort', revision: revisions['dsh-thinking-effort'], value: {}, user: { ...userState['dsh-thinking-effort'] }, applies: appliesOf('dsh-thinking-effort') },
     ]
     for (const entry of entries) described.push({ ns: entry.ns, revision: entry.revision })
     return entries
@@ -357,6 +366,40 @@ describe('applySnapshot', () => {
     })
 
     expect(outcome.restartRequired).toEqual(['llm-pi-ai'])
+  })
+
+  // Restart requirements follow the writes that landed, not the plan they came
+  // from: a namespace whose new configuration was refused still runs the old one,
+  // so telling the user to restart for it would describe a change that never
+  // happened.
+  it('omits a namespace whose restart-only write failed', async () => {
+    const { settings } = harness({ applies: { 'llm-pi-ai': 'restart' }, failOn: 'llm-pi-ai' })
+    const outcome = await applySnapshot({
+      snapshot: snapshotOf({ 'llm-pi-ai': { subagentEffort: 'high' } }),
+      mode: 'merge',
+      settings,
+      autoBackup: false,
+    })
+
+    expect(outcome.ok).toBe(false)
+    expect(outcome.outcomes).toEqual([{ ns: 'llm-pi-ai', ok: false, error: 'invalid provider profile', conflict: false }])
+    expect(outcome.restartRequired).toEqual([])
+  })
+
+  it('reports the restart-only namespace that did apply while its sibling failed', async () => {
+    const { settings } = harness({ applies: { 'dsh-thinking-effort': 'restart' }, failOn: 'llm-pi-ai' })
+    const outcome = await applySnapshot({
+      snapshot: snapshotOf({
+        'dsh-thinking-effort': { opencodeSession: { providers: { p: { models: { m: true } } } } },
+        'llm-pi-ai': { subagentEffort: 'high' },
+      }),
+      mode: 'merge',
+      settings,
+      autoBackup: false,
+    })
+
+    expect(outcome.ok).toBe(false)
+    expect(outcome.restartRequired).toEqual(['dsh-thinking-effort'])
   })
 
   it('surfaces a describe failure without writing', async () => {

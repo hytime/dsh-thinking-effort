@@ -91,13 +91,18 @@ export async function applySnapshot(request: ApplyRequest): Promise<ApplyOutcome
     })
   }
 
+  // Only a namespace whose write LANDED can need a restart: a namespace that was
+  // planned but refused still runs its old configuration, so naming it would tell
+  // the user to restart for a change that never happened.
+  const applied = new Set(outcomes.filter((outcome) => outcome.ok).map((outcome) => outcome.ns))
+
   return {
     ok: outcomes.every((outcome) => outcome.ok),
     skipped: false,
     outcomes,
     ...autoBackupError === undefined ? {} : { autoBackupError },
     restartRequired: namespaces
-      .filter((entry) => entry.applies === 'restart' && plan.namespaces.some((planned) => planned.ns === entry.ns))
+      .filter((entry) => entry.applies === 'restart' && applied.has(entry.ns))
       .map((entry) => entry.ns),
   }
 }

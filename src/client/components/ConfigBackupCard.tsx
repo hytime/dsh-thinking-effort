@@ -11,11 +11,12 @@ import {
 } from '../config-snapshot/library.js'
 import { parseSnapshot, serializeSnapshot } from '../config-snapshot/parse.js'
 import { planImport } from '../config-snapshot/plan.js'
-import { snapshotFileName, snapshotFromNamespaces } from '../config-snapshot/snapshot.js'
+import { isSnapshotLibraryKey, snapshotFileName, snapshotFromNamespaces } from '../config-snapshot/snapshot.js'
 import {
   MAX_PROFILES,
   MAX_PROFILE_NAME,
   PLUGIN_NAMESPACE,
+  type ApplyOutcome,
   type ConfigSnapshot,
   type ImportMode,
   type ParseFailure,
@@ -58,7 +59,6 @@ export interface ConfigBackupCardProps {
 
 interface PendingImport {
   readonly snapshot: ConfigSnapshot
-  readonly source: 'file' | 'profile' | 'autoBackup'
   readonly label: string
   readonly ignored: readonly string[]
 }
@@ -95,6 +95,13 @@ const initialState: CardState = {
 export function ConfigBackupCard({ settings, palette, t, onApplied, download = browserDownloadJson, now }: ConfigBackupCardProps): React.ReactElement {
   const [state, setState] = React.useState<CardState>(initialState)
   const fileInput = React.useRef<HTMLInputElement>(null)
+  /**
+   * Ordinal of the newest file read. Two selections in quick succession can
+   * resolve out of order, and the slower earlier read would otherwise install
+   * its preview over the file the user chose last — and confirmation writes the
+   * preview, so the token is what keeps consent attached to the last choice.
+   */
+  const readToken = React.useRef(0)
   const clock = (): Date => (now ?? (() => new Date()))()
 
   // One describe answer is the whole registry, and three consumers read it —
@@ -114,8 +121,14 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
     }
   }
 
+  /**
+   * Re-read the registry into the card. The refresh writes only the fields it
+   * read, and never the error slot: every caller that means to clear a failure
+   * clears it on the way into its own action, while a partial apply installs its
+   * report and refreshes in one step — a refresh that cleared the error there
+   * would erase the only message naming the namespace that was not written.
+   */
   const load = (): void => {
-    setState((current) => ({ ...current, error: null }))
     settings.describe().then((response) => {
       if (!response.ok) {
         setState((current) => ({ ...current, busy: false, error: response.error.message }))
@@ -247,8 +260,8 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
     }
   }
 
-  const openPreview = (snapshot: ConfigSnapshot, source: PendingImport['source'], label: string, ignored: readonly string[] = []): void => {
-    setState((current) => ({ ...current, error: null, notice: [], mode: 'merge', preview: { snapshot, source, label, ignored } }))
+  const openPreview = (snapshot: ConfigSnapshot, label: string, ignored: readonly string[] = []): void => {
+    setState((current) => ({ ...current, error: null, notice: [], mode: 'merge', preview: { snapshot, label, ignored } }))
     void refreshNamespaces()
   }
 
@@ -256,16 +269,42 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
     const input = event.currentTarget
     const file = input.files?.[0]
     if (file === undefined) return
+    readToken.current += 1
+    const token = readToken.current
+    // A superseded read reports nothing at all — neither a preview nor a
+    // failure: its error would otherwise clear the preview a newer read just
+    // installed, which is the same consent defect in the other direction.
+    const current = (): boolean => readToken.current === token
     file.text().then((content) => {
+      if (!current()) return
       const parsed = parseSnapshot(content)
       if (!parsed.ok) {
         failImport(t(PARSE_ERROR_KEYS[parsed.error.code], parsed.error.params ?? {}))
         return
       }
-      openPreview(parsed.value.snapshot, 'file', t('backupSourceFile'), parsed.value.ignoredNamespaces)
+      openPreview(parsed.value.snapshot, t('backupSourceFile'), parsed.value.ignoredNamespaces)
     }).catch((error: unknown) => {
+      if (!current()) return
       failImport(t('backupReadFailed', { message: error instanceof Error ? error.message : String(error) }))
     }).finally(() => { input.value = '' })
+  }
+
+  const appliedNamespaces = (outcome: ApplyOutcome): readonly string[] =>
+    outcome.outcomes.filter((entry) => entry.ok).map((entry) => entry.ns)
+
+  /**
+   * The outcomes of the writes themselves, reported beside the apply result
+   * rather than inside it: a copy that could not be written is not a failed
+   * write, and a namespace that needs a restart is not a failure either. These
+   * are true of every apply that reached the writes, so a half-applied plan
+   * reports them too — a namespace that failed does not unsay a namespace that
+   * landed.
+   */
+  const applyWarnings = (outcome: ApplyOutcome): string[] => {
+    const warnings: string[] = []
+    if (outcome.restartRequired.length > 0) warnings.push(t('backupRestartRequired', { namespaces: outcome.restartRequired.join(', ') }))
+    if (outcome.autoBackupError !== undefined) warnings.push(t('backupAutoBackupFailed', { message: outcome.autoBackupError }))
+    return warnings
   }
 
   const confirmImport = (): void => {
@@ -289,7 +328,14 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
         const detail = failed.map((entry) => `${entry.ns}: ${entry.error ?? ''}`).join('; ')
         const partial = t('backupAppliedPartial', { detail })
         const conflicted = failed.some((entry) => entry.conflict === true)
-        setState((current) => ({ ...current, busy: false, preview: null, error: conflicted ? `${t('backupConflict')} — ${partial}` : partial }))
+        // The failure belongs in the error block, but the half that applied —
+        // and what it costs — is still true and still has to be readable.
+        const applied = appliedNamespaces(outcome)
+        const notice = [
+          ...applied.length === 0 ? [] : [t('backupAppliedPartial', { detail: applied.join(', ') })],
+          ...applyWarnings(outcome),
+        ]
+        setState((current) => ({ ...current, busy: false, preview: null, notice, error: conflicted ? `${t('backupConflict')} — ${partial}` : partial }))
         load()
         return
       }
@@ -297,9 +343,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
       // rather than the error block: a copy that could not be written is not a
       // failed write, and a namespace that needs a restart is not a failure
       // either. Both are reported from the outcome, after the writes ran.
-      const notice = [t('backupApplied')]
-      if (outcome.restartRequired.length > 0) notice.push(t('backupRestartRequired', { namespaces: outcome.restartRequired.join(', ') }))
-      if (outcome.autoBackupError !== undefined) notice.push(t('backupAutoBackupFailed', { message: outcome.autoBackupError }))
+      const notice = [t('backupApplied'), ...applyWarnings(outcome)]
       setState((current) => ({ ...current, busy: false, preview: null, notice }))
       onApplied()
       load()
@@ -309,6 +353,14 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   }
 
   const previewPlan = state.preview === null ? null : planImport(state.preview.snapshot, state.namespaces, state.mode)
+  // An empty plan has two very different causes. When the file's plugin section
+  // held nothing but the snapshot library's own keys — the profile library and
+  // the rollback copy — the payload was discarded wholesale, and "already
+  // matches this configuration" would assert an equivalence the file never
+  // expressed. `previewPlan.empty` covers a file that agrees with the settings;
+  // this flag covers a file with nothing left to agree about.
+  const previewKeys = state.preview === null ? [] : Object.keys(state.preview.snapshot.sections[PLUGIN_NAMESPACE] ?? {})
+  const previewLibraryOnly = previewKeys.length > 0 && previewKeys.every((key) => isSnapshotLibraryKey(PLUGIN_NAMESPACE, key))
   const readOnly = !state.writable
   const profileCount = state.profileNames.length
   const hint = profileCount === 0 ? t('backupCollapsedHintEmpty') : t('backupCollapsedHint', { count: profileCount })
@@ -340,7 +392,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
         {profileCount === 0 ? <div style={muted}>{t('backupProfilesEmpty')}</div> : state.profileNames.map((name) => <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '3px 0' }}>
           <span style={{ flex: '1 1 auto', minWidth: 0, fontSize: '12px', overflowWrap: 'anywhere' }}>{name}</span>
           <span style={muted}>{(state.profiles[name]?.createdAt ?? '').slice(0, 10)}</span>
-          <ActionButton text={t('backupApply')} onClick={() => openPreview(state.profiles[name]!, 'profile', t('backupSourceProfile', { name }))} disabled={state.busy || readOnly} palette={palette} icon="check" />
+          <ActionButton text={t('backupApply')} onClick={() => openPreview(state.profiles[name]!, t('backupSourceProfile', { name }))} disabled={state.busy || readOnly} palette={palette} icon="check" />
           <ActionButton text={t('backupExportProfile')} onClick={() => exportProfile(name)} disabled={state.busy} palette={palette} />
           {state.pendingDelete === name
             ? <>
@@ -379,7 +431,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
         <div style={sectionTitle}>{t('backupAutoBackupTitle')}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={muted}>{state.autoBackupAt === null ? t('backupAutoBackupNone') : state.autoBackupAt}</span>
-          {state.autoBackupAt === null ? null : <ActionButton text={t('backupAutoBackupRestore')} onClick={() => openPreview(autoBackupFromNamespaces(state.namespaces)!, 'autoBackup', t('backupSourceAutoBackup'))} disabled={state.busy || readOnly} palette={palette} icon="restore" />}
+          {state.autoBackupAt === null ? null : <ActionButton text={t('backupAutoBackupRestore')} onClick={() => openPreview(autoBackupFromNamespaces(state.namespaces)!, t('backupSourceAutoBackup'))} disabled={state.busy || readOnly} palette={palette} icon="restore" />}
         </div>
       </div>
       {state.preview === null || previewPlan === null ? null : <div style={{ display: 'grid', gap: '6px', border: `1px solid ${palette.accentBorder}`, borderRadius: '8px', backgroundColor: palette.accentSoft, padding: '7px 8px' }}>
@@ -398,7 +450,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
           <option value="replace">{t('backupModeReplace')}</option>
         </select>
         <div style={{ fontSize: '12px' }}>{previewPlan.empty
-          ? t('backupSummaryEmpty')
+          ? t(previewLibraryOnly ? 'backupSummaryLibraryOnly' : 'backupSummaryEmpty')
           : t('backupSummary', { added: previewPlan.summary.added, overwritten: previewPlan.summary.overwritten, removed: previewPlan.summary.removed })}</div>
         {state.preview.ignored.length === 0 ? null : <div style={muted}>{t('backupIgnored', { count: state.preview.ignored.length })}</div>}
         <div style={{ display: 'flex', gap: '6px' }}>

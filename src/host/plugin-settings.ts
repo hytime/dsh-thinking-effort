@@ -47,10 +47,3 @@ export const PLUGIN_SETTINGS_SCHEMA = z.object({
     sections: {},
   },
 })
-
-/**
- * The resolved shape of the plugin's namespace: a valid OpenCode session
- * settings section plus the configuration snapshot fields. Derived from the
- * schema so the stored shape and the type can never drift.
- */
-export type PluginSettings = ReturnType<typeof PLUGIN_SETTINGS_SCHEMA>
