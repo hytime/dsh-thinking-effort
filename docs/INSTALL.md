@@ -113,7 +113,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 Install the current release explicitly:
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.0
 ```
 
 The official CLI updates the profile dependency, lockfile, and `dsh.profile.bundles` automatically. Do not add a manual YAML row.
@@ -129,7 +129,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 Upgrade to a specific version:
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.0
 ```
 
 Restart DSH for host changes and refresh the Web page for client changes.
@@ -147,7 +147,7 @@ If the old dependency still exists, use the official commands:
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.0
 ```
 
 If the dependency was removed by another tool but the old bundle remains, inspect the composed profile:
@@ -161,7 +161,7 @@ If it still contains `name: dsh-thinking-effort`, find the old GitHub commit in 
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.2.4
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.0
 ```
 
 Do not add the old package name to a new bundle list.
@@ -176,7 +176,7 @@ grep -n "@hytime/dsh-thinking-effort" \
 node -p "require('${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/node_modules/@hytime/dsh-thinking-effort/package.json').version"
 ```
 
-The version must be `0.2.0` for this release.
+The version must be `0.3.0` for this release.
 
 ## Japanese and Korean support status
 
