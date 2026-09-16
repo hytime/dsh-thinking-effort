@@ -54,6 +54,3 @@ export const PLUGIN_SETTINGS_SCHEMA = z.object({
  * schema so the stored shape and the type can never drift.
  */
 export type PluginSettings = ReturnType<typeof PLUGIN_SETTINGS_SCHEMA>
-
-/** The settings section accepted by the schema, including defaults. */
-export type PluginSettingsInput = Parameters<typeof PLUGIN_SETTINGS_SCHEMA>[0]

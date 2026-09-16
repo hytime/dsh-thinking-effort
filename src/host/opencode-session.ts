@@ -3,7 +3,6 @@ import {
   isOpenCodeSessionEnabled,
   OPENCODE_SESSION_HEADER,
   OPENCODE_SESSION_NAMESPACE,
-  type OpenCodeSessionSettings,
 } from '../compat/opencode-session.js'
 import { PLUGIN_SETTINGS_SCHEMA } from './plugin-settings.js'
 import type {
