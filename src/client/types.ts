@@ -78,6 +78,8 @@ export interface SettingsNamespace {
   readonly schema?: unknown
   readonly base?: unknown
   readonly user?: Record<string, unknown>
+  /** Owner's declared effect timing; `restart` means the write needs a DSH restart. */
+  readonly applies?: string
 }
 
 export interface OpenCodeSessionState {
@@ -91,6 +93,8 @@ export interface OpenCodeSessionState {
 
 export interface SettingsDescribeValue {
   readonly namespaces: readonly SettingsNamespace[]
+  /** Whether the active settings provider accepts writes; absent means writable. */
+  readonly writable?: boolean
 }
 
 export interface ClientError {
