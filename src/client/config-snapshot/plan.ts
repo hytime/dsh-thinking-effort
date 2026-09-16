@@ -1,0 +1,131 @@
+import { CONFIG_NAMESPACES } from './types.js'
+import type { ConfigSnapshot, ImportMode, ImportPlan, NamespacePlan, SnapshotSection } from './types.js'
+import { userSectionOf, isRecord } from './snapshot.js'
+import type { SettingsNamespace, SettingsOp } from '../types.js'
+
+export function deepEqualJson(left: unknown, right: unknown): boolean {
+  if (left === right) return true
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false
+    return left.every((entry, index) => deepEqualJson(entry, right[index]))
+  }
+  if (!isRecord(left) || !isRecord(right)) return false
+  const keys = Object.keys(left)
+  if (keys.length !== Object.keys(right).length) return false
+  return keys.every((key) => Object.prototype.hasOwnProperty.call(right, key) && deepEqualJson(left[key], right[key]))
+}
+
+function has(object: SnapshotSection, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(object, key)
+}
+
+/**
+ * Count one removed top-level entry. A dict-valued entry counts its own
+ * first-level items — the unit the user reasons about is a provider, not a
+ * key — while a scalar counts as one.
+ */
+function countRemoved(value: unknown): number {
+  return isRecord(value) ? Object.keys(value).length : 1
+}
+
+/**
+ * Compute the path ops that turn `current` into `snapshot`.
+ *
+ * Both modes merge at exactly one level: the first level of a dict-valued
+ * entry is compared per key and each key is replaced wholesale, while
+ * everything below it is written as one value. Whole-provider replacement is
+ * deliberate — a field-level merge could never restore a field the snapshot
+ * deliberately omits, which is what rollback needs.
+ *
+ * `merge` keeps top-level entries the snapshot omits; `replace` unsets them.
+ * Deletions are emitted before writes so the op list reads the same way it is
+ * summarized, and the summary counts only entries that actually differ — an
+ * import whose file already matches reports zero across the board.
+ */
+export function planImport(
+  snapshot: ConfigSnapshot,
+  namespaces: readonly SettingsNamespace[],
+  mode: ImportMode,
+): ImportPlan {
+  const summary: { added: number; overwritten: number; removed: number } = { added: 0, overwritten: 0, removed: 0 }
+  const plans: NamespacePlan[] = []
+
+  for (const ns of CONFIG_NAMESPACES) {
+    const incoming = snapshot.sections[ns] ?? {}
+    const current = userSectionOf(namespaces, ns)
+    const unsets: SettingsOp[] = []
+    const sets: SettingsOp[] = []
+
+    const keys = mode === 'replace'
+      ? [...new Set([...Object.keys(incoming), ...Object.keys(current)])]
+      : Object.keys(incoming)
+
+    for (const key of keys) {
+      const inFile = has(incoming, key)
+      const inCurrent = has(current, key)
+      const fileValue = incoming[key]
+      const currentValue = current[key]
+
+      if (!inFile) {
+        summary.removed += countRemoved(currentValue)
+        unsets.push({ op: 'unset', path: [key] })
+        continue
+      }
+
+      if (isRecord(fileValue) && isRecord(currentValue)) {
+        let changed = false
+        if (mode === 'merge') {
+          const merged: Record<string, unknown> = { ...currentValue }
+          for (const [inner, innerValue] of Object.entries(fileValue)) {
+            if (has(currentValue, inner)) {
+              if (!deepEqualJson(currentValue[inner], innerValue)) {
+                summary.overwritten += 1
+                changed = true
+              }
+            } else {
+              summary.added += 1
+              changed = true
+            }
+            merged[inner] = innerValue
+          }
+          if (changed) sets.push({ op: 'set', path: [key], value: merged })
+          continue
+        }
+        for (const inner of Object.keys(fileValue)) {
+          if (has(currentValue, inner)) {
+            if (!deepEqualJson(currentValue[inner], fileValue[inner])) {
+              summary.overwritten += 1
+              changed = true
+            }
+          } else {
+            summary.added += 1
+            changed = true
+          }
+        }
+        for (const inner of Object.keys(currentValue)) {
+          if (!has(fileValue, inner)) {
+            summary.removed += countRemoved(currentValue[inner])
+            changed = true
+          }
+        }
+        if (changed) sets.push({ op: 'set', path: [key], value: fileValue })
+        continue
+      }
+
+      if (!inCurrent) {
+        summary.added += 1
+        sets.push({ op: 'set', path: [key], value: fileValue })
+        continue
+      }
+      if (!deepEqualJson(fileValue, currentValue)) {
+        summary.overwritten += 1
+        sets.push({ op: 'set', path: [key], value: fileValue })
+      }
+    }
+
+    const ops = [...unsets, ...sets]
+    if (ops.length > 0) plans.push({ ns, ops })
+  }
+
+  return { mode, summary, namespaces: plans, empty: plans.length === 0 }
+}
