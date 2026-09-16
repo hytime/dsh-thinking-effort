@@ -26,8 +26,12 @@ const storedSnapshot = (sections: Record<string, Record<string, unknown>>) => ({
 
 interface HarnessOptions {
   user?: Record<string, Record<string, unknown>>
+  /** Per-describe-call user layers, so a later read can answer with edited state. Index 0 is the mount read. */
+  userByCall?: readonly Record<string, Record<string, unknown>>[]
   writable?: boolean
   describeError?: string
+  /** Describe call ordinals that fail; omit to fail on every call. */
+  describeErrorCalls?: readonly number[]
 }
 
 function harness(options: HarnessOptions = {}) {
@@ -35,15 +39,21 @@ function harness(options: HarnessOptions = {}) {
     ok: true,
     value: { ns, revision: revision + 1, value: {} },
   }))
+  let describeCalls = 0
   const describe = vi.fn(async (): Promise<ClientResult<{ namespaces: readonly SettingsNamespace[]; writable?: boolean }>> => {
-    if (options.describeError !== undefined) return { ok: false, error: { message: options.describeError } }
+    const call = describeCalls++
+    const failure = options.describeError
+    if (failure !== undefined && (options.describeErrorCalls === undefined || options.describeErrorCalls.includes(call))) {
+      return { ok: false, error: { message: failure } }
+    }
+    const user = options.userByCall?.[call] ?? options.user
     return {
       ok: true,
       value: {
         writable: options.writable ?? true,
         namespaces: [
-          { ns: 'llm-pi-ai', revision: 4, value: {}, user: options.user?.['llm-pi-ai'] ?? { subagentEffort: 'off' } },
-          { ns: 'dsh-thinking-effort', revision: 8, value: {}, user: options.user?.['dsh-thinking-effort'] ?? {} },
+          { ns: 'llm-pi-ai', revision: 4, value: {}, user: user?.['llm-pi-ai'] ?? { subagentEffort: 'off' } },
+          { ns: 'dsh-thinking-effort', revision: 8, value: {}, user: user?.['dsh-thinking-effort'] ?? {} },
         ],
       },
     }
@@ -61,6 +71,7 @@ function harness(options: HarnessOptions = {}) {
 
   return {
     container,
+    describe,
     mutate,
     download,
     onApplied,
@@ -82,6 +93,13 @@ function modeSelect(container: HTMLElement): HTMLSelectElement {
   const found = container.querySelector('select')
   if (found === null) throw new Error('missing preview mode select')
   return found
+}
+
+function setProfileName(container: HTMLElement, name: string): void {
+  const input = container.querySelector('input[type="text"]') as HTMLInputElement
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  setter?.call(input, name)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
 async function chooseFile(container: HTMLElement, file: File): Promise<void> {
@@ -292,5 +310,82 @@ describe('ConfigBackupCard', () => {
     expect(view.container.textContent).toContain(text('backupSourceAutoBackup'))
     expect(modeSelect(view.container).value).toBe('merge')
     expect(view.mutate).not.toHaveBeenCalled()
+  })
+
+  // An editor-side save (model reasoning levels, subagent default, gateway
+  // compat) changes the namespaces without remounting this card, so both
+  // snapshot actions must describe again instead of trusting the mount read.
+  const editedAfterMount = (before: Record<string, Record<string, unknown>>, after: Record<string, Record<string, unknown>>): HarnessOptions => ({ userByCall: [before, after] })
+  const off = { 'llm-pi-ai': { subagentEffort: 'off' } }
+  const high = { 'llm-pi-ai': { subagentEffort: 'high' } }
+
+  it('exports the freshly described configuration, not the mount-time copy', async () => {
+    const view = harness(editedAfterMount(off, high))
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+
+    act(() => button(view.container, text('backupExportCurrent')).click())
+    await settle()
+
+    expect(view.describe).toHaveBeenCalledTimes(2)
+    expect(view.download).toHaveBeenCalledTimes(1)
+    const [, body] = view.download.mock.calls[0] as [string, string]
+    const parsed = JSON.parse(body) as { sections: Record<string, unknown> }
+    expect(parsed.sections['llm-pi-ai']).toEqual({ subagentEffort: 'high' })
+  })
+
+  it('saves a profile from the freshly described configuration, not the mount-time copy', async () => {
+    const view = harness(editedAfterMount(off, high))
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+
+    setProfileName(view.container, 'work')
+    act(() => button(view.container, text('backupSaveCurrent')).click())
+    await settle()
+
+    expect(view.mutate).toHaveBeenCalledWith('dsh-thinking-effort', [
+      {
+        op: 'set',
+        path: ['profiles', 'work'],
+        value: expect.objectContaining({ sections: expect.objectContaining({ 'llm-pi-ai': { subagentEffort: 'high' } }) }),
+      },
+    ], 8)
+  })
+
+  it('surfaces a failed describe on export instead of downloading an empty snapshot', async () => {
+    const view = harness({ describeError: 'settings unavailable', describeErrorCalls: [1] })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
+
+    act(() => button(view.container, text('backupExportCurrent')).click())
+    await settle()
+
+    expect(view.download).not.toHaveBeenCalled()
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain('settings unavailable')
+  })
+
+  it('exports a fresh snapshot while the settings source is read-only', async () => {
+    const view = harness({ ...editedAfterMount(off, high), writable: false })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+
+    const exportButton = button(view.container, text('backupExportCurrent'))
+    expect(exportButton.disabled).toBe(false)
+    act(() => exportButton.click())
+    await settle()
+
+    expect(view.download).toHaveBeenCalledTimes(1)
+    const [, body] = view.download.mock.calls[0] as [string, string]
+    const parsed = JSON.parse(body) as { sections: Record<string, unknown> }
+    expect(parsed.sections['llm-pi-ai']).toEqual({ subagentEffort: 'high' })
   })
 })

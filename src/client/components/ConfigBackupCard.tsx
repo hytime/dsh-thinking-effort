@@ -20,6 +20,7 @@ import {
   type ImportMode,
   type ParseFailure,
   type ProfileNameError,
+  type SnapshotMeta,
 } from '../config-snapshot/types.js'
 import { ActionButton, Icon } from './Controls.js'
 import type { Palette } from '../theme.js'
@@ -121,14 +122,36 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   // other than the file the user just chose.
   const failImport = (message: string): void => setState((current) => ({ ...current, busy: false, notice: null, error: message, preview: null }))
 
-  const currentSnapshot = (): ConfigSnapshot => snapshotFromNamespaces(state.namespaces, {
+  const snapshotMeta = (): SnapshotMeta => ({
     createdAt: clock().toISOString(),
     pluginVersion: PLUGIN_VERSION,
     sourceProfile: settings.compatibilityProfile,
   })
 
+  // An editor-side save elsewhere on the page changes the namespaces without
+  // remounting this card, so every snapshot the user asks for is described
+  // again: the mount-time copy is only a view of the profile library.
+  const freshSnapshot = (): Promise<ConfigSnapshot | undefined> => {
+    setState((current) => ({ ...current, busy: true, error: null, notice: null }))
+    return settings.describe().then((response) => {
+      if (!response.ok) {
+        fail(response.error.message)
+        return undefined
+      }
+      const snapshot = snapshotFromNamespaces(response.value.namespaces, snapshotMeta())
+      setState((current) => ({ ...current, busy: false }))
+      return snapshot
+    }).catch((error: unknown) => {
+      fail(error instanceof Error ? error.message : String(error))
+      return undefined
+    })
+  }
+
   const exportCurrent = (): void => {
-    download(snapshotFileName(clock()), serializeSnapshot(currentSnapshot()))
+    void freshSnapshot().then((snapshot) => {
+      if (snapshot === undefined) return
+      download(snapshotFileName(clock()), serializeSnapshot(snapshot))
+    })
   }
 
   const exportProfile = (name: string): void => {
@@ -148,16 +171,19 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
       return
     }
     const name = validated.value
-    setState((current) => ({ ...current, busy: true, error: null, notice: null }))
-    settings.mutate(PLUGIN_NAMESPACE, saveProfileOps(name, currentSnapshot()), revisionOf(PLUGIN_NAMESPACE)).then((response) => {
-      if (!response.ok) {
-        fail(t('backupSaveProfileFailed', { message: response.error.message }))
-        return
-      }
-      setState((current) => ({ ...current, busy: false, nameDraft: '', notice: t('backupSavedProfile', { name }) }))
-      load()
-    }).catch((error: unknown) => {
-      fail(t('backupSaveProfileFailed', { message: error instanceof Error ? error.message : String(error) }))
+    void freshSnapshot().then((snapshot) => {
+      if (snapshot === undefined) return
+      setState((current) => ({ ...current, busy: true, error: null, notice: null }))
+      settings.mutate(PLUGIN_NAMESPACE, saveProfileOps(name, snapshot), revisionOf(PLUGIN_NAMESPACE)).then((response) => {
+        if (!response.ok) {
+          fail(t('backupSaveProfileFailed', { message: response.error.message }))
+          return
+        }
+        setState((current) => ({ ...current, busy: false, nameDraft: '', notice: t('backupSavedProfile', { name }) }))
+        load()
+      }).catch((error: unknown) => {
+        fail(t('backupSaveProfileFailed', { message: error instanceof Error ? error.message : String(error) }))
+      })
     })
   }
 
