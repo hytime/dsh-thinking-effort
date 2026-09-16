@@ -82,13 +82,14 @@ interface CardState {
   mode: ImportMode
   busy: boolean
   error: string | null
-  notice: string | null
+  /** Lines shown in the status block: the apply result, plus any warning that came with it. */
+  notice: readonly string[]
 }
 
 const initialState: CardState = {
   open: false, namespaces: [], writable: true, profiles: {}, profileNames: [],
   autoBackupAt: null, nameDraft: '', pendingDelete: null, preview: null, mode: 'merge',
-  busy: false, error: null, notice: null,
+  busy: false, error: null, notice: [],
 }
 
 export function ConfigBackupCard({ settings, palette, t, onApplied, download = browserDownloadJson, now }: ConfigBackupCardProps): React.ReactElement {
@@ -130,10 +131,10 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   React.useEffect(() => { load() }, [])
 
   const revisionOf = (namespaces: readonly SettingsNamespace[], ns: string): number => namespaces.find((entry) => entry.ns === ns)?.revision ?? 0
-  const fail = (message: string): void => setState((current) => ({ ...current, busy: false, notice: null, error: message }))
+  const fail = (message: string): void => setState((current) => ({ ...current, busy: false, notice: [], error: message }))
   // Import failures drop the preview: a confirmation must never apply a snapshot
   // other than the file the user just chose.
-  const failImport = (message: string): void => setState((current) => ({ ...current, busy: false, notice: null, error: message, preview: null }))
+  const failImport = (message: string): void => setState((current) => ({ ...current, busy: false, notice: [], error: message, preview: null }))
 
   const snapshotMeta = (): SnapshotMeta => ({
     createdAt: clock().toISOString(),
@@ -149,7 +150,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   // writes this namespace too. `async` is load-bearing: a describe that throws
   // instead of rejecting must be caught here, or `busy` would never clear.
   const freshSnapshot = async (): Promise<FreshSettings | undefined> => {
-    setState((current) => ({ ...current, busy: true, error: null, notice: null }))
+    setState((current) => ({ ...current, busy: true, error: null, notice: [] }))
     try {
       const response = await settings.describe()
       if (!response.ok) {
@@ -195,13 +196,13 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
     const name = validated.value
     void freshSnapshot().then((fresh) => {
       if (fresh === undefined) return
-      setState((current) => ({ ...current, busy: true, error: null, notice: null }))
+      setState((current) => ({ ...current, busy: true, error: null, notice: [] }))
       settings.mutate(PLUGIN_NAMESPACE, saveProfileOps(name, fresh.snapshot), fresh.revision).then((response) => {
         if (!response.ok) {
           fail(t('backupSaveProfileFailed', { message: response.error.message }))
           return
         }
-        setState((current) => ({ ...current, busy: false, nameDraft: '', notice: t('backupSavedProfile', { name }) }))
+        setState((current) => ({ ...current, busy: false, nameDraft: '', notice: [t('backupSavedProfile', { name })] }))
         load()
       }).catch((error: unknown) => {
         fail(t('backupSaveProfileFailed', { message: error instanceof Error ? error.message : String(error) }))
@@ -216,7 +217,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
     // conflict. Only the revision is used here.
     void freshSnapshot().then((fresh) => {
       if (fresh === undefined) return
-      setState((current) => ({ ...current, busy: true, error: null, notice: null }))
+      setState((current) => ({ ...current, busy: true, error: null, notice: [] }))
       settings.mutate(PLUGIN_NAMESPACE, deleteProfileOps(name), fresh.revision).then((response) => {
         if (!response.ok) {
           fail(t('backupDeleteProfileFailed', { message: response.error.message }))
@@ -247,7 +248,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   }
 
   const openPreview = (snapshot: ConfigSnapshot, source: PendingImport['source'], label: string, ignored: readonly string[] = []): void => {
-    setState((current) => ({ ...current, error: null, notice: null, mode: 'merge', preview: { snapshot, source, label, ignored } }))
+    setState((current) => ({ ...current, error: null, notice: [], mode: 'merge', preview: { snapshot, source, label, ignored } }))
     void refreshNamespaces()
   }
 
@@ -270,7 +271,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   const confirmImport = (): void => {
     const pending = state.preview
     if (pending === null) return
-    setState((current) => ({ ...current, busy: true, error: null, notice: null }))
+    setState((current) => ({ ...current, busy: true, error: null, notice: [] }))
     void applySnapshot({
       snapshot: pending.snapshot,
       mode: state.mode,
@@ -280,7 +281,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
       pluginVersion: PLUGIN_VERSION,
     }).then((outcome) => {
       if (outcome.skipped) {
-        setState((current) => ({ ...current, busy: false, preview: null, notice: t('backupSkipped') }))
+        setState((current) => ({ ...current, busy: false, preview: null, notice: [t('backupSkipped')] }))
         return
       }
       const failed = outcome.outcomes.filter((entry) => !entry.ok)
@@ -292,7 +293,14 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
         load()
         return
       }
-      setState((current) => ({ ...current, busy: false, preview: null, notice: t('backupApplied') }))
+      // The apply itself succeeded, so the warnings ride in the status block
+      // rather than the error block: a copy that could not be written is not a
+      // failed write, and a namespace that needs a restart is not a failure
+      // either. Both are reported from the outcome, after the writes ran.
+      const notice = [t('backupApplied')]
+      if (outcome.restartRequired.length > 0) notice.push(t('backupRestartRequired', { namespaces: outcome.restartRequired.join(', ') }))
+      if (outcome.autoBackupError !== undefined) notice.push(t('backupAutoBackupFailed', { message: outcome.autoBackupError }))
+      setState((current) => ({ ...current, busy: false, preview: null, notice }))
       onApplied()
       load()
     }).catch((error: unknown) => {
@@ -325,7 +333,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
       </button>
     </div>
     {state.error ? <div role="alert" aria-live="assertive" style={{ fontSize: '12px', lineHeight: '18px', color: palette.danger, backgroundColor: palette.dangerBg, border: `1px solid ${palette.dangerBorder}`, borderRadius: '8px', padding: '6px 8px', margin: '0 8px 8px' }}>{state.error}</div> : null}
-    {state.notice ? <div role="status" aria-live="polite" style={{ fontSize: '12px', lineHeight: '18px', color: palette.accent, backgroundColor: palette.accentSoft, border: `1px solid ${palette.accentBorder}`, borderRadius: '8px', padding: '6px 8px', margin: '0 8px 8px' }}>{state.notice}</div> : null}
+    {state.notice.length === 0 ? null : <div role="status" aria-live="polite" style={{ fontSize: '12px', lineHeight: '18px', color: palette.accent, backgroundColor: palette.accentSoft, border: `1px solid ${palette.accentBorder}`, borderRadius: '8px', padding: '6px 8px', margin: '0 8px 8px', whiteSpace: 'pre-line' }}>{state.notice.join('\n')}</div>}
     {state.open ? <div style={{ display: 'grid', gap: '9px', padding: '8px', borderTop: `1px solid ${palette.divider}` }}>
       <div>
         <div style={sectionTitle}>{t('backupProfilesTitle')}</div>
@@ -349,7 +357,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
             aria-label={t('backupProfileNamePlaceholder')}
             onChange={(event) => {
               const value = event.currentTarget.value
-              setState((current) => ({ ...current, notice: null, nameDraft: value }))
+              setState((current) => ({ ...current, notice: [], nameDraft: value }))
             }}
             style={{ ...field, flex: '1 1 auto', minWidth: 0 }}
           />

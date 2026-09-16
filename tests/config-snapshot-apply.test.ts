@@ -70,18 +70,21 @@ function applyOpToSection(section: Record<string, unknown>, op: SettingsOp): voi
 
 /**
  * A settings transport whose user layer is real mutable state: a successful
- * write mutates it and advances the shared revision, so a later `describe()`
- * observes the applied values rather than the values from before the apply.
+ * write mutates it and advances that namespace's revision, so a later
+ * `describe()` observes the applied values rather than the values from before
+ * the apply. Revisions are per namespace and enforced, exactly as the host
+ * does, so a write fenced with a revision another write already moved is
+ * refused as a conflict.
  */
 function harness(options: HarnessOptions = {}) {
   const calls: Call[] = []
   const described: DescribeRead[] = []
   const userState: Record<string, Record<string, unknown>> = structuredClone(options.user ?? {})
-  let revision = 1
+  const revisions: Record<string, number> = { 'llm-pi-ai': 1, 'dsh-thinking-effort': 1 }
   const namespaces = (): SettingsNamespace[] => {
     const entries: SettingsNamespace[] = [
-      { ns: 'llm-pi-ai', revision, value: {}, user: { ...userState['llm-pi-ai'] }, applies: options.applies },
-      { ns: 'dsh-thinking-effort', revision, value: {}, user: { ...userState['dsh-thinking-effort'] } },
+      { ns: 'llm-pi-ai', revision: revisions['llm-pi-ai'], value: {}, user: { ...userState['llm-pi-ai'] }, applies: options.applies },
+      { ns: 'dsh-thinking-effort', revision: revisions['dsh-thinking-effort'], value: {}, user: { ...userState['dsh-thinking-effort'] } },
     ]
     for (const entry of entries) described.push({ ns: entry.ns, revision: entry.revision })
     return entries
@@ -92,11 +95,15 @@ function harness(options: HarnessOptions = {}) {
       calls.push({ ns, ops, revision: expected })
       if (ns === options.conflictOn) return { ok: false as const, error: { message: 'settings conflict', code: 'settings/conflict' } }
       if (rejects(options, ns, ops)) return { ok: false as const, error: { message: 'invalid provider profile' } }
-      revision += 1
+      const current = revisions[ns] ?? 0
+      if (expected !== current) {
+        return { ok: false as const, error: { message: `settings namespace "${ns}" changed since it was read (expected revision ${expected}, now ${current})`, code: 'settings/conflict' } }
+      }
+      revisions[ns] = current + 1
       const section = userState[ns] ?? {}
       for (const op of ops) applyOpToSection(section, op)
       userState[ns] = section
-      return { ok: true as const, value: { ns, revision, value: {} } }
+      return { ok: true as const, value: { ns, revision: current + 1, value: {} } }
     }),
   }
   return { settings, calls, described, userState }
@@ -176,7 +183,7 @@ describe('applySnapshot', () => {
     expect(outcome.outcomes).toEqual([{ ns: 'llm-pi-ai', ok: false, error: 'settings conflict', conflict: true }])
   })
 
-  it('writes the pre-apply snapshot into the auto backup field when asked', async () => {
+  it('writes the pre-apply snapshot into the auto backup field before the namespace writes', async () => {
     const { settings, calls, described, userState } = harness({ user: { 'llm-pi-ai': { subagentEffort: 'off' } } })
     const outcome = await applySnapshot({
       snapshot: snapshotOf({ 'llm-pi-ai': { subagentEffort: 'high' } }),
@@ -185,7 +192,10 @@ describe('applySnapshot', () => {
       autoBackup: true,
     })
 
-    const backupCall = calls.at(-1)
+    // The rollback copy is the first write of the apply: taken afterwards it
+    // would not exist while the writes below are still failing.
+    expect(calls.map((call) => isAutoBackup(call.ops))).toEqual([true, false])
+    const backupCall = calls[0]
     expect(backupCall?.ns).toBe('dsh-thinking-effort')
     expect(backupCall?.ops).toEqual([
       { op: 'set', path: ['autoBackup'], value: expect.objectContaining({ sections: expect.objectContaining({ 'llm-pi-ai': { subagentEffort: 'off' } }) }) },
@@ -195,16 +205,16 @@ describe('applySnapshot', () => {
     // ...while the live configuration now holds the imported value, so the
     // post-apply state cannot be what produced the backup above.
     expect(userState['llm-pi-ai']).toEqual({ subagentEffort: 'high' })
-    // The revision is re-read after the writes: reusing the pre-apply revision
-    // would collide with the write that just bumped it.
-    expect(described.map((read) => read.revision)).toEqual([1, 1, 2, 2])
-    expect(backupCall?.revision).toBe(2)
     expect(outcome.autoBackupError).toBeUndefined()
+    // One read fences the whole apply: the backup needs no `describe()` of its
+    // own because nothing has written the plugin namespace yet.
+    expect(described.map((read) => read.revision)).toEqual([1, 1])
+    expect(backupCall?.revision).toBe(1)
   })
 
   it('reports a backup failure without turning the applied write into a failed apply', async () => {
     // The plugin namespace needs no write, so the plan holds only `llm-pi-ai`:
-    // that write succeeds and only the backup write is rejected.
+    // the refused copy is reported separately and that write still lands.
     const { settings, calls } = harness({ failOn: (call) => isAutoBackup(call.ops) })
     const outcome = await applySnapshot({
       snapshot: snapshotOf({ 'llm-pi-ai': { subagentEffort: 'high' } }),
@@ -214,8 +224,8 @@ describe('applySnapshot', () => {
     })
 
     expect(calls).toHaveLength(2)
-    expect(calls.map((call) => call.ns)).toEqual(['llm-pi-ai', 'dsh-thinking-effort'])
-    expect(isAutoBackup(calls.at(-1)?.ops ?? [])).toBe(true)
+    expect(calls.map((call) => call.ns)).toEqual(['dsh-thinking-effort', 'llm-pi-ai'])
+    expect(isAutoBackup(calls[0]?.ops ?? [])).toBe(true)
     expect(outcome.outcomes).toEqual([{ ns: 'llm-pi-ai', ok: true, revision: 2 }])
     // The write landed; only the rollback copy failed, and it says so separately.
     expect(outcome.ok).toBe(true)
@@ -243,7 +253,7 @@ describe('applySnapshot', () => {
     ])
   })
 
-  it('still writes the backup after a partial success', async () => {
+  it('keeps the copy it wrote before a half-failed plan and fences the plugin write with it', async () => {
     const { settings, calls } = harness({ failOn: 'llm-pi-ai' })
     const outcome = await applySnapshot({
       snapshot: snapshotOf({
@@ -256,15 +266,26 @@ describe('applySnapshot', () => {
     })
 
     expect(calls).toHaveLength(3)
-    expect(calls.map((call) => isAutoBackup(call.ops))).toEqual([false, false, true])
-    expect(calls.at(-1)?.ns).toBe('dsh-thinking-effort')
-    // The copy is of what the user layer held before the successful half landed.
-    expect(backupValueOf(calls.at(-1))).toMatchObject({ sections: { 'llm-pi-ai': {} } })
+    expect(calls.map((call) => isAutoBackup(call.ops))).toEqual([true, false, false])
+    expect(calls[0]?.ns).toBe('dsh-thinking-effort')
+    // The copy is of what the user layer held before the failed apply started.
+    expect(backupValueOf(calls[0])).toMatchObject({ sections: { 'llm-pi-ai': {} } })
+    expect(calls[0]?.revision).toBe(1)
+    // The copy moved the plugin namespace's revision, so the plan's own write to
+    // it is fenced with what the copy left behind rather than with 1.
+    expect(calls[1]?.ns).toBe('dsh-thinking-effort')
+    expect(calls[1]?.revision).toBe(2)
+    expect(calls[2]?.ns).toBe('llm-pi-ai')
+    expect(calls[2]?.revision).toBe(1)
     expect(outcome.ok).toBe(false)
+    expect(outcome.outcomes).toEqual([
+      { ns: 'dsh-thinking-effort', ok: true, revision: 3 },
+      { ns: 'llm-pi-ai', ok: false, error: 'invalid provider profile', conflict: false },
+    ])
     expect(outcome.autoBackupError).toBeUndefined()
   })
 
-  it('does not back up when nothing was written', async () => {
+  it('does not back up when the plan is empty', async () => {
     const { settings, calls } = harness({ user: { 'llm-pi-ai': { subagentEffort: 'high' } } })
     await applySnapshot({
       snapshot: snapshotOf({ 'llm-pi-ai': { subagentEffort: 'high' } }),

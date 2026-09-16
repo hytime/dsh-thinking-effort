@@ -158,12 +158,12 @@ Sub2API, CPA, and other forwarding gateways must preserve and forward `x-opencod
 
 ### Backup and profiles
 
-The **Backup and profiles** card at the top of the settings page exports the current configuration, keeps named profiles on this machine, and imports a file exported earlier.
+The **Backup and profiles** card, below the language selector and the Subagent default effort card, exports the current configuration, keeps named profiles on this machine, and imports a file exported earlier.
 
-1. **Export current config** downloads `dsh-config-<timestamp>.json`. The file holds the `llm-pi-ai` and `dsh-thinking-effort` user layers and can contain plaintext such as provider `headers` — but not the credential values themselves. Keep it safe.
-2. Under **Profile library**, enter a name and click **Save current config** to store the current configuration as a named profile; **Apply** switches back to it, **Export** writes it to a file, and **Delete** removes it. At most 20 profiles are kept.
+1. **Export current config** downloads `dsh-config-<timestamp>.json`. The file holds the `llm-pi-ai` and `dsh-thinking-effort` user layers as written. No credential value is exported — a provider keeps only the name of the environment variable holding its key (`apiKeyEnv`) — but every value stored in those layers is copied verbatim, and a plaintext token kept in provider `headers` is one of them. Keep it safe.
+2. Under **Profile library**, enter a name and click **Save current config** to store the current configuration as a named profile; **Export** writes it to a file and **Delete** removes it. At most 20 profiles are kept. **Apply** switches back to a profile through the same preview an import uses, so the default **Merge** keeps providers the profile omits — an exact restore means choosing **Replace** there.
 3. **Import config → Choose file…** parses the file and shows an **Import preview** with the added / overwritten / removed counts; nothing is written before you confirm.
-4. Imports default to **Merge** (keep what the file omits); **Replace** must be chosen explicitly and deletes providers the file does not contain. **Confirm import** writes the changes, and the configuration from just before the import is saved automatically under **Pre-import backup** so it can be restored.
+4. Imports default to **Merge** (keep what the file omits); **Replace** must be chosen explicitly and deletes providers the file does not contain. **Confirm import** first saves the configuration that stands right now under **Pre-import backup**, then writes the changes — restoring that copy goes through this same preview.
 
 Export and import reuse the existing Settings channel, so the card works with both modern Remote Settings and the legacy `connection.api.settings`. When the result reports a namespace that takes effect on restart, restart DSH.
 
@@ -191,7 +191,7 @@ See the complete Chinese, English, Japanese, and Korean screenshot gallery in [`
 - `off` and an unset effort may both omit `reasoning`; whether this disables thinking depends on the gateway protocol.
 - The Composer slider is available only when the Web runtime provides the optional `modelDirectories` service. The `seat` is not registered when that service is unavailable, and the plugin leaves Composer unchanged.
 - Host changes require a DSH restart. Settings, locale, and Client bundle changes take effect after a Web page refresh.
-- The profile library is stored in the plugin's own `dsh-thinking-effort` namespace and is not carried by an export. To move named profiles to another machine, export each profile and import it there.
+- The profile library and the pre-import backup live in the plugin's own `dsh-thinking-effort` namespace and are not carried by an export. To move named profiles to another machine, export each profile and import it there.
 
 ## CI and release maintenance
 

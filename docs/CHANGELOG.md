@@ -16,8 +16,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### 新增 / Added
 
-- 新增「配置备份与方案」：可把 `llm-pi-ai` 与 `dsh-thinking-effort` 两个 namespace 的用户层导出成 JSON 文件，在另一台机器或重装后导入恢复；也可在设置页内保存多份命名方案并一键应用。导入前必须选择「合并」（默认，保留文件里没有的 provider）或「替换」（完全以文件为准），并显示新增 / 覆盖 / 删除的条数预览；应用前会自动留存一份可回滚的导入前快照。整个功能复用现有 Settings 通道，同时支持新版 Remote Settings 与旧版 `connection.api.settings`，不新增依赖。
-- Add "Backup and profiles": export the user layer of the `llm-pi-ai` and `dsh-thinking-effort` namespaces as a JSON file and import it on another machine or after a reinstall; save named profiles in the settings page and switch between them. Every import requires choosing merge (default, keeps providers the file omits) or replace (the file wins) and shows an added / overwritten / removed preview; a rollback snapshot is kept automatically before applying. The feature reuses the existing Settings transport for both modern Remote Settings and the legacy `connection.api.settings`, with no new dependencies.
+- 新增「配置备份与方案」：可把 `llm-pi-ai` 与 `dsh-thinking-effort` 两个 namespace 的用户层导出成 JSON 文件，在另一台机器或重装后导入恢复；也可在设置页内保存多份命名方案并切回。导入会显示新增 / 覆盖 / 删除的条数预览，默认使用「合并」（保留文件里没有的 provider），并可在预览中改选「替换」（完全以文件为准）；第一次写入前会自动留存一份可回滚的导入前快照，写入结果需要重启时会列出对应 namespace。整个功能复用现有 Settings 通道，同时支持新版 Remote Settings 与旧版 `connection.api.settings`，不新增依赖。
+- Add "Backup and profiles": export the user layer of the `llm-pi-ai` and `dsh-thinking-effort` namespaces as a JSON file and import it on another machine or after a reinstall; save named profiles in the settings page and switch back to them. An import shows an added / overwritten / removed preview, defaults to merge (keeps providers the file omits), and can switch to replace (the file wins) in that preview; a rollback snapshot is kept automatically before the first write, and an apply that needs a restart names the namespaces involved. The feature reuses the existing Settings transport for both modern Remote Settings and the legacy `connection.api.settings`, with no new dependencies.
 
 ## [0.2.4] - 2026-09-11
 

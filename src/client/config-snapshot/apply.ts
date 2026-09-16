@@ -28,11 +28,13 @@ function revisionOf(namespaces: readonly SettingsNamespace[], ns: string): numbe
 /**
  * Apply a snapshot to the live configuration.
  *
- * The caller's snapshot is the *source*, so it is read once up front; every
- * revision comes from a fresh `describe()`, which is what keeps a concurrent
- * edit in another window from being silently overwritten. A namespace that
- * fails does not roll back its siblings: a rollback is another write and can
- * fail the same way, so the outcome names exactly which half applied instead.
+ * The caller's snapshot is the *source*, so it is read once up front, and every
+ * write is fenced with the revision that read reported — or, when an earlier
+ * write of this same apply moved that namespace, with the revision that write
+ * returned. That is what keeps a concurrent edit in another window from being
+ * silently overwritten. A namespace that fails does not roll back its siblings:
+ * a rollback is another write and can fail the same way, so the outcome names
+ * exactly which half applied instead.
  */
 export async function applySnapshot(request: ApplyRequest): Promise<ApplyOutcome> {
   const { settings, snapshot, mode } = request
@@ -47,9 +49,29 @@ export async function applySnapshot(request: ApplyRequest): Promise<ApplyOutcome
     return { ok: true, skipped: true, outcomes: [], restartRequired: [] }
   }
 
+  // The rollback copy is written before the first namespace write. A copy taken
+  // afterwards would not exist yet while the writes are failing or the page is
+  // closing — exactly the states it has to roll back. Returning above on an
+  // empty plan is what makes this conditional exact: reaching this point means
+  // at least one namespace write is about to be attempted.
+  let autoBackupError: string | undefined
+  let backedUpNamespace: SettingsNamespace | undefined
+  if (request.autoBackup) {
+    const backup = await writeAutoBackup(request, namespaces)
+    autoBackupError = backup.error
+    backedUpNamespace = backup.namespace
+  }
+
+  // Revisions are per namespace, so the copy above moved the plugin namespace's
+  // revision; a plan that writes that namespace too is fenced with what the copy
+  // left behind. Every other write keeps the revision it was planned from.
+  const revisionFor = (ns: string): number => backedUpNamespace !== undefined && backedUpNamespace.ns === ns
+    ? backedUpNamespace.revision
+    : revisionOf(namespaces, ns)
+
   const outcomes: NamespaceOutcome[] = []
   for (const namespacePlan of plan.namespaces) {
-    const response = await settings.mutate(namespacePlan.ns, namespacePlan.ops, revisionOf(namespaces, namespacePlan.ns))
+    const response = await settings.mutate(namespacePlan.ns, namespacePlan.ops, revisionFor(namespacePlan.ns))
     if (response.ok) {
       outcomes.push({ ns: namespacePlan.ns, ok: true, revision: response.value.revision })
       continue
@@ -60,11 +82,6 @@ export async function applySnapshot(request: ApplyRequest): Promise<ApplyOutcome
       error: response.error.message,
       conflict: isConflictError(response.error),
     })
-  }
-
-  let autoBackupError: string | undefined
-  if (request.autoBackup && outcomes.some((outcome) => outcome.ok)) {
-    autoBackupError = await writeAutoBackup(request, namespaces)
   }
 
   return {
@@ -78,8 +95,20 @@ export async function applySnapshot(request: ApplyRequest): Promise<ApplyOutcome
   }
 }
 
-/** Back up the pre-apply configuration; a failure here must not look like an apply failure. */
-async function writeAutoBackup(request: ApplyRequest, preApply: readonly SettingsNamespace[]): Promise<string | undefined> {
+/** What the rollback copy left behind: its failure, or the plugin namespace it wrote. */
+interface AutoBackupWrite {
+  readonly error?: string
+  readonly namespace?: SettingsNamespace
+}
+
+/**
+ * Back up the pre-apply configuration; a failure here must not look like an
+ * apply failure. The write is fenced with the plugin namespace revision from
+ * the read at the top of the apply: nothing has written that namespace yet, so
+ * that revision is still the current one, and a second `describe()` would only
+ * read the same value back.
+ */
+async function writeAutoBackup(request: ApplyRequest, preApply: readonly SettingsNamespace[]): Promise<AutoBackupWrite> {
   const { settings, now, pluginVersion } = request
   const backup = snapshotFromNamespaces(preApply, {
     createdAt: (now ?? (() => new Date()))().toISOString(),
@@ -87,9 +116,7 @@ async function writeAutoBackup(request: ApplyRequest, preApply: readonly Setting
     sourceProfile: 'unknown',
   })
 
-  const fresh = await settings.describe()
-  if (!fresh.ok) return fresh.error.message
-  const revision = revisionOf(fresh.value.namespaces, PLUGIN_NAMESPACE)
+  const revision = revisionOf(preApply, PLUGIN_NAMESPACE)
   const response = await settings.mutate(PLUGIN_NAMESPACE, autoBackupOps(backup), revision)
-  return response.ok ? undefined : response.error.message
+  return response.ok ? { namespace: response.value } : { error: response.error.message }
 }

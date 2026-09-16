@@ -3,6 +3,7 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ConfigBackupCard } from '../src/client/components/ConfigBackupCard.js'
+import { AUTO_BACKUP_PATH } from '../src/client/config-snapshot/library.js'
 import { SNAPSHOT_KIND, SNAPSHOT_VERSION } from '../src/client/config-snapshot/types.js'
 import { zh } from '../src/client/locales.js'
 import { iosPalette } from '../src/client/theme.js'
@@ -40,6 +41,15 @@ interface HarnessOptions {
   revisionByCall?: readonly Record<string, number>[]
   /** Refuse a mutate whose revision is not the one the latest describe reported, the way the host does. */
   enforceRevisions?: boolean
+  /** `applies` flags the host reports per namespace, so a write can require a restart. */
+  applies?: Readonly<Record<string, string>>
+  /** Refuse the pre-import backup write, so an applied import has no rollback copy. */
+  failAutoBackup?: boolean
+}
+
+/** The op list `autoBackupOps` builds — what separates the rollback copy from a namespace write. */
+function isAutoBackup(ops: readonly SettingsOp[]): boolean {
+  return ops.some((op) => op.op === 'set' && op.path.length === 1 && op.path[0] === AUTO_BACKUP_PATH[0])
 }
 
 function harness(options: HarnessOptions = {}) {
@@ -47,7 +57,10 @@ function harness(options: HarnessOptions = {}) {
   // describe can answer with a bumped revision, and a stale mutate is then
   // refused with settings/conflict just like the real provider.
   const revisions: Record<string, number> = { 'llm-pi-ai': 4, 'dsh-thinking-effort': 8 }
-  const mutate = vi.fn(async (ns: string, _ops: readonly SettingsOp[], revision: number): Promise<ClientResult<SettingsNamespace>> => {
+  const mutate = vi.fn(async (ns: string, ops: readonly SettingsOp[], revision: number): Promise<ClientResult<SettingsNamespace>> => {
+    if (options.failAutoBackup === true && isAutoBackup(ops)) {
+      return { ok: false, error: { message: 'settings rejected the backup' } }
+    }
     if (options.enforceRevisions === true && revision !== revisions[ns]) {
       return { ok: false, error: { message: 'settings/conflict' } }
     }
@@ -75,7 +88,7 @@ function harness(options: HarnessOptions = {}) {
       value: {
         writable: options.writable ?? true,
         namespaces: [
-          { ns: 'llm-pi-ai', revision: revisions['llm-pi-ai'], value: {}, user: user?.['llm-pi-ai'] ?? { subagentEffort: 'off' } },
+          { ns: 'llm-pi-ai', revision: revisions['llm-pi-ai'], value: {}, user: user?.['llm-pi-ai'] ?? { subagentEffort: 'off' }, applies: options.applies?.['llm-pi-ai'] },
           { ns: 'dsh-thinking-effort', revision: revisions['dsh-thinking-effort'], value: {}, user: user?.['dsh-thinking-effort'] ?? {} },
         ],
       },
@@ -229,6 +242,48 @@ describe('ConfigBackupCard', () => {
     act(() => button(view.container, text('backupConfirmImport')).click())
     await settle()
 
+    expect(view.mutate).toHaveBeenCalledWith('llm-pi-ai', [{ op: 'set', path: ['subagentEffort'], value: 'high' }], 4)
+    expect(view.onApplied).toHaveBeenCalled()
+  })
+
+  // The apply reports the namespaces that only take effect after a DSH restart,
+  // and a rollback copy that could not be written. Both are consequences of a
+  // successful apply, so they belong in the status block beside it, not in the
+  // error block that means "the configuration was not applied".
+  it('names the namespaces that need a restart after a successful apply', async () => {
+    const view = harness({ applies: { 'llm-pi-ai': 'restart' } })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(view.container, new File([JSON.stringify(storedSnapshot({ 'llm-pi-ai': { subagentEffort: 'high' } }))], 'snapshot.json', { type: 'application/json' }))
+
+    act(() => button(view.container, text('backupConfirmImport')).click())
+    await settle()
+
+    const status = view.container.querySelector('[role="status"]')?.textContent ?? ''
+    expect(status).toContain(text('backupApplied'))
+    expect(status).toContain(text('backupRestartRequired', { namespaces: 'llm-pi-ai' }))
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
+    expect(view.onApplied).toHaveBeenCalled()
+  })
+
+  it('reports a rollback copy that could not be written without failing the apply', async () => {
+    const view = harness({ failAutoBackup: true })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(view.container, new File([JSON.stringify(storedSnapshot({ 'llm-pi-ai': { subagentEffort: 'high' } }))], 'snapshot.json', { type: 'application/json' }))
+
+    act(() => button(view.container, text('backupConfirmImport')).click())
+    await settle()
+
+    const status = view.container.querySelector('[role="status"]')?.textContent ?? ''
+    expect(status).toContain(text('backupApplied'))
+    expect(status).toContain(text('backupAutoBackupFailed', { message: 'settings rejected the backup' }))
+    // Only the copy failed: the write landed and the card must not call it an error.
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
     expect(view.mutate).toHaveBeenCalledWith('llm-pi-ai', [{ op: 'set', path: ['subagentEffort'], value: 'high' }], 4)
     expect(view.onApplied).toHaveBeenCalled()
   })
