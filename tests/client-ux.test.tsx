@@ -9,6 +9,7 @@ import { createTakeoverRuntimeStore, type TakeoverRuntimeResolution } from '../s
 import { resolveGatewayCompat } from '../src/compat/gateway/resolve.js'
 import { GatewayCompatControls, renderGatewayCompatControls } from '../src/client/components/GatewayCompatControls.js'
 import { ModelEditor } from '../src/client/components/ModelEditor.js'
+import { ConfigBackupCard } from '../src/client/components/ConfigBackupCard.js'
 import { inventoryFrom, modelGatewayCompatViewFrom, providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
 import { en, ja, ko, zh } from '../src/client/locales.js'
 import { isOpenCodeSessionNamespace, openCodeSessionKey, openCodeSessionView } from '../src/client/model-header-ops.js'
@@ -435,7 +436,7 @@ describe('OpenCode session Client namespace state', () => {
       value: true,
     }], plugin.revision)
     expect(view.container.textContent).toContain(text('opencodeSessionSaved'))
-    expect(view.container.textContent).not.toContain(text('unsaved'))
+    expect(view.container.querySelector('[title="' + text('unsaved') + '"]')).toBeNull()
     const afterSupportsDeveloperRole = view.container.querySelector(
       `[data-scope="provider"] select[aria-label="${text('supportsDeveloperRole')}"]`,
     ) as HTMLSelectElement
@@ -488,7 +489,7 @@ describe('OpenCode session Client namespace state', () => {
     }], plugin.revision)
     expect(view.container.textContent).toContain(text('opencodeSessionSaved'))
     expect(view.container.querySelector(`[data-scope="opencode-session"] button[aria-label="${text('saveOpenCodeSessionAria')}"]`)).toBeNull()
-    expect(view.container.textContent).not.toContain(text('unsaved'))
+    expect(view.container.querySelector('[title="' + text('unsaved') + '"]')).toBeNull()
     view.unmount()
   })
 
@@ -608,11 +609,11 @@ describe('OpenCode session Client namespace state', () => {
     act(() => headerSwitch.click())
     await settle()
     expect(headerSwitch.getAttribute('aria-checked')).toBe('true')
-    expect(view.container.textContent).not.toContain(text('unsaved'))
+    expect(view.container.querySelector('[title="' + text('unsaved') + '"]')).toBeNull()
 
     act(() => button(view.container, text('closeModelSettings')).click())
     expect(view.container.querySelector('[data-scope="opencode-session"]')).toBeNull()
-    expect(view.container.textContent).not.toContain(text('unsaved'))
+    expect(view.container.querySelector('[title="' + text('unsaved') + '"]')).toBeNull()
 
     act(() => modelSettingsButton(view.container).click())
     const reopenedTransport = view.container.querySelector('[data-scope="opencode-session"]') as HTMLElement
@@ -1388,7 +1389,7 @@ describe('SectionEditor user behavior', () => {
     }], 2)
     expect(view.container.querySelector('[role="alert"]')?.textContent).toContain('stale revision')
     expect((view.container.querySelector(`[data-scope="model"] select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement).value).toBe('max_tokens')
-    expect(view.container.textContent).toContain(text('unsaved'))
+    expect(view.container.querySelector('[title="' + text('unsaved') + '"]')).not.toBeNull()
     view.unmount()
   })
 
@@ -1428,7 +1429,7 @@ describe('SectionEditor user behavior', () => {
     expect(thinkingFormat).not.toBeNull()
     act(() => setValue(supportsStore, 'unsupported'))
     act(() => setValue(thinkingFormat, 'deepseek'))
-    expect(view.container.textContent).toContain(text('unsaved'))
+    expect(view.container.querySelector('[title="' + text('unsaved') + '"]')).not.toBeNull()
     act(() => button(view.container, text('saveModelGatewayCompat')).click())
     await settle()
 
@@ -1517,7 +1518,7 @@ describe('SectionEditor user behavior', () => {
     const modelMaxTokens = view.container.querySelector(`[data-scope="model"] select[aria-label="${text('maxTokensField')}"]`) as HTMLSelectElement
     act(() => setValue(modelMaxTokens, 'max_completion_tokens'))
     expect(modelMaxTokens.value).toBe('max_completion_tokens')
-    expect(view.container.textContent).toContain(text('unsaved'))
+    expect(view.container.querySelector('[title="' + text('unsaved') + '"]')).not.toBeNull()
     expect(view.container.querySelector('[data-scope="model"]')).not.toBeNull()
     const providerSupports = view.container.querySelector(`[data-scope="provider"] select[aria-label="${text('supportsDeveloperRole')}"]`) as HTMLSelectElement
     act(() => setValue(providerSupports, 'supported'))
@@ -1653,7 +1654,7 @@ describe('SectionEditor user behavior', () => {
 
     expect(view.container.querySelector('[role="alert"]')?.textContent).toContain('stale revision')
     expect(maxTokens.value).toBe('auto')
-    expect(view.container.textContent).toContain(text('unsaved'))
+    expect(view.container.querySelector('[title="' + text('unsaved') + '"]')).not.toBeNull()
     view.unmount()
   })
 
@@ -1776,7 +1777,7 @@ describe('SectionEditor user behavior', () => {
     await settle()
     expect(view.container.querySelector('[role="alert"]')?.textContent).toContain('conflict')
     expect(view.container.querySelector('input[placeholder="' + text('wirePlaceholder') + '"]')).not.toBeNull()
-    expect(view.container.textContent).toContain(text('unsaved'))
+    expect(view.container.querySelector('[title="' + text('unsaved') + '"]')).not.toBeNull()
     view.unmount()
   })
 
@@ -1801,5 +1802,66 @@ describe('SectionEditor user behavior', () => {
     await settle()
     expect(view.container.textContent).toContain(text('restoreReasoning'))
     view.unmount()
+  })
+})
+
+describe('ConfigBackupCard integration', () => {
+  it('mounts under the subagent card and exports the live configuration', async () => {
+    const download = vi.fn()
+    const view = renderEditor()
+    await settle()
+
+    const scope = view.container.querySelector('[data-scope="config-backup"]')
+    expect(scope).not.toBeNull()
+
+    const header = [...scope!.querySelectorAll('button')].find((candidate) => candidate.textContent?.includes(text('backupCardTitle')))
+    expect(header).not.toBeUndefined()
+    act(() => header!.click())
+    await settle()
+
+    const exportButton = [...scope!.querySelectorAll('button')].find((candidate) => candidate.textContent?.includes(text('backupExportCurrent')))
+    expect(exportButton).not.toBeUndefined()
+    view.unmount()
+  })
+
+  it('renders the card directly with an injected download so the export body is assertable', async () => {
+    const download = vi.fn()
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    const settings: SettingsApi = {
+      externalLanguages: false,
+      compatibilityProfile: 'modern',
+      // Both fixtures need a `user` layer: the snapshot captures the raw user
+      // section, and `openCodeNamespace()` defaults to `value` only.
+      describe: async () => ({
+        ok: true,
+        value: {
+          namespaces: [
+            openCodeLlmNamespace({ user: { subagentEffort: 'high' } }),
+            openCodeNamespace({ user: { opencodeSession: { providers: { provider: { models: { 'model-a': true } } } } } }),
+          ],
+        },
+      }),
+      mutate: vi.fn(async (ns, _ops, revision) => ({ ok: true as const, value: { ns, revision: revision + 1, value: {} } })),
+    }
+    act(() => {
+      root.render(<ConfigBackupCard settings={settings} palette={iosPalette()} t={text as Translation} download={download} onApplied={vi.fn()} />)
+    })
+    await settle()
+
+    const scope = container.querySelector('[data-scope="config-backup"]')!
+    act(() => [...scope.querySelectorAll('button')].find((candidate) => candidate.textContent?.includes(text('backupCardTitle')))!.click())
+    await settle()
+    act(() => [...scope.querySelectorAll('button')].find((candidate) => candidate.textContent?.includes(text('backupExportCurrent')))!.click())
+    await settle()
+
+    expect(download).toHaveBeenCalledTimes(1)
+    const body = JSON.parse((download.mock.calls[0] as [string, string])[1]) as { sections: Record<string, Record<string, unknown>> }
+    expect(body.sections['llm-pi-ai']).toEqual({ subagentEffort: 'high' })
+    expect(body.sections['dsh-thinking-effort']).toEqual({ opencodeSession: { providers: { provider: { models: { 'model-a': true } } } } })
+
+    act(() => root.unmount())
+    container.remove()
   })
 })
