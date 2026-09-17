@@ -55,11 +55,90 @@ DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行
 
 OpenCode セッション Header はモデル編集内のモデル単位の設定であり、provider 全体の設定ではありません。既定では無効です。対象の正確な `provider/model` を展開し、サービスが `x-opencode-session` を必要とする場合だけ **OpenCode セッション Header** を有効にしてください。トグルすると即保存され、別途保存ボタンはありません。
 
-Host は一致する `llm/stream` リクエストごとに、現在の DSH 会話の `sessionId` から Header 値を動的に生成します。固定値を入力または保存する必要はありません。アダプターまたは呼び出し元が `x-opencode-session` を既に指定している場合、その値を保持し、上書きしません。この設定は新しい Remote Settings transport と旧来の `connection.api.settings` transport の両方で動作します。同じルートの GPT など OpenCode 以外のモデルには継承されず、ルートの `api` プロトコルも変更しません。
+### 既定で送られる値
 
-リクエストが Sub2API、CPA、その他の転送ゲートウェイを通る場合は、`x-opencode-session` が保持され OpenCode 上流へ転送されることを確認してください。`llm-pi-ai.providers.<route>.headers.x-opencode-session` のような静的 route 設定は、全会話で同じ固定値を使うため代替になりません。
+スイッチを有効にして `format` 未設定の場合、Host は OpenCode Zen の正規形を持ち**現在の DSH セッション ID から決定論的に導出**した `x-opencode-session` を送信します。
 
-Host またはプラグインパッケージを変更した後は DSH を再起動し、Settings または Client を変更した後は Web ページを更新してからモデル要求を確認してください。
+| セグメント | 長さ | 由来 |
+| --- | --- | --- |
+| `ses_` | 4 | 固定プレフィックス |
+| 16 進タイムスタンプ | 12 | 48 ビットのミリ秒タイムスタンプ。DSH セッションごとに 1 回鋳造（`time: firstUse`） |
+| Base62 接尾辞 | 14 | セッション ID を正規化（`session-` プレフィックス除去、小文字化、ハイフン除去）した 80 ビット SHA-256 ダイジェスト |
+
+これにより得られる保証：
+
+- **セッション内で一定** — 同じ DSH セッションは常に同じ値を送信します（セッション単位のスティッキーキャッシュ）。再開したセッションは同じ 14 桁の接尾辞を維持し、`firstUse` モードでは DSH 再起動後に 16 進タイムスタンプだけが再鋳造されます。
+- **セッション間で異なる** — 各 subagent 実行は独立した値を導出するため、複数の会話が 1 つの上流セッションに潰れません。
+- **DSH セッション ID に結び付く** — 同じセッション ID はどのマシンでも同じ接尾辞を導出し、保存値は不要です。
+- **形式準拠** — 結果は `^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`（計 30 文字）に一致します。
+
+### 生成器の設定
+
+生成器は DSH 設定ドキュメント（例：`~/.dsh/settings.yaml` または現在の profile の設定）の `dsh-thinking-effort.opencodeSession.format` で設定します。
+
+```yaml
+dsh-thinking-effort:
+  opencodeSession:
+    providers:
+      opencode-go:
+        models:
+          deepseek-v4-flash: true
+    format:
+      mode: ses-derive
+      time: firstUse
+```
+
+フィールド：
+
+| フィールド | 値 | 既定 | 意味 |
+| --- | --- | --- | --- |
+| `mode` | `ses-derive` / `passthrough` / `template` / `expression` / `script` | `ses-derive` | スイッチ有効時に使う生成器。未知の値は `ses-derive` にフォールバックします。 |
+| `time` | `firstUse` / `hash` | `firstUse` | 12 桁の 16 進ブロックの由来。`hash` はセッションダイジェストから導出し、キャッシュなしでどのマシンでも値が完全に一致します。 |
+| `template` | 文字列 | `''` | `template` モード：プレースホルダー `{hex12}`、`{tail62}`、`{sessionId}`、`{rawSessionId}`、`{sha256}`、`{now}`、`{provider}`、`{model}`。 |
+| `expression` | 文字列 | `''` | `expression` モード：同じコンテキストを使う制限付き加算式。`sha256`、`slice`、`lower`、`upper` もあります。例：`'ses_' + hex12 + tail62`。 |
+| `script` | 絶対パス | `''` | `script` モード：`format(context)` をエクスポートし header 値を文字列で返す JS ファイル（`.mjs` / `.cjs`）。ファイル変更時にホットリロード（毎秒最大 1 回チェック）。読み込み・評価失敗時は `ses-derive` にフォールバックします。 |
+| `validate` | 正規表現ソース | `''` | 任意の検証。空なら検査しません。組み込みの既定形は `^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$` です。 |
+| `onInvalid` | `warn` / `drop` / `send` | `warn` | `validate` に失敗したとき：ログを出して送信 / header を省略 / 静かに送信。 |
+
+例：
+
+```yaml
+# 明示的な正規生成器（既定と等価）
+format: { mode: ses-derive, time: firstUse }
+
+# どのマシンでも完全に決定的（hex 部もダイジェスト由来）
+format: { mode: ses-derive, time: hash }
+
+# 旧動作：生の DSH セッション ID
+format: { mode: passthrough }
+
+# 上流の改版後のテンプレート
+format: { mode: template, template: '{hex12}-{tail62}' }
+
+# 上流が「プレフィックス + 派生部」を求める場合の式
+format: { mode: expression, expression: "'ses_' + hex12 + tail62" }
+
+# 任意の将来形式に対する外部スクリプト
+format: { mode: script, script: '/絶対/パス/session.mjs' }
+```
+
+`script` ファイルは同じコンテキストオブジェクトを受け取る関数をエクスポートします。
+
+```js
+// /絶対/パス/session.mjs
+export function format(ctx) {
+  // ctx.hex12, ctx.tail62, ctx.sessionId, ctx.rawSessionId, ctx.now, ctx.provider, ctx.model
+  return 'ses_' + ctx.hex12 + ctx.tail62
+}
+```
+
+`format` 設定を変更すると、セッションの次のリクエストで新しい設定に従って再導出されます（セッション単位のキャッシュは設定フィンガープリントがキーです）。Host またはプラグインパッケージを変更した後は DSH を再起動し、Settings または Client を変更した後は Web ページを更新してからモデル要求を確認してください。
+
+### 動作の注意
+
+- アダプターまたは呼び出し元が既に指定した `x-opencode-session` は保持され、上書きされません。
+- この設定は新しい Remote Settings transport と旧来の `connection.api.settings` transport の両方で動作し、ルートの `api` プロトコルは変更しません。
+- リクエストが Sub2API、CPA、その他の転送ゲートウェイを通る場合は、`x-opencode-session` が保持され OpenCode 上流へ転送されることを確認してください。`llm-pi-ai.providers.<route>.headers.x-opencode-session` のような静的 route 設定は、全会話で同じ固定値を使うため代替になりません。
 
 ## ゲートウェイ互換設定
 

@@ -14,6 +14,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 新增 / Added
+
+- 新增可配置的 OpenCode 会话 Header 生成器（`opencodeSession.format`）。开关打开且未配置 `format` 时，默认按 OpenCode Zen 规范格式生成随 DSH 会话绑定的确定性 `ses_` 值：`ses_` + 12 位十六进制（48 位毫秒时间戳，会话内首次使用时铸造一次）+ 14 位 Base62（DSH 会话 ID 归一化后的 80 位 SHA-256 摘要）。同一 DSH 会话内值恒定，不同会话（含每次子 agent 运行）各不相同，14 位后缀在 DSH 重启后仍然稳定。为应对上游格式变化，提供 `ses-derive` / `passthrough` / `template` / `expression` / `script` 四档生成模式、`time: firstUse | hash` 时间戳来源、`validate` 正则与 `onInvalid: warn | drop | send` 校验策略，均可通过设置文档手写配置、无需改代码或重建插件。
+- Add a configurable OpenCode session Header generator (`opencodeSession.format`). With the switch on and no `format` configured, the Host now sends a deterministic `ses_` value bound to the DSH session in the canonical OpenCode Zen shape: `ses_` + 12 hex characters (a 48-bit millisecond timestamp minted once per session) + 14 Base62 characters (an 80-bit SHA-256 digest of the normalized DSH session id). The value is stable within one DSH session, distinct per session (including each subagent run), and its 14-character suffix survives DSH restarts. To keep up with upstream format changes, the generator supports `ses-derive` / `passthrough` / `template` / `expression` / `script` modes, a `time: firstUse | hash` timestamp source, and `validate` / `onInvalid` checks — all configurable in the settings document without code changes.
+
+### 变更 / Changed
+
+- OpenCode 会话 Header 的默认发送值从「原始 DSH 会话 ID」改为「符合上游格式的派生 `ses_` 值」；需要旧行为的用户可显式配置 `format: { mode: passthrough }`。
+- The default `x-opencode-session` value changes from the raw DSH session id to a derived upstream-compliant `ses_` value; users who need the old behavior can configure `format: { mode: passthrough }`.
+
 ## [0.3.0] - 2026-09-16
 
 ### 新增 / Added

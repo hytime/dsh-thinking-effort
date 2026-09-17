@@ -61,11 +61,90 @@ version-map 按以下规则判断网关能力：
 
 OpenCode 会话 Header 是模型编辑器中的模型级设置，不是 provider 全局设置，默认关闭。展开精确的 `provider/model`，只有目标服务确实要求 `x-opencode-session` 时才勾选「OpenCode 会话 Header」；开关拨动即保存，没有单独的保存按钮。
 
-Host 会在匹配的 `llm/stream` 请求中从当前 DSH 会话的 `sessionId` 动态生成 Header 值。用户不需要填写或保存固定值。如果适配器或调用方已经提供 `x-opencode-session`，插件会保留原值，绝不覆盖。该设置同时支持新版 Remote Settings transport 和旧版 `connection.api.settings` transport。同一路由中的 GPT 或其他非 OpenCode 模型不会继承该设置；该设置也不会修改路由的 `api` 协议。
+### 默认发送什么
 
-如果请求经过 Sub2API、CPA 或其他中转服务，请确认它保留 `x-opencode-session` 并继续转发给 OpenCode 上游。`llm-pi-ai.providers.<route>.headers.x-opencode-session` 这类静态 route 设置不能替代本功能，因为所有会话会共用一个固定值。
+勾选开关且未配置 `format` 时，Host 会发送符合 OpenCode Zen 规范形态、**由当前 DSH 会话 ID 确定性派生**的 `x-opencode-session`：
 
-修改 Host 或插件包后需要重启 DSH；修改 Settings 或 Client 后需要刷新 Web 页面，再测试模型请求。
+| 段 | 长度 | 来源 |
+| --- | --- | --- |
+| `ses_` | 4 | 固定前缀 |
+| 十六进制时间戳 | 12 | 48 位毫秒时间戳，每个 DSH 会话首次使用时铸造一次（`time: firstUse`） |
+| Base62 后缀 | 14 | 会话 ID 归一化（去掉 `session-` 前缀、转小写、去连字符）后的 80 位 SHA-256 摘要 |
+
+由此得到的保证：
+
+- **会话内恒定**——同一 DSH 会话总是发送同一个值（按会话粘性缓存）；恢复的会话保留同样的 14 位后缀，只有 `firstUse` 模式下 DSH 重启后会重新铸造 hex 时间戳段。
+- **会话间不同**——每次子 agent 运行都会派生独立的值，不会把多个会话压缩进同一个上游会话。
+- **与会话 ID 绑定**——同一会话 ID 在任何机器上都派生同样的后缀，且无需保存任何值。
+- **格式合规**——结果匹配 `^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`（共 30 个字符）。
+
+### 配置生成器
+
+生成器在 DSH 设置文档（例如 `~/.dsh/settings.yaml` 或当前 profile 的设置）的 `dsh-thinking-effort.opencodeSession.format` 下配置：
+
+```yaml
+dsh-thinking-effort:
+  opencodeSession:
+    providers:
+      opencode-go:
+        models:
+          deepseek-v4-flash: true
+    format:
+      mode: ses-derive
+      time: firstUse
+```
+
+字段：
+
+| 字段 | 取值 | 默认 | 含义 |
+| --- | --- | --- | --- |
+| `mode` | `ses-derive` / `passthrough` / `template` / `expression` / `script` | `ses-derive` | 开关打开时使用的生成器。未知值回退到 `ses-derive`。 |
+| `time` | `firstUse` / `hash` | `firstUse` | 12 位 hex 段的来源。`hash` 改为从会话摘要派生，使整个值在任何机器上完全一致且无需任何缓存。 |
+| `template` | 字符串 | `''` | `template` 模式：占位符 `{hex12}`、`{tail62}`、`{sessionId}`、`{rawSessionId}`、`{sha256}`、`{now}`、`{provider}`、`{model}`。 |
+| `expression` | 字符串 | `''` | `expression` 模式：使用同一上下文的受限加法表达式，另提供 `sha256`、`slice`、`lower`、`upper`，例如 `'ses_' + hex12 + tail62`。 |
+| `script` | 绝对路径 | `''` | `script` 模式：导出 `format(context)` 的 JS 文件（`.mjs` 或 `.cjs`），返回 header 值字符串。文件变更时热加载（每秒至多检查一次）；加载或求值失败时回退到 `ses-derive`。 |
+| `validate` | 正则源 | `''` | 可选校验。为空不校验；内置默认形态为 `^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`。 |
+| `onInvalid` | `warn` / `drop` / `send` | `warn` | 产物未通过 `validate` 时：记日志照常发送 / 省略 header / 静默发送。 |
+
+示例：
+
+```yaml
+# 显式规范生成器（等价于默认）
+format: { mode: ses-derive, time: firstUse }
+
+# 任何机器上完全确定（hex 段也来自摘要）
+format: { mode: ses-derive, time: hash }
+
+# 旧行为：原始 DSH 会话 ID
+format: { mode: passthrough }
+
+# 上游改版后的模板
+format: { mode: template, template: '{hex12}-{tail62}' }
+
+# 上游要求「前缀 + 派生段」时的表达式
+format: { mode: expression, expression: "'ses_' + hex12 + tail62" }
+
+# 任意未来格式的外部脚本
+format: { mode: script, script: '/绝对/路径/session.mjs' }
+```
+
+`script` 文件导出一个接收相同上下文对象的函数：
+
+```js
+// /绝对/路径/session.mjs
+export function format(ctx) {
+  // ctx.hex12, ctx.tail62, ctx.sessionId, ctx.rawSessionId, ctx.now, ctx.provider, ctx.model
+  return 'ses_' + ctx.hex12 + ctx.tail62
+}
+```
+
+修改 `format` 配置后，会话的下一次请求会按新配置重新派生（按会话的缓存以配置指纹为 key）。修改 Host 或插件包后需要重启 DSH；修改 Settings 或 Client 后需要刷新 Web 页面，再测试模型请求。
+
+### 行为说明
+
+- 适配器或调用方已经提供的 `x-opencode-session` 会被保留，绝不覆盖。
+- 该设置同时支持新版 Remote Settings transport 和旧版 `connection.api.settings` transport，且不会修改路由的 `api` 协议。
+- 如果请求经过 Sub2API、CPA 或其他中转服务，请确认它保留 `x-opencode-session` 并继续转发给 OpenCode 上游。`llm-pi-ai.providers.<route>.headers.x-opencode-session` 这类静态 route 设置不能替代本功能，因为所有会话会共用一个固定值。
 
 ## 网关兼容设置
 
