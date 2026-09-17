@@ -4,6 +4,7 @@ import {
   OPENCODE_SESSION_HEADER,
   OPENCODE_SESSION_NAMESPACE,
 } from '../compat/opencode-session.js'
+import { OpenCodeSessionFormatter, resolveFormatConfig } from './opencode-session-format.js'
 import { PLUGIN_SETTINGS_SCHEMA } from './plugin-settings.js'
 import type {
   HostContext,
@@ -123,9 +124,11 @@ function headersForFetch(input: FetchInput, init: FetchInit | undefined): Header
   return headers
 }
 
-function fetchWithSession(
-  originalFetch: FetchFunction,
+async function fetchWithSession(
+  formatter: OpenCodeSessionFormatter,
   storage: AsyncLocalStorage<OpenCodeSessionRequest>,
+  settingsSnapshot: unknown,
+  originalFetch: FetchFunction,
   input: FetchInput,
   init: FetchInit | undefined,
 ): ReturnType<typeof fetch> {
@@ -134,7 +137,19 @@ function fetchWithSession(
 
   const headers = headersForFetch(input, init)
   if (headers.has(OPENCODE_SESSION_HEADER)) return originalFetch(input, init)
-  headers.set(OPENCODE_SESSION_HEADER, request.sessionId)
+
+  let value: string | undefined
+  try {
+    value = await formatter.format(
+      { provider: request.provider, model: request.model, sessionId: request.sessionId },
+      resolveFormatConfig(settingsSnapshot),
+    )
+  } catch (error) {
+    console.warn(LOG_PREFIX, 'session format error:', error instanceof Error ? error.message : String(error))
+    value = request.sessionId
+  }
+  if (value === undefined) return originalFetch(input, init)
+  headers.set(OPENCODE_SESSION_HEADER, value)
 
   return originalFetch(input, {
     ...init,
@@ -196,6 +211,7 @@ export function installOpenCodeSession(ctx: HostContext): void {
 
   ctx.effect(() => {
     const storage = new AsyncLocalStorage<OpenCodeSessionRequest>()
+    const formatter = new OpenCodeSessionFormatter()
     const listenerDisposer = ctx.on('llm/stream', (...args: unknown[]) => {
       const next = args[1]
       if (typeof next !== 'function') return undefined
@@ -214,7 +230,14 @@ export function installOpenCodeSession(ctx: HostContext): void {
       }
     }
 
-    const patchedFetch: typeof fetch = (input, init) => fetchWithSession(originalFetch, storage, input, init)
+    const patchedFetch: typeof fetch = (input, init) => fetchWithSession(
+      formatter,
+      storage,
+      settingsSnapshot,
+      originalFetch,
+      input,
+      init,
+    )
     globalThis.fetch = patchedFetch
 
     return () => {

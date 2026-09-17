@@ -20,6 +20,23 @@ const openCodeSessionProvider = z.object({
   models: openCodeSessionModels,
 }).default({ models: {} })
 const openCodeSessionProviders = z.dict(openCodeSessionProvider).default({})
+const openCodeSessionFormat = z.object({
+  mode: z.string().default('ses-derive'),
+  time: z.string().default('firstUse'),
+  template: z.string().default(''),
+  expression: z.string().default(''),
+  script: z.string().default(''),
+  validate: z.string().default(''),
+  onInvalid: z.string().default('warn'),
+}).default({
+  mode: 'ses-derive',
+  time: 'firstUse',
+  template: '',
+  expression: '',
+  script: '',
+  validate: '',
+  onInvalid: 'warn',
+})
 
 /**
  * One stored configuration snapshot, as it appears in the settings document.
@@ -58,11 +75,31 @@ export interface PluginSettings extends OpenCodeSessionSettings {
 export const PLUGIN_SETTINGS_SCHEMA: z<PluginSettings> = z.object({
   opencodeSession: z.object({
     providers: openCodeSessionProviders,
-  }).default({ providers: {} }),
+    format: openCodeSessionFormat,
+  }).default({ providers: {}, format: {
+    mode: 'ses-derive',
+    time: 'firstUse',
+    template: '',
+    expression: '',
+    script: '',
+    validate: '',
+    onInvalid: 'warn',
+  } }),
   profiles: z.dict(configSnapshot).default({}),
   autoBackup: configSnapshot,
 }).default({
-  opencodeSession: { providers: {} },
+  opencodeSession: {
+    providers: {},
+    format: {
+      mode: 'ses-derive',
+      time: 'firstUse',
+      template: '',
+      expression: '',
+      script: '',
+      validate: '',
+      onInvalid: 'warn',
+    },
+  },
   profiles: {},
   autoBackup: {
     kind: 'dsh-thinking-effort/config-snapshot',

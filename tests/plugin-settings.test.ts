@@ -26,21 +26,39 @@ const section = {
   },
 }
 
+const formatDefaults = {
+  mode: 'ses-derive',
+  time: 'firstUse',
+  template: '',
+  expression: '',
+  script: '',
+  validate: '',
+  onInvalid: 'warn',
+}
+
 describe('PLUGIN_SETTINGS_SCHEMA', () => {
-  it('resolves a full section without altering it', () => {
-    const resolved = PLUGIN_SETTINGS_SCHEMA(section) as unknown
-    expect(resolved).toEqual(section)
+  it('resolves a full section without altering it apart from owned field defaults', () => {
+    const resolved = PLUGIN_SETTINGS_SCHEMA(section) as { opencodeSession?: Record<string, unknown> }
+    const { opencodeSession, ...rest } = resolved
+    expect(rest).toEqual({ ...section, opencodeSession: undefined })
+    expect(opencodeSession).toEqual({
+      providers: { p: { models: { m: true } } },
+      format: formatDefaults,
+    })
   })
 
   it('materializes every owned field for an empty section so editors see a stable shape', () => {
     const resolved = PLUGIN_SETTINGS_SCHEMA({ opencodeSession: { providers: {} } }) as unknown as Record<string, unknown>
     expect(Object.keys(resolved)).toEqual(['opencodeSession', 'profiles', 'autoBackup'])
     expect(resolved.profiles).toEqual({})
+    expect((resolved.opencodeSession as Record<string, unknown>).format).toEqual(formatDefaults)
   })
 
   it('publishes the new fields on its serialized JSON so configuration surfaces can render them', () => {
     const json = JSON.stringify(PLUGIN_SETTINGS_SCHEMA.toJSON())
     expect(json).toContain('profiles')
     expect(json).toContain('autoBackup')
+    expect(json).toContain('ses-derive')
+    expect(json).toContain('onInvalid')
   })
 })

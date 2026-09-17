@@ -1,11 +1,34 @@
 export const OPENCODE_SESSION_NAMESPACE = 'dsh-thinking-effort'
 export const OPENCODE_SESSION_HEADER = 'x-opencode-session'
 
+export type OpenCodeSessionFormatMode = 'ses-derive' | 'passthrough' | 'template' | 'expression' | 'script'
+export type OpenCodeSessionTimeSource = 'firstUse' | 'hash'
+export type OpenCodeSessionInvalidPolicy = 'warn' | 'drop' | 'send'
+
+/** Configurable generator shape stored under `opencodeSession.format`. */
+export interface OpenCodeSessionFormatSettings {
+  /** The generator mode; unknown values resolve to `ses-derive`. */
+  readonly mode?: OpenCodeSessionFormatMode | string
+  /** Where the 12-hex block comes from; `firstUse` mints once per session, `hash` derives from the session digest. */
+  readonly time?: OpenCodeSessionTimeSource | string
+  /** `template` mode: a string with `{hex12}`, `{tail62}`, `{sessionId}`, `{rawSessionId}`, `{sha256}`, `{now}`, `{provider}`, `{model}` placeholders. */
+  readonly template?: string
+  /** `expression` mode: a safe additive expression evaluated with the same context plus `sha256`, `slice`, `lower`, `upper` functions. */
+  readonly expression?: string
+  /** `script` mode: absolute path to a JS file exporting `format(context)`. */
+  readonly script?: string
+  /** Optional validation regex; invalid values follow `onInvalid`. */
+  readonly validate?: string
+  /** What to do when the produced value fails `validate`: `warn`, `drop`, or `send`. */
+  readonly onInvalid?: OpenCodeSessionInvalidPolicy | string
+}
+
 export interface OpenCodeSessionSettings {
   readonly opencodeSession?: {
     readonly providers?: Readonly<Record<string, {
       readonly models?: Readonly<Record<string, boolean>>
     }>>
+    readonly format?: OpenCodeSessionFormatSettings
   }
 }
 
