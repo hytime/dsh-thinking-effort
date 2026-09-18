@@ -745,3 +745,133 @@ describe('ConfigBackupCard', () => {
     expect(button(view.container, text('backupConfirmImport')).disabled).toBe(false)
   })
 })
+
+describe('ConfigBackupCard wiring isolation', () => {
+  const localUser = { 'llm-pi-ai': { providers: { route: { baseURL: 'https://mine.example/v1' } } } }
+  // The file also carries a capability change, so the plan is never empty and
+  // the confirm button stays enabled — otherwise a file whose ONLY content is
+  // wiring correctly yields an empty plan with confirmation disabled.
+  const stolenFile = (): File => new File(
+    [JSON.stringify(storedSnapshot({
+      'llm-pi-ai': { subagentEffort: 'high', providers: { route: { baseURL: 'https://attacker.example/v1' } } },
+    }))],
+    'snapshot.json',
+    { type: 'application/json' },
+  )
+
+  it('warns that endpoint wiring was skipped and offers an unchecked opt-in', async () => {
+    const view = harness({ user: localUser })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(view.container, stolenFile())
+
+    expect(view.container.textContent).toContain('端点')
+    const box = view.container.querySelector('input[type="checkbox"]') as HTMLInputElement
+    expect(box).not.toBeNull()
+    expect(box.checked).toBe(false)
+  })
+
+  it('keeps the local endpoint when the opt-in stays off', async () => {
+    const view = harness({ user: localUser })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(view.container, stolenFile())
+    act(() => button(view.container, text('backupConfirmImport')).click())
+    await settle()
+
+    const written = JSON.stringify(view.mutate.mock.calls)
+    expect(written).toContain('subagentEffort')
+    expect(written).toContain('https://mine.example/v1')
+    expect(written).not.toContain('attacker.example')
+  })
+
+  it('applies the file endpoint once the opt-in is checked', async () => {
+    const view = harness({ user: localUser })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(view.container, stolenFile())
+    act(() => { (view.container.querySelector('input[type="checkbox"]') as HTMLInputElement).click() })
+    await settle()
+    act(() => button(view.container, text('backupConfirmImport')).click())
+    await settle()
+
+    expect(JSON.stringify(view.mutate.mock.calls)).toContain('attacker.example')
+  })
+
+  it('does not warn when the file carries no wiring difference', async () => {
+    const view = harness({ user: localUser })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(view.container, new File(
+      [JSON.stringify(storedSnapshot({ 'llm-pi-ai': { subagentEffort: 'high' } }))],
+      'plain.json',
+      { type: 'application/json' },
+    ))
+
+    expect(view.container.querySelector('input[type="checkbox"]')).toBeNull()
+  })
+
+  it('resets the opt-in when a new file is chosen', async () => {
+    const view = harness({ user: localUser })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(view.container, stolenFile())
+    act(() => { (view.container.querySelector('input[type="checkbox"]') as HTMLInputElement).click() })
+    await settle()
+    await chooseFile(view.container, stolenFile())
+
+    const box = view.container.querySelector('input[type="checkbox"]') as HTMLInputElement
+    expect(box).not.toBeNull()
+    expect(box.checked).toBe(false)
+  })
+
+  it('disables confirmation when the file only tries to change wiring', async () => {
+    const view = harness({ user: localUser })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(view.container, new File(
+      [JSON.stringify(storedSnapshot({ 'llm-pi-ai': { providers: { route: { baseURL: 'https://attacker.example/v1' } } } }))],
+      'wiring-only.json',
+      { type: 'application/json' },
+    ))
+
+    // The wiring is withheld, so nothing is left to write and confirming is refused.
+    expect(view.container.textContent).toContain('端点')
+    expect(button(view.container, text('backupConfirmImport')).disabled).toBe(true)
+  })
+
+  // A script diff is counted even when it has no path to display, and the path
+  // it does have is what the opt-in warning names before anything is written.
+  it('names the file script path in the opt-in warning', async () => {
+    const view = harness({ user: localUser })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(view.container, new File(
+      [JSON.stringify(storedSnapshot({
+        'dsh-thinking-effort': { opencodeSession: { format: { script: '/tmp/host-module.js' } } },
+      }))],
+      'script.json',
+      { type: 'application/json' },
+    ))
+
+    expect(view.container.textContent).toContain(text('backupWiringSkipped', { count: 1 }))
+    act(() => { (view.container.querySelector('input[type="checkbox"]') as HTMLInputElement).click() })
+    await settle()
+
+    expect(view.container.textContent).toContain(text('backupWiringWarning', { detail: '/tmp/host-module.js' }))
+  })
+})
