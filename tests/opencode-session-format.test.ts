@@ -150,6 +150,52 @@ describe('OpenCodeSessionFormatter ses-derive', () => {
   })
 })
 
+describe('OpenCodeSessionFormatter cache stability', () => {
+  it('keeps a session value stable when the bounded value cache evicts it (mint retained)', () => {
+    let fakeNow = FIXED_NOW
+    const instance = new OpenCodeSessionFormatter({ now: () => fakeNow, log: () => undefined })
+    const config = resolveFormatConfig(undefined)
+    const first = instance.format(defaultRequest, config) as string
+    fakeNow += 60_000
+    // Overflow the value cache (capacity 4096): the first session is evicted,
+    // but its first-use mint survives, so the value must stay byte-identical.
+    for (let index = 0; index < 5000; index += 1) {
+      instance.format({ ...defaultRequest, sessionId: `session-${index.toString(36).padStart(12, '0')}` }, config)
+    }
+    expect(instance.format(defaultRequest, config)).toBe(first)
+  })
+
+  it('keeps an actively used session resident under cache pressure (LRU recency)', () => {
+    let fakeNow = FIXED_NOW
+    const instance = new OpenCodeSessionFormatter({ now: () => fakeNow, log: () => undefined })
+    const config = resolveFormatConfig(undefined)
+    const hot = instance.format(defaultRequest, config) as string
+    for (let index = 0; index < 4090; index += 1) {
+      instance.format({ ...defaultRequest, sessionId: `session-${index}` }, config)
+    }
+    fakeNow += 60_000
+    // Re-touch the hot session: the recency refresh must protect it from the
+    // eviction that the later fills trigger, so no re-mint (which the advanced
+    // clock would produce) may happen.
+    expect(instance.format(defaultRequest, config)).toBe(hot)
+    for (let index = 0; index < 10; index += 1) {
+      instance.format({ ...defaultRequest, sessionId: `session-fill-${index}` }, config)
+    }
+    expect(instance.format(defaultRequest, config)).toBe(hot)
+  })
+})
+
+describe('OpenCodeSessionFormatter expression safety', () => {
+  it('rejects Object.prototype member names as expression helpers', () => {
+    const instance = formatter()
+    const fallback = instance.format(defaultRequest, resolveFormatConfig(undefined))
+    for (const expression of ['constructor("x")', 'toString()', '__defineGetter__("x", 1)']) {
+      const config = resolveFormatConfig({ opencodeSession: { format: { mode: 'expression', expression } } })
+      expect(instance.format(defaultRequest, config)).toBe(fallback)
+    }
+  })
+})
+
 describe('OpenCodeSessionFormatter modes', () => {
   it('passthrough returns the raw session id', () => {
     const config = resolveFormatConfig({ opencodeSession: { format: { mode: 'passthrough' } } })

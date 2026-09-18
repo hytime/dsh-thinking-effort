@@ -133,7 +133,12 @@ function configFingerprint(config: ResolvedFormatConfig): string {
   ])
 }
 
-/** Strip the `session-` prefix, hyphens and case so the same DSH session always derives the same id. */
+/**
+ * Strip the `session-` prefix, hyphens and case so the same DSH session always
+ * derives the same id. Note this intentionally also folds ids that only differ
+ * in internal hyphen placement (`session-ab-cd` vs `session-a-bcd`); harmless
+ * for the UUID-shaped ids DSH actually produces.
+ */
 export function normalizeSessionId(raw: string): string {
   let value = raw.trim()
   if (value.startsWith(DSH_SESSION_PREFIX)) value = value.slice(DSH_SESSION_PREFIX.length)
@@ -326,8 +331,13 @@ function evaluateNode(
       return lookup[node.name]
     }
     case 'call': {
-      const fn = funcs[node.name]
-      if (fn === undefined) throw new Error(`unknown function '${node.name}'`)
+      // Own-property check mirrors the scope lookup below: a plain object
+      // literal inherits Object.prototype, so without it names like
+      // `constructor` / `toString` / `__defineGetter__` would resolve.
+      if (!Object.prototype.hasOwnProperty.call(funcs, node.name)) {
+        throw new Error(`unknown function '${node.name}'`)
+      }
+      const fn = funcs[node.name]!
       return fn(...node.args.map((arg) => evaluateNode(arg, scope, funcs)))
     }
     case 'binary': {
@@ -339,7 +349,12 @@ function evaluateNode(
   }
 }
 
-const EXPRESSION_FUNCS: Record<string, (...args: unknown[]) => unknown> = {
+/**
+ * The documented helper functions for `expression` mode. Built on a
+ * null-prototype object so the inherited Object.prototype members are not even
+ * present, and the evaluator additionally checks own-property ownership.
+ */
+const EXPRESSION_FUNCS: Record<string, (...args: unknown[]) => unknown> = Object.assign(Object.create(null), {
   sha256(value: unknown): string {
     return sha256Hex(String(value))
   },
@@ -352,7 +367,7 @@ const EXPRESSION_FUNCS: Record<string, (...args: unknown[]) => unknown> = {
   upper(value: unknown): string {
     return String(value).toUpperCase()
   },
-}
+})
 
 function evaluateExpression(
   source: string,
@@ -381,9 +396,20 @@ function renderTemplate(template: string, context: SessionFormatContext): string
   return value
 }
 
-/** Per-session generator with bounded caches; one instance per Host effect. */
+/**
+ * Per-session generator; one instance per Host effect. The value cache is
+ * bounded (LRU), while `minted` timestamps are intentionally retained for the
+ * process lifetime so a session's value never changes once published.
+ */
 export class OpenCodeSessionFormatter {
   private readonly cache = new Map<string, { fingerprint: string; value: string | undefined }>()
+  /**
+   * First-use minted hex blocks. Eviction removes only the value-cache entry,
+   * never the mint: dropping it would re-mint on the next request and change
+   * the header value for the same DSH session, breaking per-session stability.
+   * Entries are a dozen bytes per distinct session, so retention is bounded in
+   * practice and preferred over a second eviction policy.
+   */
   private readonly minted = new Map<string, string>()
   private readonly warned = new Set<string>()
   private readonly scripts = new Map<string, ScriptSlot>()
@@ -408,7 +434,12 @@ export class OpenCodeSessionFormatter {
     const session = normalizeSessionId(request.sessionId)
     const fingerprint = configFingerprint(config)
     const cached = this.cache.get(session)
-    if (cached !== undefined && cached.fingerprint === fingerprint) return cached.value
+    if (cached !== undefined && cached.fingerprint === fingerprint) {
+      // Refresh recency without re-running the generator; see `storeAndReturn`.
+      this.cache.delete(session)
+      this.cache.set(session, cached)
+      return cached.value
+    }
 
     if (config.mode === 'script') {
       return this.computeScriptValue(request, session, config, fingerprint)
@@ -533,12 +564,13 @@ export class OpenCodeSessionFormatter {
     fingerprint: string,
     value: string | undefined,
   ): string | undefined {
+    // A cache hit re-inserts the entry so the Map's insertion order doubles as
+    // LRU order. Without the delete-then-set the eviction below would discard
+    // the coldest insertion rather than the least recently used one.
+    this.cache.delete(session)
     if (this.cache.size >= CACHE_MAX_ENTRIES) {
       const oldest = this.cache.keys().next().value
-      if (oldest !== undefined) {
-        this.cache.delete(oldest)
-        this.minted.delete(oldest)
-      }
+      if (oldest !== undefined) this.cache.delete(oldest)
     }
     this.cache.set(session, { fingerprint, value })
     return value
