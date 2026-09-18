@@ -108,6 +108,8 @@ export interface ImportPlan {
   readonly mode: ImportMode
   readonly summary: PlanSummary
   readonly namespaces: readonly NamespacePlan[]
+  /** Wiring the file actively provides that differs from this machine. */
+  readonly wiring: WiringReport
   /** True when every namespace plan is empty; callers must not write. */
   readonly empty: boolean
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { adjustIncoming, PROVIDER_WIRING_KEYS, wiringReport } from '../src/client/config-snapshot/wiring.js'
+import { planImport } from '../src/client/config-snapshot/plan.js'
 import { LLM_NAMESPACE, PLUGIN_NAMESPACE } from '../src/client/config-snapshot/types.js'
 import type { ConfigSnapshot } from '../src/client/config-snapshot/types.js'
 import type { SettingsNamespace } from '../src/client/types.js'
@@ -187,5 +188,64 @@ describe('adjustIncoming script wiring', () => {
     )
     expect(report.count).toBe(0)
     expect(report.script).toBeUndefined()
+  })
+})
+
+const opsFor = (plan: ReturnType<typeof planImport>, ns: string): readonly unknown[] =>
+  plan.namespaces.find((entry) => entry.ns === ns)?.ops ?? []
+
+describe('planImport wiring integration', () => {
+  const local = { 'llm-pi-ai': { providers: { route: { baseURL: 'https://mine.example/v1', models: [{ id: 'a' }] } } } }
+  const stolen = { 'llm-pi-ai': { providers: { route: { baseURL: 'https://attacker.example/v1', models: [{ id: 'b' }] } } } }
+
+  it('keeps the local baseURL in merge mode by default', () => {
+    const plan = planImport(snapshotOf(stolen), namespacesOf(local), 'merge')
+    const ops = JSON.stringify(opsFor(plan, 'llm-pi-ai'))
+    expect(ops).toContain('https://mine.example/v1')
+    expect(ops).not.toContain('attacker.example')
+    expect(plan.wiring.count).toBeGreaterThan(0)
+  })
+
+  it('keeps the local baseURL in replace mode by default', () => {
+    const plan = planImport(snapshotOf(stolen), namespacesOf(local), 'replace')
+    const ops = JSON.stringify(opsFor(plan, 'llm-pi-ai'))
+    expect(ops).toContain('https://mine.example/v1')
+    expect(ops).not.toContain('attacker.example')
+  })
+
+  it('does not delete the local baseURL when the file omits it in replace mode', () => {
+    const plan = planImport(snapshotOf({ 'llm-pi-ai': { providers: { route: { models: [{ id: 'b' }] } } } }), namespacesOf(local), 'replace')
+    const ops = JSON.stringify(opsFor(plan, 'llm-pi-ai'))
+    expect(ops).toContain('https://mine.example/v1')
+  })
+
+  it('applies the file baseURL when importWiring is on', () => {
+    const plan = planImport(snapshotOf(stolen), namespacesOf(local), 'merge', { importWiring: true })
+    expect(JSON.stringify(opsFor(plan, 'llm-pi-ai'))).toContain('attacker.example')
+  })
+
+  it('reports empty wiring for a snapshot that matches the machine', () => {
+    const plan = planImport(snapshotOf(local), namespacesOf(local), 'merge')
+    expect(plan.wiring.count).toBe(0)
+  })
+
+  it('leaves the existing replace behaviour for a route the file omits entirely', () => {
+    const plan = planImport(snapshotOf({ 'llm-pi-ai': {} }), namespacesOf(local), 'replace')
+    expect(opsFor(plan, 'llm-pi-ai')).toEqual([{ op: 'unset', path: ['providers'] }])
+  })
+
+  it('merges a report that counts a difference it cannot display', () => {
+    // The file supplies an empty script. `count` still counts the difference
+    // while `script` has no path to show, so a non-zero count without a script
+    // survives the merge rather than being read as "nothing to warn about".
+    const withScript = { 'dsh-thinking-effort': { opencodeSession: { format: { mode: 'script', script: '/mine/session.mjs' } } } }
+    const plan = planImport(
+      snapshotOf({ 'dsh-thinking-effort': { opencodeSession: { format: { mode: 'script', script: '' } } } }),
+      namespacesOf(withScript),
+      'merge',
+    )
+
+    expect(plan.wiring.count).toBeGreaterThan(0)
+    expect(plan.wiring.script).toBeUndefined()
   })
 })

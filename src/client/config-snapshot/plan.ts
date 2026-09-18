@@ -1,6 +1,7 @@
 import { CONFIG_NAMESPACES } from './types.js'
-import type { ConfigSnapshot, ImportMode, ImportPlan, NamespacePlan, SnapshotSection } from './types.js'
+import type { ConfigSnapshot, ImportMode, ImportPlan, NamespacePlan, SnapshotSection, WiringReport } from './types.js'
 import { userSectionOf, isRecord, isSnapshotLibraryKey, deepEqualJson } from './snapshot.js'
+import { adjustIncoming, mergeWiringReports } from './wiring.js'
 import type { SettingsNamespace, SettingsOp } from '../types.js'
 
 export { deepEqualJson } from './snapshot.js'
@@ -17,6 +18,11 @@ function has(object: SnapshotSection, key: string): boolean {
  */
 function countRemoved(value: unknown): number {
   return isRecord(value) ? Math.max(1, Object.keys(value).length) : 1
+}
+
+export interface PlanOptions {
+  /** Apply the file's endpoint / credential / script wiring too. Defaults to false. */
+  readonly importWiring?: boolean
 }
 
 /**
@@ -38,18 +44,29 @@ function countRemoved(value: unknown): number {
  * so no import can replace the profile library or the rollback copy, and a
  * `replace` cannot unset them either. The summary counts ops, and no op exists
  * for a key that never enters the loop.
+ *
+ * Provider wiring is withheld before the diff: `adjustIncoming` drops the
+ * endpoint and credential fields the file supplies and writes this machine's
+ * values back, so a snapshot cannot redirect traffic by default and `replace`
+ * cannot delete the user's own endpoint either. The withholding happens here,
+ * inside the planner, so the preview and the write share one rule —
+ * `applySnapshot` re-runs this same function against a fresh read.
  */
 export function planImport(
   snapshot: ConfigSnapshot,
   namespaces: readonly SettingsNamespace[],
   mode: ImportMode,
+  options: PlanOptions = {},
 ): ImportPlan {
   const summary: { added: number; overwritten: number; removed: number } = { added: 0, overwritten: 0, removed: 0 }
   const plans: NamespacePlan[] = []
+  const reports: WiringReport[] = []
 
   for (const ns of CONFIG_NAMESPACES) {
-    const incoming = snapshot.sections[ns] ?? {}
     const current = userSectionOf(namespaces, ns)
+    const adjusted = adjustIncoming(ns, snapshot.sections[ns] ?? {}, current, options.importWiring ?? false)
+    const incoming = adjusted.value
+    reports.push(adjusted.report)
     const unsets: SettingsOp[] = []
     const sets: SettingsOp[] = []
 
@@ -125,5 +142,5 @@ export function planImport(
     if (ops.length > 0) plans.push({ ns, ops })
   }
 
-  return { mode, summary, namespaces: plans, empty: plans.length === 0 }
+  return { mode, summary, namespaces: plans, wiring: mergeWiringReports(reports), empty: plans.length === 0 }
 }

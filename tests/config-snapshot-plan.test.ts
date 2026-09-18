@@ -38,17 +38,21 @@ describe('deepEqualJson', () => {
 })
 
 describe('planImport merge mode', () => {
-  it('overwrites a matching provider wholesale and keeps the others', () => {
+  it('treats a matching provider that differs only in wiring as unchanged', () => {
     const plan = planImport(
       snapshotOf({ 'llm-pi-ai': { providers: { keep: { baseURL: 'http://file-keep' }, added: { baseURL: 'http://added' } } } }),
       current({ 'llm-pi-ai': { providers: { keep: { baseURL: 'http://mine', api: 'x' }, untouched: { baseURL: 'http://untouched' } } } }),
       'merge',
     )
 
+    // Both endpoints are withheld, so they match this machine and the plan
+    // carries the machine's `baseURL`. `added` is dropped outright: it held
+    // nothing but wiring, so there is no capability left to import. The single
+    // overwrite is `untouched`, which the file omits and `merge` keeps.
     expect(opsFor(plan, 'llm-pi-ai')).toEqual([
-      { op: 'set', path: ['providers'], value: { keep: { baseURL: 'http://file-keep' }, untouched: { baseURL: 'http://untouched' }, added: { baseURL: 'http://added' } } },
+      { op: 'set', path: ['providers'], value: { keep: { baseURL: 'http://mine' }, untouched: { baseURL: 'http://untouched' } } },
     ])
-    expect(plan.summary).toEqual({ added: 1, overwritten: 1, removed: 0 })
+    expect(plan.summary).toEqual({ added: 0, overwritten: 1, removed: 0 })
     expect(plan.empty).toBe(false)
   })
 
@@ -95,9 +99,11 @@ describe('planImport replace mode', () => {
 
     expect(opsFor(plan, 'llm-pi-ai')).toEqual([
       { op: 'unset', path: ['extra'] },
-      { op: 'set', path: ['providers'], value: { keep: { baseURL: 'http://file' } } },
+      // The endpoint is withheld, so the write carries this machine's `baseURL`,
+      // not the file's.
+      { op: 'set', path: ['providers'], value: { keep: { baseURL: 'http://mine' } } },
     ])
-    expect(plan.summary).toEqual({ added: 0, overwritten: 1, removed: 2 })
+    expect(plan.summary).toEqual({ added: 0, overwritten: 0, removed: 2 })
   })
 
   it('counts a removed empty dict as one removal', () => {
@@ -107,11 +113,10 @@ describe('planImport replace mode', () => {
       'replace',
     )
 
-    expect(opsFor(plan, 'llm-pi-ai')).toEqual([
-      { op: 'unset', path: ['emptyProviders'] },
-      { op: 'set', path: ['providers'], value: { keep: { baseURL: 'http://file' } } },
-    ])
-    expect(plan.summary).toEqual({ added: 0, overwritten: 1, removed: 1 })
+    // After the endpoint is withheld both sides hold `baseURL: 'http://mine'`, so
+    // the only op is the removal this test is about.
+    expect(opsFor(plan, 'llm-pi-ai')).toEqual([{ op: 'unset', path: ['emptyProviders'] }])
+    expect(plan.summary).toEqual({ added: 0, overwritten: 0, removed: 1 })
   })
 
   it('produces no ops when both sides are empty', () => {
