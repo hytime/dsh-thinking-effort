@@ -153,4 +153,39 @@ describe('adjustIncoming script wiring', () => {
     const namespaces = namespacesOf({ 'dsh-thinking-effort': current })
     expect(wiringReport(snapshot, namespaces).script).toBe('/attacker/session.mjs')
   })
+
+  it('counts an empty script the file provides, without displaying one', () => {
+    const fileWithEmptyScript = { opencodeSession: { format: { mode: 'script', script: '' } } }
+    const { value, report } = adjustIncoming(PLUGIN_NAMESPACE, fileWithEmptyScript, current, false)
+    const format = ((value.opencodeSession as Record<string, unknown>).format) as Record<string, unknown>
+    expect(format.script).toBe('/mine/session.mjs')
+    expect(report.count).toBe(1)
+    expect(report.script).toBeUndefined()
+    expect(report.providers).toEqual([])
+    expect(report.endpoints).toEqual([])
+
+    const merged = wiringReport(snapshotOf({ 'dsh-thinking-effort': fileWithEmptyScript }), namespacesOf({ 'dsh-thinking-effort': current }))
+    expect(merged.count).toBe(1)
+    expect(merged.script).toBeUndefined()
+  })
+
+  it('counts a non-string script the file provides, without displaying one', () => {
+    const fileWithNumericScript = { opencodeSession: { format: { mode: 'script', script: 123 } } }
+    const { value, report } = adjustIncoming(PLUGIN_NAMESPACE, fileWithNumericScript, current, false)
+    const format = ((value.opencodeSession as Record<string, unknown>).format) as Record<string, unknown>
+    expect(format.script).toBe('/mine/session.mjs')
+    expect(report.count).toBe(1)
+    expect(report.script).toBeUndefined()
+  })
+
+  it('does not report an empty script both sides agree on', () => {
+    const { report } = adjustIncoming(
+      PLUGIN_NAMESPACE,
+      { opencodeSession: { format: { mode: 'script', script: '' } } },
+      { opencodeSession: { format: { mode: 'script', script: '' } } },
+      false,
+    )
+    expect(report.count).toBe(0)
+    expect(report.script).toBeUndefined()
+  })
 })

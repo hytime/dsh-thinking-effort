@@ -140,9 +140,17 @@ function adjustScript(
   const fileProvides = own(fileFormat, PLUGIN_WIRING_SCRIPT_KEY)
   const differs = fileProvides && (!localProvides || !deepEqualJson(fileFormat[PLUGIN_WIRING_SCRIPT_KEY], localFormat![PLUGIN_WIRING_SCRIPT_KEY]))
   const scriptValue = fileFormat[PLUGIN_WIRING_SCRIPT_KEY]
-  const report: WiringReport = differs && typeof scriptValue === 'string' && scriptValue.length > 0
-    ? { count: 1, providers: [], endpoints: [], script: scriptValue }
-    : EMPTY_WIRING_REPORT
+  // Counting and display are separate concerns. `count` follows the report
+  // definition exactly — the file provides the key and the value differs — so a
+  // difference whose value cannot be shown (an empty string, a non-string) is
+  // still counted and still reaches the import prompt. `script` is the
+  // displayable path only: an empty or non-string value has none to show, and a
+  // `count: 1` report without `script` is a valid outcome for this namespace.
+  const report: WiringReport = !differs
+    ? EMPTY_WIRING_REPORT
+    : typeof scriptValue === 'string' && scriptValue.length > 0
+      ? { count: 1, providers: [], endpoints: [], script: scriptValue }
+      : { count: 1, providers: [], endpoints: [] }
 
   if (importWiring) return { value: incoming, report }
 

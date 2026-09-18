@@ -86,13 +86,21 @@ export interface WiringEndpoint {
 
 /** What a snapshot would change about this machine's deployment wiring. */
 export interface WiringReport {
-  /** Wiring entries the file ACTIVELY provides and that differ from this machine. */
+  /**
+   * Wiring entries the file ACTIVELY provides and that differ from this machine.
+   * A difference is counted whether or not its value can be displayed, so
+   * `count` is the field import risk is decided from, never `script`.
+   */
   readonly count: number
   /** Routes whose wiring would change. Values are never included. */
   readonly providers: readonly string[]
   /** Only ever `baseURL` values — never a credential name or a header value. */
   readonly endpoints: readonly WiringEndpoint[]
-  /** The script path the file would load, when it actively provides one. */
+  /**
+   * The script path the file would load, when it has a non-empty string one to
+   * show. Display only, and absent when the value cannot be shown: the file may
+   * provide an empty string or a non-string, which `count` still counts.
+   */
   readonly script?: string
 }
 
