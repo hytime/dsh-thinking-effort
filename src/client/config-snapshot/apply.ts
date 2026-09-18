@@ -10,6 +10,8 @@ export interface ApplyRequest {
   readonly mode: ImportMode
   readonly settings: ApplySettings
   readonly autoBackup: boolean
+  /** Apply the snapshot's endpoint / credential / script wiring too. Defaults to false. */
+  readonly importWiring?: boolean
   /** Injected for tests; defaults to the real clock. */
   readonly now?: () => Date
   readonly pluginVersion?: string
@@ -44,7 +46,7 @@ export async function applySnapshot(request: ApplyRequest): Promise<ApplyOutcome
   }
 
   const namespaces = fresh.value.namespaces
-  const plan = planImport(snapshot, namespaces, mode)
+  const plan = planImport(snapshot, namespaces, mode, { importWiring: request.importWiring ?? false })
   if (plan.empty) {
     return { ok: true, skipped: true, outcomes: [], restartRequired: [] }
   }

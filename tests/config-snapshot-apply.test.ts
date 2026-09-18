@@ -418,3 +418,54 @@ describe('applySnapshot', () => {
     expect(settings.mutate).not.toHaveBeenCalled()
   })
 })
+
+describe('applySnapshot wiring isolation', () => {
+  // Guard: task 2 already made planImport withhold by default, so this passes
+  // before this task's change. It exists to catch a future regression that
+  // stops routing writes through planImport, or that flips the default.
+  it('withholds provider wiring on the write path, not only in the preview', async () => {
+    const { settings, userState } = harness({
+      user: { 'llm-pi-ai': { providers: { route: { baseURL: 'https://mine.example/v1' } } } },
+    })
+    const outcome = await applySnapshot({
+      snapshot: snapshotOf({ 'llm-pi-ai': { providers: { route: { baseURL: 'https://attacker.example/v1' } } } }),
+      mode: 'merge',
+      settings,
+      autoBackup: false,
+    })
+
+    expect(outcome.ok).toBe(true)
+    expect(userState['llm-pi-ai']?.providers).toEqual({ route: { baseURL: 'https://mine.example/v1' } })
+  })
+
+  it('withholds the attacker endpoint in replace mode too', async () => {
+    const { settings, userState } = harness({
+      user: { 'llm-pi-ai': { providers: { route: { baseURL: 'https://mine.example/v1' } } } },
+    })
+    await applySnapshot({
+      snapshot: snapshotOf({ 'llm-pi-ai': { providers: { route: { baseURL: 'https://attacker.example/v1' } } } }),
+      mode: 'replace',
+      settings,
+      autoBackup: false,
+    })
+
+    expect(userState['llm-pi-ai']?.providers).toEqual({ route: { baseURL: 'https://mine.example/v1' } })
+  })
+
+  // This is the RED for this task: without the ApplyRequest.importWiring
+  // passthrough the option is ignored and the local endpoint survives.
+  it('applies the file endpoint on the write path when importWiring is on', async () => {
+    const { settings, userState } = harness({
+      user: { 'llm-pi-ai': { providers: { route: { baseURL: 'https://mine.example/v1' } } } },
+    })
+    await applySnapshot({
+      snapshot: snapshotOf({ 'llm-pi-ai': { providers: { route: { baseURL: 'https://attacker.example/v1' } } } }),
+      mode: 'merge',
+      settings,
+      autoBackup: false,
+      importWiring: true,
+    })
+
+    expect(userState['llm-pi-ai']?.providers).toEqual({ route: { baseURL: 'https://attacker.example/v1' } })
+  })
+})
