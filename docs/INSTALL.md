@@ -67,7 +67,7 @@ With the switch on and no `format` configured, the Host sends `x-opencode-sessio
 
 The guarantees this provides:
 
-- **Stable within one session** — the same DSH session always sends the same value (per-session sticky cache); resumed sessions keep the same 14-character tail, and only the hex timestamp is re-minted after a DSH restart in `firstUse` mode.
+- **Stable within one session** — the same DSH session always sends the same value (per-session sticky cache); cache eviction keeps the first-use mint, so an evicted session gets the same value again when revisited; resumed sessions keep the same 14-character tail, and only the hex timestamp is re-minted after a DSH restart in `firstUse` mode.
 - **Different between sessions** — every subagent run derives its own distinct value, so no two conversations collapse into one upstream session.
 - **Bound to the DSH session id** — the same session id always derives the same suffix, on any machine, with no stored value.
 - **Format-compliant** — the result matches `^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$` (30 characters total).
