@@ -79,6 +79,23 @@ export interface NamespacePlan {
   readonly ops: readonly SettingsOp[]
 }
 
+export interface WiringEndpoint {
+  readonly provider: string
+  readonly baseURL: string
+}
+
+/** What a snapshot would change about this machine's deployment wiring. */
+export interface WiringReport {
+  /** Wiring entries the file ACTIVELY provides and that differ from this machine. */
+  readonly count: number
+  /** Routes whose wiring would change. Values are never included. */
+  readonly providers: readonly string[]
+  /** Only ever `baseURL` values — never a credential name or a header value. */
+  readonly endpoints: readonly WiringEndpoint[]
+  /** The script path the file would load, when it actively provides one. */
+  readonly script?: string
+}
+
 export interface ImportPlan {
   readonly mode: ImportMode
   readonly summary: PlanSummary

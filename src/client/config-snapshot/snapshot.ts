@@ -71,3 +71,20 @@ export function snapshotFileName(now: Date): string {
   const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`
   return `dsh-config-${stamp}.json`
 }
+
+/**
+ * Structural JSON equality. Lives here rather than beside `planImport` because
+ * both the planner and the wiring rules compare values, and a planner that
+ * imports the wiring module must not import back into itself.
+ */
+export function deepEqualJson(left: unknown, right: unknown): boolean {
+  if (left === right) return true
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false
+    return left.every((entry, index) => deepEqualJson(entry, right[index]))
+  }
+  if (!isRecord(left) || !isRecord(right)) return false
+  const keys = Object.keys(left)
+  if (keys.length !== Object.keys(right).length) return false
+  return keys.every((key) => Object.prototype.hasOwnProperty.call(right, key) && deepEqualJson(left[key], right[key]))
+}

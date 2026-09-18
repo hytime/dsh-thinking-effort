@@ -1,0 +1,156 @@
+import { describe, expect, it } from 'vitest'
+import { adjustIncoming, PROVIDER_WIRING_KEYS, wiringReport } from '../src/client/config-snapshot/wiring.js'
+import { LLM_NAMESPACE, PLUGIN_NAMESPACE } from '../src/client/config-snapshot/types.js'
+import type { ConfigSnapshot } from '../src/client/config-snapshot/types.js'
+import type { SettingsNamespace } from '../src/client/types.js'
+
+const snapshotOf = (sections: Record<string, Record<string, unknown>>): ConfigSnapshot => ({
+  kind: 'dsh-thinking-effort/config-snapshot',
+  version: 1,
+  createdAt: '2026-09-16T12:00:00.000Z',
+  pluginVersion: '0.3.0',
+  sourceProfile: 'modern',
+  sections: { 'dsh-thinking-effort': {}, 'llm-pi-ai': {}, ...sections },
+})
+
+const namespacesOf = (sections: Record<string, Record<string, unknown>>): SettingsNamespace[] => [
+  { ns: 'llm-pi-ai', revision: 5, value: {}, user: sections['llm-pi-ai'] ?? {} },
+  { ns: 'dsh-thinking-effort', revision: 9, value: {}, user: sections['dsh-thinking-effort'] ?? {} },
+]
+
+describe('PROVIDER_WIRING_KEYS', () => {
+  it('lists exactly the transport and credential fields', () => {
+    expect([...PROVIDER_WIRING_KEYS]).toEqual(['baseURL', 'apiKeyEnv', 'headers'])
+  })
+})
+
+describe('adjustIncoming provider wiring', () => {
+  const current = { providers: { route: { baseURL: 'https://mine.example/v1', apiKeyEnv: 'MINE', models: [{ id: 'a' }] } } }
+  const file = { providers: { route: { baseURL: 'https://attacker.example/v1', apiKeyEnv: 'THEIRS', headers: { authorization: 'Bearer x' }, models: [{ id: 'b' }] } } }
+
+  it('discards the file wiring values and keeps the local ones', () => {
+    const { value, report } = adjustIncoming(LLM_NAMESPACE, file, current, false)
+    const profile = (value.providers as Record<string, Record<string, unknown>>).route
+    expect(profile.baseURL).toBe('https://mine.example/v1')
+    expect(profile.apiKeyEnv).toBe('MINE')
+    expect(profile.headers).toBeUndefined()
+    expect(profile.models).toEqual([{ id: 'b' }])
+    expect(report.count).toBeGreaterThan(0)
+  })
+
+  it('backfills the local value when the file omits the key, so replace cannot delete it', () => {
+    const fileWithoutBaseUrl = { providers: { route: { models: [{ id: 'b' }] } } }
+    const { value } = adjustIncoming(LLM_NAMESPACE, fileWithoutBaseUrl, current, false)
+    const profile = (value.providers as Record<string, Record<string, unknown>>).route
+    expect(profile.baseURL).toBe('https://mine.example/v1')
+    expect(profile.apiKeyEnv).toBe('MINE')
+    expect(profile.models).toEqual([{ id: 'b' }])
+  })
+
+  it('does not report an omission, only an actively provided difference', () => {
+    const fileWithoutBaseUrl = { providers: { route: { models: [{ id: 'b' }] } } }
+    expect(adjustIncoming(LLM_NAMESPACE, fileWithoutBaseUrl, current, false).report.count).toBe(0)
+  })
+
+  it('drops a route the file adds whose only content was wiring', () => {
+    const { value } = adjustIncoming(LLM_NAMESPACE, { providers: { fresh: { baseURL: 'https://attacker.example/v1' } } }, {}, false)
+    expect(Object.keys(value.providers as Record<string, unknown>)).toEqual([])
+  })
+
+  it('keeps a route the file adds when it still carries capability fields', () => {
+    const { value } = adjustIncoming(LLM_NAMESPACE, { providers: { fresh: { baseURL: 'https://x.example', models: [{ id: 'c' }] } } }, {}, false)
+    const profile = (value.providers as Record<string, Record<string, unknown>>).fresh
+    expect(profile.baseURL).toBeUndefined()
+    expect(profile.models).toEqual([{ id: 'c' }])
+  })
+
+  it('applies the file wiring verbatim when importWiring is on', () => {
+    const { value, report } = adjustIncoming(LLM_NAMESPACE, file, current, true)
+    const profile = (value.providers as Record<string, Record<string, unknown>>).route
+    expect(profile.baseURL).toBe('https://attacker.example/v1')
+    expect(profile.apiKeyEnv).toBe('THEIRS')
+    expect(report.count).toBeGreaterThan(0)
+  })
+
+  it('leaves a non-record providers value untouched for the host schema to reject', () => {
+    const { value } = adjustIncoming(LLM_NAMESPACE, { providers: 'nope' }, current, false)
+    expect(value.providers).toBe('nope')
+  })
+
+  it('never reports header or apiKeyEnv values', () => {
+    const { report } = adjustIncoming(LLM_NAMESPACE, file, current, false)
+    const serialized = JSON.stringify(report)
+    expect(serialized).not.toContain('Bearer x')
+    expect(serialized).not.toContain('THEIRS')
+    expect(serialized).toContain('attacker.example')
+    expect(report.providers).toEqual(['route'])
+    expect(report.endpoints).toEqual([{ provider: 'route', baseURL: 'https://attacker.example/v1' }])
+  })
+})
+
+describe('wiringReport', () => {
+  it('is empty when the file carries no wiring difference', () => {
+    const snapshot = snapshotOf({ 'llm-pi-ai': { providers: { route: { baseURL: 'https://mine.example/v1' } } } })
+    const namespaces = namespacesOf({ 'llm-pi-ai': { providers: { route: { baseURL: 'https://mine.example/v1' } } } })
+    expect(wiringReport(snapshot, namespaces).count).toBe(0)
+  })
+
+  it('reports a file that redirects a route', () => {
+    const snapshot = snapshotOf({ 'llm-pi-ai': { providers: { route: { baseURL: 'https://attacker.example/v1' } } } })
+    const namespaces = namespacesOf({ 'llm-pi-ai': { providers: { route: { baseURL: 'https://mine.example/v1' } } } })
+    const report = wiringReport(snapshot, namespaces)
+    expect(report.count).toBe(1)
+    expect(report.endpoints).toEqual([{ provider: 'route', baseURL: 'https://attacker.example/v1' }])
+  })
+
+  it('reports a route this machine does not have yet', () => {
+    const snapshot = snapshotOf({ 'llm-pi-ai': { providers: { fresh: { baseURL: 'https://attacker.example/v1' } } } })
+    expect(wiringReport(snapshot, namespacesOf({})).count).toBe(1)
+  })
+})
+
+describe('adjustIncoming script wiring', () => {
+  const current = { opencodeSession: { format: { mode: 'script', script: '/mine/session.mjs' }, providers: { route: { models: { m: true } } } } }
+  const file = { opencodeSession: { format: { mode: 'script', script: '/attacker/session.mjs' }, providers: { route: { models: { m: true } } } } }
+
+  it('keeps the local script path and reports the file one', () => {
+    const { value, report } = adjustIncoming(PLUGIN_NAMESPACE, file, current, false)
+    const format = ((value.opencodeSession as Record<string, unknown>).format) as Record<string, unknown>
+    expect(format.script).toBe('/mine/session.mjs')
+    expect(report.script).toBe('/attacker/session.mjs')
+    expect(report.count).toBe(1)
+  })
+
+  it('backfills the local script when the file omits it', () => {
+    const fileWithoutScript = { opencodeSession: { format: { mode: 'ses-derive' } } }
+    const { value, report } = adjustIncoming(PLUGIN_NAMESPACE, fileWithoutScript, current, false)
+    const format = ((value.opencodeSession as Record<string, unknown>).format) as Record<string, unknown>
+    expect(format.script).toBe('/mine/session.mjs')
+    expect(report.count).toBe(0)
+  })
+
+  it('drops the script key when neither side has one', () => {
+    const { value } = adjustIncoming(PLUGIN_NAMESPACE, { opencodeSession: { format: { mode: 'ses-derive' } } }, {}, false)
+    const format = ((value.opencodeSession as Record<string, unknown>).format) as Record<string, unknown>
+    expect('script' in format).toBe(false)
+    expect(format.mode).toBe('ses-derive')
+  })
+
+  it('applies the file script when importWiring is on', () => {
+    const { value } = adjustIncoming(PLUGIN_NAMESPACE, file, current, true)
+    const format = ((value.opencodeSession as Record<string, unknown>).format) as Record<string, unknown>
+    expect(format.script).toBe('/attacker/session.mjs')
+  })
+
+  it('ignores a plugin section with no format object', () => {
+    const { value, report } = adjustIncoming(PLUGIN_NAMESPACE, { opencodeSession: { providers: {} } }, current, false)
+    expect(value).toEqual({ opencodeSession: { providers: {} } })
+    expect(report.count).toBe(0)
+  })
+
+  it('surfaces a script through wiringReport', () => {
+    const snapshot = snapshotOf({ 'dsh-thinking-effort': file })
+    const namespaces = namespacesOf({ 'dsh-thinking-effort': current })
+    expect(wiringReport(snapshot, namespaces).script).toBe('/attacker/session.mjs')
+  })
+})
