@@ -77,7 +77,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 | 默认档位补齐 | 为缺少配置的模型添加 `off`、`high`、`max`，不覆盖已有自定义值 |
 | 模型级编辑 | 在「设置 → 模型能力与档位」中逐模型勾选档位并填写线上值；catalog/modelOverrides 和 `models[]` 模型都可编辑 compat |
 | 网关兼容配置 | 按 provider 全局或单个模型配置 15 个常用标量字段，按角色与推理、格式与输出、流式与工具、存储与缓存分组并默认收起 |
-| OpenCode 会话 Header | 按精确模型启用动态 `x-opencode-session`，使用当前 DSH 会话 ID，不保存固定 Header 值 |
+| OpenCode 会话 Header | 按精确模型启用动态 `x-opencode-session`，默认生成与 DSH 会话绑定的确定性 `ses_` 值（提供 template / expression / script 等模式以应对上游格式变化），不保存固定 Header 值 |
 | 网关值映射 | 例如 DSH 选择 `high` 时，实际向网关发送 `ultra` |
 | 配置备份与方案 | 把当前配置导出成 JSON 文件用于跨机器迁移；在本机保存多份命名方案并可在其中切换；导入前可选择「合并」或「替换」并预览影响范围 |
 | 子 agent 默认值 | 为未显式指定档位的子 agent 请求自动填入默认思考强度 |
@@ -171,7 +171,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.0
    | `high` | `ultra` |
    | `max` | `max` |
 
-7. 在模型编辑器中，只有目标模型确实需要 `x-opencode-session` 时才启用「OpenCode 会话 Header」。它默认关闭，会动态使用当前 DSH 会话 ID，不会在同一路由的其他模型或不同 provider 之间继承；拨动开关即立即保存，没有单独的保存按钮。
+7. 在模型编辑器中，只有目标模型确实需要 `x-opencode-session` 时才启用「OpenCode 会话 Header」。它默认关闭，会从当前 DSH 会话生成确定性的 `ses_` 值，不会在同一路由的其他模型或不同 provider 之间继承；拨动开关即立即保存，没有单独的保存按钮。上游格式变化时参考[生成器章节](#opencode-会话-header-生成器)。
 8. 回到 Composer，选择对应模型后即可使用推理档位滑块。
 
 ### Composer 推理档位滑块
@@ -207,11 +207,21 @@ providers:
 
 这些 compat 值属于控制面配置。它们不实现或替代网关 transport；网络请求仍由外部 transport 负责。
 
-### OpenCode 会话 Header 兼容
+### OpenCode 会话 Header 生成器
 
 模型编辑器提供独立的「OpenCode 会话 Header」开关。它默认关闭，保存在插件自有的 `dsh-thinking-effort` Settings namespace 中，不写入 `llm-pi-ai.compat`。只有确实需要 `x-opencode-session` 的精确 `provider/model` 才应启用；同一路由中的其他模型（包括 GPT 模型）不会继承该设置。拨动开关即立即保存，没有单独的保存按钮；重新打开模型时显示的是已持久化的值。
 
-启用后，Host 会在匹配的 `llm/stream` 请求中发送 `x-opencode-session: <当前 DSH 会话 ID>`。该值跟随当前会话，不写入 Settings，也不会替换成固定值。适配器或调用方已经提供的 `x-opencode-session` 会保留。该设置不会选择或修改 `openai-completions`、`openai-responses` 或 `anthropic-messages` 协议。
+启用后、未配置 `format` 时，Host 会发送符合 `ses_` 规范形态、**由当前 DSH 会话确定性派生**的值：`ses_` + 12 位十六进制（48 位毫秒时间戳，会话内首次使用时铸造一次）+ 14 位 Base62（对归一化的 DSH 会话 ID 取 80 位 SHA-256 摘要）。同一 DSH 会话总是发送同一个值：该值按会话粘性保留，有界缓存淘汰只丢弃缓存值、绝不丢弃首次铸造的铸币，因此被淘汰的会话再次访问时值仍不变；只有 DSH 重启且处于 `firstUse` 模式时才会重新铸造 hex 时间戳（`time: hash` 则完全无状态）。14 位后缀因为是派生而非存储，在 DSH 重启后依然稳定。不同会话（包括每次子 agent 运行）派生不同值。
+
+生成器在 DSH 设置文档的 `dsh-thinking-effort.opencodeSession.format` 下配置，共四档，可应对上游格式变化而无需重建插件：
+
+- `ses-derive`（默认）——上面的规范生成器。`time: firstUse` 按会话铸造一次 hex 段；`time: hash` 改为从会话摘要派生，使整个值在任何机器上完全一致。
+- `passthrough`——旧行为：发送原始 DSH 会话 ID。
+- `template`——带 `{hex12}`、`{tail62}`、`{sessionId}`、`{rawSessionId}`、`{sha256}`、`{now}`、`{provider}`、`{model}` 占位符的字符串。
+- `expression`——使用同一上下文的受限加法表达式，另提供 `sha256`、`slice`、`lower`、`upper` 辅助函数，例如 `'ses_' + hex12 + tail62`。
+- `script`——导出 `format(context)` 的 JS 文件的绝对路径，文件变更时热加载；加载或求值失败时回退到 `ses-derive`。
+
+可选的 `validate` 正则配合 `onInvalid: warn | drop | send` 校验产物是否符合上游最新要求（默认 `warn`）。适配器或调用方已经提供的 `x-opencode-session` 会被保留、绝不覆盖。该设置不会选择或修改 `openai-completions`、`openai-responses` 或 `anthropic-messages` 协议。完整配置参考见 [INSTALL.zh.md](./docs/INSTALL.zh.md)。
 
 Sub2API、CPA 和其他中转服务必须保留并继续把 `x-opencode-session` 转发给 OpenCode 上游。`llm-pi-ai.providers.<route>.headers.x-opencode-session` 这类静态 route Header 不能替代本功能：它会让所有会话共用一个值，无法提供按会话路由和提示词缓存亲和性。修改 Host 后需要重启 DSH；修改 Settings 或 Client 后需要刷新 Web 页面。
 
@@ -237,7 +247,7 @@ Sub2API、CPA 和其他中转服务必须保留并继续把 `x-opencode-session`
 
 ## 工作方式
 
-- **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位；同时读取模型级 OpenCode 会话设置，只在匹配的 `llm/stream` 请求中注入当前 DSH 会话 ID。
+- **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位；同时读取模型级 OpenCode 会话设置，只在匹配的 `llm/stream` 请求中注入按 `opencodeSession.format` 生成（默认 `ses-derive`）的 `x-opencode-session`。
 - **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页；运行时提供 `modelDirectories` 服务时，为可选 Composer `seat` 注册低优先级 `shadow` 实现，并显示宿主已解析的推理档位滑块。模型编辑器把 OpenCode 会话 Header 设置保存在插件自有 namespace，与 `llm-pi-ai.compat` 分开。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
 - **子 agent：** 默认值存储在 `llm-pi-ai` 用户层的 `subagentEffort`；`agent/request` waterfall 只对未显式指定档位的子 agent 请求进行补全。
 - **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.14`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。

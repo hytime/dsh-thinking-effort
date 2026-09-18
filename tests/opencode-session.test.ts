@@ -250,7 +250,9 @@ describe('Host OpenCode session integration', () => {
     expect(nextCalls).toBe(1)
     expect(harness.fetchCalls).toHaveLength(1)
     const headers = new Headers(harness.fetchCalls[0]?.init?.headers)
-    expect(headers.get(OPENCODE_SESSION_HEADER)).toBe('session-a')
+    const header = headers.get(OPENCODE_SESSION_HEADER)
+    expect(header).toMatch(/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
+    expect(header).toHaveLength(30)
     harness.dispose()
   })
 
@@ -280,8 +282,10 @@ describe('Host OpenCode session integration', () => {
 
     expect(harness.fetchCalls).toHaveLength(2)
     const received = harness.fetchCalls.map((call) => new Headers(call.init?.headers).get(OPENCODE_SESSION_HEADER))
-    expect(received).toContain('session-a')
     expect(received).toContain('caller-value')
+    const derived = received.filter((value) => value !== 'caller-value')
+    expect(derived).toHaveLength(1)
+    expect(derived[0]).toMatch(/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
     harness.dispose()
   })
 
@@ -307,7 +311,8 @@ describe('Host OpenCode session integration', () => {
     await delayed
 
     const headers = harness.fetchCalls.map((call) => new Headers(call.init?.headers).get(OPENCODE_SESSION_HEADER))
-    expect(headers).toEqual(['session-normal', null])
+    expect(headers[0]).toMatch(/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
+    expect(headers[1]).toBeNull()
     harness.dispose()
   })
 
@@ -333,7 +338,8 @@ describe('Host OpenCode session integration', () => {
     await delayed
 
     const headers = harness.fetchCalls.map((call) => new Headers(call.init?.headers).get(OPENCODE_SESSION_HEADER))
-    expect(headers).toEqual(['session-return', null])
+    expect(headers[0]).toMatch(/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
+    expect(headers[1]).toBeNull()
     harness.dispose()
   })
 
@@ -359,7 +365,8 @@ describe('Host OpenCode session integration', () => {
     await delayed
 
     const headers = harness.fetchCalls.map((call) => new Headers(call.init?.headers).get(OPENCODE_SESSION_HEADER))
-    expect(headers).toEqual(['session-throw', null])
+    expect(headers[0]).toMatch(/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
+    expect(headers[1]).toBeNull()
     harness.dispose()
   })
 
@@ -377,7 +384,7 @@ describe('Host OpenCode session integration', () => {
     new Headers(call?.init?.headers).forEach((value, name) => headers.set(name, value))
     expect(headers.get('x-input')).toBe('input-value')
     expect(headers.get('x-init')).toBe('init-value')
-    expect(headers.get(OPENCODE_SESSION_HEADER)).toBe('session-headers')
+    expect(headers.get(OPENCODE_SESSION_HEADER)).toMatch(/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
     harness.dispose()
   })
 
@@ -412,5 +419,90 @@ describe('Host OpenCode session integration', () => {
     globalThis.fetch = patched
     harness.dispose()
     expect(globalThis.fetch).not.toBe(patched)
+  })
+
+  it('sends the raw DSH session id when format mode is passthrough', async () => {
+    settingsStub.source = {
+      opencodeSession: {
+        providers: { 'opencode-go': { models: { 'deepseek-v4-flash': true } } },
+        format: { mode: 'passthrough' },
+      },
+    }
+    const harness = createHostHarness()
+    await drain(harness.stream({ provider: 'opencode-go', model: 'deepseek-v4-flash', sessionId: 'session-a' }, async function* () {
+      await fetch('https://provider.test/chat/completions')
+      yield 'done'
+    }))
+    const headers = new Headers(harness.fetchCalls[0]?.init?.headers)
+    expect(headers.get(OPENCODE_SESSION_HEADER)).toBe('session-a')
+    harness.dispose()
+  })
+
+  it('renders template mode values into the header', async () => {
+    settingsStub.source = {
+      opencodeSession: {
+        providers: { 'opencode-go': { models: { 'deepseek-v4-flash': true } } },
+        format: { mode: 'template', template: 'tmpl_{hex12}_{tail62}' },
+      },
+    }
+    const harness = createHostHarness()
+    await drain(harness.stream({ provider: 'opencode-go', model: 'deepseek-v4-flash', sessionId: 'session-a' }, async function* () {
+      await fetch('https://provider.test/chat/completions')
+      yield 'done'
+    }))
+    const headers = new Headers(harness.fetchCalls[0]?.init?.headers)
+    expect(headers.get(OPENCODE_SESSION_HEADER)).toMatch(/^tmpl_[0-9a-f]{12}_[0-9A-Za-z]{14}$/)
+    harness.dispose()
+  })
+
+  it('omits the header when validation drops the value', async () => {
+    settingsStub.source = {
+      opencodeSession: {
+        providers: { 'opencode-go': { models: { 'deepseek-v4-flash': true } } },
+        format: { mode: 'passthrough', validate: '^abc$', onInvalid: 'drop' },
+      },
+    }
+    const harness = createHostHarness()
+    await drain(harness.stream({ provider: 'opencode-go', model: 'deepseek-v4-flash', sessionId: 'session-a' }, async function* () {
+      await fetch('https://provider.test/chat/completions')
+      yield 'done'
+    }))
+    const headers = new Headers(harness.fetchCalls[0]?.init?.headers)
+    expect(headers.has(OPENCODE_SESSION_HEADER)).toBe(false)
+    harness.dispose()
+  })
+
+  it('reuses the same session value across separate streams in one DSH session', async () => {
+    settingsStub.source = enabled
+    const harness = createHostHarness()
+    const run = (): Promise<void> => drain(harness.stream(
+      { provider: 'opencode-go', model: 'deepseek-v4-flash', sessionId: 'session-stable' },
+      async function* () {
+        await fetch('https://provider.test/chat/completions')
+        yield 'done'
+      },
+    ))
+    await run()
+    await run()
+    const headers = harness.fetchCalls.map((call) => new Headers(call.init?.headers).get(OPENCODE_SESSION_HEADER))
+    expect(headers[0]).toMatch(/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
+    expect(headers[1]).toBe(headers[0])
+    harness.dispose()
+  })
+
+  it('derives a distinct value per DSH session (subagent differentiation)', async () => {
+    settingsStub.source = enabled
+    const harness = createHostHarness()
+    for (const sessionId of ['session-alpha', 'session-beta']) {
+      await drain(harness.stream({ provider: 'opencode-go', model: 'deepseek-v4-flash', sessionId }, async function* () {
+        await fetch('https://provider.test/chat/completions')
+        yield 'done'
+      }))
+    }
+    const received = harness.fetchCalls.map((call) => new Headers(call.init?.headers).get(OPENCODE_SESSION_HEADER))
+    expect(received[0]).toMatch(/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
+    expect(received[1]).toMatch(/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
+    expect(received[0]).not.toBe(received[1])
+    harness.dispose()
   })
 })

@@ -176,6 +176,16 @@ const snapshotDefaults = {
   sections: {},
 }
 
+const openCodeSessionFormatDefaults = {
+  mode: 'ses-derive',
+  time: 'firstUse',
+  template: '',
+  expression: '',
+  script: '',
+  validate: '',
+  onInvalid: 'warn',
+}
+
 describe('real Settings-backed OpenCode registration', () => {
   it('rejects non-boolean model values through the real Settings schema', async () => {
     const host = await bootRealOpenCodeHost()
@@ -187,7 +197,7 @@ describe('real Settings-backed OpenCode registration', () => {
         value: 'true',
       }])).rejects.toThrow()
       expect(host.ctx.settings.describe().find((entry) => entry.ns === OPENCODE_SESSION_NAMESPACE)?.value).toEqual({
-        opencodeSession: { providers: {} },
+        opencodeSession: { providers: {}, format: openCodeSessionFormatDefaults },
         profiles: {},
         autoBackup: snapshotDefaults,
       })
@@ -218,6 +228,7 @@ describe('real Settings-backed OpenCode registration', () => {
           providers: {
             'opencode-go': { models: { 'deepseek-v4-flash': true } },
           },
+          format: openCodeSessionFormatDefaults,
         },
         profiles: {},
         autoBackup: snapshotDefaults,
@@ -228,7 +239,7 @@ describe('real Settings-backed OpenCode registration', () => {
         model: 'deepseek-v4-flash',
         sessionId: 'real-session',
       })
-      expect(new Headers(calls[0]?.init?.headers).get('x-opencode-session')).toBe('real-session')
+      expect(new Headers(calls[0]?.init?.headers).get('x-opencode-session')).toMatch(/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
 
       await host.settingsFiber.dispose()
       expect(host.ctx.get('settings')).toBeUndefined()

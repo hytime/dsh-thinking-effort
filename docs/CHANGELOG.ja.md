@@ -10,6 +10,14 @@
 
 ## [Unreleased]
 
+### 追加
+
+- 設定可能な OpenCode セッション Header 生成器（`opencodeSession.format`）を追加しました。スイッチを有効にして `format` 未設定の場合、Host は OpenCode Zen の正規形を持つ決定論的な `ses_` 値を送信します：`ses_` + 16 進 12 桁（セッションごとに 1 回鋳造する 48 ビットのミリ秒タイムスタンプ）+ Base62 14 桁（正規化した DSH セッション ID の 80 ビット SHA-256 ダイジェスト）。同じ DSH セッション内で値は一定で、別セッション（各 subagent 実行を含む）ごとに異なり、14 桁の接尾辞は DSH 再起動後も安定します。上流の形式変更に対応するため、`ses-derive` / `passthrough` / `template` / `expression` / `script` の 4 モード、`time: firstUse | hash` のタイムスタンプ由来、`validate` / `onInvalid` の検証を設定ドキュメントだけで変更でき、コード変更や再ビルドは不要です。
+
+### 変更
+
+- `x-opencode-session` の既定値が「生の DSH セッション ID」から「上流準拠の派生 `ses_` 値」に変わりました。旧動作が必要な場合は `format: { mode: passthrough }` を明示的に設定してください。
+
 ## [0.3.0] - 2026-09-16
 
 ### 追加

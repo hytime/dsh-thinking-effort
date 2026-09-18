@@ -68,7 +68,7 @@ These identifiers have different responsibilities:
 | Default levels | Adds `off`, `high`, and `max` without overwriting custom values |
 | Per-model editor | Select levels and configure gateway values for both catalog/modelOverrides and `models[]` entries in Settings |
 | Gateway compatibility | Configure 15 common scalar fields globally per provider or separately per model, grouped by role/reasoning, format/output, streaming/tools, and storage/cache; groups are collapsed by default |
-| OpenCode session Header | Enable a dynamic `x-opencode-session` per exact model, using the current DSH session ID without storing a fixed Header value |
+| OpenCode session Header | Enable a dynamic `x-opencode-session` per exact model. By default a deterministic `ses_…` generator bound to the DSH session (with template / expression / script modes to survive upstream format changes), without storing a fixed Header value |
 | Gateway mapping | Send `ultra` when the user selects DSH `high` |
 | Backup and profiles | Export the current configuration as a JSON file for migration; save named profiles locally and switch between them; choose merge or replace before importing, with an impact preview |
 | Composer effort slider | Registers an optional Composer `seat` when the Web runtime exposes `modelDirectories`, with host-resolved tiers for the current `provider/model` |
@@ -112,7 +112,7 @@ See [INSTALL.md](./docs/INSTALL.md) for profile discovery, migration, validation
    | `high` | `ultra` |
    | `max` | `max` |
 
-7. In the model editor, optionally enable **OpenCode session Header** for the exact model that needs `x-opencode-session`. It is off by default, uses the current DSH session ID dynamically, does not inherit across models or providers, and saves immediately when toggled — there is no separate save button.
+7. In the model editor, optionally enable **OpenCode session Header** for the exact model that needs `x-opencode-session`. It is off by default, sends a deterministic `ses_…` value generated from the current DSH session, does not inherit across models or providers, and saves immediately when toggled — there is no separate save button. See the [generator section](#opencode-session-header-generator) when the upstream changes its expected format.
 8. Return to Composer, choose the configured model, then use its reasoning-effort slider.
 
 ### Composer reasoning-effort slider
@@ -148,11 +148,21 @@ The provider area in Settings edits defaults for all models. Both catalog models
 
 These compat values are control plane configuration. They do not implement or replace the gateway transport; an external transport remains responsible for network requests.
 
-### OpenCode session Header compatibility
+### OpenCode session Header generator
 
-The model editor has a separate **OpenCode session Header** switch. It is off by default and is stored in the plugin's own `dsh-thinking-effort` Settings namespace, not in `llm-pi-ai.compat`. Enable it only for the exact `provider/model` that requires `x-opencode-session`; another model on the same route, including a GPT model, does not inherit it. Flipping the switch saves immediately — there is no separate save button — and reopening the model shows the persisted value.
+The model editor has a separate **OpenCode session Header** switch, stored in the plugin's own `dsh-thinking-effort` Settings namespace, not in `llm-pi-ai.compat`. Enable it only for the exact `provider/model` that requires `x-opencode-session`; another model on the same route, including a GPT model, does not inherit it. Flipping the switch saves immediately — there is no separate save button — and reopening the model shows the persisted value.
 
-When enabled, the Host sends `x-opencode-session: <current DSH session ID>` on matching `llm/stream` requests. The value follows the current conversation and is not stored in Settings or replaced with a fixed value. An existing `x-opencode-session` supplied by the adapter or caller is preserved. The setting does not choose or change `openai-completions`, `openai-responses`, or `anthropic-messages`.
+When enabled and no `format` is configured, the Host sends a deterministic value in the canonical `ses_` shape derived from the current DSH session: `ses_` + 12 hex characters (a 48-bit millisecond timestamp minted once per session) + 14 Base62 characters (an 80-bit digest of the normalized DSH session id). The same DSH session always sends the same value: the value is stickied per session, and eviction from the bounded value cache drops only the cached value — never the first-use mint — so an evicted session keeps its value when revisited. Only a DSH restart re-mints the hex timestamp, and only in `firstUse` mode (`time: hash` needs no state at all). The 14-character suffix is stable across DSH restarts because it is derived, not stored. Different sessions — including each subagent run — derive distinct values.
+
+The generator is configurable under `dsh-thinking-effort.opencodeSession.format` in the DSH settings document. Four modes cover upstream format changes without rebuilding the plugin:
+
+- `ses-derive` (default) — the canonical generator above. `time: firstUse` mints the hex block once per session; `time: hash` derives it from the session digest so the whole value is identical on every machine.
+- `passthrough` — the previous behavior: send the raw DSH session id.
+- `template` — a string with `{hex12}`, `{tail62}`, `{sessionId}`, `{rawSessionId}`, `{sha256}`, `{now}`, `{provider}`, `{model}` placeholders.
+- `expression` — a safe additive expression with the same context plus `sha256`, `slice`, `lower`, `upper` helpers, e.g. `'ses_' + hex12 + tail62`.
+- `script` — an absolute path to a JS file exporting `format(context)`, hot-reloaded on file change; on load or evaluation errors it falls back to `ses-derive`.
+
+An optional `validate` regex plus `onInvalid: warn | drop | send` checks the produced value against the latest upstream expectation (`warn` is the default). An `x-opencode-session` already supplied by the adapter or caller is always preserved and never overwritten. The setting does not choose or change `openai-completions`, `openai-responses`, or `anthropic-messages`. See [INSTALL.md](./docs/INSTALL.md) for the full configuration reference.
 
 Sub2API, CPA, and other forwarding gateways must preserve and forward `x-opencode-session` to the OpenCode upstream. A static route setting such as `llm-pi-ai.providers.<route>.headers.x-opencode-session` is not an equivalent replacement: it uses one value for every conversation and cannot provide per-conversation routing or prompt-cache affinity. Restart DSH after Host changes and refresh the Web page after Settings or Client changes.
 
@@ -178,7 +188,7 @@ See the complete Chinese, English, Japanese, and Korean screenshot gallery in [`
 
 ## How it works
 
-- **Host:** Scans `llm-pi-ai` `models` and `modelOverrides` on startup and settings changes, adding defaults only where `reasoningEfforts` is missing. It also observes the model-level OpenCode session setting and injects the current DSH session ID only into matching `llm/stream` requests.
+- **Host:** Scans `llm-pi-ai` `models` and `modelOverrides` on startup and settings changes, adding defaults only where `reasoningEfforts` is missing. It also observes the model-level OpenCode session setting and injects the generated `x-opencode-session` (default `ses-derive`, configurable per `opencodeSession.format`) only into matching `llm/stream` requests.
 - **Client:** Registers the Settings page through the DSH Settings Remote (`ctx.remote.settings`) and, when the runtime exposes `modelDirectories`, registers the optional Composer `seat` with a low `shadow` priority and host-resolved effort slider. The model editor stores OpenCode session Header settings in the plugin namespace, separately from `llm-pi-ai.compat`. Chinese, English, Japanese, and Korean dictionaries are maintained separately in `src/locales/zh.json`, `src/locales/en.json`, `src/locales/ja.json`, and `src/locales/ko.json`, then generated into the client bundle before publishing.
 - **Subagents:** Stores the default in the `llm-pi-ai` user layer as `subagentEffort`. The `agent/request` waterfall only fills requests that do not already specify an effort.
 - **No configured default:** The plugin does not automatically choose `off`, `high`, or `max`; the request omits `reasoning` and the gateway decides its own default behavior.

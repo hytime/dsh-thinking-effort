@@ -55,11 +55,90 @@ DSH `0.1.0-rc.8` and later supported ranges follow the field availability shown 
 
 The OpenCode session Header setting is a model-level control in the model editor, not a provider-global option. It is off by default. Expand the exact `provider/model` and flip the **OpenCode session Header** switch only when the target service requires `x-opencode-session`; the toggle saves immediately, with no separate save button.
 
-The Host derives the Header value from the current DSH conversation's `sessionId` for each matching `llm/stream` request. You do not enter or store a fixed value. An existing `x-opencode-session` supplied by the adapter or caller is preserved and never overwritten. The setting works through both the modern Remote Settings transport and the legacy `connection.api.settings` transport. Models that share the route, including GPT or other non-OpenCode models, do not inherit the setting, and the setting does not change the route's `api` protocol.
+### What the Host sends by default
 
-If the request passes through Sub2API, CPA, or another forwarding gateway, verify that it preserves and forwards `x-opencode-session` to the OpenCode upstream. A static route setting such as `llm-pi-ai.providers.<route>.headers.x-opencode-session` is not equivalent because one fixed value is shared by all conversations.
+With the switch on and no `format` configured, the Host sends `x-opencode-session` in OpenCode Zen's canonical shape, **deterministically derived from the current DSH session id**:
 
-After changing Host code or the plugin package, restart DSH. After changing Settings or Client code, refresh the Web page before testing the model request.
+| Segment | Length | Source |
+| --- | --- | --- |
+| `ses_` | 4 | fixed prefix |
+| hex timestamp | 12 | 48-bit millisecond timestamp, minted once per DSH session (`time: firstUse`) |
+| Base62 tail | 14 | 80-bit SHA-256 digest of the normalized session id (`session-` prefix stripped, lowercased, hyphens removed) |
+
+The guarantees this provides:
+
+- **Stable within one session** — the same DSH session always sends the same value (per-session sticky cache); cache eviction keeps the first-use mint, so an evicted session gets the same value again when revisited; resumed sessions keep the same 14-character tail, and only the hex timestamp is re-minted after a DSH restart in `firstUse` mode.
+- **Different between sessions** — every subagent run derives its own distinct value, so no two conversations collapse into one upstream session.
+- **Bound to the DSH session id** — the same session id always derives the same suffix, on any machine, with no stored value.
+- **Format-compliant** — the result matches `^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$` (30 characters total).
+
+### Configuring the generator
+
+The generator is configured under `dsh-thinking-effort.opencodeSession.format` in the DSH settings document (for example `~/.dsh/settings.yaml` or the active profile's settings):
+
+```yaml
+dsh-thinking-effort:
+  opencodeSession:
+    providers:
+      opencode-go:
+        models:
+          deepseek-v4-flash: true
+    format:
+      mode: ses-derive
+      time: firstUse
+```
+
+Fields:
+
+| Field | Values | Default | Meaning |
+| --- | --- | --- | --- |
+| `mode` | `ses-derive` / `passthrough` / `template` / `expression` / `script` | `ses-derive` | The generator used when the switch is on. Unknown values fall back to `ses-derive`. |
+| `time` | `firstUse` / `hash` | `firstUse` | Where the 12-hex block comes from. `hash` derives it from the session digest, making the whole value identical on every machine without any cache. |
+| `template` | string | `''` | `template` mode: placeholders `{hex12}`, `{tail62}`, `{sessionId}`, `{rawSessionId}`, `{sha256}`, `{now}`, `{provider}`, `{model}`. |
+| `expression` | string | `''` | `expression` mode: a safe additive expression using the same context plus `sha256`, `slice`, `lower`, `upper`, e.g. `'ses_' + hex12 + tail62`. |
+| `script` | absolute path | `''` | `script` mode: a JS file (`.mjs` or `.cjs`) exporting `format(context)` returning the header value string. Reloaded when the file changes (checked at most once per second). On load or evaluation failure it falls back to `ses-derive`. |
+| `validate` | regex source | `''` | Optional validation. Empty means no check; the built-in default shape is `^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`. |
+| `onInvalid` | `warn` / `drop` / `send` | `warn` | What to do when the produced value fails `validate`: log and still send, omit the header, or send silently. |
+
+Examples:
+
+```yaml
+# Explicit canonical generator (equivalent to the default)
+format: { mode: ses-derive, time: firstUse }
+
+# Fully deterministic on every machine (hex block also from the digest)
+format: { mode: ses-derive, time: hash }
+
+# Previous behavior: raw DSH session id
+format: { mode: passthrough }
+
+# Template for a reshuffled upstream format
+format: { mode: template, template: '{hex12}-{tail62}' }
+
+# Expression, when the upstream expects a prefix plus derived parts
+format: { mode: expression, expression: "'ses_' + hex12 + tail62" }
+
+# External script for arbitrary future formats
+format: { mode: script, script: '/absolute/path/to/session.mjs' }
+```
+
+The `script` file exports a function that receives the same context object:
+
+```js
+// /absolute/path/to/session.mjs
+export function format(ctx) {
+  // ctx.hex12, ctx.tail62, ctx.sessionId, ctx.rawSessionId, ctx.now, ctx.provider, ctx.model
+  return 'ses_' + ctx.hex12 + ctx.tail62
+}
+```
+
+Changing the `format` config re-derives the value on the next request of a session (the per-session cache is keyed by the config fingerprint). After changing the Host or the plugin package, restart DSH; after changing Settings or Client code, refresh the Web page.
+
+### Behavior notes
+
+- An `x-opencode-session` already supplied by the adapter or caller is preserved and never overwritten.
+- The setting works through both the modern Remote Settings transport and the legacy `connection.api.settings` transport, and does not change the route's `api` protocol.
+- If the request passes through Sub2API, CPA, or another forwarding gateway, verify that it preserves and forwards `x-opencode-session` to the OpenCode upstream. A static route setting such as `llm-pi-ai.providers.<route>.headers.x-opencode-session` is not equivalent because one fixed value is shared by all conversations.
 
 ## Gateway compatibility settings
 

@@ -55,11 +55,90 @@ DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 �
 
 OpenCode 세션 Header는 모델 편집기의 모델별 설정이며 provider 전체 설정이 아닙니다. 기본값은 꺼져 있습니다. 정확한 `provider/model`을 펼치고 대상 서비스가 `x-opencode-session`을 요구할 때만 **OpenCode 세션 Header**를 활성화하세요. 토글하면 즉시 저장되며 별도의 저장 버튼이 없습니다.
 
-Host는 일치하는 `llm/stream` 요청마다 현재 DSH 대화의 `sessionId`에서 Header 값을 동적으로 만듭니다. 고정 값을 입력하거나 저장할 필요가 없습니다. adapter 또는 호출자가 이미 `x-opencode-session`을 제공한 경우 해당 값을 유지하며 덮어쓰지 않습니다. 이 설정은 최신 Remote Settings transport와 이전 `connection.api.settings` transport를 모두 지원합니다. 같은 route의 GPT 등 OpenCode가 아닌 모델에는 상속되지 않으며 route의 `api` 프로토콜도 변경하지 않습니다.
+### 기본적으로 보내는 값
 
-요청이 Sub2API, CPA 또는 다른 forwarding gateway를 통과한다면 `x-opencode-session`을 보존하여 OpenCode upstream으로 전달하는지 확인하세요. `llm-pi-ai.providers.<route>.headers.x-opencode-session`과 같은 정적 route 설정은 모든 대화가 같은 고정 값을 공유하므로 대체할 수 없습니다.
+스위치를 켜고 `format`을 설정하지 않으면 Host는 OpenCode Zen의 정규 형태를 가지며 **현재 DSH 세션 ID에서 결정적으로 파생된** `x-opencode-session`을 보냅니다.
 
-Host 또는 플러그인 패키지를 변경한 뒤에는 DSH를 재시작하고 Settings 또는 Client를 변경한 뒤에는 Web 페이지를 새로 고친 다음 모델 요청을 확인하세요.
+| 세그먼트 | 길이 | 출처 |
+| --- | --- | --- |
+| `ses_` | 4 | 고정 접두사 |
+| 16진 타임스탬프 | 12 | 48비트 밀리초 타임스탬프. DSH 세션마다 한 번 주조(`time: firstUse`) |
+| Base62 접미사 | 14 | 세션 ID를 정규화(`session-` 접두사 제거, 소문자화, 하이픈 제거)한 80비트 SHA-256 다이제스트 |
+
+이로 얻는 보장:
+
+- **세션 내에서 일정** — 같은 DSH 세션은 항상 같은 값을 보냅니다(세션별 스티키 캐시). 캐시 축출 시에도 첫 주조는 유지되므로, 축출된 세션을 다시 방문해도 같은 값을 얻습니다. 재개한 세션은 같은 14자리 접미사를 유지하며, `firstUse` 모드에서는 DSH 재시작 후 16진 타임스탬프만 다시 주조됩니다.
+- **세션 간에 다름** — 각 subagent 실행이 독립적인 값을 파생하므로 여러 대화가 하나의 upstream 세션으로 뭉개지지 않습니다.
+- **DSH 세션 ID에 바인딩** — 같은 세션 ID는 어떤 머신에서도 같은 접미사를 파생하며 저장된 값이 필요 없습니다.
+- **형식 준수** — 결과가 `^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`(총 30자)에 일치합니다.
+
+### 생성기 설정
+
+생성기는 DSH 설정 문서(예: `~/.dsh/settings.yaml` 또는 현재 profile의 설정)의 `dsh-thinking-effort.opencodeSession.format`에서 설정합니다.
+
+```yaml
+dsh-thinking-effort:
+  opencodeSession:
+    providers:
+      opencode-go:
+        models:
+          deepseek-v4-flash: true
+    format:
+      mode: ses-derive
+      time: firstUse
+```
+
+필드:
+
+| 필드 | 값 | 기본값 | 의미 |
+| --- | --- | --- | --- |
+| `mode` | `ses-derive` / `passthrough` / `template` / `expression` / `script` | `ses-derive` | 스위치가 켜졌을 때 사용하는 생성기. 알 수 없는 값은 `ses-derive`로 폴백합니다. |
+| `time` | `firstUse` / `hash` | `firstUse` | 12자리 16진 블록의 출처. `hash`는 세션 다이제스트에서 파생하여 캐시 없이 어떤 머신에서도 값이 완전히 같습니다. |
+| `template` | 문자열 | `''` | `template` 모드: `{hex12}`, `{tail62}`, `{sessionId}`, `{rawSessionId}`, `{sha256}`, `{now}`, `{provider}`, `{model}` 플레이스홀더. |
+| `expression` | 문자열 | `''` | `expression` 모드: 같은 컨텍스트를 쓰는 제한된 덧셈 표현식이며 `sha256`, `slice`, `lower`, `upper`도 제공합니다. 예: `'ses_' + hex12 + tail62`. |
+| `script` | 절대 경로 | `''` | `script` 모드: `format(context)`를 내보내 header 값을 문자열로 반환하는 JS 파일(`.mjs` / `.cjs`). 파일이 바뀌면 핫 리로드(초당 최대 1회 확인). 로드·평가 실패 시 `ses-derive`로 폴백합니다. |
+| `validate` | 정규식 소스 | `''` | 선택 검증. 비어 있으면 검사하지 않습니다. 내장 기본 형태는 `^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$`입니다. |
+| `onInvalid` | `warn` / `drop` / `send` | `warn` | `validate`에 실패했을 때: 로그를 남기고 전송 / header 생략 / 조용히 전송. |
+
+예시:
+
+```yaml
+# 명시적 정규 생성기(기본값과 동일)
+format: { mode: ses-derive, time: firstUse }
+
+# 어떤 머신에서도 완전히 결정적(hex 부분도 다이제스트 출처)
+format: { mode: ses-derive, time: hash }
+
+# 이전 동작: 원시 DSH 세션 ID
+format: { mode: passthrough }
+
+# 상류 개편 후의 템플릿
+format: { mode: template, template: '{hex12}-{tail62}' }
+
+# 상류가 '접두사 + 파생부'를 요구하는 경우의 표현식
+format: { mode: expression, expression: "'ses_' + hex12 + tail62" }
+
+# 임의의 향후 형식에 대한 외부 스크립트
+format: { mode: script, script: '/절대/경로/session.mjs' }
+```
+
+`script` 파일은 같은 컨텍스트 객체를 받는 함수를 내보냅니다.
+
+```js
+// /절대/경로/session.mjs
+export function format(ctx) {
+  // ctx.hex12, ctx.tail62, ctx.sessionId, ctx.rawSessionId, ctx.now, ctx.provider, ctx.model
+  return 'ses_' + ctx.hex12 + ctx.tail62
+}
+```
+
+`format` 설정을 바꾸면 세션의 다음 요청에서 새 설정에 따라 다시 파생됩니다(세션별 캐시는 설정 지문을 키로 사용). Host 또는 플러그인 패키지를 변경한 뒤에는 DSH를 재시작하고 Settings 또는 Client를 변경한 뒤에는 Web 페이지를 새로 고친 다음 모델 요청을 확인하세요.
+
+### 동작 참고
+
+- adapter 또는 호출자가 이미 제공한 `x-opencode-session`은 유지되며 덮어쓰지 않습니다.
+- 이 설정은 최신 Remote Settings transport와 이전 `connection.api.settings` transport를 모두 지원하며 route의 `api` 프로토콜은 변경하지 않습니다.
+- 요청이 Sub2API, CPA 또는 다른 forwarding gateway를 통과한다면 `x-opencode-session`을 보존하여 OpenCode upstream으로 전달하는지 확인하세요. `llm-pi-ai.providers.<route>.headers.x-opencode-session`과 같은 정적 route 설정은 모든 대화가 같은 고정 값을 공유하므로 대체할 수 없습니다.
 
 ## 게이트웨이 호환성 설정
 
