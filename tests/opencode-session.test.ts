@@ -608,6 +608,26 @@ describe('Host OpenCode session integration', () => {
     expect(headers.get('user-agent')).toBe('opencode/1.18.31')
     harness.dispose()
   })
+
+  it('rewrites user-agent even when the request has no session id', async () => {
+    settingsStub.source = {
+      opencodeSession: {
+        userAgent: {
+          value: 'opencode/1.18.31 runtime/bun/1.3.14',
+          providers: { 'opencode-go': { enabled: true } },
+        },
+      },
+    }
+    const harness = createHostHarness()
+    await drain(harness.stream({ provider: 'opencode-go', model: 'deepseek-v4-flash' }, async function* () {
+      await fetch('https://provider.test/chat/completions')
+      yield 'done'
+    }))
+    const headers = new Headers(harness.fetchCalls[0]?.init?.headers)
+    expect(headers.get('user-agent')).toBe('opencode/1.18.31 runtime/bun/1.3.14')
+    expect(headers.has(OPENCODE_SESSION_HEADER)).toBe(false)
+    harness.dispose()
+  })
 })
 
 describe('resolveUserAgentValue', () => {

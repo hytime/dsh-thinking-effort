@@ -19,7 +19,8 @@ const LOG_PREFIX = '[@hytime/dsh-thinking-effort]'
 type OpenCodeSessionRequest = {
   readonly provider: string
   readonly model: string
-  readonly sessionId: string
+  /** Absent when `GenerateOptions.sessionId` is omitted; only the Header branch needs it. */
+  readonly sessionId: string | undefined
   readonly sessionEnabled: boolean
   readonly userAgentValue: string | undefined
   active: boolean
@@ -74,7 +75,9 @@ function requestContext(options: unknown, settings: unknown): OpenCodeSessionReq
   const provider = nonEmptyString(options.provider)
   const model = nonEmptyString(options.model)
   const sessionId = nonEmptyString(options.sessionId)
-  if (provider === undefined || model === undefined || sessionId === undefined) return undefined
+  // The session id is optional: the user-agent override must still work for
+  // callers that construct GenerateOptions without it (e.g. auto-review).
+  if (provider === undefined || model === undefined) return undefined
   const sessionEnabled = isOpenCodeSessionEnabled(settings, provider, model)
   const userAgentValue = resolveUserAgentValue(settings, provider, model)
   if (!sessionEnabled && userAgentValue === undefined) return undefined
@@ -177,11 +180,12 @@ async function fetchWithSession(
     headers.set('user-agent', request.userAgentValue)
   }
 
-  if (request.sessionEnabled && !headers.has(OPENCODE_SESSION_HEADER)) {
+  const sessionId = request.sessionId
+  if (sessionId !== undefined && request.sessionEnabled && !headers.has(OPENCODE_SESSION_HEADER)) {
     let value: string | undefined
     try {
       value = await formatter.format(
-        { provider: request.provider, model: request.model, sessionId: request.sessionId },
+        { provider: request.provider, model: request.model, sessionId },
         resolveFormatConfig(settingsSnapshot),
       )
     } catch (error) {
