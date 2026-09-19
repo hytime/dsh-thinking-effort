@@ -141,7 +141,7 @@
   "modelsArrayCompatSaveNote": "保存后只会修改当前模型的设置，不会影响其他模型。",
   "opencodeSessionHeader": "OpenCode 会话 Header",
   "opencodeSessionHeaderTitle": "OpenCode 会话 Header",
-  "opencodeSessionHeaderDescription": "为 OpenCode、OpenCode Go 或会继续转发该 Header 的中转服务，为当前模型动态发送 DSH 会话 ID（x-opencode-session）。",
+  "opencodeSessionHeaderDescription": "为 OpenCode、OpenCode Go 或会继续转发该 Header 的中转服务，为当前模型生成与 DSH 会话绑定的派生会话值（x-opencode-session）；默认生成器符合上游格式，可在设置文档的 opencodeSession.format 中调整。",
   "opencodeSessionSaved": "OpenCode 会话 Header 已保存",
   "opencodeSessionSaveFailed": "OpenCode 会话 Header 保存失败：{message}",
   "backupCardTitle": "配置备份与方案",

@@ -141,7 +141,7 @@
   "modelsArrayCompatSaveNote": "저장하면 현재 모델의 설정만 변경되며 다른 모델에는 영향을 주지 않습니다.",
   "opencodeSessionHeader": "OpenCode 세션 Header",
   "opencodeSessionHeaderTitle": "OpenCode 세션 Header",
-  "opencodeSessionHeaderDescription": "OpenCode, OpenCode Go 또는 이 Header를 전달하는 프록시를 위해 현재 DSH 세션 ID를 이 모델의 x-opencode-session으로 동적으로 보냅니다.",
+  "opencodeSessionHeaderDescription": "OpenCode, OpenCode Go 또는 이 Header를 전달하는 프록시를 위해 현재 DSH 세션에서 파생한 값을 이 모델의 x-opencode-session으로 보냅니다. 기본 생성기는 상류 형식을 따르며 opencodeSession.format에서 변경할 수 있습니다.",
   "opencodeSessionSaved": "OpenCode 세션 Header를 저장했습니다",
   "opencodeSessionSaveFailed": "OpenCode 세션 Header를 저장하지 못했습니다: {message}",
   "backupCardTitle": "설정 백업 및 프로필",

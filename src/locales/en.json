@@ -141,7 +141,7 @@
   "modelsArrayCompatSaveNote": "Saving changes updates only this model; other models are not affected.",
   "opencodeSessionHeader": "OpenCode session Header",
   "opencodeSessionHeaderTitle": "OpenCode session Header",
-  "opencodeSessionHeaderDescription": "For OpenCode, OpenCode Go, or a forwarding proxy, dynamically send the current DSH session ID as x-opencode-session for this model.",
+  "opencodeSessionHeaderDescription": "For OpenCode, OpenCode Go, or a forwarding proxy, send a session value derived from the current DSH session as x-opencode-session for this model; the default generator matches the upstream format and is configurable under opencodeSession.format.",
   "opencodeSessionSaved": "OpenCode session Header saved",
   "opencodeSessionSaveFailed": "Failed to save OpenCode session Header: {message}",
   "backupCardTitle": "Backup and profiles",
