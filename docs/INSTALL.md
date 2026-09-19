@@ -181,6 +181,14 @@ Field-by-field, each value resolves independently in this order: model → provi
 
 The current DSH Settings API does not support array-index path operations. `modelOverrides` edits therefore use field-level `set`/`unset` operations and touch only the selected field. A `models[]` edit writes one complete `providers.<route>.models` array set, preserving other model entries, unknown fields, and compat fields. These values are control plane configuration only; an external transport remains responsible for network requests.
 
+### Snapshot import trust model
+
+A snapshot carries **capability configuration** — reasoning efforts, compat switches, which models enable the session Header — and is safe to move between machines. It does not carry **deployment wiring**: a provider's `baseURL`, `apiKeyEnv`, and `headers`, plus `opencodeSession.format.script`, are withheld on import so a file from someone else cannot redirect your requests, attach their credential name, inject a raw header, or name a local module for the Host to import and execute.
+
+When a file does try to change wiring, the preview says how many entries were skipped and offers **Also import endpoints and credentials (advanced)**, which is off for every import and never remembered. The warning lists the target endpoint for each affected route so the destination is visible before you consent.
+
+Restoring a rollback copy or a saved profile follows the same rule. If you previously imported wiring with the opt-in and need to restore an old endpoint, re-check the box in that preview.
+
 ## 1. Official installation
 
 Install the latest version:

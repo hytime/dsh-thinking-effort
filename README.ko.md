@@ -165,6 +165,8 @@ Sub2API, CPA 및 다른 forwarding gateway는 `x-opencode-session`을 보존하�
 
 내보내기와 가져오기는 기존 Settings 채널을 그대로 사용하므로 최신 Remote Settings와 이전 `connection.api.settings`에서 모두 동작합니다. 결과에 재시작이 필요한 namespace가 표시되면 DSH를 재시작한 뒤 적용됩니다.
 
+스냅샷을 가져올 때 기본적으로 capability 설정만 마이그레이션합니다. provider의 `baseURL`, `apiKeyEnv`, `headers` 및 `opencodeSession.format.script`는 로컬 배포 연결 설정이므로, 미리보기에서 **Also import endpoints and credentials (advanced)**를 명시적으로 선택한 경우에만 적용됩니다.
+
 ### 설정 페이지 구성
 
 페이지 상단에는 언어 선택기가 있습니다. 그 아래의 **Subagent default effort** 카드는 명시적인 값이 없는 요청의 기본값을 관리합니다. **Quick settings**는 일괄 프리셋을 적용합니다. 제공자와 모델 목록은 펼치거나 접을 수 있으며, 각 모델 행에는 입력 기능, 컨텍스트 길이 및 게이트웨이 호환성 편집 영역이 표시됩니다. `models[]` 저장은 배열 인덱스 path op가 아니라 전체 배열 set을 사용합니다.

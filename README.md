@@ -177,6 +177,8 @@ The **Backup and profiles** card, below the language selector and the Subagent d
 
 Export and import reuse the existing Settings channel, so the card works with both modern Remote Settings and the legacy `connection.api.settings`. When the result reports a namespace that takes effect on restart, restart DSH.
 
+When importing a snapshot, only capability configuration is migrated by default. A provider's `baseURL`, `apiKeyEnv`, and `headers`, along with `opencodeSession.format.script`, are local deployment wiring and take effect only when you explicitly select **Also import endpoints and credentials (advanced)** in the preview.
+
 ### Settings page layout
 
 The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and gateway compatibility controls in its settings area. `models[]` saves use one complete array set rather than an array-index path operation.

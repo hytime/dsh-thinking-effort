@@ -236,6 +236,8 @@ Sub2API、CPA 和其他中转服务必须保留并继续把 `x-opencode-session`
 
 导出与导入复用插件现有的 Settings 通道，因此新版 Remote Settings 与旧版 `connection.api.settings` 都可以使用。结果显示某个 namespace 需要重启时，重启 DSH 后生效。
 
+导入快照时默认只迁移能力配置；provider 的 `baseURL`、`apiKeyEnv`、`headers` 与 `opencodeSession.format.script` 属于本机部署接线，需在预览中显式勾选「同时导入端点与凭据」才会生效。
+
 ### 设置页界面
 
 页面顶部是语言选择器；其下方的「子 agent 默认档位」卡片控制没有显式档位的请求。「一键设置」负责批量应用预设。供应商和模型列表支持展开/收起；每个模型行显示输入能力、上下文长度，并在设置区域提供网关兼容控件。`models[]` 保存使用完整数组 set，而不是数组索引 path op。

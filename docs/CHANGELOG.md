@@ -24,6 +24,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - OpenCode 会话 Header 的默认发送值从「原始 DSH 会话 ID」改为「符合上游格式的派生 `ses_` 值」；需要旧行为的用户可显式配置 `format: { mode: passthrough }`。
 - The default `x-opencode-session` value changes from the raw DSH session id to a derived upstream-compliant `ses_` value; users who need the old behavior can configure `format: { mode: passthrough }`.
 
+### 安全 / Security
+
+- 配置快照导入默认不再应用 provider 的 `baseURL`、`apiKeyEnv`、`headers` 与 `opencodeSession.format.script`：这些属于本机部署接线，导入他人文件不再能改写请求终点或指定本地可执行模块。预览会提示被跳过的项数，并提供默认关闭、不粘滞的高级开关（issue #11）。
+- Config snapshot import no longer applies a provider's `baseURL`, `apiKeyEnv`, or `headers`, nor `opencodeSession.format.script`: these are local deployment wiring, so importing someone else's file can no longer redirect requests or name a local module to execute. The preview reports how many entries were skipped and offers a default-off, non-sticky advanced opt-in (issue #11).
+
 ## [0.3.0] - 2026-09-16
 
 ### 新增 / Added
