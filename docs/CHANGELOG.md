@@ -14,6 +14,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-19
+
 ### 新增 / Added
 
 - 新增可配置的 OpenCode 会话 Header 生成器（`opencodeSession.format`）。开关打开且未配置 `format` 时，默认按 OpenCode Zen 规范格式生成随 DSH 会话绑定的确定性 `ses_` 值：`ses_` + 12 位十六进制（48 位毫秒时间戳，会话内首次使用时铸造一次）+ 14 位 Base62（DSH 会话 ID 归一化后的 80 位 SHA-256 摘要）。同一 DSH 会话内值恒定，不同会话（含每次子 agent 运行）各不相同，14 位后缀在 DSH 重启后仍然稳定。为应对上游格式变化，提供 `ses-derive` / `passthrough` / `template` / `expression` / `script` 四档生成模式、`time: firstUse | hash` 时间戳来源、`validate` 正则与 `onInvalid: warn | drop | send` 校验策略，均可通过设置文档手写配置、无需改代码或重建插件。

@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-19
+
 ### 추가
 
 - 설정 가능한 OpenCode 세션 Header 생성기(`opencodeSession.format`)를 추가했습니다. 스위치를 켜고 `format`을 설정하지 않으면 Host는 OpenCode Zen 정규 형태의 결정적 `ses_` 값을 보냅니다: `ses_` + 16진수 12자리(세션마다 한 번 주조되는 48비트 밀리초 타임스탬프) + Base62 14자리(정규화한 DSH 세션 ID의 80비트 SHA-256 다이제스트). 같은 DSH 세션 내에서 값이 일정하고, 다른 세션(각 subagent 실행 포함)마다 다르며, 14자리 접미사는 DSH 재시작 후에도 안정적입니다. 상류 형식 변경에 대응하기 위해 `ses-derive` / `passthrough` / `template` / `expression` / `script` 4가지 모드, `time: firstUse | hash` 타임스탬프 출처, `validate` / `onInvalid` 검증을 설정 문서만으로 변경할 수 있으며 코드 수정이나 재빌드가 필요 없습니다.
