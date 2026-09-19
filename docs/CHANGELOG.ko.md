@@ -18,6 +18,10 @@
 
 - `x-opencode-session`의 기본값이 「원시 DSH 세션 ID」에서 「상류 준수 파생 `ses_` 값」으로 바뀌었습니다. 이전 동작이 필요하면 `format: { mode: passthrough }`를 명시적으로 설정하세요.
 
+### 보안
+
+- 설정 스냅샷을 가져올 때 provider의 `baseURL`, `apiKeyEnv`, `headers` 및 `opencodeSession.format.script`를 기본으로 적용하지 않도록 변경했습니다. 이 값들은 로컬 배포 연결 설정이므로 다른 사람이 만든 파일을 가져와도 요청 목적지를 바꾸거나 Host가 실행할 로컬 모듈을 지정할 수 없습니다. 미리보기에는 건너뛴 항목 수가 표시되며, 기본적으로 꺼져 있고 가져올 때마다 초기화되는 opt-in 스위치를 제공합니다(issue #11).
+
 ## [0.3.0] - 2026-09-16
 
 ### 추가

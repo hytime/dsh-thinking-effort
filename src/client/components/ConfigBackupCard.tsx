@@ -80,6 +80,8 @@ interface CardState {
   pendingDelete: string | null
   preview: PendingImport | null
   mode: ImportMode
+  /** Opt-in to importing endpoint / credential / script wiring. Never sticky. */
+  importWiring: boolean
   busy: boolean
   error: string | null
   /** Lines shown in the status block: the apply result, plus any warning that came with it. */
@@ -88,7 +90,7 @@ interface CardState {
 
 const initialState: CardState = {
   open: false, namespaces: [], writable: true, profiles: {}, profileNames: [],
-  autoBackupAt: null, nameDraft: '', pendingDelete: null, preview: null, mode: 'merge',
+  autoBackupAt: null, nameDraft: '', pendingDelete: null, preview: null, mode: 'merge', importWiring: false,
   busy: false, error: null, notice: [],
 }
 
@@ -261,7 +263,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   }
 
   const openPreview = (snapshot: ConfigSnapshot, label: string, ignored: readonly string[] = []): void => {
-    setState((current) => ({ ...current, error: null, notice: [], mode: 'merge', preview: { snapshot, label, ignored } }))
+    setState((current) => ({ ...current, error: null, notice: [], mode: 'merge', importWiring: false, preview: { snapshot, label, ignored } }))
     void refreshNamespaces()
   }
 
@@ -314,6 +316,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
     void applySnapshot({
       snapshot: pending.snapshot,
       mode: state.mode,
+      importWiring: state.importWiring,
       settings,
       autoBackup: true,
       now: clock,
@@ -352,7 +355,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
     })
   }
 
-  const previewPlan = state.preview === null ? null : planImport(state.preview.snapshot, state.namespaces, state.mode)
+  const previewPlan = state.preview === null ? null : planImport(state.preview.snapshot, state.namespaces, state.mode, { importWiring: state.importWiring })
   // An empty plan has two very different causes. When the file's plugin section
   // held nothing but the snapshot library's own keys — the profile library and
   // the rollback copy — the payload was discarded wholesale, and "already
@@ -361,6 +364,18 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   // this flag covers a file with nothing left to agree about.
   const previewKeys = state.preview === null ? [] : Object.keys(state.preview.snapshot.sections[PLUGIN_NAMESPACE] ?? {})
   const previewLibraryOnly = previewKeys.length > 0 && previewKeys.every((key) => isSnapshotLibraryKey(PLUGIN_NAMESPACE, key))
+  // Only an endpoint URL or a script path is ever shown. `apiKeyEnv` names a
+  // credential and `headers` can hold a plaintext token, so both are reported
+  // as counts and route names only. The string can therefore be empty while
+  // `wiring.count` is not, which is why it is rendered as its own element: the
+  // sentence around it names the change without a placeholder to leave a stray
+  // separator when there is no detail to show.
+  const wiringDetail = previewPlan === null
+    ? ''
+    : [
+        ...previewPlan.wiring.endpoints.map((entry) => `${entry.provider} → ${entry.baseURL}`),
+        ...previewPlan.wiring.script === undefined ? [] : [previewPlan.wiring.script],
+      ].join(', ')
   const readOnly = !state.writable
   const profileCount = state.profileNames.length
   const hint = profileCount === 0 ? t('backupCollapsedHintEmpty') : t('backupCollapsedHint', { count: profileCount })
@@ -452,6 +467,25 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
         <div style={{ fontSize: '12px' }}>{previewPlan.empty
           ? t(previewLibraryOnly ? 'backupSummaryLibraryOnly' : 'backupSummaryEmpty')
           : t('backupSummary', { added: previewPlan.summary.added, overwritten: previewPlan.summary.overwritten, removed: previewPlan.summary.removed })}</div>
+        {previewPlan.wiring.count === 0 ? null : <div style={{ display: 'grid', gap: '4px' }}>
+          <div style={{ ...muted, color: palette.secondary }}>
+            {state.importWiring
+              ? t('backupWiringWarning')
+              : t('backupWiringSkipped', { count: previewPlan.wiring.count })}
+          </div>
+          {!state.importWiring || wiringDetail === '' ? null : <div style={{ ...muted, color: palette.secondary }}>{wiringDetail}</div>}
+          <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}>
+            <input
+              type="checkbox"
+              checked={state.importWiring}
+              onChange={(event) => {
+                const checked = event.currentTarget.checked
+                setState((current) => ({ ...current, importWiring: checked }))
+              }}
+            />
+            {t('backupWiringInclude')}
+          </label>
+        </div>}
         {state.preview.ignored.length === 0 ? null : <div style={muted}>{t('backupIgnored', { count: state.preview.ignored.length })}</div>}
         <div style={{ display: 'flex', gap: '6px' }}>
           <ActionButton text={t('backupConfirmImport')} onClick={confirmImport} disabled={state.busy || readOnly || previewPlan.empty} tone="primary" palette={palette} icon="check" />

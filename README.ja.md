@@ -165,6 +165,8 @@ Sub2API、CPA、その他の転送ゲートウェイは `x-opencode-session` を
 
 書き出しと読み込みは既存の Settings チャネルを再利用するため、新しい Remote Settings と旧来の `connection.api.settings` のどちらでも動作します。結果に再起動が必要な namespace が示された場合は、DSH を再起動すると反映されます。
 
+スナップショットの読み込みでは、既定で capability 設定だけを移行します。provider の `baseURL`、`apiKeyEnv`、`headers` と `opencodeSession.format.script` はローカル環境の接続設定であり、プレビューで **Also import endpoints and credentials (advanced)** を明示的に選択した場合だけ反映されます。
+
 ### 設定ページの構成
 
 ページ上部に言語セレクターがあります。その下の **Subagent default effort** カードは明示値のないリクエストの既定値を管理します。**Quick settings** は一括プリセットを適用します。プロバイダーとモデルの一覧は展開/折りたたみができ、各モデル行に入力能力、コンテキスト長、ゲートウェイ互換値の編集領域が表示されます。`models[]` の保存は配列インデックス path op ではなく、配列全体の set を使用します。
