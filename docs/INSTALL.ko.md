@@ -140,6 +140,37 @@ export function format(ctx) {
 - 이 설정은 최신 Remote Settings transport와 이전 `connection.api.settings` transport를 모두 지원하며 route의 `api` 프로토콜은 변경하지 않습니다.
 - 요청이 Sub2API, CPA 또는 다른 forwarding gateway를 통과한다면 `x-opencode-session`을 보존하여 OpenCode upstream으로 전달하는지 확인하세요. `llm-pi-ai.providers.<route>.headers.x-opencode-session`과 같은 정적 route 설정은 모든 대화가 같은 고정 값을 공유하므로 대체할 수 없습니다.
 
+## OpenCode user-agent 재정의
+
+`llm-pi-ai` adapter는 모든 provider 요청에 자체 attribution `user-agent`(`deepseek-harness/<버전> (+https://github.com/deepseek-ai/deepseek-harness)`)를 강제하고 같은 이름의 provider 설정 값을 제거합니다. 따라서 `llm-pi-ai.providers.<route>.headers.user-agent`는 효과가 없습니다. 이 플러그인은 일치하는 `llm/stream` 요청에서 전송 직전의 마지막 레이어에서 헤더를 다시 씁니다. 이것이 유일하게 살아남는 재정의 지점입니다.
+
+`dsh-thinking-effort.opencodeSession.userAgent`에서 설정하며 기본값은 꺼져 있습니다.
+
+```yaml
+dsh-thinking-effort:
+  opencodeSession:
+    userAgent:
+      value: "opencode/1.18.31 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14"
+      providers:
+        opencode-go:
+          enabled: true              # 이 route의 모든 모델
+        sundrawnewapi-private:
+          value: "opencode/1.18.31"  # 선택적인 route별 값
+          models:
+            mimo-v2.5-free: true     # 정확한 모델 토글
+```
+
+| 필드 | 의미 |
+| --- | --- |
+| `userAgent.value` | 마스터 값이자 활성화 스위치. 비어 있거나 없으면 전체에서 꺼집니다. |
+| `userAgent.providers.<route>.enabled` | `true`면 해당 route의 모든 모델에 적용됩니다. |
+| `userAgent.providers.<route>.models.<model>` | `true`면 해당 정확한 모델에만 적용됩니다. |
+| `userAgent.providers.<route>.value` | 선택적인 route별 값. 비어 있지 않으면 마스터 값보다 우선합니다. |
+
+요청 하나의 해석 순서: route가 `enabled` 또는 정확한 모델 토글로 일치해야 하며, 다음으로 비어 있지 않은 route별 `value`, 없으면 마스터 `value`를 사용합니다. 일치하지 않는 요청은 DSH attribution `user-agent`를 유지하므로 명시적으로 선택한 route만 영향받습니다. 커스텀 provider는 설정한 route 이름을 그대로 키로 쓰면 되며 추가 등록이 필요 없습니다. 이 재정의는 같은 요청의 세션 Header와 함께 쓸 수 있고, 호출자가 명시적으로 지정한 `user-agent`도 덮어씁니다(adapter를 우회하는 것이 목적이므로).
+
+Host 또는 플러그인 패키지를 변경한 뒤에는 DSH를 재시작하세요. 설정 자체는 설정 변경 시 다시 읽힙니다.
+
 ## 게이트웨이 호환성 설정
 
 Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델의 `compat` 기본값을 수정합니다. 모델 하나를 펼치면 단일 모델 영역이 열립니다. 4개 그룹은 기본으로 접혀 있습니다.

@@ -45,6 +45,21 @@ const openCodeSessionFormat = z.object({
 }).default({ ...OPENCODE_SESSION_FORMAT_DEFAULTS })
 
 /**
+ * Defaults shared by the `userAgent` section schema and the stored namespace
+ * shape (mirrors the `format` section above).
+ */
+const OPENCODE_SESSION_USER_AGENT_DEFAULTS = { value: '', providers: {} }
+
+const openCodeSessionUserAgent = z.object({
+  value: z.string().default(''),
+  providers: z.dict(z.object({
+    enabled: z.boolean().default(false),
+    value: z.string().default(''),
+    models: openCodeSessionModels,
+  }).default({ enabled: false, value: '', models: {} })).default({}),
+}).default({ ...OPENCODE_SESSION_USER_AGENT_DEFAULTS })
+
+/**
  * One stored configuration snapshot, as it appears in the settings document.
  * Every field is optional because a hand-written section may omit any of them
  * and the schema supplies the defaults on resolution.
@@ -82,13 +97,19 @@ export const PLUGIN_SETTINGS_SCHEMA: z<PluginSettings> = z.object({
   opencodeSession: z.object({
     providers: openCodeSessionProviders,
     format: openCodeSessionFormat,
-  }).default({ providers: {}, format: { ...OPENCODE_SESSION_FORMAT_DEFAULTS } }),
+    userAgent: openCodeSessionUserAgent,
+  }).default({
+    providers: {},
+    format: { ...OPENCODE_SESSION_FORMAT_DEFAULTS },
+    userAgent: { ...OPENCODE_SESSION_USER_AGENT_DEFAULTS },
+  }),
   profiles: z.dict(configSnapshot).default({}),
   autoBackup: configSnapshot,
 }).default({
   opencodeSession: {
     providers: {},
     format: { ...OPENCODE_SESSION_FORMAT_DEFAULTS },
+    userAgent: { ...OPENCODE_SESSION_USER_AGENT_DEFAULTS },
   },
   profiles: {},
   autoBackup: {

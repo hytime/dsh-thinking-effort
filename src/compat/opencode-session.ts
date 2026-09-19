@@ -23,12 +23,26 @@ export interface OpenCodeSessionFormatSettings {
   readonly onInvalid?: OpenCodeSessionInvalidPolicy | string
 }
 
+/** Configurable `user-agent` override, scoped per provider/model. */
+export interface OpenCodeSessionUserAgentSettings {
+  /** Master value. Empty or absent disables the override entirely. */
+  readonly value?: string
+  readonly providers?: Readonly<Record<string, {
+    /** Apply the override to every model on this route. */
+    readonly enabled?: boolean
+    /** Optional per-route value; falls back to the master `value`. */
+    readonly value?: string
+    readonly models?: Readonly<Record<string, boolean>>
+  }>>
+}
+
 export interface OpenCodeSessionSettings {
   readonly opencodeSession?: {
     readonly providers?: Readonly<Record<string, {
       readonly models?: Readonly<Record<string, boolean>>
     }>>
     readonly format?: OpenCodeSessionFormatSettings
+    readonly userAgent?: OpenCodeSessionUserAgentSettings
   }
 }
 

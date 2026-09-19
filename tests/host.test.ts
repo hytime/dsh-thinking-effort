@@ -186,6 +186,8 @@ const openCodeSessionFormatDefaults = {
   onInvalid: 'warn',
 }
 
+const openCodeSessionUserAgentDefaults = { value: '', providers: {} }
+
 describe('real Settings-backed OpenCode registration', () => {
   it('rejects non-boolean model values through the real Settings schema', async () => {
     const host = await bootRealOpenCodeHost()
@@ -197,7 +199,7 @@ describe('real Settings-backed OpenCode registration', () => {
         value: 'true',
       }])).rejects.toThrow()
       expect(host.ctx.settings.describe().find((entry) => entry.ns === OPENCODE_SESSION_NAMESPACE)?.value).toEqual({
-        opencodeSession: { providers: {}, format: openCodeSessionFormatDefaults },
+        opencodeSession: { providers: {}, format: openCodeSessionFormatDefaults, userAgent: openCodeSessionUserAgentDefaults },
         profiles: {},
         autoBackup: snapshotDefaults,
       })
@@ -229,6 +231,7 @@ describe('real Settings-backed OpenCode registration', () => {
             'opencode-go': { models: { 'deepseek-v4-flash': true } },
           },
           format: openCodeSessionFormatDefaults,
+          userAgent: openCodeSessionUserAgentDefaults,
         },
         profiles: {},
         autoBackup: snapshotDefaults,
