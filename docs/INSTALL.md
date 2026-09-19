@@ -140,6 +140,37 @@ Changing the `format` config re-derives the value on the next request of a sessi
 - The setting works through both the modern Remote Settings transport and the legacy `connection.api.settings` transport, and does not change the route's `api` protocol.
 - If the request passes through Sub2API, CPA, or another forwarding gateway, verify that it preserves and forwards `x-opencode-session` to the OpenCode upstream. A static route setting such as `llm-pi-ai.providers.<route>.headers.x-opencode-session` is not equivalent because one fixed value is shared by all conversations.
 
+## OpenCode user-agent override
+
+The `llm-pi-ai` adapter forces its own attribution `user-agent` (`deepseek-harness/<version> (+https://github.com/deepseek-ai/deepseek-harness)`) onto every provider request and strips any provider-configured value with the same name, so `llm-pi-ai.providers.<route>.headers.user-agent` has no effect. This plugin rewrites the header on the matching `llm/stream` request at the last layer before it leaves, which is the only place a rewrite survives.
+
+It is configured under `dsh-thinking-effort.opencodeSession.userAgent` and is off by default:
+
+```yaml
+dsh-thinking-effort:
+  opencodeSession:
+    userAgent:
+      value: "opencode/1.18.31 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14"
+      providers:
+        opencode-go:
+          enabled: true              # every model on this route
+        sundrawnewapi-private:
+          value: "opencode/1.18.31"  # optional per-route value
+          models:
+            mimo-v2.5-free: true     # exact model toggle
+```
+
+| Field | Meaning |
+| --- | --- |
+| `userAgent.value` | Master value and the enable switch. Empty or absent turns the override off everywhere. |
+| `userAgent.providers.<route>.enabled` | `true` applies the override to every model on that route. |
+| `userAgent.providers.<route>.models.<model>` | `true` applies it to that exact model only. |
+| `userAgent.providers.<route>.value` | Optional route-specific value; wins over the master `value`. |
+
+Resolution order for one request: the route must match by `enabled` or an exact model toggle, then the route `value` is used when non-empty, otherwise the master `value`. Requests that do not match keep DSH's attribution `user-agent`, so only the routes you opt in are affected. Custom providers work by their configured route name with no extra registration. The override composes with the session Header on the same request, and an explicit caller `user-agent` is still overwritten because the whole point is to defeat the adapter.
+
+Restart DSH after changing Host code or the package; the configuration itself is re-read on settings changes.
+
 ## Gateway compatibility settings
 
 The provider global area in the Settings page edits the default `compat` values for every model under that provider. Expanding one model opens its single-model area. The four groups are collapsed by default.

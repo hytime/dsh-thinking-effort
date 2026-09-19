@@ -140,6 +140,37 @@ export function format(ctx) {
 - この設定は新しい Remote Settings transport と旧来の `connection.api.settings` transport の両方で動作し、ルートの `api` プロトコルは変更しません。
 - リクエストが Sub2API、CPA、その他の転送ゲートウェイを通る場合は、`x-opencode-session` が保持され OpenCode 上流へ転送されることを確認してください。`llm-pi-ai.providers.<route>.headers.x-opencode-session` のような静的 route 設定は、全会話で同じ固定値を使うため代替になりません。
 
+## OpenCode user-agent 上書き
+
+`llm-pi-ai` アダプターは、すべての provider リクエストに独自の帰属 `user-agent`（`deepseek-harness/<バージョン> (+https://github.com/deepseek-ai/deepseek-harness)`）を強制し、同名の provider 設定値を削除します。そのため `llm-pi-ai.providers.<route>.headers.user-agent` は効果がありません。このプラグインは、一致する `llm/stream` リクエストで、送信直前の最後のレイヤーでヘッダーを書き換えます。これが唯一生き残る書き換えポイントです。
+
+`dsh-thinking-effort.opencodeSession.userAgent` で設定し、既定では無効です。
+
+```yaml
+dsh-thinking-effort:
+  opencodeSession:
+    userAgent:
+      value: "opencode/1.18.31 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14"
+      providers:
+        opencode-go:
+          enabled: true              # このルートの全モデル
+        sundrawnewapi-private:
+          value: "opencode/1.18.31"  # 任意のルート別値
+          models:
+            mimo-v2.5-free: true     # 正確なモデルのトグル
+```
+
+| フィールド | 意味 |
+| --- | --- |
+| `userAgent.value` | マスター値かつ有効スイッチ。空または欠落なら全体で無効です。 |
+| `userAgent.providers.<route>.enabled` | `true` でそのルートの全モデルに適用されます。 |
+| `userAgent.providers.<route>.models.<model>` | `true` でその正確なモデルだけに適用されます。 |
+| `userAgent.providers.<route>.value` | 任意のルート別値。非空ならマスター値より優先されます。 |
+
+1 リクエストの解決順：ルートが `enabled` または正確なモデルトグルで一致し、次に非空のルート別 `value`、なければマスター `value` を使います。一致しないリクエストは DSH の帰属 `user-agent` のままなので、明示的に選択したルートだけが影響を受けます。カスタム provider は設定済みのルート名をそのままキーに使え、追加登録は不要です。この上書きは同じリクエスト上のセッション Header と組み合わせられ、呼び出し元が明示指定した `user-agent` も上書きされます（アダプターを迂回するのが目的だからです）。
+
+Host またはプラグインパッケージを変更した後は DSH を再起動してください。設定自体は設定変更時に再読込されます。
+
 ## ゲートウェイ互換設定
 
 Settings の provider グローバル領域では、その provider 配下のすべてのモデルの `compat` 既定値を編集します。モデルを 1 つ展開すると単一モデル領域が開きます。4 グループは既定で折りたたまれています。

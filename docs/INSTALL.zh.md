@@ -146,6 +146,37 @@ export function format(ctx) {
 - 该设置同时支持新版 Remote Settings transport 和旧版 `connection.api.settings` transport，且不会修改路由的 `api` 协议。
 - 如果请求经过 Sub2API、CPA 或其他中转服务，请确认它保留 `x-opencode-session` 并继续转发给 OpenCode 上游。`llm-pi-ai.providers.<route>.headers.x-opencode-session` 这类静态 route 设置不能替代本功能，因为所有会话会共用一个固定值。
 
+## OpenCode user-agent 覆盖
+
+`llm-pi-ai` 适配器会在每个 provider 请求上强制盖上自己的归因 `user-agent`（`deepseek-harness/<版本> (+https://github.com/deepseek-ai/deepseek-harness)`），并删除 provider 配置的同名头，因此 `llm-pi-ai.providers.<route>.headers.user-agent` 不生效。本插件在匹配的 `llm/stream` 请求离开发送前的最后一层改写该 header——这也是唯一能存活的重写点。
+
+在 `dsh-thinking-effort.opencodeSession.userAgent` 下配置，默认关闭：
+
+```yaml
+dsh-thinking-effort:
+  opencodeSession:
+    userAgent:
+      value: "opencode/1.18.31 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14"
+      providers:
+        opencode-go:
+          enabled: true              # 该路由全部模型
+        sundrawnewapi-private:
+          value: "opencode/1.18.31"  # 可选的路由级值
+          models:
+            mimo-v2.5-free: true     # 精确模型开关
+```
+
+| 字段 | 含义 |
+| --- | --- |
+| `userAgent.value` | 主值兼总开关。为空或缺失时全局不生效。 |
+| `userAgent.providers.<route>.enabled` | `true` 表示该路由全部模型生效。 |
+| `userAgent.providers.<route>.models.<model>` | `true` 表示仅该精确模型生效。 |
+| `userAgent.providers.<route>.value` | 可选的路由级值；非空时优先于主值。 |
+
+单个请求的解析顺序：路由先按 `enabled` 或精确模型开关命中，然后取非空的路由级 `value`，否则用主 `value`。未命中的请求保持 DSH 的归因 `user-agent`，只有你显式选中的路由受影响。自定义 provider 直接用其路由名作为 key，无需额外登记。该覆盖与上面的会话 Header 作用于同一请求、可以叠加；调用方显式提供的 `user-agent` 也会被覆盖——这正是该功能的目的（绕过适配器）。
+
+修改 Host 或插件包后需重启 DSH；配置本身在设置变更时重新读取。
+
 ## 网关兼容设置
 
 设置页的 provider 全局区域用于修改该 provider 下全部模型的 `compat` 默认值。展开单个模型后进入单模型区域。4 组字段默认收起。
