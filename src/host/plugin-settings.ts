@@ -97,7 +97,7 @@ export const PLUGIN_SETTINGS_SCHEMA: z<PluginSettings> = z.object({
   opencodeSession: z.object({
     providers: openCodeSessionProviders,
     format: openCodeSessionFormat,
-userAgent: openCodeSessionUserAgent,
+    userAgent: openCodeSessionUserAgent,
   }).default({
     providers: {},
     format: { ...OPENCODE_SESSION_FORMAT_DEFAULTS },
@@ -108,7 +108,7 @@ userAgent: openCodeSessionUserAgent,
 }).default({
   opencodeSession: {
     providers: {},
-format: { ...OPENCODE_SESSION_FORMAT_DEFAULTS },
+    format: { ...OPENCODE_SESSION_FORMAT_DEFAULTS },
     userAgent: { ...OPENCODE_SESSION_USER_AGENT_DEFAULTS },
   },
   profiles: {},
