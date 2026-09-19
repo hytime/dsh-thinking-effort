@@ -366,7 +366,10 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   const previewLibraryOnly = previewKeys.length > 0 && previewKeys.every((key) => isSnapshotLibraryKey(PLUGIN_NAMESPACE, key))
   // Only an endpoint URL or a script path is ever shown. `apiKeyEnv` names a
   // credential and `headers` can hold a plaintext token, so both are reported
-  // as counts and route names only.
+  // as counts and route names only. The string can therefore be empty while
+  // `wiring.count` is not, which is why it is rendered as its own element: the
+  // sentence around it names the change without a placeholder to leave a stray
+  // separator when there is no detail to show.
   const wiringDetail = previewPlan === null
     ? ''
     : [
@@ -467,9 +470,10 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
         {previewPlan.wiring.count === 0 ? null : <div style={{ display: 'grid', gap: '4px' }}>
           <div style={{ ...muted, color: palette.secondary }}>
             {state.importWiring
-              ? t('backupWiringWarning', { detail: wiringDetail })
+              ? t('backupWiringWarning')
               : t('backupWiringSkipped', { count: previewPlan.wiring.count })}
           </div>
+          {!state.importWiring || wiringDetail === '' ? null : <div style={{ ...muted, color: palette.secondary }}>{wiringDetail}</div>}
           <label style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}>
             <input
               type="checkbox"

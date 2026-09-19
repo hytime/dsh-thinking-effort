@@ -169,7 +169,7 @@
   "backupIgnored": "已忽略 {count} 项不支持的配置",
   "backupWiringSkipped": "已跳过 {count} 项端点/凭据设置（快照只迁移能力配置）",
   "backupWiringInclude": "同时导入端点与凭据（高级）",
-  "backupWiringWarning": "本次导入会改写请求终点：{detail}",
+  "backupWiringWarning": "本次导入会改写端点/凭据设置",
   "backupSourceFile": "来自文件",
   "backupSourceProfile": "来自方案「{name}」",
   "backupSourceAutoBackup": "来自导入前的自动备份",

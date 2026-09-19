@@ -169,7 +169,7 @@
   "backupIgnored": "未対応の {count} 項目を無視しました",
   "backupWiringSkipped": "エンドポイント/認証情報の設定 {count} 件をスキップしました（スナップショットは能力設定のみを移行します）",
   "backupWiringInclude": "エンドポイントと認証情報もインポートする（上級者向け）",
-  "backupWiringWarning": "このインポートはリクエストの送信先を書き換えます：{detail}",
+  "backupWiringWarning": "このインポートはエンドポイントと認証情報の設定を書き換えます",
   "backupSourceFile": "ファイルから",
   "backupSourceProfile": "プロファイル「{name}」から",
   "backupSourceAutoBackup": "読み込み前の自動バックアップから",

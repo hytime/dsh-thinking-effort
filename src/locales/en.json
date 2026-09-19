@@ -169,7 +169,7 @@
   "backupIgnored": "Ignored {count} unsupported entries",
   "backupWiringSkipped": "Skipped {count} endpoint/credential setting(s); a snapshot only carries capability configuration",
   "backupWiringInclude": "Also import endpoints and credentials (advanced)",
-  "backupWiringWarning": "This import rewrites where requests are sent: {detail}",
+  "backupWiringWarning": "This import rewrites endpoint and credential settings",
   "backupSourceFile": "From file",
   "backupSourceProfile": "From profile \"{name}\"",
   "backupSourceAutoBackup": "From the pre-import backup",

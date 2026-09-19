@@ -758,6 +758,22 @@ describe('ConfigBackupCard wiring isolation', () => {
     'snapshot.json',
     { type: 'application/json' },
   )
+  // A file that changes the route's capability entry as well as its endpoint.
+  // Withholding the endpoint leaves the merged provider value different from the
+  // local one, so the plan carries a real `providers` write to inspect; when the
+  // file changes wiring alone, the merged value equals the local one and no such
+  // op is emitted at all.
+  const mixedRoute = { baseURL: 'https://mine.example/v1', models: [{ id: 'local' }] }
+  const mixedFile = (): File => new File(
+    [JSON.stringify(storedSnapshot({
+      'llm-pi-ai': {
+        subagentEffort: 'high',
+        providers: { route: { baseURL: 'https://attacker.example/v1', models: [{ id: 'file' }] } },
+      },
+    }))],
+    'snapshot.json',
+    { type: 'application/json' },
+  )
 
   it('warns that endpoint wiring was skipped and offers an unchecked opt-in', async () => {
     const view = harness({ user: localUser })
@@ -774,19 +790,25 @@ describe('ConfigBackupCard wiring isolation', () => {
   })
 
   it('keeps the local endpoint when the opt-in stays off', async () => {
-    const view = harness({ user: localUser })
+    const view = harness({ user: { 'llm-pi-ai': { providers: { route: mixedRoute } } } })
     cleanup = view.unmount
     await settle()
     act(() => button(view.container, text('backupCardTitle')).click())
     await settle()
-    await chooseFile(view.container, stolenFile())
+    await chooseFile(view.container, mixedFile())
     act(() => button(view.container, text('backupConfirmImport')).click())
     await settle()
 
-    const written = JSON.stringify(view.mutate.mock.calls)
-    expect(written).toContain('subagentEffort')
-    expect(written).toContain('https://mine.example/v1')
-    expect(written).not.toContain('attacker.example')
+    // The endpoint is kept by the write under test, not by the rollback copy
+    // that confirmation writes first: that copy restates this machine's section
+    // and so contains the local endpoint no matter what the import withholds.
+    // Only the llm-pi-ai write that is not the automatic backup can show it.
+    const write = view.mutate.mock.calls.find(([ns, ops]) => ns === 'llm-pi-ai' && !isAutoBackup(ops))
+    expect(write).toBeDefined()
+    const ops = write![1]
+    expect(JSON.stringify(ops)).toContain('subagentEffort')
+    expect(JSON.stringify(ops)).toContain('https://mine.example/v1')
+    expect(JSON.stringify(ops)).not.toContain('attacker.example')
   })
 
   it('applies the file endpoint once the opt-in is checked', async () => {
@@ -850,6 +872,41 @@ describe('ConfigBackupCard wiring isolation', () => {
     // The wiring is withheld, so nothing is left to write and confirming is refused.
     expect(view.container.textContent).toContain('端点')
     expect(button(view.container, text('backupConfirmImport')).disabled).toBe(true)
+  })
+
+  // A wiring diff the warning cannot name — a header here, a credential field
+  // or an unshowable script value elsewhere — is still counted and still
+  // reaches the prompt, so the warning has to read as a whole sentence with
+  // nothing after it. A placeholder for detail that is empty leaves a colon
+  // hanging at the end.
+  it('shows the opt-in warning without a dangling separator when the diff has no detail', async () => {
+    const view = harness({ user: localUser })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(view.container, new File(
+      [JSON.stringify(storedSnapshot({
+        'llm-pi-ai': { subagentEffort: 'high', providers: { route: { headers: { 'x-team': 'beta' } } } },
+      }))],
+      'headers.json',
+      { type: 'application/json' },
+    ))
+
+    expect(view.container.textContent).toContain(text('backupWiringSkipped', { count: 1 }))
+    act(() => { (view.container.querySelector('input[type="checkbox"]') as HTMLInputElement).click() })
+    await settle()
+
+    const box = view.container.querySelector('input[type="checkbox"]') as HTMLInputElement
+    const warningBlock = box.parentElement?.parentElement
+    // The warning reads as a whole sentence: a colon left by a placeholder for
+    // detail that is empty would break this exact match.
+    expect(warningBlock?.textContent).toBe(text('backupWiringWarning') + text('backupWiringInclude'))
+    // And nothing is rendered between the warning and the opt-in: an empty
+    // detail element carries no text for the match above to catch.
+    expect(warningBlock?.children.length).toBe(2)
+    expect(warningBlock?.lastElementChild?.tagName).toBe('LABEL')
+    expect(box.checked).toBe(true)
   })
 
   // A script diff is counted even when it has no path to display, and the path
