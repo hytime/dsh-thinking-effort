@@ -5,7 +5,7 @@ const settingsStub = {
   onChange: undefined as (() => void) | undefined,
 }
 
-import { installOpenCodeSession, OPENCODE_SESSION_SETTINGS_SCHEMA } from '../src/host/opencode-session.ts'
+import { installOpenCodeSession, OPENCODE_SESSION_SETTINGS_SCHEMA, resolveUserAgentValue } from '../src/host/opencode-session.ts'
 import {
   isOpenCodeSessionEnabled,
   modelPath,
@@ -504,5 +504,143 @@ describe('Host OpenCode session integration', () => {
     expect(received[1]).toMatch(/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
     expect(received[0]).not.toBe(received[1])
     harness.dispose()
+  })
+
+  it('rewrites user-agent for a route enabled in userAgent.providers', async () => {
+    settingsStub.source = {
+      opencodeSession: {
+        userAgent: {
+          value: 'opencode/1.18.31 runtime/bun/1.3.14',
+          providers: { 'opencode-go': { enabled: true } },
+        },
+      },
+    }
+    const harness = createHostHarness()
+    await drain(harness.stream({ provider: 'opencode-go', model: 'deepseek-v4-flash', sessionId: 'session-ua' }, async function* () {
+      await fetch('https://provider.test/chat/completions')
+      yield 'done'
+    }))
+    const headers = new Headers(harness.fetchCalls[0]?.init?.headers)
+    expect(headers.get('user-agent')).toBe('opencode/1.18.31 runtime/bun/1.3.14')
+    expect(headers.has(OPENCODE_SESSION_HEADER)).toBe(false)
+    harness.dispose()
+  })
+
+  it('rewrites user-agent for a single model toggle without touching other models', async () => {
+    settingsStub.source = {
+      opencodeSession: {
+        userAgent: {
+          value: 'opencode/1.18.31',
+          providers: { 'opencode-go': { models: { 'deepseek-v4-flash': true } } },
+        },
+      },
+    }
+    const harness = createHostHarness()
+    for (const model of ['deepseek-v4-flash', 'other-model']) {
+      await drain(harness.stream({ provider: 'opencode-go', model, sessionId: `session-${model}` }, async function* () {
+        await fetch('https://provider.test/chat/completions')
+        yield 'done'
+      }))
+    }
+    const received = harness.fetchCalls.map((call) => new Headers(call.init?.headers).get('user-agent'))
+    expect(received[0]).toBe('opencode/1.18.31')
+    expect(received[1]).toBeNull()
+    harness.dispose()
+  })
+
+  it('prefers the provider-level user-agent value over the master value', async () => {
+    settingsStub.source = {
+      opencodeSession: {
+        userAgent: {
+          value: 'master/1.0',
+          providers: {
+            'opencode-go': { value: 'opencode/1.18.31 ai-sdk/provider-utils/4.0.23', models: { 'deepseek-v4-flash': true } },
+            'other-route': { models: { 'deepseek-v4-flash': true } },
+          },
+        },
+      },
+    }
+    const harness = createHostHarness()
+    for (const provider of ['opencode-go', 'other-route']) {
+      await drain(harness.stream({ provider, model: 'deepseek-v4-flash', sessionId: `session-${provider}` }, async function* () {
+        await fetch('https://provider.test/chat/completions')
+        yield 'done'
+      }))
+    }
+    const received = harness.fetchCalls.map((call) => new Headers(call.init?.headers).get('user-agent'))
+    expect(received[0]).toBe('opencode/1.18.31 ai-sdk/provider-utils/4.0.23')
+    expect(received[1]).toBe('master/1.0')
+    harness.dispose()
+  })
+
+  it('combines the session header and user-agent override on one match', async () => {
+    settingsStub.source = {
+      opencodeSession: {
+        providers: { 'opencode-go': { models: { 'deepseek-v4-flash': true } } },
+        userAgent: { value: 'opencode/1.18.31', providers: { 'opencode-go': { enabled: true } } },
+      },
+    }
+    const harness = createHostHarness()
+    await drain(harness.stream({ provider: 'opencode-go', model: 'deepseek-v4-flash', sessionId: 'session-both' }, async function* () {
+      await fetch('https://provider.test/chat/completions')
+      yield 'done'
+    }))
+    const headers = new Headers(harness.fetchCalls[0]?.init?.headers)
+    expect(headers.get('user-agent')).toBe('opencode/1.18.31')
+    expect(headers.get(OPENCODE_SESSION_HEADER)).toMatch(/^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$/)
+    harness.dispose()
+  })
+
+  it('preserves an explicit caller session header while still rewriting user-agent', async () => {
+    settingsStub.source = {
+      opencodeSession: {
+        providers: { 'opencode-go': { models: { 'deepseek-v4-flash': true } } },
+        userAgent: { value: 'opencode/1.18.31', providers: { 'opencode-go': { models: { 'deepseek-v4-flash': true } } } },
+      },
+    }
+    const harness = createHostHarness()
+    await drain(harness.stream({ provider: 'opencode-go', model: 'deepseek-v4-flash', sessionId: 'session-explicit' }, async function* () {
+      await fetch('https://provider.test/chat/completions', { headers: { 'X-OPENCODE-SESSION': 'caller-value' } })
+      yield 'done'
+    }))
+    const headers = new Headers(harness.fetchCalls[0]?.init?.headers)
+    expect(headers.get(OPENCODE_SESSION_HEADER)).toBe('caller-value')
+    expect(headers.get('user-agent')).toBe('opencode/1.18.31')
+    harness.dispose()
+  })
+})
+
+describe('resolveUserAgentValue', () => {
+  it('is fully off when the master value is missing or empty', () => {
+    expect(resolveUserAgentValue(undefined, 'p', 'm')).toBeUndefined()
+    expect(resolveUserAgentValue({ opencodeSession: { userAgent: { providers: { p: { enabled: true } } } } }, 'p', 'm')).toBeUndefined()
+    expect(resolveUserAgentValue({ opencodeSession: { userAgent: { value: '', providers: { p: { models: { m: true } } } } } }, 'p', 'm')).toBeUndefined()
+  })
+
+  it('matches a route-wide enabled flag for every model', () => {
+    const settings = { opencodeSession: { userAgent: { value: 'ua/1', providers: { p: { enabled: true } } } } }
+    expect(resolveUserAgentValue(settings, 'p', 'm1')).toBe('ua/1')
+    expect(resolveUserAgentValue(settings, 'p', 'm2')).toBe('ua/1')
+    expect(resolveUserAgentValue(settings, 'other', 'm1')).toBeUndefined()
+  })
+
+  it('matches an exact model toggle and prefers the provider value', () => {
+    const settings = {
+      opencodeSession: {
+        userAgent: {
+          value: 'master/1',
+          providers: { p: { value: 'route/2', models: { m: true, other: false } } },
+        },
+      },
+    }
+    expect(resolveUserAgentValue(settings, 'p', 'm')).toBe('route/2')
+    expect(resolveUserAgentValue(settings, 'p', 'other')).toBeUndefined()
+    expect(resolveUserAgentValue(settings, 'p', 'unlisted')).toBeUndefined()
+  })
+
+  it('returns undefined for empty provider or model names', () => {
+    const settings = { opencodeSession: { userAgent: { value: 'ua/1', providers: { p: { enabled: true } } } } }
+    expect(resolveUserAgentValue(settings, '', 'm')).toBeUndefined()
+    expect(resolveUserAgentValue(settings, 'p', '')).toBeUndefined()
   })
 })

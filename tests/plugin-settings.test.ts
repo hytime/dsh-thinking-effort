@@ -36,6 +36,8 @@ const formatDefaults = {
   onInvalid: 'warn',
 }
 
+const userAgentDefaults = { value: '', providers: {} }
+
 describe('PLUGIN_SETTINGS_SCHEMA', () => {
   it('resolves a full section without altering it apart from owned field defaults', () => {
     const resolved = PLUGIN_SETTINGS_SCHEMA(section) as { opencodeSession?: Record<string, unknown> }
@@ -44,6 +46,7 @@ describe('PLUGIN_SETTINGS_SCHEMA', () => {
     expect(opencodeSession).toEqual({
       providers: { p: { models: { m: true } } },
       format: formatDefaults,
+      userAgent: userAgentDefaults,
     })
   })
 
@@ -52,6 +55,7 @@ describe('PLUGIN_SETTINGS_SCHEMA', () => {
     expect(Object.keys(resolved)).toEqual(['opencodeSession', 'profiles', 'autoBackup'])
     expect(resolved.profiles).toEqual({})
     expect((resolved.opencodeSession as Record<string, unknown>).format).toEqual(formatDefaults)
+    expect((resolved.opencodeSession as Record<string, unknown>).userAgent).toEqual(userAgentDefaults)
   })
 
   it('publishes the new fields on its serialized JSON so configuration surfaces can render them', () => {
