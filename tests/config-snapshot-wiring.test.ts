@@ -249,3 +249,73 @@ describe('planImport wiring integration', () => {
     expect(plan.wiring.script).toBeUndefined()
   })
 })
+
+describe('replace mode withholds route wiring', () => {
+  const local = {
+    'llm-pi-ai': {
+      providers: {
+        B: { baseURL: 'https://mine.example/v1', apiKeyEnv: 'MINE', models: [{ id: 'local' }] },
+        C: { baseURL: 'https://c.example/v1', models: [{ id: 'c' }] },
+      },
+    },
+  }
+  /** The providers value the single `providers` write carries, or undefined when no such write was planned. */
+  const providersWrite = (plan: ReturnType<typeof planImport>): Record<string, Record<string, unknown>> | undefined => {
+    const write = opsFor(plan, 'llm-pi-ai').find((op) => {
+      const candidate = op as { readonly op?: string; readonly path?: readonly string[] }
+      return candidate.op === 'set' && candidate.path?.[0] === 'providers'
+    }) as { readonly value?: Record<string, Record<string, unknown>> } | undefined
+    return write?.value
+  }
+
+  it('keeps a local endpoint on an existing route the file also carries', () => {
+    const plan = planImport(
+      snapshotOf({ 'llm-pi-ai': { providers: { B: { baseURL: 'https://attacker.example/v1', apiKeyEnv: 'THEIRS' } } } }),
+      namespacesOf(local),
+      'replace',
+    )
+    const providers = providersWrite(plan)!
+    // Replace rewrites the whole `providers` dict, so the B entry must come back
+    // with this machine's wiring rather than the file's — and B must not be
+    // dropped for having nothing else in the file to import.
+    expect(providers.B.baseURL).toBe('https://mine.example/v1')
+    expect(providers.B.apiKeyEnv).toBe('MINE')
+    expect(JSON.stringify(providers)).not.toContain('attacker.example')
+  })
+
+  it('does not create a route whose only content was wiring', () => {
+    const plan = planImport(
+      snapshotOf({ 'llm-pi-ai': { providers: { fresh: { baseURL: 'https://attacker.example/v1' } } } }),
+      namespacesOf(local),
+      'replace',
+    )
+    const providers = providersWrite(plan)!
+    expect(providers.fresh).toBeUndefined()
+    expect(JSON.stringify(providers)).not.toContain('attacker.example')
+  })
+
+  it('creates a new route with its capability fields and no wiring', () => {
+    const plan = planImport(
+      snapshotOf({ 'llm-pi-ai': { providers: { fresh: { baseURL: 'https://attacker.example/v1', models: [{ id: 'file' }] } } } }),
+      namespacesOf(local),
+      'replace',
+    )
+    const providers = providersWrite(plan)!
+    expect(providers.fresh.models).toEqual([{ id: 'file' }])
+    expect(providers.fresh.baseURL).toBeUndefined()
+    expect(JSON.stringify(providers)).not.toContain('attacker.example')
+  })
+
+  it('still deletes a route the file omits entirely, wiring included', () => {
+    const plan = planImport(
+      snapshotOf({ 'llm-pi-ai': { providers: { B: { models: [{ id: 'file' }] } } } }),
+      namespacesOf(local),
+      'replace',
+    )
+    const providers = providersWrite(plan)!
+    // Route C is absent from the file, so replace removes it with its endpoint —
+    // the branch's withholding must not turn an omission into a keep.
+    expect(providers.C).toBeUndefined()
+    expect(JSON.stringify(providers)).not.toContain('c.example')
+  })
+})

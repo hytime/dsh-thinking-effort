@@ -183,7 +183,7 @@ The current DSH Settings API does not support array-index path operations. `mode
 
 ### Snapshot import trust model
 
-A snapshot carries **capability configuration** — reasoning efforts, compat switches, which models enable the session Header — and is safe to move between machines. It does not carry **deployment wiring**: a provider's `baseURL`, `apiKeyEnv`, and `headers`, plus `opencodeSession.format.script`, are withheld on import so a file from someone else cannot redirect your requests, attach their credential name, inject a raw header, or name a local module for the Host to import and execute.
+A snapshot carries **capability configuration** — reasoning efforts, compat switches, which models enable the session Header — and is safe to move between machines. An export also contains **deployment wiring** verbatim: a provider's `baseURL`, `apiKeyEnv`, and `headers`, plus `opencodeSession.format.script`. Import withholds those fields by default, so a file from someone else cannot redirect your requests, attach their credential name, inject a raw header, or name a local module for the Host to import and execute. The exported file still holds every value as written, including a plaintext token kept in `headers` — check it before sharing.
 
 When a file does try to change wiring, the preview says how many entries were skipped and offers **Also import endpoints and credentials (advanced)**, which is off for every import and never remembered. The warning lists the target endpoint for each affected route so the destination is visible before you consent.
 

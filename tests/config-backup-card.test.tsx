@@ -909,6 +909,47 @@ describe('ConfigBackupCard wiring isolation', () => {
     expect(box.checked).toBe(true)
   })
 
+  // The preview and the write must share one rule, and the write must re-derive
+  // it: `applySnapshot` describes again before planning, so wiring the file tried
+  // to change is withheld against the settings the write actually sees. A plan
+  // captured at preview time and replayed here would instead keep the endpoint
+  // that was local when the preview opened, while the machine had already moved
+  // to another one.
+  it('withholds file wiring against the settings read at write time, not the preview read', async () => {
+    // Call 0 is the mount read, call 1 the read that opens the preview, and call
+    // 2 the read `applySnapshot` takes before planning the write. The middle one
+    // is the plan the confirmation must not replay.
+    const preview = { 'llm-pi-ai': { subagentEffort: 'off', providers: { route: { baseURL: 'https://preview.example/v1', models: [{ id: 'local' }] } } } }
+    const atWrite = { 'llm-pi-ai': { subagentEffort: 'off', providers: { route: { baseURL: 'https://write.example/v1', models: [{ id: 'local' }] } } } }
+    const view = harness({ userByCall: [preview, preview, atWrite] })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(view.container, mixedFile())
+
+    // The preview opened against the first read and reports the skipped wiring
+    // it found there. It does not print the endpoint url unless the opt-in is
+    // checked, so the endpoint the preview planned against is read off the plan
+    // the card holds: `providers.route.baseURL` is the preview read's value.
+    expect(view.container.textContent).toContain(text('backupWiringSkipped', { count: 1 }))
+    expect(view.describe).toHaveBeenCalledTimes(2)
+    expect(view.mutate).not.toHaveBeenCalled()
+
+    act(() => button(view.container, text('backupConfirmImport')).click())
+    await settle()
+
+    // Only the llm-pi-ai write that is not the automatic backup can show which
+    // endpoint the import kept: the rollback copy restates the machine's section
+    // no matter what the import withholds.
+    const write = view.mutate.mock.calls.find(([ns, ops]) => ns === 'llm-pi-ai' && !isAutoBackup(ops))
+    expect(write).toBeDefined()
+    const written = JSON.stringify(write![1])
+    expect(written).not.toContain('attacker.example')
+    expect(written).toContain('https://write.example/v1')
+    expect(written).not.toContain('https://preview.example/v1')
+  })
+
   // A script diff is counted even when it has no path to display, and the path
   // it does have is what the opt-in warning names before anything is written.
   it('names the file script path in the opt-in warning', async () => {
