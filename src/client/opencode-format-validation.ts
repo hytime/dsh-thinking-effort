@@ -1,4 +1,9 @@
-import { parseExpression } from '../compat/opencode-expression.js'
+import {
+  collectExpressionNames,
+  EXPRESSION_HELPER_NAMES,
+  parseExpression,
+  SESSION_CONTEXT_KEYS,
+} from '../compat/opencode-expression.js'
 import type { SettingsOp } from './types.js'
 
 /** The namespace the generator settings live in. */
@@ -31,6 +36,7 @@ export type FormatFieldError =
   | 'templateRequired'
   | 'expressionRequired'
   | 'expressionSyntax'
+  | 'expressionUnknownName'
   | 'scriptRequired'
   | 'scriptNotAbsolute'
 
@@ -109,6 +115,12 @@ function isAbsolutePath(value: string): boolean {
  * `expression` / `script` silently falls back to `ses-derive`. Both cases look
  * configured to the user while behaving differently, which is exactly what the
  * card has to refuse.
+ *
+ * An `expression` is therefore checked past its syntax: the evaluator throws on
+ * a name it does not know, the Host catches that together with every other
+ * evaluation failure, and the same silent fallback follows. A misspelled
+ * identifier or helper would read as configured while behaving as if the card
+ * had never been filled in.
  */
 export function formatFieldErrors(draft: FormatDraft): readonly FormatProblem[] {
   const problems: FormatProblem[] = []
@@ -130,7 +142,12 @@ export function formatFieldErrors(draft: FormatDraft): readonly FormatProblem[] 
       problems.push({ field: 'expression', error: 'expressionRequired' })
     } else {
       try {
-        parseExpression(draft.expression)
+        const names = collectExpressionNames(parseExpression(draft.expression))
+        const unknownRef = names.refs.find((name) => !(SESSION_CONTEXT_KEYS as readonly string[]).includes(name))
+        const unknownCall = names.calls.find((name) => !(EXPRESSION_HELPER_NAMES as readonly string[]).includes(name))
+        if (unknownRef !== undefined || unknownCall !== undefined) {
+          problems.push({ field: 'expression', error: 'expressionUnknownName' })
+        }
       } catch {
         problems.push({ field: 'expression', error: 'expressionSyntax' })
       }

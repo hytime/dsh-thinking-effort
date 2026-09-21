@@ -182,3 +182,49 @@ export function evaluateNode(
 export function parseExpression(source: string): Node {
   return new ExpressionParser(tokenize(source)).parse()
 }
+
+/**
+ * Every identifier the evaluation scope provides — the data keys of the Host's
+ * `SessionFormatContext`. The Host asserts these two sets are exactly equal at
+ * compile time, so this list cannot drift away from what evaluation sees.
+ */
+export const SESSION_CONTEXT_KEYS = [
+  'provider', 'model', 'rawSessionId', 'sessionId', 'now', 'hex12', 'tail62', 'sha256',
+] as const
+
+/** Every helper function `expression` mode may call. Also type-checked against the Host's table. */
+export const EXPRESSION_HELPER_NAMES = ['sha256', 'slice', 'lower', 'upper'] as const
+
+/**
+ * Collect the names a parsed expression references or calls.
+ *
+ * The Host evaluates a name it does not know by throwing (`unknown identifier` /
+ * `unknown function`), which the caller catches and turns into a silent fall
+ * back to `ses-derive`. A validator therefore cannot stop at syntax: it has to
+ * know which names exist.
+ * @param node - a parsed expression.
+ * @returns the referenced identifiers and the called function names.
+ */
+export function collectExpressionNames(node: Node): { readonly refs: readonly string[]; readonly calls: readonly string[] } {
+  const refs: string[] = []
+  const calls: string[] = []
+  const visit = (current: Node): void => {
+    switch (current.kind) {
+      case 'literal':
+        return
+      case 'ref':
+        refs.push(current.name)
+        return
+      case 'call':
+        calls.push(current.name)
+        for (const arg of current.args) visit(arg)
+        return
+      case 'binary':
+        visit(current.left)
+        visit(current.right)
+        return
+    }
+  }
+  visit(node)
+  return { refs, calls }
+}

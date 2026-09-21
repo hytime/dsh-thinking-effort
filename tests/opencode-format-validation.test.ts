@@ -97,6 +97,21 @@ describe('formatFieldErrors', () => {
     expect(formatFieldErrors(draft({ mode: 'expression', expression: "'ses_' + hex12 + tail62" }))).toEqual([])
   })
 
+  it('rejects an expression that calls an unknown function', () => {
+    expect(formatFieldErrors(draft({ mode: 'expression', expression: 'sha256x(sessionId)' })))
+      .toEqual([{ field: 'expression', error: 'expressionUnknownName' }])
+  })
+
+  it('rejects an expression that references an unknown identifier', () => {
+    expect(formatFieldErrors(draft({ mode: 'expression', expression: "'ses_' + hex_12" })))
+      .toEqual([{ field: 'expression', error: 'expressionUnknownName' }])
+  })
+
+  it('accepts every documented identifier and helper', () => {
+    expect(formatFieldErrors(draft({ mode: 'expression', expression: 'upper(slice(sha256(sessionId), 0, 6)) + lower(hex12) + tail62 + rawSessionId + sha256 + provider + model' })))
+      .toEqual([])
+  })
+
   it('requires a script path in script mode', () => {
     expect(formatFieldErrors(draft({ mode: 'script', script: '  ' })))
       .toEqual([{ field: 'script', error: 'scriptRequired' }])

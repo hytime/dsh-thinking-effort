@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto'
 import {
   evaluateNode,
   ExpressionParser,
+  EXPRESSION_HELPER_NAMES,
+  SESSION_CONTEXT_KEYS,
   tokenize,
 } from '../compat/opencode-expression.js'
 import type { Node } from '../compat/opencode-expression.js'
@@ -49,6 +51,19 @@ export interface SessionFormatContext {
   /** Full lowercase SHA-256 hex of the normalized session id. */
   readonly sha256: string
 }
+
+// Compile-time guards: the shared name lists must equal what evaluation really
+// provides. Adding a context key or a helper without updating the shared list
+// (or the reverse) becomes a type error rather than a silent client misjudgement.
+// The Client validates an expression against these lists before saving it, so a
+// name the evaluator would reject has to be caught there rather than by the
+// catch-and-fall-back in `computeValue`.
+type ContextKeysExact =
+  (typeof SESSION_CONTEXT_KEYS)[number] extends keyof SessionFormatContext
+    ? keyof SessionFormatContext extends (typeof SESSION_CONTEXT_KEYS)[number] ? true : never
+    : never
+const contextKeysExact: ContextKeysExact = true
+void contextKeysExact
 
 export interface SessionFormatRequest {
   readonly provider: string
@@ -192,11 +207,12 @@ interface ScriptSlot {
 }
 
 /**
- * The documented helper functions for `expression` mode. Built on a
- * null-prototype object so the inherited Object.prototype members are not even
- * present, and the evaluator additionally checks own-property ownership.
+ * The documented helper functions for `expression` mode. The `satisfies` clause
+ * pins the table to the shared name list in both directions: a helper that is
+ * not listed, and a listed helper without an implementation, are both type
+ * errors.
  */
-const EXPRESSION_FUNCS: Record<string, (...args: unknown[]) => unknown> = Object.assign(Object.create(null), {
+const EXPRESSION_FUNCS_TABLE = {
   sha256(value: unknown): string {
     return sha256Hex(String(value))
   },
@@ -209,7 +225,14 @@ const EXPRESSION_FUNCS: Record<string, (...args: unknown[]) => unknown> = Object
   upper(value: unknown): string {
     return String(value).toUpperCase()
   },
-})
+} satisfies Record<(typeof EXPRESSION_HELPER_NAMES)[number], (...args: unknown[]) => unknown>
+
+/**
+ * Built on a null-prototype object so the inherited Object.prototype members
+ * are not even present, and the evaluator additionally checks own-property
+ * ownership.
+ */
+const EXPRESSION_FUNCS: Record<string, (...args: unknown[]) => unknown> = Object.assign(Object.create(null), EXPRESSION_FUNCS_TABLE)
 
 function evaluateExpression(
   source: string,
