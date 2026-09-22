@@ -1857,6 +1857,57 @@ describe('SectionEditor user behavior', () => {
     view.unmount()
   })
 
+  // The subagent save and the OpenCode header toggle address the SAME section
+  // under the entry-config model, so the id alone cannot pick the failure copy:
+  // a failed subagent save must not be reported as a failed OpenCode session
+  // save. The write kind is the discriminator.
+  it('uses the generic write copy for a failed subagent save on an entry-config host', async () => {
+    const view = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [namespace(), entryConfigNamespace()] } }),
+      mutate: async () => ({ ok: false, error: { message: 'conflict' } }),
+    })
+    await settle()
+
+    const select = view.container.querySelectorAll('select')[1] as HTMLSelectElement
+    act(() => {
+      setValue(select, 'custom')
+    })
+    const custom = view.container.querySelector(`input[placeholder="${text('customPlaceholder')}"]`) as HTMLInputElement
+    act(() => {
+      setValue(custom, 'deep')
+    })
+    act(() => button(view.container, text('apply')).click())
+    await settle()
+
+    expect(view.mutate).toHaveBeenCalledWith('thinking-effort', [{ op: 'set', path: ['subagentEffort'], value: 'deep' }], 9)
+    const alert = view.container.querySelector('[role="alert"]')?.textContent ?? ''
+    expect(alert).toContain(text('writeError', { message: 'conflict' }))
+    expect(alert).not.toContain(text('opencodeSessionSaveFailed', { message: 'conflict' }))
+    view.unmount()
+  })
+
+  it('keeps the OpenCode-specific failure copy for the header toggle on an entry-config host', async () => {
+    const llm = openCodeLlmNamespace()
+    const entry = entryConfigNamespace({ revision: 21, value: { opencodeSession: { providers: { provider: { models: { 'model-a': false } } } } } })
+    const view = renderEditor({
+      namespaces: [entry],
+      describe: async () => ({ ok: true, value: { namespaces: [llm, entry] } }),
+      mutate: async () => ({ ok: false, error: { message: 'conflict' } }),
+      compatibilityProfile: 'modern',
+    })
+    await settle()
+
+    openFirstModel(view.container)
+    const headerSwitch = view.container.querySelector(`[data-scope="opencode-session"] button[role="switch"][aria-label="${text('opencodeSessionHeaderTitle')}"]`) as HTMLButtonElement
+    act(() => headerSwitch.click())
+    await settle()
+
+    expect(view.mutate).toHaveBeenCalledWith('thinking-effort', expect.any(Array), entry.revision)
+    const alert = view.container.querySelector('[role="alert"]')?.textContent ?? ''
+    expect(alert).toContain(text('opencodeSessionSaveFailed', { message: 'conflict' }))
+    view.unmount()
+  })
+
   it('keeps the draft and shows a write failure after a rejected save', async () => {
     const view = renderEditor({
       mutate: async () => ({ ok: false, error: { message: 'conflict' } }),

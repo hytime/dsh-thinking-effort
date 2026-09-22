@@ -316,9 +316,12 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   }, [takeoverResolution])
 
   const runOps = ({ ns, revision, ops, successMessage, onSuccess, openCodeSessionSavedKey, entrySectionWrite }: RunOpsRequest): void => {
-    // Either section id is this plugin's own, so a failed toggle keeps the
-    // OpenCode-specific copy under both settings models.
-    const writeError = (message: string): string => isOpenCodeSessionSectionId(ns)
+    // The OpenCode-specific copy belongs to the header toggle, whose section id
+    // happens to equal the entry id under the 0.1.7 model. A failed subagent
+    // save targets that same section (`entrySectionWrite`), so the discriminator
+    // is the write kind, not the id: keying on the id alone would report a
+    // subagent failure as an OpenCode session failure.
+    const writeError = (message: string): string => isOpenCodeSessionSectionId(ns) && entrySectionWrite !== true
       ? t('opencodeSessionSaveFailed', { message })
       : t('writeError', { message })
     setState((current) => ({ ...current, busy: true, error: null, notice: null }))

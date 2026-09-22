@@ -7,6 +7,7 @@ import {
 } from './types.js'
 import type { ConfigSnapshot, SnapshotMeta, SnapshotSection } from './types.js'
 import { isOpenCodeSessionSectionId, PLUGIN_ENTRY_ID } from '../../compat/opencode-session.js'
+import { pluginSectionId } from '../subagent-section.js'
 import type { SettingsNamespace } from '../types.js'
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -82,8 +83,13 @@ export function pluginSectionOf(user: SnapshotSection): SnapshotSection {
 export function snapshotFromNamespaces(
   namespaces: readonly SettingsNamespace[],
   meta: SnapshotMeta,
-  /** The id this host addresses the plugin section by; defaults to the legacy registered namespace. */
-  pluginNamespace: string = PLUGIN_NAMESPACE,
+  /**
+   * The id this host addresses the plugin section by, when the caller already
+   * resolved it. Absent, it is resolved from `namespaces` — the read being
+   * captured — so an entry-config host cannot silently export the plugin's
+   * settings as `{}` under the legacy id.
+   */
+  pluginNamespace: string = pluginSectionId(namespaces),
 ): ConfigSnapshot {
   const sections: Record<string, SnapshotSection> = {}
   for (const ns of CONFIG_NAMESPACES) {

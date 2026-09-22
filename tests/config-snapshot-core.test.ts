@@ -110,6 +110,42 @@ describe('parseSnapshot', () => {
     expect(result.value.snapshot.sections['llm-deepseek']).toBeUndefined()
   })
 
+  // Both settings models' section ids are this plugin's own. Accepting only the
+  // legacy one made a file the plugin itself exported on 0.1.7 re-import as an
+  // IGNORED namespace, with the plugin half silently replaced by `{}` — a
+  // round trip the product performs on every export/import pair.
+  it('accepts the entry-config section id a 0.1.7 host exports', () => {
+    const entrySection = { opencodeSession: { providers: { p: { models: { m: true } } } } }
+    const result = parseSnapshot(JSON.stringify({
+      ...validSnapshot,
+      sections: { 'thinking-effort': entrySection, 'llm-pi-ai': { a: 1 } },
+    }))
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.value.ignoredNamespaces).toEqual([])
+    expect(result.value.snapshot.sections['thinking-effort']).toEqual(entrySection)
+  })
+
+  it('round-trips a real entry-config export without dropping its plugin section', () => {
+    const entry = (user: Record<string, unknown>): SettingsNamespace => ({ ns: 'thinking-effort', revision: 9, value: {}, user })
+    const entrySection = { opencodeSession: { providers: { p: { models: { m: true } } } } }
+    const exported = snapshotFromNamespaces(
+      [llm({ subagentEffort: 'off' }), entry(entrySection)],
+      { createdAt: '2026-09-16T12:00:00.000Z', pluginVersion: '0.2.4', sourceProfile: 'modern' },
+    )
+    // What a 0.1.7 export actually writes: one plugin key, under the entry id.
+    expect(Object.keys(exported.sections)).toEqual(['thinking-effort', 'llm-pi-ai'])
+
+    const result = parseSnapshot(serializeSnapshot(exported))
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    expect(result.value.ignoredNamespaces).toEqual([])
+    expect(result.value.snapshot.sections['thinking-effort']).toEqual(entrySection)
+    expect(result.value.snapshot.sections['llm-pi-ai']).toEqual({ subagentEffort: 'off' })
+  })
+
   it('rejects malformed input with a specific code', () => {
     const codes = (text: string): string | undefined => {
       const result = parseSnapshot(text)

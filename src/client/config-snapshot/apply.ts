@@ -1,7 +1,7 @@
 import { planImport } from './plan.js'
 import { autoBackupOps } from './library.js'
 import { snapshotFromNamespaces } from './snapshot.js'
-import { PLUGIN_NAMESPACE } from './types.js'
+import { pluginSectionId } from '../subagent-section.js'
 import type { ApplyOutcome, ApplySettings, ConfigSnapshot, ImportMode, NamespaceOutcome } from './types.js'
 import type { SettingsNamespace } from '../types.js'
 
@@ -13,10 +13,11 @@ export interface ApplyRequest {
   /** Apply the snapshot's endpoint / credential / script wiring too. Defaults to false. */
   readonly importWiring?: boolean
   /**
-   * The id the running host addresses the plugin section by — `pluginSectionId`
-   * of the fresh `describe()` below. The auto backup is written there and the
-   * plugin half of the plan targets it; absent, the legacy registered namespace
-   * is kept, which is what an older host publishes.
+   * The id the running host addresses the plugin section by, when the caller
+   * already resolved it. Absent, it is resolved from the fresh `describe()` the
+   * apply takes below, so the production path cannot fall back to the legacy id
+   * on an entry-config host. The auto backup is written to the resolved id and
+   * the plugin half of the plan targets it.
    */
   readonly pluginNamespace?: string
   /** Injected for tests; defaults to the real clock. */
@@ -53,7 +54,9 @@ export async function applySnapshot(request: ApplyRequest): Promise<ApplyOutcome
   }
 
   const namespaces = fresh.value.namespaces
-  const pluginNamespace = request.pluginNamespace ?? PLUGIN_NAMESPACE
+  // Resolved from the read the plan runs against, so a caller that omits the
+  // option still writes the section the live host publishes.
+  const pluginNamespace = request.pluginNamespace ?? pluginSectionId(namespaces)
   const plan = planImport(snapshot, namespaces, mode, {
     importWiring: request.importWiring ?? false,
     pluginNamespace,

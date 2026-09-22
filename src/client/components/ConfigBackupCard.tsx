@@ -110,20 +110,19 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   // One describe answer is the whole registry, and three consumers read it —
   // the profile library, the export snapshot and the import summary — so they
   // all take it through this mapping and cannot disagree about what the
-  // settings hold. The plugin section's id is resolved here too, once per read:
-  // under the 0.1.7 entry-config model it is the Loader entry rather than the
-  // legacy registered namespace, and every one of those readers keys on it.
+  // settings hold. The library readers resolve the plugin section's id from
+  // this same read, so under the 0.1.7 entry-config model they key on the
+  // Loader entry rather than the legacy registered namespace.
   const withNamespaces = (current: CardState, value: SettingsDescribeValue): CardState => {
     const namespaces = value.namespaces
-    const pluginId = pluginSectionId(namespaces)
-    const profiles = profilesFromNamespaces(namespaces, pluginId)
+    const profiles = profilesFromNamespaces(namespaces)
     return {
       ...current,
       namespaces,
       writable: value.writable !== false,
       profiles,
       profileNames: Object.keys(profiles).sort(),
-      autoBackupAt: autoBackupFromNamespaces(namespaces, pluginId)?.createdAt ?? null,
+      autoBackupAt: autoBackupFromNamespaces(namespaces)?.createdAt ?? null,
     }
   }
 
@@ -275,6 +274,20 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   const openPreview = (snapshot: ConfigSnapshot, label: string, ignored: readonly string[] = []): void => {
     setState((current) => ({ ...current, error: null, notice: [], mode: 'merge', importWiring: false, preview: { snapshot, label, ignored } }))
     void refreshNamespaces()
+  }
+
+  /**
+   * Preview the stored rollback copy, keyed by the same resolved plugin id as
+   * every other read. The copy is re-read here rather than passed down from the
+   * header, which only renders the timestamp: an id that disagreed with the one
+   * the library used would hand `openPreview` `undefined`, and the preview
+   * dereferences the snapshot. Returning without a preview is the whole failure
+   * mode — a refresh can legitimately drop a copy the mount read still saw.
+   */
+  const openAutoBackupPreview = (): void => {
+    const backup = autoBackupFromNamespaces(state.namespaces, pluginId())
+    if (backup === undefined) return
+    openPreview(backup, t('backupSourceAutoBackup'))
   }
 
   const onFileChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
@@ -462,7 +475,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
         <div style={sectionTitle}>{t('backupAutoBackupTitle')}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <span style={muted}>{state.autoBackupAt === null ? t('backupAutoBackupNone') : state.autoBackupAt}</span>
-          {state.autoBackupAt === null ? null : <ActionButton text={t('backupAutoBackupRestore')} onClick={() => openPreview(autoBackupFromNamespaces(state.namespaces)!, t('backupSourceAutoBackup'))} disabled={state.busy || readOnly} palette={palette} icon="restore" />}
+          {state.autoBackupAt === null ? null : <ActionButton text={t('backupAutoBackupRestore')} onClick={openAutoBackupPreview} disabled={state.busy || readOnly} palette={palette} icon="restore" />}
         </div>
       </div>
       {state.preview === null || previewPlan === null ? null : <div style={{ display: 'grid', gap: '6px', border: `1px solid ${palette.accentBorder}`, borderRadius: '8px', backgroundColor: palette.accentSoft, padding: '7px 8px' }}>

@@ -2,6 +2,7 @@ import { CONFIG_NAMESPACES, PLUGIN_NAMESPACE } from './types.js'
 import type { ConfigSnapshot, ImportMode, ImportPlan, NamespacePlan, SnapshotSection, WiringReport } from './types.js'
 import { userSectionOf, isRecord, isSnapshotLibraryKey, deepEqualJson, pluginSectionKey } from './snapshot.js'
 import { adjustIncoming, mergeWiringReports } from './wiring.js'
+import { pluginSectionId } from '../subagent-section.js'
 import type { SettingsNamespace, SettingsOp } from '../types.js'
 
 export { deepEqualJson } from './snapshot.js'
@@ -24,10 +25,10 @@ export interface PlanOptions {
   /** Apply the file's endpoint / credential / script wiring too. Defaults to false. */
   readonly importWiring?: boolean
   /**
-   * The id the running host addresses the plugin section by — `pluginSectionId`
-   * of the same `describe()` result. Writes are planned against it, while the
-   * file's own section is looked up under whichever id it carries, so a
-   * snapshot exported by the other settings model still applies.
+   * The id the running host addresses the plugin section by, when the caller
+   * already resolved it. Absent, it is resolved from `namespaces` — the same
+   * `describe()` result the diff runs against — so a caller cannot silently
+   * plan against the legacy id on an entry-config host.
    */
   readonly pluginNamespace?: string
 }
@@ -68,7 +69,7 @@ export function planImport(
   const summary: { added: number; overwritten: number; removed: number } = { added: 0, overwritten: 0, removed: 0 }
   const plans: NamespacePlan[] = []
   const reports: WiringReport[] = []
-  const pluginNamespace = options.pluginNamespace ?? PLUGIN_NAMESPACE
+  const pluginNamespace = options.pluginNamespace ?? pluginSectionId(namespaces)
   const fileKey = pluginSectionKey(snapshot.sections, pluginNamespace)
 
   for (const ns of CONFIG_NAMESPACES) {

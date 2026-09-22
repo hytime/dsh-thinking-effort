@@ -10,10 +10,11 @@ export const MAX_PROFILE_NAME = 40
 export const LLM_NAMESPACE = 'llm-pi-ai'
 /**
  * The plugin section's legacy id: what rc.7 … 0.1.6 register, and the snapshot
- * key this build falls back to when the running host publishes no entry
- * section. Under the 0.1.7 entry-config model the section is the Loader entry
- * (`PLUGIN_ENTRY_ID`), so callers that hold a `describe()` result resolve the
- * live id with `pluginSectionId` and pass it in.
+ * key this build falls back to when the host publishes no entry section. Under
+ * the 0.1.7 entry-config model the section is the Loader entry
+ * (`PLUGIN_ENTRY_ID`); the snapshot pipeline resolves that live id from the
+ * `describe()` result it already holds — `pluginSectionId` — and only falls
+ * back to this constant when neither id is published.
  */
 export const PLUGIN_NAMESPACE = OPENCODE_SESSION_NAMESPACE
 

@@ -61,12 +61,17 @@ function isAutoBackup(ops: readonly SettingsOp[]): boolean {
 }
 
 function harness(options: HarnessOptions = {}) {
-  // The revisions the host reports: llm-pi-ai 4, plugin namespace 8. A later
-  // describe can answer with a bumped revision, and a stale mutate is then
-  // refused with settings/conflict just like the real provider.
-  const revisions: Record<string, number> = { 'llm-pi-ai': 4, 'dsh-thinking-effort': 8, 'thinking-effort': 8 }
+  // The revisions the host reports: llm-pi-ai 4, and 8 for the one plugin
+  // section this host publishes. Only published ids are registered, so a write
+  // addressed to the other settings model's id is refused the way the real host
+  // refuses an unknown namespace — a harness that accepted it would let a card
+  // that targets the wrong section pass on an "entry host".
   const pluginId = options.pluginNamespace ?? 'dsh-thinking-effort'
+  const revisions: Record<string, number> = { 'llm-pi-ai': 4, [pluginId]: 8 }
   const mutate = vi.fn(async (ns: string, ops: readonly SettingsOp[], revision: number): Promise<ClientResult<SettingsNamespace>> => {
+    if (!Object.prototype.hasOwnProperty.call(revisions, ns)) {
+      return { ok: false, error: { message: `unknown settings namespace "${ns}"` } }
+    }
     if (options.failAutoBackup === true && isAutoBackup(ops)) {
       return { ok: false, error: { message: 'settings rejected the backup' } }
     }
@@ -784,6 +789,99 @@ describe('ConfigBackupCard', () => {
     expect(view.container.textContent).toContain(text('backupSummary', { added: 0, overwritten: 1, removed: 0 }))
     expect(view.container.textContent).not.toContain(text('backupSummaryLibraryOnly'))
     expect(button(view.container, text('backupConfirmImport')).disabled).toBe(false)
+  })
+})
+
+describe('ConfigBackupCard settings-model round trip', () => {
+  const sessionValue = { providers: { provider: { models: { 'model-a': true } } } }
+  const entrySection = { opencodeSession: sessionValue }
+
+  /**
+   * Export a file from one entry-config host and return its bytes: the real
+   * exporter, not a hand-built snapshot. The file is then fed back through the
+   * card's own `<input type="file">`, so the whole product path under test is
+   * export → file → `parseSnapshot` → plan → apply.
+   */
+  const exportFromEntryHost = async (user: Record<string, Record<string, unknown>>): Promise<string> => {
+    const source = harness({ pluginNamespace: 'thinking-effort', user })
+    await settle()
+    act(() => button(source.container, text('backupCardTitle')).click())
+    await settle()
+    act(() => button(source.container, text('backupExportCurrent')).click())
+    await settle()
+    const [, body] = source.download.mock.calls[0] as [string, string]
+    source.unmount()
+    return body
+  }
+
+  it('imports a file another entry-config host exported and writes the entry section', async () => {
+    const body = await exportFromEntryHost({ 'thinking-effort': entrySection })
+    // What 0.1.7 actually exports: the plugin's settings under the entry id.
+    expect((JSON.parse(body) as { sections: Record<string, unknown> }).sections['thinking-effort']).toEqual(entrySection)
+
+    // A different 0.1.7 host, whose own plugin section is still empty.
+    const target = harness({ pluginNamespace: 'thinking-effort' })
+    cleanup = target.unmount
+    await settle()
+    act(() => button(target.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(target.container, new File([body], 'export.json', { type: 'application/json' }))
+
+    // The file's plugin section is recognized, so the preview counts its write
+    // instead of claiming the file already matches this configuration.
+    expect(target.container.textContent).toContain(text('backupSummary', { added: 1, overwritten: 0, removed: 0 }))
+    expect(button(target.container, text('backupConfirmImport')).disabled).toBe(false)
+
+    act(() => button(target.container, text('backupConfirmImport')).click())
+    await settle()
+
+    // Only the namespace writes, not the rollback copy taken before them.
+    const writes = target.mutate.mock.calls.filter(([, ops]) => !isAutoBackup(ops))
+    expect(writes).toEqual([
+      ['thinking-effort', [{ op: 'set', path: ['opencodeSession'], value: sessionValue }], 9],
+    ])
+    // The legacy id this host does not publish is never addressed.
+    expect(target.mutate.mock.calls.map(([ns]) => ns)).not.toContain('dsh-thinking-effort')
+    expect(target.container.querySelector('[role="alert"]')).toBeNull()
+    expect(target.onApplied).toHaveBeenCalled()
+  })
+
+  it('applies a file an entry-config host exported to a legacy host section', async () => {
+    const body = await exportFromEntryHost({ 'thinking-effort': entrySection })
+
+    const target = harness()
+    cleanup = target.unmount
+    await settle()
+    act(() => button(target.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(target.container, new File([body], 'export.json', { type: 'application/json' }))
+
+    expect(target.container.textContent).toContain(text('backupSummary', { added: 1, overwritten: 0, removed: 0 }))
+
+    act(() => button(target.container, text('backupConfirmImport')).click())
+    await settle()
+
+    const writes = target.mutate.mock.calls.filter(([, ops]) => !isAutoBackup(ops))
+    expect(writes).toEqual([
+      ['dsh-thinking-effort', [{ op: 'set', path: ['opencodeSession'], value: sessionValue }], 9],
+    ])
+  })
+
+  it('previews the auto backup stored in the entry section instead of dereferencing a missing snapshot', async () => {
+    const backup = storedSnapshot({ 'llm-pi-ai': { subagentEffort: 'high' } }, '2026-09-15T08:30:00.000Z')
+    const view = harness({ pluginNamespace: 'thinking-effort', user: { 'thinking-effort': { autoBackup: backup } } })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+
+    act(() => button(view.container, text('backupAutoBackupRestore')).click())
+    await settle()
+
+    expect(view.container.textContent).toContain(text('backupSourceAutoBackup'))
+    expect(view.container.textContent).toContain(text('backupPreviewTitle'))
+    expect(view.mutate).not.toHaveBeenCalled()
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
   })
 })
 

@@ -8,6 +8,7 @@ import {
   validateProfileName,
 } from '../src/client/config-snapshot/library.js'
 import { deepEqualJson, planImport } from '../src/client/config-snapshot/plan.js'
+import { parseSnapshot, serializeSnapshot } from '../src/client/config-snapshot/parse.js'
 import type { ConfigSnapshot } from '../src/client/config-snapshot/types.js'
 import type { SettingsNamespace } from '../src/client/types.js'
 
@@ -34,14 +35,37 @@ describe('planImport under the entry-config settings model', () => {
     { ns: 'llm-pi-ai', revision: 5, value: {}, user: sections['llm-pi-ai'] ?? {} },
     { ns: 'thinking-effort', revision: 9, value: {}, user: sections['thinking-effort'] ?? {} },
   ]
+  const entrySection = { opencodeSession: { providers: { p: { models: { m: true } } } } }
 
+  /**
+   * The file a real exporter writes, read back through the parse that guards
+   * every import. The sections given here are the whole file — the exporter
+   * writes one plugin key, under the id of the model that produced it — and
+   * handing a hand-built `ConfigSnapshot` straight to `planImport` would assert
+   * a path the product cannot execute, because the parse sits between the file
+   * and the plan and decides which sections survive.
+   */
+  const fileOf = (sections: Record<string, Record<string, unknown>>): ConfigSnapshot => {
+    const parsed = parseSnapshot(serializeSnapshot({
+      kind: 'dsh-thinking-effort/config-snapshot',
+      version: 1,
+      createdAt: '2026-09-16T12:00:00.000Z',
+      pluginVersion: '0.2.4',
+      sourceProfile: 'modern',
+      sections,
+    }))
+    if (!parsed.ok) throw new Error(`fixture did not parse: ${parsed.error.code}`)
+    return parsed.value.snapshot
+  }
+
+  // No `pluginNamespace` is passed anywhere below: the id is resolved from the
+  // host's own describe result, exactly as the card's preview and write do.
   it('writes the plugin section under the entry id a 0.1.7 host publishes', () => {
-    const plan = planImport(
-      snapshotOf({ 'thinking-effort': { opencodeSession: { providers: { p: { models: { m: true } } } } } }),
-      entryHost({}),
-      'merge',
-      { pluginNamespace: 'thinking-effort' },
-    )
+    const file = fileOf({ 'thinking-effort': entrySection })
+    // The fixture is what the entry model exports — one plugin key, entry id.
+    expect(file.sections['thinking-effort']).toEqual(entrySection)
+
+    const plan = planImport(file, entryHost({}), 'merge')
 
     expect(opsFor(plan, 'thinking-effort')).toEqual([
       { op: 'set', path: ['opencodeSession'], value: { providers: { p: { models: { m: true } } } } },
@@ -50,52 +74,43 @@ describe('planImport under the entry-config settings model', () => {
   })
 
   it('applies a snapshot exported by the legacy model to the entry section', () => {
-    const plan = planImport(
-      snapshotOf({ 'dsh-thinking-effort': { opencodeSession: { providers: { p: { models: { m: true } } } } } }),
-      entryHost({}),
-      'merge',
-      { pluginNamespace: 'thinking-effort' },
-    )
+    const file = fileOf({ 'dsh-thinking-effort': entrySection })
+
+    const plan = planImport(file, entryHost({}), 'merge')
 
     expect(opsFor(plan, 'thinking-effort')).toEqual([
       { op: 'set', path: ['opencodeSession'], value: { providers: { p: { models: { m: true } } } } },
     ])
+    expect(opsFor(plan, 'dsh-thinking-effort')).toEqual([])
   })
 
   it('applies a snapshot exported by the entry model to a legacy host', () => {
-    const plan = planImport(
-      snapshotOf({ 'thinking-effort': { opencodeSession: { providers: { p: { models: { m: true } } } } } }),
-      current({}),
-      'merge',
-      { pluginNamespace: 'dsh-thinking-effort' },
-    )
+    const file = fileOf({ 'thinking-effort': entrySection })
+
+    const plan = planImport(file, current({}), 'merge')
 
     expect(opsFor(plan, 'dsh-thinking-effort')).toEqual([
       { op: 'set', path: ['opencodeSession'], value: { providers: { p: { models: { m: true } } } } },
     ])
+    expect(opsFor(plan, 'thinking-effort')).toEqual([])
   })
 
-  it('keeps the legacy key by default, so a pre-0.1.7 host is unaffected', () => {
-    const plan = planImport(
-      snapshotOf({ 'dsh-thinking-effort': { opencodeSession: { providers: { p: { models: { m: true } } } } } }),
-      current({}),
-      'merge',
-    )
+  it('keeps the legacy key on a host that publishes only it', () => {
+    const file = fileOf({ 'dsh-thinking-effort': entrySection })
+
+    const plan = planImport(file, current({}), 'merge')
 
     expect(opsFor(plan, 'dsh-thinking-effort')).toHaveLength(1)
     expect(opsFor(plan, 'thinking-effort')).toEqual([])
   })
 
   it('never plans the snapshot library out of an entry section either', () => {
-    const plan = planImport(
-      snapshotOf({ 'thinking-effort': { profiles: { work: {} }, autoBackup: {}, opencodeSession: { providers: {} } } }),
-      entryHost({}),
-      'replace',
-      { pluginNamespace: 'thinking-effort' },
-    )
+    const file = fileOf({ 'thinking-effort': { ...entrySection, profiles: { work: {} }, autoBackup: {} } })
+
+    const plan = planImport(file, entryHost({}), 'replace')
 
     expect(opsFor(plan, 'thinking-effort')).toEqual([
-      { op: 'set', path: ['opencodeSession'], value: { providers: {} } },
+      { op: 'set', path: ['opencodeSession'], value: { providers: { p: { models: { m: true } } } } },
     ])
   })
 })
