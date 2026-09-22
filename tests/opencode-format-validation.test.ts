@@ -6,6 +6,7 @@ import {
   formatFieldErrors,
   formatOps,
 } from '../src/client/opencode-format-validation.js'
+import { PLUGIN_SETTINGS_SCHEMA } from '../src/host/plugin-settings.ts'
 
 const draft = (over: Partial<Record<string, string>>) => ({ ...DEFAULT_FORMAT_DRAFT, ...over })
 
@@ -20,6 +21,25 @@ describe('DEFAULT_FORMAT_DRAFT', () => {
       validate: '',
       onInvalid: 'warn',
     })
+  })
+
+  it('equals the defaults the Host schema resolves', () => {
+    // The card shows these values in its "stored value is unsupported, resolved
+    // to X" notice, so a schema default changed without this module would make
+    // the card name a fallback the Host does not use. The Client cannot import
+    // the Host schema (it pulls in `node:` built-ins), but a test can.
+    //
+    // Both shapes are read: an absent namespace takes the schema's outer
+    // default, while a namespace whose `format` section is missing takes the
+    // per-field defaults — the two are separate copies of the same values.
+    type Resolved = { opencodeSession?: { format?: Record<string, unknown> } }
+    const absent = PLUGIN_SETTINGS_SCHEMA({}) as Resolved
+    expect(absent.opencodeSession?.format).toEqual(DEFAULT_FORMAT_DRAFT)
+    // An empty `format` object is what actually exercises the per-field
+    // `z.string().default(...)` declarations; a missing section short-circuits
+    // to the object literals above instead.
+    const emptyFormat = PLUGIN_SETTINGS_SCHEMA({ opencodeSession: { providers: {}, format: {} } }) as Resolved
+    expect(emptyFormat.opencodeSession?.format).toEqual(DEFAULT_FORMAT_DRAFT)
   })
 
   it('lists every field key', () => {
@@ -72,6 +92,13 @@ describe('formatFieldErrors', () => {
 
   it('ignores an empty validate source', () => {
     expect(formatFieldErrors(draft({ validate: '' }))).toEqual([])
+  })
+
+  it('ignores a whitespace-only validate source', () => {
+    // `/   /` compiles, so this is not a syntax problem the old check caught:
+    // it reaches the Host as a filter no generated value can match.
+    expect(formatFieldErrors(draft({ validate: '   ' }))).toEqual([])
+    expect(new RegExp('   ').test('ses_000000000000AAAAAAAAAAAAAA')).toBe(false)
   })
 
   it('requires a template in template mode', () => {
@@ -151,5 +178,19 @@ describe('formatOps', () => {
 
   it('does not emit ops for unchanged fields', () => {
     expect(formatOps(draft({ template: 'x' }), draft({ template: 'x' }))).toEqual([])
+  })
+
+  it('writes a whitespace-only validate source as the empty string', () => {
+    // Never as a literal whitespace pattern: the Host would compile it into a
+    // filter that rejects every generated value. Clearing a stored source with
+    // spaces must reach the Host as "no validation", not as a live filter.
+    expect(formatOps(draft({ validate: '   ' }), draft({ validate: '^ses_' })))
+      .toEqual([{ op: 'set', path: ['opencodeSession', 'format', 'validate'], value: '' }])
+    expect(formatOps(draft({ validate: '   ' }), DEFAULT_FORMAT_DRAFT)).toEqual([])
+  })
+
+  it('keeps a validate source that only has surrounding whitespace', () => {
+    expect(formatOps(draft({ validate: ' ^ses_ ' }), DEFAULT_FORMAT_DRAFT))
+      .toEqual([{ op: 'set', path: ['opencodeSession', 'format', 'validate'], value: ' ^ses_ ' }])
   })
 })

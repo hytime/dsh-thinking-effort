@@ -4,6 +4,7 @@ import {
   DEFAULT_FORMAT_DRAFT,
   draftFromSettings,
   FORMAT_INVALID_POLICIES,
+  FORMAT_KEYS,
   FORMAT_MODES,
   FORMAT_TIMES,
   formatFieldErrors,
@@ -11,11 +12,16 @@ import {
   FORMAT_NAMESPACE,
 } from '../opencode-format-validation.js'
 import type { FormatDraft, FormatField, FormatFieldError } from '../opencode-format-validation.js'
+import type { OpenCodeSessionFormatMode, OpenCodeSessionInvalidPolicy } from '../../compat/opencode-session.js'
 import type { Palette } from '../theme.js'
 import type { SettingsApi, SettingsDescribeValue, SettingsNamespace, Translation } from '../types.js'
 
-/** Localization keys for the five generator modes, in `FORMAT_MODES` order. */
-const MODE_LABEL_KEYS: Readonly<Record<string, string>> = {
+/**
+ * Localization keys for the five generator modes. Typed as a complete map over
+ * the shared mode list, so adding a mode there without a label here is a type
+ * error rather than an option that renders its raw key name.
+ */
+const MODE_LABEL_KEYS: Readonly<Record<OpenCodeSessionFormatMode, string>> = {
   'ses-derive': 'formatModeSesDerive',
   'passthrough': 'formatModePassthrough',
   'template': 'formatModeTemplate',
@@ -31,7 +37,7 @@ const ENUM_LABEL_KEYS: Readonly<Partial<Record<FormatField, string>>> = {
 }
 
 /** Localization keys for the three invalid policies, in `FORMAT_INVALID_POLICIES` order. */
-const POLICY_LABEL_KEYS: Readonly<Record<string, string>> = {
+const POLICY_LABEL_KEYS: Readonly<Record<OpenCodeSessionInvalidPolicy, string>> = {
   'warn': 'formatOnInvalidWarn',
   'drop': 'formatOnInvalidDrop',
   'send': 'formatOnInvalidSend',
@@ -69,13 +75,28 @@ const HINT_LABEL_KEYS: Readonly<Partial<Record<FormatField, string>>> = {
  * `script` all read `hex12` through `context(request, session, config.time)` —
  * as does `derive(session, config.time)`, which each of them falls back to when
  * its source is empty or fails.
+ *
+ * Derived from the shared mode list rather than listed again, so a mode added
+ * there is offered its timestamp source by default instead of silently losing
+ * the control.
  */
-const TIME_MODES = ['ses-derive', 'template', 'expression', 'script'] as const
+const TIME_MODES: readonly OpenCodeSessionFormatMode[] =
+  FORMAT_MODES.filter((mode) => mode !== 'passthrough')
 
 export interface OpenCodeFormatCardProps {
   readonly settings: SettingsApi
   readonly palette: Palette
   readonly t: Translation
+  /**
+   * A value that changes on every read the surrounding editor performs for this
+   * namespace — the backup card importing a snapshot, the model editor's
+   * session switch, this card's own successful write. Every change re-reads the
+   * stored draft, so the controls never keep a draft a page-mate has since
+   * retired. It is compared for inequality only, so a read counter serves as
+   * well as the namespace revision and does not miss a second read that lands
+   * on the same revision.
+   */
+  readonly revision?: number
   /**
    * Called after a successful write. This card shares its namespace with the
    * model editor's session switch, so the surrounding editor has to re-read the
@@ -161,15 +182,39 @@ function ownRecord(value: unknown, key: string): Record<string, unknown> | undef
 
 const isConflict = (message: string): boolean => /conflict/i.test(message)
 
-export function OpenCodeFormatCard({ settings, palette, t, onApplied }: OpenCodeFormatCardProps): React.ReactElement {
+export function OpenCodeFormatCard({ settings, palette, t, revision, onApplied }: OpenCodeFormatCardProps): React.ReactElement {
   const [state, setState] = React.useState<CardState>(initialState)
+  /**
+   * The latest state, for the async callbacks below. `apply` re-reads the
+   * registry before writing, and by the time that read lands the user may have
+   * typed into a field this card did not re-render for; the draft that gets
+   * written has to be the one on screen at that moment, not the one captured
+   * when Apply was clicked.
+   */
+  const stateRef = React.useRef(state)
+  stateRef.current = state
 
+  /**
+   * Fold one read into the card's state.
+   *
+   * A field the user has already edited (`draft` differs from `saved`) keeps
+   * its draft; every other field takes the freshly read value. That keeps the
+   * card from writing back the values it read before a page-mate — the backup
+   * card's import, the model editor's session switch — changed this namespace:
+   * with the whole draft replaced, the next Apply would present those retired
+   * values as edits and silently undo the other write. `saved` always advances
+   * to the fresh read, so it stays the single reference for "unchanged".
+   */
   const applyRead = (current: CardState, value: SettingsDescribeValue): CardState => {
     const user = userOf(value.namespaces)
-    const draft = draftFromSettings(user)
+    const fresh = draftFromSettings(user)
+    let draft = current.draft
+    for (const key of FORMAT_KEYS) {
+      if (draft[key] === current.saved[key]) draft = { ...draft, [key]: fresh[key] }
+    }
     return {
       ...current,
-      saved: draft,
+      saved: fresh,
       draft,
       unsupportedStored: unsupportedStoredEnums(user),
       writable: value.writable !== false,
@@ -191,7 +236,7 @@ export function OpenCodeFormatCard({ settings, palette, t, onApplied }: OpenCode
     })
   }
 
-  React.useEffect(() => { load() }, [])
+  React.useEffect(() => { load() }, [revision])
 
   const patch = (field: keyof FormatDraft, value: string): void => {
     setState((current) => ({ ...current, notice: null, error: null, draft: { ...current.draft, [field]: value } }))
@@ -210,7 +255,8 @@ export function OpenCodeFormatCard({ settings, palette, t, onApplied }: OpenCode
         setState((current) => ({ ...current, busy: false, error: response.error.message }))
         return undefined
       }
-      const ops = formatOps(state.draft, draftFromSettings(userOf(response.value.namespaces)))
+      const stored = draftFromSettings(userOf(response.value.namespaces))
+      const ops = formatOps(stateRef.current.draft, stored)
       if (ops.length === 0) {
         setState((current) => ({ ...current, busy: false, saved: current.draft, notice: t('formatSaved') }))
         return undefined
@@ -286,7 +332,7 @@ export function OpenCodeFormatCard({ settings, palette, t, onApplied }: OpenCode
       onChange={(event) => patch('mode', event.currentTarget.value)}
       style={selectStyle(palette)}
     >
-      {FORMAT_MODES.map((mode) => <option key={mode} value={mode}>{t(MODE_LABEL_KEYS[mode]!)}</option>)}
+      {FORMAT_MODES.map((mode) => <option key={mode} value={mode}>{t(MODE_LABEL_KEYS[mode])}</option>)}
     </select>
   )
 
@@ -315,7 +361,7 @@ export function OpenCodeFormatCard({ settings, palette, t, onApplied }: OpenCode
       >
         <span>{t('formatCardTitle')}</span>
         <span style={{ marginLeft: 'auto', color: palette.secondary, fontSize: '11px', fontWeight: 600 }}>
-          {t('formatCardHint', { mode: t(MODE_LABEL_KEYS[state.saved.mode] ?? 'formatModeSesDerive') })}
+          {t('formatCardHint', { mode: t(MODE_LABEL_KEYS[state.saved.mode as OpenCodeSessionFormatMode] ?? 'formatModeSesDerive') })}
         </span>
         <Icon name={state.open ? 'chevronUp' : 'chevronDown'} size={14} />
       </button>
@@ -340,7 +386,7 @@ export function OpenCodeFormatCard({ settings, palette, t, onApplied }: OpenCode
       {state.draft.mode === 'expression' ? textField('expression', 'formatExpressionLabel') : null}
       {state.draft.mode === 'script' ? textField('script', 'formatScriptLabel') : null}
       {textField('validate', 'formatValidateLabel')}
-      {state.draft.validate === '' ? null : <label style={rowStyle}>
+      {state.draft.validate.trim() === '' ? null : <label style={rowStyle}>
         <span style={labelStyle}>{t('formatOnInvalidLabel')}</span>
         <select
           value={state.draft.onInvalid}
@@ -349,7 +395,7 @@ export function OpenCodeFormatCard({ settings, palette, t, onApplied }: OpenCode
           onChange={(event) => patch('onInvalid', event.currentTarget.value)}
           style={selectStyle(palette)}
         >
-          {FORMAT_INVALID_POLICIES.map((policy) => <option key={policy} value={policy}>{t(POLICY_LABEL_KEYS[policy]!)}</option>)}
+          {FORMAT_INVALID_POLICIES.map((policy) => <option key={policy} value={policy}>{t(POLICY_LABEL_KEYS[policy])}</option>)}
         </select>
       </label>}
       <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>

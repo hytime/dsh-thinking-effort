@@ -143,7 +143,7 @@ The card validates before writing and disables **Apply** when a check fails:
 - **Validation regex** must be a valid regular expression. The Host **silently degrades** an uncompilable regex to "no validation at all", which makes this the easiest field to believe is set when it is not.
 - **Template / expression / script** must not be empty in their own mode, or the Host falls back to the derived `ses_` value.
 - **Script path** must be an absolute path: the Host resolves a relative path against its own working directory, so a relative path is not usable in practice.
-- **Expression** is syntax-checked inside the card (sharing one parser with the Host), and a syntax error is refused.
+- **Expression** is syntax-checked inside the card (sharing one parser with the Host), and a syntax error or an unknown name is refused: the evaluator throws on either, and the Host answers a throw with the same silent fallback to the derived value.
 
 **Apply** writes only the fields you changed, so it never overwrites the profile library, the pre-import backup, or the per-model session switches in the same namespace.
 

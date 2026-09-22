@@ -51,6 +51,15 @@ interface EditorState {
   modelCompatDirty: Record<string, ModelCompatDirtyFields>
   modelCompatExpanded: Record<string, boolean>
   revision: number
+  /**
+   * A count of the reads of the shared `dsh-thinking-effort` namespace, handed
+   * to the generator card so it re-reads whenever this editor does. It is not
+   * the namespace revision: the import path can land on one revision twice (the
+   * snapshot writer commits `set`s, and the card's own write bumps it again), so
+   * a value the card compares for equality has to change on every read, not
+   * only when the revision does.
+   */
+  openCodeSessionReads: number
   expanded: Record<string, boolean>
   expandedProviders: Record<string, boolean>
   drafts: Record<string, ReasoningDraft>
@@ -77,7 +86,7 @@ export interface SectionEditorProps {
 }
 
 const initialState: EditorState = {
-  loading: true, namespace: null, openCodeSessionNamespace: null, openCodeSessionViews: {}, openCodeSessionDrafts: {}, openCodeSessionDirty: {}, openCodeSessionFound: false, openCodeSessionAvailable: false, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
+  loading: true, namespace: null, openCodeSessionNamespace: null, openCodeSessionReads: 0, openCodeSessionViews: {}, openCodeSessionDrafts: {}, openCodeSessionDirty: {}, openCodeSessionFound: false, openCodeSessionAvailable: false, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
 }
 
 export type { OpenCodeSessionState } from './types.js'
@@ -211,6 +220,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     return {
       ...current,
       openCodeSessionNamespace: next.namespace,
+      openCodeSessionReads: current.openCodeSessionReads + 1,
       openCodeSessionViews: next.views,
       openCodeSessionDrafts: next.drafts,
       openCodeSessionDirty: next.dirty,
@@ -312,6 +322,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
         return {
           ...current,
           openCodeSessionNamespace: refreshed.namespace,
+          openCodeSessionReads: current.openCodeSessionReads + 1,
           openCodeSessionViews: refreshed.views,
           openCodeSessionDrafts: refreshed.drafts,
           openCodeSessionDirty: refreshed.dirty,
@@ -570,7 +581,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     {state.error ? <div role="alert" aria-live="assertive" style={{ fontSize: '12px', lineHeight: '18px', color: palette.danger, backgroundColor: palette.dangerBg, border: `1px solid ${palette.dangerBorder}`, borderRadius: '8px', padding: '6px 8px', margin: '0 0 8px' }}>{state.error}</div> : null}
     <SubagentSettings effort={state.subagent?.effort ?? null} namespaceFound={state.subagent !== null} draft={state.subagentDraft} custom={state.subagentCustom} busy={state.busy} palette={palette} t={t} onDraftChange={(value) => setState((current) => ({ ...current, notice: null, subagentDraft: value }))} onCustomChange={(value) => setState((current) => ({ ...current, notice: null, subagentCustom: value }))} onSave={applySubagentEffort} />
     <ConfigBackupCard settings={settings} palette={palette} t={t} onApplied={load} />
-    <OpenCodeFormatCard settings={settings} palette={palette} t={t} onApplied={load} />
+    <OpenCodeFormatCard settings={settings} palette={palette} t={t} revision={state.openCodeSessionReads} onApplied={load} />
     {state.nsFound === false ? <p style={{ fontSize: '12px', opacity: 0.75 }}>{t('noNamespace')}</p> : <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: state.quickSettingsOpen ? '4px' : '6px' }}><ActionButton text={t('quickSettings')} onClick={() => setState((current) => ({ ...current, quickSettingsOpen: !current.quickSettingsOpen }))} disabled={state.busy} palette={palette} icon={state.quickSettingsOpen ? 'chevronUp' : 'sliders'} />{state.quickSettingsOpen ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flexBasis: '100%', padding: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.field }}>{PRESETS.map((preset) => <ActionButton key={preset.key} text={t(preset.labelKey)} onClick={() => { setState((current) => ({ ...current, quickSettingsOpen: false })); applyPreset(preset.levels) }} disabled={state.busy} palette={palette} icon={preset.key === 'official' ? 'sparkles' : 'sliders'} />)}</div> : null}</div>
       <div style={{ position: 'relative', marginBottom: '7px' }}><span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: palette.secondary, pointerEvents: 'none' }}><Icon name="search" size={15} /></span><input type="text" value={state.query} placeholder={t('searchPlaceholder')} onChange={(event) => { const value = event.currentTarget.value; setState((current) => ({ ...current, query: value })) }} style={{ boxSizing: 'border-box', width: '100%', height: '30px', padding: '0 10px 0 30px', border: `1px solid ${palette.border}`, borderRadius: '8px', fontSize: '13px', backgroundColor: palette.field, color: palette.text, outline: 'none', boxShadow: palette.shadow }} /></div>

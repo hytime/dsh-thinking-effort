@@ -4,6 +4,11 @@ import {
   parseExpression,
   SESSION_CONTEXT_KEYS,
 } from '../compat/opencode-expression.js'
+import {
+  FORMAT_INVALID_POLICIES,
+  FORMAT_MODES,
+  FORMAT_TIMES,
+} from '../compat/opencode-session.js'
 import type { SettingsOp } from './types.js'
 
 /** The namespace the generator settings live in. */
@@ -12,9 +17,7 @@ export const FORMAT_NAMESPACE = 'dsh-thinking-effort'
 /** The path prefix every generated op addresses. */
 export const FORMAT_PATH = ['opencodeSession', 'format'] as const
 
-export const FORMAT_MODES = ['ses-derive', 'passthrough', 'template', 'expression', 'script'] as const
-export const FORMAT_TIMES = ['firstUse', 'hash'] as const
-export const FORMAT_INVALID_POLICIES = ['warn', 'drop', 'send'] as const
+export { FORMAT_INVALID_POLICIES, FORMAT_MODES, FORMAT_TIMES }
 
 /** The seven editable fields, in the order the card renders them. */
 export const FORMAT_KEYS = ['mode', 'time', 'template', 'expression', 'script', 'validate', 'onInvalid'] as const
@@ -125,7 +128,11 @@ function isAbsolutePath(value: string): boolean {
 export function formatFieldErrors(draft: FormatDraft): readonly FormatProblem[] {
   const problems: FormatProblem[] = []
 
-  if (draft.validate !== '') {
+  // Whitespace alone is treated as "not filled in", the same as the three
+  // free-text fields below. The Host compiles any non-empty source, and `/   /`
+  // is a valid expression that no generated value can match, so a stray space
+  // would otherwise reach the Host as a filter that drops every value.
+  if (draft.validate.trim() !== '') {
     try {
       new RegExp(draft.validate)
     } catch {
@@ -169,12 +176,18 @@ export function formatFieldErrors(draft: FormatDraft): readonly FormatProblem[] 
  * One `set` op per changed field, so saving the generator never rewrites the
  * other keys this namespace holds — the profile library, the rollback copy,
  * and the per-model session switches the model editor owns.
+ *
+ * A whitespace-only `validate` is written as the empty string. The Host treats
+ * any non-empty source as a filter, and whitespace compiles to a regex nothing
+ * matches, so an accidental space would otherwise be stored as "drop every
+ * value" — the opposite of what the field looks like it says.
  */
 export function formatOps(draft: FormatDraft, saved: FormatDraft): readonly SettingsOp[] {
   const ops: SettingsOp[] = []
   for (const key of FORMAT_KEYS) {
-    if (draft[key] === saved[key]) continue
-    ops.push({ op: 'set', path: [...FORMAT_PATH, key], value: draft[key] })
+    const value = key === 'validate' && draft.validate.trim() === '' ? '' : draft[key]
+    if (value === saved[key]) continue
+    ops.push({ op: 'set', path: [...FORMAT_PATH, key], value })
   }
   return ops
 }

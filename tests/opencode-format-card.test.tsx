@@ -3,6 +3,8 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OpenCodeFormatCard } from '../src/client/components/OpenCodeFormatCard.js'
+import { DEFAULT_FORMAT_DRAFT } from '../src/client/opencode-format-validation.js'
+import type { FormatDraft } from '../src/client/opencode-format-validation.js'
 import { zh } from '../src/client/locales.js'
 import { iosPalette } from '../src/client/theme.js'
 import type { ClientResult, SettingsApi, SettingsDescribeValue, SettingsNamespace, SettingsOp, Translation } from '../src/client/types.js'
@@ -21,15 +23,63 @@ interface HarnessOptions {
   readonly describeError?: string
   /** Forwarded to the card, standing in for the surrounding editor's reload. */
   readonly onApplied?: () => void
+  /** The `revision` prop the first render carries; defaults to the fixture's value. */
+  readonly revision?: number
+}
+
+/** The stored `opencodeSession.format` section a draft stands for. */
+function storedFormat(current: FormatDraft): Record<string, unknown> {
+  return { opencodeSession: { format: { ...current } } }
+}
+
+/** The seven stored field values a namespace user layer holds, if it holds any. */
+function storedFormatDraft(user: Record<string, unknown> | undefined): Record<string, string> {
+  const opencodeSession = user?.['opencodeSession']
+  const format = (typeof opencodeSession === 'object' && opencodeSession !== null
+    ? (opencodeSession as Record<string, unknown>)['format']
+    : undefined)
+  return (typeof format === 'object' && format !== null ? format : {}) as Record<string, string>
+}
+
+/**
+ * Apply `formatOps`' `set` ops to a namespace user layer, so the reads that
+ * follow a write see the values that were actually written. Without this the
+ * fixture would keep answering with the pre-write layer and the card would
+ * appear to lose its own save.
+ */
+function applyOps(
+  user: Record<string, Record<string, unknown>>,
+  ns: string,
+  ops: readonly SettingsOp[],
+): Record<string, Record<string, unknown>> {
+  const next = { ...user, [ns]: { ...(user[ns] ?? {}) } }
+  for (const op of ops) {
+    if (op.op !== 'set') continue
+    const path = op.path.slice()
+    let cursor: Record<string, unknown> = next[ns]!
+    while (path.length > 1) {
+      const key = String(path.shift())
+      const child = cursor[key]
+      const copy = typeof child === 'object' && child !== null ? { ...child as Record<string, unknown> } : {}
+      cursor[key] = copy
+      cursor = copy
+    }
+    cursor[String(path[0])] = op.value
+  }
+  return next
 }
 
 function harness(options: HarnessOptions = {}) {
   const revisions: Record<string, number> = { 'llm-pi-ai': 4, 'dsh-thinking-effort': 8 }
+  let storedUser: Record<string, Record<string, unknown>> = options.user ?? {}
+  // Set by a test to stand in for a page-mate's write landing between reads.
+  let imported: Record<string, Record<string, unknown>> | undefined
   const mutate = vi.fn(async (ns: string, ops: readonly SettingsOp[], revision: number): Promise<ClientResult<SettingsNamespace>> => {
     if (revision !== revisions[ns]) {
       return { ok: false, error: { message: 'settings/conflict' } }
     }
     revisions[ns] = revision + 1
+    storedUser = applyOps(storedUser, ns, ops)
     return { ok: true, value: { ns, revision: revision + 1, value: {} } }
   })
   let describeCalls = 0
@@ -38,7 +88,7 @@ function harness(options: HarnessOptions = {}) {
     if (options.describeError !== undefined) {
       return Promise.resolve({ ok: false, error: { message: options.describeError } })
     }
-    const user = options.userByCall?.[call] ?? options.user
+    const user = options.userByCall?.[call] ?? (call === 0 ? options.user : (imported ?? storedUser))
     return Promise.resolve({
       ok: true,
       value: {
@@ -55,14 +105,23 @@ function harness(options: HarnessOptions = {}) {
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
-  act(() => {
-    root.render(<OpenCodeFormatCard settings={settings} palette={iosPalette({ prefersDark: true })} t={text as Translation} onApplied={options.onApplied} />)
-  })
+  const revision = options.revision ?? revisions['dsh-thinking-effort']
+  const render = (next: number): void => {
+    act(() => {
+      root.render(<OpenCodeFormatCard settings={settings} palette={iosPalette({ prefersDark: true })} t={text as Translation} revision={next} onApplied={options.onApplied} />)
+    })
+  }
+  render(revision)
   return {
     container,
     describe,
     mutate,
+    revisions,
     onApplied: options.onApplied,
+    /** Simulate a page-mate's write: raise the namespace revision, then re-render. */
+    rerenderAt: (next: number): void => { render(next) },
+    /** Stand in for a page-mate's write: every later read answers with this layer. */
+    set imported(next: Record<string, Record<string, unknown>> | undefined) { imported = next },
     unmount: () => { act(() => root.unmount()); container.remove() },
   }
 }
@@ -477,5 +536,120 @@ describe('OpenCodeFormatCard dynamic fields', () => {
     act(() => setInput(inputByLabel(view.container, text('formatValidateLabel')), '^ses_'))
     await settle()
     expect(view.container.querySelector(`select[aria-label="${text('formatOnInvalidLabel')}"]`)).not.toBeNull()
+  })
+
+  it('treats a whitespace-only validate source as no validation', async () => {
+    const view = harness({ user: { 'dsh-thinking-effort': storedFormat({ ...DEFAULT_FORMAT_DRAFT, validate: '^ses_' }) } })
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    act(() => setInput(inputByLabel(view.container, text('formatValidateLabel')), '   '))
+    await settle()
+    // `/   /` compiles, so this is not the syntax problem the message names:
+    // storing it would filter out every generated value. Clearing the stored
+    // source with spaces means "no validation", which is an empty string here.
+    expect(view.container.textContent).not.toContain(text('formatErrValidateRegex'))
+    expect(view.container.querySelector(`select[aria-label="${text('formatOnInvalidLabel')}"]`)).toBeNull()
+    act(() => button(view.container, text('formatApply')).click())
+    await settle()
+    expect(view.mutate).toHaveBeenCalledTimes(1)
+    const [, ops] = view.mutate.mock.calls[0]!
+    expect(ops).toEqual([{ op: 'set', path: ['opencodeSession', 'format', 'validate'], value: '' }])
+  })
+})
+
+/**
+ * The re-read contract. This card shares its namespace with the backup card's
+ * snapshot import and the model editor's session switch, so a read that landed
+ * after one of those writes has to reach the controls — and a read must never
+ * overwrite what the user has typed since. `revision` is the signal for both.
+ */
+describe('OpenCodeFormatCard re-read contract', () => {
+  const stored = (over: Partial<Record<string, string>> = {}): Record<string, Record<string, unknown>> => ({
+    'dsh-thinking-effort': storedFormat({ ...DEFAULT_FORMAT_DRAFT, ...over }),
+  })
+
+  it('absorbs an external write into the draft', async () => {
+    const before = { ...DEFAULT_FORMAT_DRAFT, mode: 'template', template: 'old_{hex12}' }
+    const view = harness({ user: stored(before) })
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    expect(inputByLabel(view.container, text('formatTemplateLabel')).value).toBe('old_{hex12}')
+
+    // The backup card imports a snapshot: it writes the namespace, the editor
+    // re-reads, and the card is handed the new revision. The import moves the
+    // mode too, so a card that kept the draft it mounted with would still be
+    // showing template controls.
+    view.imported = stored({ ...DEFAULT_FORMAT_DRAFT, mode: 'expression', expression: 'hex12' })
+    view.revisions['dsh-thinking-effort'] = 9
+    view.rerenderAt(9)
+    await settle()
+
+    expect(selectByLabel(view.container, text('formatModeLabel')).value).toBe('expression')
+    expect(inputByLabel(view.container, text('formatExpressionLabel')).value).toBe('hex12')
+    expect(view.container.querySelector(`input[aria-label="${text('formatTemplateLabel')}"]`)).toBeNull()
+    // The absorbed read is the card's saved baseline too, so nothing is dirty.
+    expect(button(view.container, text('formatApply')).disabled).toBe(true)
+  })
+
+  it('keeps a field the user edited while a re-read brings in another field', async () => {
+    const view = harness({ user: stored() })
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+
+    // The user edits `template` in template mode, then switches the mode back
+    // so this is the only field they own.
+    act(() => setSelect(selectByLabel(view.container, text('formatModeLabel')), 'template'))
+    await settle()
+    act(() => setInput(inputByLabel(view.container, text('formatTemplateLabel')), 'mine_{hex12}'))
+    await settle()
+    act(() => setSelect(selectByLabel(view.container, text('formatModeLabel')), 'ses-derive'))
+    await settle()
+
+    // The import changes the *same* field, and one the user never touched.
+    view.imported = stored({ ...DEFAULT_FORMAT_DRAFT, template: 'theirs_{hex12}', script: '/srv/external.mjs' })
+    view.revisions['dsh-thinking-effort'] = 9
+    view.rerenderAt(9)
+    await settle()
+
+    act(() => setInput(inputByLabel(view.container, text('formatValidateLabel')), '^ses_'))
+    await settle()
+    act(() => button(view.container, text('formatApply')).click())
+    await settle()
+
+    expect(view.mutate).toHaveBeenCalledTimes(1)
+    const [, ops] = view.mutate.mock.calls[0]!
+    // The edited field keeps the user's text rather than the imported value.
+    expect(ops).toContainEqual({ op: 'set', path: ['opencodeSession', 'format', 'template'], value: 'mine_{hex12}' })
+    expect(ops).not.toContainEqual({ op: 'set', path: ['opencodeSession', 'format', 'template'], value: 'theirs_{hex12}' })
+    // The field the user never touched is absorbed into the baseline, so it is
+    // not written back — and nothing else from the retired draft is either.
+    expect(ops).not.toContainEqual({ op: 'set', path: ['opencodeSession', 'format', 'script'], value: '' })
+    expect(ops).not.toContainEqual({ op: 'set', path: ['opencodeSession', 'format', 'script'], value: '/srv/external.mjs' })
+  })
+
+  it('writes with the revision re-read at Apply time, not the one it mounted with', async () => {
+    const view = harness()
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    act(() => setSelect(selectByLabel(view.container, text('formatModeLabel')), 'passthrough'))
+    await settle()
+
+    // A page-mate writes this namespace after the edit and before Apply.
+    view.revisions['dsh-thinking-effort'] = 9
+    const before = view.describe.mock.calls.length
+    act(() => button(view.container, text('formatApply')).click())
+    await settle()
+
+    // The card describes again rather than reusing the revision it mounted with.
+    expect(view.describe.mock.calls.length).toBeGreaterThan(before)
+    expect(view.mutate).toHaveBeenCalledTimes(1)
+    const [, , revision] = view.mutate.mock.calls[0]!
+    expect(revision).toBe(9)
+    expect(view.container.textContent).toContain(text('formatSaved'))
+    expect(view.container.textContent).not.toContain(text('formatConflict'))
   })
 })

@@ -9,6 +9,11 @@ import {
 import type { Node } from '../compat/opencode-expression.js'
 import { stat } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
+import {
+  FORMAT_INVALID_POLICIES as INVALID_POLICIES,
+  FORMAT_MODES,
+  FORMAT_TIMES as TIME_SOURCES,
+} from '../compat/opencode-session.js'
 import type {
   OpenCodeSessionFormatMode,
   OpenCodeSessionFormatSettings,
@@ -30,9 +35,6 @@ const BASE62_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrs
 const DSH_SESSION_PREFIX = 'session-'
 const CACHE_MAX_ENTRIES = 4096
 const SCRIPT_STAT_MIN_INTERVAL_MS = 1000
-const FORMAT_MODES: readonly OpenCodeSessionFormatMode[] = ['ses-derive', 'passthrough', 'template', 'expression', 'script']
-const TIME_SOURCES: readonly OpenCodeSessionTimeSource[] = ['firstUse', 'hash']
-const INVALID_POLICIES: readonly OpenCodeSessionInvalidPolicy[] = ['warn', 'drop', 'send']
 
 /** Context passed to template / expression / script modes and to the script export. */
 export interface SessionFormatContext {
