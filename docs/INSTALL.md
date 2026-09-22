@@ -134,6 +134,19 @@ export function format(ctx) {
 
 Changing the `format` config re-derives the value on the next request of a session (the per-session cache is keyed by the config fingerprint). After changing the Host or the plugin package, restart DSH; after changing Settings or Client code, refresh the Web page.
 
+### Session value generator card
+
+The **Session value generator** card on the settings page reads and writes every field below, so the settings document never has to be edited by hand: generator mode, timestamp source, template / expression / script path, validation regex, and the on-invalid policy. The card shows only the fields the current mode uses (the timestamp source is shown for every mode except `passthrough`), and switching modes does not clear what the other fields already hold.
+
+The card validates before writing and disables **Apply** when a check fails:
+
+- **Validation regex** must be a valid regular expression. The Host **silently degrades** an uncompilable regex to "no validation at all", which makes this the easiest field to believe is set when it is not.
+- **Template / expression / script** must not be empty in their own mode, or the Host falls back to the derived `ses_` value.
+- **Script path** must be an absolute path: the Host resolves a relative path against its own working directory, so a relative path is not usable in practice.
+- **Expression** is syntax-checked inside the card (sharing one parser with the Host), and a syntax error is refused.
+
+**Apply** writes only the fields you changed, so it never overwrites the profile library, the pre-import backup, or the per-model session switches in the same namespace.
+
 ### Behavior notes
 
 - An `x-opencode-session` already supplied by the adapter or caller is preserved and never overwritten.
