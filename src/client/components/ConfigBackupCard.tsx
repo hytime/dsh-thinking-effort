@@ -16,7 +16,6 @@ import { pluginSectionId } from '../subagent-section.js'
 import {
   MAX_PROFILES,
   MAX_PROFILE_NAME,
-  PLUGIN_NAMESPACE,
   type ApplyOutcome,
   type ConfigSnapshot,
   type ImportMode,

@@ -38,7 +38,7 @@ DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 �
 
 게이트웨이 호환 필드는 DSH 버전, 런타임 schema, 현재 라우트의 `api` 프로토콜이 모두 지원할 때만 설정할 수 있습니다. 지원하지 않는 필드는 UI에 표시되지 않으며 Settings에도 기록되지 않습니다. 이 15개 필드 중 `openai-completions`는 모두 제공하고, `openai-responses`, `azure-openai-responses`, `openai-codex-responses`는 `supportsDeveloperRole`, `supportsStrictMode`, `supportsLongCacheRetention`만 제공합니다. `api`가 없거나 인식되지 않으면 런타임 schema와 DSH 검증을 최종 기준으로 사용합니다.
 
-DSH `0.1.7`부터는 각 Loader 항목 자체의 `Config` schema에서 설정 폼을 도출합니다(entry-config 모델). 이 schema를 내보내지 않는 플러그인에는 설정 폼이 나타나지 않습니다. 이 플러그인은 해당 schema를 내보내므로 `0.1.7` 이상에서 설정 섹션은 Loader 항목 ID인 `thinking-effort`가 됩니다. `0.1.0-rc.7`부터 `0.1.6`까지는 등록된 namespace `dsh-thinking-effort`를 그대로 사용하며, Client는 실행 중인 Host가 게시한 ID를 해석합니다. `subagentEffort`는 이 플러그인 자체 섹션에 저장되고(Host는 이전 `llm-pi-ai` 위치도 폴백으로 읽습니다), `0.1.7` 이상의 설정은 `~/.dsh/settings.yaml`이 아니라 현재 profile의 `cordis.patch.yml`에 저장됩니다(`0.1.7`은 이 파일을 더 이상 사용하지 않습니다).
+DSH `0.1.7`부터는 각 Loader 항목 자체의 `Config` schema에서 설정 폼을 도출합니다(entry-config 모델). 이 schema를 내보내지 않는 플러그인에는 설정 폼이 나타나지 않습니다. 이 플러그인은 해당 schema를 내보내므로 `0.1.7` 이상에서 설정 섹션은 Loader 항목 ID인 `thinking-effort`가 됩니다. `0.1.0-rc.7`부터 `0.1.6`까지는 등록된 namespace `dsh-thinking-effort`를 그대로 사용하며, Client는 실행 중인 Host가 게시한 ID를 해석합니다. `subagentEffort`는 이 플러그인 자체 섹션에 저장되며, `0.1.7` 이상에서는 이전 `llm-pi-ai` 위치가 더 이상 폴백이 아닙니다. 그 섹션의 schema는 `providers`만 선언하므로 Host는 다른 경로 쓰기를 거부하고, 게시하는 사용자 계층에서 선언되지 않은 키를 제거합니다. 따라서 이전에 저장한 Subagent 기본값은 설정되지 않은 것으로 표시되며 플러그인 설정 카드에서 다시 선택해야 합니다. `0.1.7` 이전에 이 플러그인이 내보낸 스냅샷은 그 값을 여전히 `llm-pi-ai` 안에 담고 있고, 가져올 때 플러그인 자체 섹션으로 마이그레이션합니다. 같은 배치의 providers까지 함께 가져와지는 것도 이 마이그레이션 덕분입니다(volatile이 아닌 경로가 하나라도 있으면 Host는 배치 전체를 거부합니다). `0.1.7` 이상의 설정은 `~/.dsh/settings.yaml`이 아니라 현재 profile의 `cordis.patch.yml`에 저장됩니다(`0.1.7`은 이 파일을 더 이상 사용하지 않습니다).
 
 ## 왜 필요한가요?
 
@@ -209,7 +209,7 @@ dsh-thinking-effort:
 
 - **Host:** 시작 및 설정 변경 시 `llm-pi-ai`의 `models`와 `modelOverrides`를 검사하고 `reasoningEfforts`가 없는 경우에만 기본값을 추가합니다. 쓰기는 사용자 레이어에만 적용되므로, 직접 선언한 프로필의 모델만 보완됩니다. 컴포지션 베이스나 스키마 기본값만 제공하는 모델은 쓸 대상 항목이 없어 보완하지 않고, 건너뛴 개수를 Host 로그에 남깁니다. 또한 모델별 OpenCode 세션 설정을 읽고 일치하는 `llm/stream` 요청에만 `opencodeSession.format`에 따라 생성(기본값 `ses-derive`)한 `x-opencode-session`을 주입하며, `opencodeSession.userAgent`로 선택한 모델의 `user-agent`를 다시 씁니다(그 외에는 `llm-pi-ai` adapter의 attribution 헤더가 강제).
 - **Client:** DSH Settings Remote(`ctx.remote.settings`)와 locale service로 설정 페이지를 등록합니다. 모델 편집기는 OpenCode 세션 Header를 전용 namespace에 저장하며 `llm-pi-ai.compat`와 분리합니다. 사전은 `src/locales/ja.json`, `src/locales/ko.json` 등에서 관리하고 게시 전에 클라이언트 bundle로 생성합니다.
-- **Subagent:** `0.1.7` 이상에서는 이 플러그인 자체 설정 섹션에 `subagentEffort`를 저장합니다(`0.1.0-rc.7`부터 `0.1.6`까지는 `llm-pi-ai` 사용자 레이어). Host는 값이 있는 쪽 섹션을 읽습니다. `agent/request` waterfall은 명시적 값이 없는 요청에만 기본값을 추가합니다.
+- **Subagent:** `0.1.7` 이상에서는 이 플러그인 자체 설정 섹션에 `subagentEffort`를 저장합니다(`0.1.0-rc.7`부터 `0.1.6`까지는 `llm-pi-ai` 사용자 레이어). Host는 플러그인 자체 섹션을 먼저 읽고 `llm-pi-ai`로 폴백합니다. 후자에 값이 들어가는 것은 `0.1.7` 이전뿐입니다(entry-config의 `llm-pi-ai` 섹션은 `providers`만 선언하므로 그 사용자 레이어가 이 키를 담지 않습니다). `agent/request` waterfall은 명시적 값이 없는 요청에만 기본값을 추가합니다.
 - **기본값 없음:** 플러그인은 `off`, `high`, `max`를 자동으로 선택하지 않습니다. `reasoning`을 생략하고 게이트웨이 기본 동작을 따릅니다.
 
 ## 제한 사항
@@ -228,7 +228,7 @@ dsh-thinking-effort:
 - 일반 CI workflow는 npm에 게시하지 않습니다. `publish.yml`은 `v<version>` tag에서만 게시를 시작합니다.
 - 릴리스 tag를 만들기 전에 유지 관리자는 `package.json` 버전과 각 언어의 `CHANGELOG`를 업데이트하여 커밋하고 일치하는 `v<version>` tag를 만듭니다. tag가 가리키는 커밋은 `main` 기록에 포함되어야 합니다.
 - npm 패키지에 GitHub Trusted Publisher를 설정해야 합니다. 저장소는 `hytime/dsh-thinking-effort`, workflow는 `publish.yml`입니다. 게시에는 GitHub OIDC provenance가 포함되며 `NPM_TOKEN`이 필요하지 않습니다.
-- 게시 전에 workflow는 rc7 → rc2 → alpha2 → namespace → entry 순서로 다섯 공식 DSH capability representative를 빌드하고 테스트합니다: `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`), `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`), `dsh-v0.1.7-alpha.1` (`0.1.7-alpha.1`). 공식 `dsh plugin` 명령으로 설치한 뒤 실제 호환성 테스트를 실행하며, 실제 브라우저 DOM 프로브는 `0.1.6-alpha.1` representative에서 수행합니다.
+- 게시 전에 workflow는 rc7 → rc2 → alpha2 → namespace → entry 순서로 다섯 공식 DSH capability representative를 빌드하고 테스트합니다: `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`), `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`), `dsh-v0.1.7-alpha.1` (`0.1.7-alpha.1`). 공식 `dsh plugin` 명령으로 설치한 뒤 실제 호환성 테스트를 실행하며, 실제 브라우저 DOM 프로브는 `0.1.6-alpha.1`(namespace 모델)과 `0.1.7-alpha.1`(entry-config 모델) representative 모두에서 수행합니다.
 - workflow는 버전이나 `CHANGELOG`를 자동으로 변경하지 않습니다. npm에 같은 버전이 이미 있으면 게시도 중단됩니다.
 
 ## 라이선스

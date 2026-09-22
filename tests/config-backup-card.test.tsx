@@ -100,12 +100,22 @@ function harness(options: HarnessOptions = {}) {
     const bumped = options.revisionByCall?.[call]
     if (bumped !== undefined) Object.assign(revisions, bumped)
     const user = options.userByCall?.[call] ?? options.user
+    const rawLlmUser = user?.['llm-pi-ai'] ?? { subagentEffort: 'off' }
+    // The entry-config host derives one form per Loader entry and projects the
+    // user layer through it, so its `llm-pi-ai` (which declares only
+    // `providers` there) never reports the plugin's own `subagentEffort`. The
+    // harness models that projection: a file built from its `describe` is then
+    // one this host could really export, rather than a mixed shape only a
+    // hand-written file has.
+    const llmUser = pluginId === 'thinking-effort'
+      ? Object.fromEntries(Object.entries(rawLlmUser).filter(([key]) => key === 'providers'))
+      : rawLlmUser
     return Promise.resolve({
       ok: true,
       value: {
         writable: options.writable ?? true,
         namespaces: [
-          { ns: 'llm-pi-ai', revision: revisions['llm-pi-ai'], value: {}, user: user?.['llm-pi-ai'] ?? { subagentEffort: 'off' }, applies: options.applies?.['llm-pi-ai'] },
+          { ns: 'llm-pi-ai', revision: revisions['llm-pi-ai'], value: {}, user: llmUser, applies: options.applies?.['llm-pi-ai'] },
           { ns: pluginId, revision: revisions[pluginId], value: {}, user: user?.[pluginId] ?? {}, applies: options.applies?.[pluginId] },
         ],
       },
@@ -844,6 +854,40 @@ describe('ConfigBackupCard settings-model round trip', () => {
     expect(target.mutate.mock.calls.map(([ns]) => ns)).not.toContain('dsh-thinking-effort')
     expect(target.container.querySelector('[role="alert"]')).toBeNull()
     expect(target.onApplied).toHaveBeenCalled()
+  })
+
+  it('imports a legacy file into an entry-config host without losing its providers', async () => {
+    // What the plugin exported before 0.1.7: `subagentEffort` beside the
+    // providers inside `llm-pi-ai`, and the plugin's own settings under the
+    // legacy id. The entry-config writer refuses a whole batch when any op path
+    // is not volatile, so without the migration the provider write would be
+    // refused with the key's — and the user would silently lose their providers.
+    const body = JSON.stringify(storedSnapshot({
+      'dsh-thinking-effort': entrySection,
+      'llm-pi-ai': { subagentEffort: 'high', providers: { local: { models: [{ id: 'legacy-model' }] } } },
+    }))
+
+    const target = harness({ pluginNamespace: 'thinking-effort' })
+    cleanup = target.unmount
+    await settle()
+    act(() => button(target.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(target.container, new File([body], 'legacy.json', { type: 'application/json' }))
+
+    act(() => button(target.container, text('backupConfirmImport')).click())
+    await settle()
+
+    const writes = target.mutate.mock.calls.filter(([, ops]) => !isAutoBackup(ops))
+    expect(writes).toEqual([
+      ['thinking-effort', [
+        { op: 'set', path: ['opencodeSession'], value: sessionValue },
+        { op: 'set', path: ['subagentEffort'], value: 'high' },
+      ], 9],
+      ['llm-pi-ai', [
+        { op: 'set', path: ['providers'], value: { local: { models: [{ id: 'legacy-model' }] } } },
+      ], 4],
+    ])
+    expect(target.container.querySelector('[role="alert"]')).toBeNull()
   })
 
   it('applies a file an entry-config host exported to a legacy host section', async () => {

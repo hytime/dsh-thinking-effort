@@ -113,6 +113,132 @@ describe('planImport under the entry-config settings model', () => {
       { op: 'set', path: ['opencodeSession'], value: { providers: { p: { models: { m: true } } } } },
     ])
   })
+
+  /**
+   * A file the plugin exported before 0.1.7: `subagentEffort` sits inside
+   * `llm-pi-ai` beside the providers, and the plugin's own key holds the
+   * OpenCode session fields. The entry-config writer refuses a whole batch when
+   * ANY op path is not volatile and `llm-pi-ai` declares only `providers`, so
+   * this key used to cost the user their providers too.
+   */
+  const legacyFile = (): ConfigSnapshot => fileOf({
+    'dsh-thinking-effort': {},
+    'llm-pi-ai': {
+      subagentEffort: 'high',
+      providers: {
+        local: {
+          api: 'openai-completions',
+          baseURL: 'http://gateway.test/v1',
+          models: [{ id: 'legacy-model', reasoningEfforts: { high: 'high' } }],
+        },
+      },
+    },
+  })
+
+  /**
+   * The 0.1.7 writer's admission rule, reduced to the half this plan can
+   * violate: every op path must be volatile or the WHOLE batch is refused
+   * (`dsh-settings` `write` → `isVolatilePath`). `llm-pi-ai` declares
+   * `providers` and nothing else; this plugin's entry section is root-volatile.
+   * Asserting the op list alone cannot show the batch would be accepted, so the
+   * ops go through that rule and then land in the two user layers.
+   */
+  const VOLATILE_PATHS: Readonly<Record<string, (path: readonly string[]) => boolean>> = {
+    'llm-pi-ai': (path) => path[0] === 'providers',
+    'thinking-effort': () => true,
+    'dsh-thinking-effort': () => false,
+  }
+
+  const writeOnEntryConfigHost = (plan: ReturnType<typeof planImport>): Record<string, Record<string, unknown>> => {
+    const refused = plan.namespaces.flatMap((entry) => entry.ops
+      .filter((op) => !(VOLATILE_PATHS[entry.ns]?.(op.path) ?? false))
+      .map((op) => `${entry.ns}.${op.path.join('.')}`))
+    if (refused.length > 0) throw new Error(`Config field "${refused[0]}" is not volatile`)
+
+    const written: Record<string, Record<string, unknown>> = {}
+    for (const entry of plan.namespaces) {
+      const section = written[entry.ns] ?? {}
+      for (const op of entry.ops) {
+        const path = [...op.path]
+        const leaf = path.pop()
+        if (leaf === undefined) continue
+        let host = section
+        for (const segment of path) host = (host[segment] ??= {}) as Record<string, unknown>
+        if (op.op === 'set') host[leaf] = op.value
+        else delete host[leaf]
+      }
+      written[entry.ns] = section
+    }
+    return written
+  }
+
+  it('imports the providers of a legacy file and sends no non-volatile llm-pi-ai op', () => {
+    const plan = planImport(legacyFile(), entryHost({}), 'merge')
+
+    expect(opsFor(plan, 'llm-pi-ai')).toEqual([
+      {
+        op: 'set',
+        path: ['providers'],
+        value: {
+          local: { api: 'openai-completions', models: [{ id: 'legacy-model', reasoningEfforts: { high: 'high' } }] },
+        },
+      },
+    ])
+    // The value does not disappear with the key: it moves to the section that
+    // declares it, which is where the Host reads it from on this model.
+    expect(opsFor(plan, 'thinking-effort')).toEqual([{ op: 'set', path: ['subagentEffort'], value: 'high' }])
+    expect(opsFor(plan, 'dsh-thinking-effort')).toEqual([])
+
+    expect(writeOnEntryConfigHost(plan)).toEqual({
+      'llm-pi-ai': {
+        providers: {
+          local: { api: 'openai-completions', models: [{ id: 'legacy-model', reasoningEfforts: { high: 'high' } }] },
+        },
+      },
+      'thinking-effort': { subagentEffort: 'high' },
+    })
+  })
+
+  it('keeps the entry section value when the file states the key in both places', () => {
+    const file = fileOf({
+      'thinking-effort': { subagentEffort: 'low', ...entrySection },
+      'llm-pi-ai': { subagentEffort: 'high' },
+    })
+
+    const plan = planImport(file, entryHost({}), 'merge')
+
+    expect(opsFor(plan, 'llm-pi-ai')).toEqual([])
+    expect(opsFor(plan, 'thinking-effort')).toEqual([
+      { op: 'set', path: ['subagentEffort'], value: 'low' },
+      { op: 'set', path: ['opencodeSession'], value: { providers: { p: { models: { m: true } } } } },
+    ])
+  })
+
+  it('does not plan an unset for a legacy key the entry-config host still reports', () => {
+    // A `replace` diffs the file against the host's own user layer. The entry
+    // model drops undeclared keys from that projection, but a host that still
+    // reported one must not turn it into an `unset` op: that path is not
+    // volatile, so the provider write would be refused with it.
+    const file = fileOf({ 'thinking-effort': entrySection })
+
+    const plan = planImport(file, entryHost({ 'llm-pi-ai': { subagentEffort: 'low' } }), 'replace')
+
+    expect(opsFor(plan, 'llm-pi-ai')).toEqual([])
+    expect(opsFor(plan, 'thinking-effort')).toEqual([
+      { op: 'set', path: ['opencodeSession'], value: { providers: { p: { models: { m: true } } } } },
+    ])
+  })
+
+  it('still imports a legacy subagentEffort on a legacy host', () => {
+    // The migration is the entry model's, not a change of what an older host
+    // reads: there the key is where the Host has always looked for it.
+    const file = fileOf({ 'llm-pi-ai': { subagentEffort: 'high' } })
+
+    const plan = planImport(file, current({}), 'merge')
+
+    expect(opsFor(plan, 'llm-pi-ai')).toEqual([{ op: 'set', path: ['subagentEffort'], value: 'high' }])
+    expect(opsFor(plan, 'dsh-thinking-effort')).toEqual([])
+  })
 })
 
 describe('deepEqualJson', () => {

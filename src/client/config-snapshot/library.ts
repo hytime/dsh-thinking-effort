@@ -23,8 +23,9 @@ function isStoredSnapshot(value: unknown): value is ConfigSnapshot {
 }
 
 /**
- * Read the profile library defensively: `settings.yaml` is user-editable, so a
- * hand-written entry must be dropped rather than crash the settings page.
+ * Read the profile library defensively: the user layer is hand-editable (in
+ * `settings.yaml` before 0.1.7 and in the active profile's config after it), so
+ * a hand-written entry must be dropped rather than crash the settings page.
  *
  * `pluginNamespace` is the id the running host addresses the plugin section by
  * — the Loader entry under the 0.1.7 entry-config model, and the legacy

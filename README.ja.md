@@ -38,7 +38,7 @@ DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行
 
 ゲートウェイ互換フィールドを設定できるのは、DSH のバージョン、実行時 schema、ルートの `api` プロトコルのすべてが対応している場合だけです。対応しないフィールドは UI に表示されず、Settings にも書き込まれません。この 15 フィールドでは `openai-completions` がすべてを提供し、`openai-responses`、`azure-openai-responses`、`openai-codex-responses` は `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention` だけを提供します。`api` がない、または認識できない場合は、実行時 schema と DSH の検証を最終的な基準にします。
 
-DSH `0.1.7` 以降は、各 Loader エントリ自身の `Config` schema から設定フォームを導出します（entry-config モデル）。この schema を公開しないプラグインには設定フォームが表示されません。本プラグインはこれを公開しているため、`0.1.7` 以降の設定セクションは Loader エントリ ID の `thinking-effort` になります。`0.1.0-rc.7` から `0.1.6` までは登録済み namespace の `dsh-thinking-effort` のままで、Client は実行中の Host が公開している方の ID を解決します。`subagentEffort` は本プラグイン自身のセクションに移り（Host は旧 `llm-pi-ai` の場所もフォールバックとして読みます）、`0.1.7` 以降の設定は `~/.dsh/settings.yaml` ではなく現在の profile の `cordis.patch.yml` に保存されます（`0.1.7` はこのファイルを使用しません）。
+DSH `0.1.7` 以降は、各 Loader エントリ自身の `Config` schema から設定フォームを導出します（entry-config モデル）。この schema を公開しないプラグインには設定フォームが表示されません。本プラグインはこれを公開しているため、`0.1.7` 以降の設定セクションは Loader エントリ ID の `thinking-effort` になります。`0.1.0-rc.7` から `0.1.6` までは登録済み namespace の `dsh-thinking-effort` のままで、Client は実行中の Host が公開している方の ID を解決します。`subagentEffort` は本プラグイン自身のセクションに移り、`0.1.7` 以降は旧 `llm-pi-ai` の場所がフォールバックになりません。このセクションの schema は `providers` しか宣言しておらず、Host はそれ以外のパスへの書き込みを拒否し、公開するユーザーレイヤーから未宣言のキーを落とすためです。したがって以前に設定した Subagent の既定値は未設定として表示され、プラグインの設定カードで選び直す必要があります。`0.1.7` より前に本プラグインが書き出したスナップショットは今もこの値を `llm-pi-ai` の中に持っており、インポート時にプラグイン自身のセクションへ移行します。同じバッチの providers が取り込めるのはこの移行のおかげです（volatile でないパスが 1 つでもあると Host はバッチ全体を拒否します）。`0.1.7` 以降の設定は `~/.dsh/settings.yaml` ではなく現在の profile の `cordis.patch.yml` に保存されます（`0.1.7` はこのファイルを使用しません）。
 
 ## なぜ使うのか
 
@@ -209,7 +209,7 @@ dsh-thinking-effort:
 
 - **Host：** 起動時と設定変更時に `llm-pi-ai` の `models` と `modelOverrides` を確認し、`reasoningEfforts` がない場合だけ既定値を追加します。書き込みはユーザーレイヤーだけを対象とするため、補完されるのは自身のプロファイルで宣言したモデルです。コンポジションのベースやスキーマ既定値だけが供給するモデルには書き込む先のエントリがないため補完せず、スキップした件数を Host ログに出力します。さらにモデル単位の OpenCode セッション設定を読み、一致する `llm/stream` リクエストにだけ `opencodeSession.format` に従って生成（既定 `ses-derive`）した `x-opencode-session` を注入し、`opencodeSession.userAgent` で選択したモデルの `user-agent` を書き換えます（それ以外は `llm-pi-ai` アダプターの帰属ヘッダーが強制）。
 - **Client：** DSH Settings Remote（`ctx.remote.settings`）と locale service を使って設定ページを登録します。モデル編集では OpenCode セッション Header を専用 namespace に保存し、`llm-pi-ai.compat` とは分離します。辞書は `src/locales/ja.json` と `src/locales/ko.json` などで管理し、公開前にクライアント bundle へ生成します。
-- **Subagent：** `0.1.7` 以降は本プラグイン自身の設定セクションに `subagentEffort` を保存します（`0.1.0-rc.7` から `0.1.6` までは `llm-pi-ai` のユーザーレイヤー）。Host は実際に値がある方のセクションを読みます。`agent/request` waterfall は明示値のないリクエストにだけ既定値を追加します。
+- **Subagent：** `0.1.7` 以降は本プラグイン自身の設定セクションに `subagentEffort` を保存します（`0.1.0-rc.7` から `0.1.6` までは `llm-pi-ai` のユーザーレイヤー）。Host はプラグイン自身のセクションを先に読み、次に `llm-pi-ai` へフォールバックします。後者に値が入るのは `0.1.7` より前だけです（entry-config の `llm-pi-ai` セクションは `providers` しか宣言しないため、そのユーザーレイヤーがこのキーを持つことはありません）。`agent/request` waterfall は明示値のないリクエストにだけ既定値を追加します。
 - **既定値なし：** プラグインは `off`、`high`、`max` を自動選択しません。`reasoning` を省略し、ゲートウェイの既定動作に任せます。
 
 ## 制限事項
@@ -228,7 +228,7 @@ dsh-thinking-effort:
 - 通常の CI workflow は npm に公開しません。`publish.yml` は `v<version>` tag によってのみ公開を開始します。
 - リリース tag を作成する前に、メンテナーは `package.json` の version と各言語の `CHANGELOG` を更新してコミットし、一致する `v<version>` tag を作成します。tag の指す commit は `main` の履歴に含まれている必要があります。
 - npm パッケージには GitHub Trusted Publisher を設定してください。リポジトリは `hytime/dsh-thinking-effort`、workflow は `publish.yml` です。公開は GitHub OIDC による provenance を含み、`NPM_TOKEN` は必要ありません。
-- 公開前に workflow は rc7 → rc2 → alpha2 → namespace → entry の順で 5 つの公式 DSH capability representative を構築・テストします：`dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）、`dsh-v0.1.3-alpha.2`（`0.1.3-alpha.2`）、`dsh-v0.1.6-alpha.1`（`0.1.6-alpha.1`）、`dsh-v0.1.7-alpha.1`（`0.1.7-alpha.1`）。公式の `dsh plugin` コマンドでインストールし、実際の互換性テストを実行します。実ブラウザ DOM プローブは `0.1.6-alpha.1` の代表で実行します。
+- 公開前に workflow は rc7 → rc2 → alpha2 → namespace → entry の順で 5 つの公式 DSH capability representative を構築・テストします：`dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）、`dsh-v0.1.3-alpha.2`（`0.1.3-alpha.2`）、`dsh-v0.1.6-alpha.1`（`0.1.6-alpha.1`）、`dsh-v0.1.7-alpha.1`（`0.1.7-alpha.1`）。公式の `dsh plugin` コマンドでインストールし、実際の互換性テストを実行します。実ブラウザ DOM プローブは `0.1.6-alpha.1`（namespace モデル）と `0.1.7-alpha.1`（entry-config モデル）の両方の代表で実行します。
 - workflow は version や `CHANGELOG` を自動変更しません。npm に同じ version が既にある場合も公開を停止します。
 
 ## ライセンス

@@ -1857,6 +1857,107 @@ describe('SectionEditor user behavior', () => {
     view.unmount()
   })
 
+  /**
+   * The subagent save and the OpenCode header toggle write the SAME section
+   * under the entry-config model, and 0.1.7 revisions are per section: the
+   * second write of any such pair has to carry the revision the first write's
+   * response reported, or the host refuses it as a conflict and the user has to
+   * reload. Each order reaches that section through a different code path —
+   * `entrySectionWrite` for the save, the OpenCode mutation for the toggle — so
+   * both are covered.
+   */
+  const entryWithToggle = (revision: number, effort: string, enabled: boolean): SettingsNamespace => entryConfigNamespace({
+    revision,
+    user: { subagentEffort: effort },
+    value: {
+      opencodeSession: { providers: { provider: { models: { 'model-a': enabled } } } },
+      subagentEffort: effort,
+    },
+  })
+
+  const headerSwitchOf = (container: HTMLElement): HTMLButtonElement => container.querySelector(
+    `[data-scope="opencode-session"] button[role="switch"][aria-label="${text('opencodeSessionHeaderTitle')}"]`,
+  ) as HTMLButtonElement
+
+  const saveSubagentEffort = async (view: ReturnType<typeof renderEditor>, effort: string): Promise<void> => {
+    const select = view.container.querySelectorAll('select')[1] as HTMLSelectElement
+    act(() => {
+      setValue(select, 'custom')
+    })
+    const custom = view.container.querySelector(`input[placeholder="${text('customPlaceholder')}"]`) as HTMLInputElement
+    act(() => {
+      setValue(custom, effort)
+    })
+    act(() => button(view.container, text('apply')).click())
+    await settle()
+  }
+
+  const toggleOpenCodeSession = async (view: ReturnType<typeof renderEditor>): Promise<void> => {
+    openFirstModel(view.container)
+    act(() => headerSwitchOf(view.container).click())
+    await settle()
+  }
+
+  it('sends the refreshed entry revision after a subagent save, then an OpenCode toggle', async () => {
+    const llm = openCodeLlmNamespace()
+    const entry = entryWithToggle(9, 'medium', false)
+    const responses = [entryWithToggle(10, 'deep', false), entryWithToggle(11, 'deep', true)]
+    const mutate = vi.fn<SettingsApi['mutate']>(async (ns) => {
+      // The same section both times; only the revision the caller sends differs.
+      expect(ns).toBe('thinking-effort')
+      return { ok: true as const, value: responses.shift()! }
+    })
+    const view = renderEditor({
+      namespaces: [entry],
+      describe: async () => ({ ok: true, value: { namespaces: [llm, entry] } }),
+      mutate,
+      compatibilityProfile: 'modern',
+    })
+    await settle()
+
+    await saveSubagentEffort(view, 'deep')
+    await toggleOpenCodeSession(view)
+
+    expect(view.mutate).toHaveBeenCalledTimes(2)
+    expect(view.mutate.mock.calls[0]?.[2]).toBe(9)
+    // The stale-revision defect: this used to send 9 again.
+    expect(view.mutate.mock.calls[1]?.[2]).toBe(10)
+    expect(view.mutate.mock.calls[1]?.[1]).toEqual([{
+      op: 'set',
+      path: ['opencodeSession', 'providers', 'provider', 'models', 'model-a'],
+      value: true,
+    }])
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
+    view.unmount()
+  })
+
+  it('sends the refreshed entry revision after an OpenCode toggle, then a subagent save', async () => {
+    const llm = openCodeLlmNamespace()
+    const entry = entryWithToggle(9, 'medium', false)
+    const responses = [entryWithToggle(10, 'medium', true), entryWithToggle(11, 'deep', true)]
+    const mutate = vi.fn<SettingsApi['mutate']>(async (ns) => {
+      expect(ns).toBe('thinking-effort')
+      return { ok: true as const, value: responses.shift()! }
+    })
+    const view = renderEditor({
+      namespaces: [entry],
+      describe: async () => ({ ok: true, value: { namespaces: [llm, entry] } }),
+      mutate,
+      compatibilityProfile: 'modern',
+    })
+    await settle()
+
+    await toggleOpenCodeSession(view)
+    await saveSubagentEffort(view, 'deep')
+
+    expect(view.mutate).toHaveBeenCalledTimes(2)
+    expect(view.mutate.mock.calls[0]?.[2]).toBe(9)
+    expect(view.mutate.mock.calls[1]?.[2]).toBe(10)
+    expect(view.mutate.mock.calls[1]?.[1]).toEqual([{ op: 'set', path: ['subagentEffort'], value: 'deep' }])
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
+    view.unmount()
+  })
+
   // The subagent save and the OpenCode header toggle address the SAME section
   // under the entry-config model, so the id alone cannot pick the failure copy:
   // a failed subagent save must not be reported as a failed OpenCode session

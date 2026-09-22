@@ -373,8 +373,8 @@ npm パッケージには GitHub Trusted Publishing を設定してください�
 - `dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）— rc7 capability representative
 - `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）— rc2 capability representative
 - `dsh-v0.1.3-alpha.2`（`0.1.3-alpha.2`）— alpha2 capability representative
-- `dsh-v0.1.6-alpha.1`（`0.1.6-alpha.1`）— 最新の namespace モデル capability representative（実ブラウザ DOM プローブも実行）
-- `dsh-v0.1.7-alpha.1`（`0.1.7-alpha.1`）— entry-config capability representative（設定フォームは各 Loader エントリ自身の `Config` から導出）
+- `dsh-v0.1.6-alpha.1`（`0.1.6-alpha.1`）— 最新の namespace モデル capability representative（実ブラウザ DOM プローブを実行）
+- `dsh-v0.1.7-alpha.1`（`0.1.7-alpha.1`）— entry-config capability representative（設定フォームは各 Loader エントリ自身の `Config` から導出。実ブラウザ DOM プローブも実行）
 
 通常の CI はテスト専用で、Pull Request と `main` への push で実行されます。`npm ci` を使うため、依存関係変更時は `package-lock.json` をコミットしてください。
 

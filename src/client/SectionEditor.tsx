@@ -8,7 +8,7 @@ import { inventoryFrom, modelCompatKey, modelGatewayCompatViewsFrom, providerGat
 import { emptyTakeoverRuntimeResolution } from './takeover-runtime.js'
 import { openCodeSessionOp, openCodeSessionStateFor, isOpenCodeSessionNamespace } from './model-header-ops.js'
 import { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from './model-ops.js'
-import { pluginEntrySection, pluginSection, subagentEffortTarget } from './subagent-section.js'
+import { isPluginEntrySection, pluginSection, subagentEffortTarget } from './subagent-section.js'
 import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, validateContextWindow, validateLevels } from './validation.js'
 import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, OpenCodeSessionState, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
 import type { Palette } from './theme.js'
@@ -41,7 +41,6 @@ interface SubagentState { effort: string | null; revision: number }
 interface EditorState {
   loading: boolean
   namespace: SettingsNamespace | null
-  openCodeSessionNamespace: SettingsNamespace | null
   openCodeSessionViews: Record<string, boolean>
   openCodeSessionDrafts: Record<string, boolean>
   openCodeSessionDirty: Record<string, boolean>
@@ -79,11 +78,16 @@ interface EditorState {
   query: string
   nsFound: boolean
   /**
-   * The plugin's own section under the 0.1.7 entry-config model, absent on
-   * legacy hosts. It is both the source of the subagent effort `user` layer and
-   * the write target for it, so the two can never disagree.
+   * The plugin's own section under whatever settings model the host publishes:
+   * the Loader entry section on 0.1.7 and later, the registered
+   * `dsh-thinking-effort` namespace before that. Both the OpenCode session
+   * fields and `subagentEffort` live in it, so the editor holds exactly ONE
+   * descriptor for it — a second copy would be refreshed by only the writes
+   * that named it, and because 0.1.7 revisions are per section, the copy left
+   * behind would fence its next write with a stale `expectedRevision` and be
+   * refused as a conflict.
    */
-  entrySection: SettingsNamespace | null
+  pluginSection: SettingsNamespace | null
   subagent: SubagentState | null
   subagentDraft: string
   subagentCustom: string
@@ -99,7 +103,7 @@ export interface SectionEditorProps {
 }
 
 const initialState: EditorState = {
-  loading: true, namespace: null, openCodeSessionNamespace: null, openCodeSessionReads: 0, openCodeSessionViews: {}, openCodeSessionDrafts: {}, openCodeSessionDirty: {}, openCodeSessionFound: false, openCodeSessionAvailable: false, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, entrySection: null, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
+  loading: true, namespace: null, openCodeSessionReads: 0, openCodeSessionViews: {}, openCodeSessionDrafts: {}, openCodeSessionDirty: {}, openCodeSessionFound: false, openCodeSessionAvailable: false, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, pluginSection: null, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
 }
 
 export type { OpenCodeSessionState } from './types.js'
@@ -116,14 +120,14 @@ export function applyOpenCodeSessionMutation(
   state: OpenCodeSessionState,
   response: ClientResult<SettingsNamespace>,
   inventory: readonly InventoryItem[],
-  savedKey: string,
+  savedKey?: string,
 ): OpenCodeSessionState {
   if (!response.ok || !isOpenCodeSessionNamespace(response.value)) return state
   const previous: OpenCodeSessionState = {
     ...state,
     dirty: { ...state.dirty },
   }
-  delete previous.dirty[savedKey]
+  if (savedKey !== undefined) delete previous.dirty[savedKey]
   return openCodeSessionStateFor(response.value, inventory, previous)
 }
 
@@ -186,6 +190,33 @@ function subagentView(namespace: SettingsNamespace | null): { subagent: Subagent
 const noRuntimeSubscribe = (): (() => void) => () => undefined
 const noRuntimeSnapshot = (): typeof emptyTakeoverRuntimeResolution => emptyTakeoverRuntimeResolution
 
+/**
+ * The section whose `user` layer holds `subagentEffort`: the plugin's own entry
+ * section when the host publishes one (0.1.7 and later), else the `llm-pi-ai`
+ * section the releases before it wrote the value into. `null` while the model
+ * registry itself is missing, which is the state the editor already reports as
+ * "unconfigured": the setting is only meaningful beside the models it applies
+ * to, and `nsFound` hides the rest of the page in exactly that case.
+ */
+function subagentSection(
+  pluginSection: SettingsNamespace | null,
+  llmSection: SettingsNamespace | null,
+): SettingsNamespace | null {
+  return isPluginEntrySection(pluginSection) && llmSection !== null ? pluginSection : llmSection
+}
+
+/** The OpenCode session state the editor holds, in the shape its merge helpers take. */
+function openCodeStateOf(current: EditorState): OpenCodeSessionState {
+  return {
+    namespace: isOpenCodeSessionNamespace(current.pluginSection) ? current.pluginSection : null,
+    views: current.openCodeSessionViews,
+    drafts: current.openCodeSessionDrafts,
+    dirty: current.openCodeSessionDirty,
+    found: current.openCodeSessionFound,
+    available: current.openCodeSessionAvailable,
+  }
+}
+
 export function SectionEditor({ settings, locale, t, palette = iosPalette(), takeoverRuntime }: SectionEditorProps): React.ReactElement {
   const [state, setState] = React.useState<EditorState>(initialState)
   const takeoverResolution = React.useSyncExternalStore(
@@ -194,8 +225,8 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     takeoverRuntime?.getSnapshot ?? noRuntimeSnapshot,
   )
 
-  const applyNamespaceView = (current: EditorState, nextNamespace: SettingsNamespace, notice: string | null, entrySection: SettingsNamespace | null): EditorState => {
-    const view = subagentView(entrySection ?? nextNamespace)
+  const applyNamespaceView = (current: EditorState, nextNamespace: SettingsNamespace, notice: string | null, pluginSection: SettingsNamespace | null): EditorState => {
+    const view = subagentView(subagentSection(pluginSection, nextNamespace))
     const nextInventory = inventoryFrom(nextNamespace)
     const providerViews = providerGatewayCompatViewsFrom(nextNamespace, settings.compatibilityProfile, takeoverResolution)
     const modelCompatViews = modelGatewayCompatViewsFrom(nextNamespace, nextInventory, settings.compatibilityProfile, takeoverResolution)
@@ -219,38 +250,41 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     for (const [provider, providerView] of Object.entries(providerViews)) {
       if (current.providerDirty[provider] !== true) providerDrafts[provider] = providerView
     }
-    return { ...current, loading: false, namespace: nextNamespace, busy: false, nsFound: true, entrySection, inventory: nextInventory, providerViews, providerDrafts, modelCompatViews, modelCompatDrafts, revision: revisionOf(nextNamespace), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom, notice }
+    return { ...current, loading: false, namespace: nextNamespace, busy: false, nsFound: true, pluginSection, inventory: nextInventory, providerViews, providerDrafts, modelCompatViews, modelCompatDrafts, revision: revisionOf(nextNamespace), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom, notice }
   }
 
   /**
-   * Refresh the subagent view from the plugin's own section after a write to
-   * it. The response is a full descriptor view, so it supersedes the stored
-   * section and carries the new revision the next write has to send back.
+   * Refresh every view of the plugin's one section from a single descriptor.
+   *
+   * `subagentEffort` and the OpenCode session fields live in the same section
+   * under the 0.1.7 entry-config model, so one write to either returns the
+   * descriptor that supersedes what the editor holds for both — and the
+   * revision in it is the `expectedRevision` the NEXT write to that section has
+   * to send. Revisions are per section there, so a view left on the pre-write
+   * copy made the second of any two such writes fail as a conflict. Every write
+   * whose response targets this section lands here; `savedKey` names the
+   * OpenCode toggle just persisted, whose draft is no longer dirty.
    */
-  const applyEntrySectionView = (current: EditorState, entrySection: SettingsNamespace, notice: string | null): EditorState => {
-    const view = subagentView(entrySection)
-    return { ...current, busy: false, entrySection, subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom, notice }
-  }
-
-  const applyOpenCodeSessionNamespace = (current: EditorState, nextNamespace: SettingsNamespace | undefined): EditorState => {
-    const previous: OpenCodeSessionState = {
-      namespace: current.openCodeSessionNamespace,
-      views: current.openCodeSessionViews,
-      drafts: current.openCodeSessionDrafts,
-      dirty: current.openCodeSessionDirty,
-      found: current.openCodeSessionFound,
-      available: current.openCodeSessionAvailable,
-    }
-    const next = createOpenCodeSessionState(nextNamespace, current.inventory, previous)
+  const applyPluginSectionView = (current: EditorState, section: SettingsNamespace | null, notice: string | null, savedKey?: string): EditorState => {
+    const previous = openCodeStateOf(current)
+    const refreshed = section === null
+      ? createOpenCodeSessionState(undefined, current.inventory, previous)
+      : applyOpenCodeSessionMutation(previous, { ok: true, value: section }, current.inventory, savedKey)
+    const view = subagentView(subagentSection(section, current.namespace))
     return {
       ...current,
-      openCodeSessionNamespace: next.namespace,
+      busy: false,
+      pluginSection: section,
       openCodeSessionReads: current.openCodeSessionReads + 1,
-      openCodeSessionViews: next.views,
-      openCodeSessionDrafts: next.drafts,
-      openCodeSessionDirty: next.dirty,
-      openCodeSessionFound: next.found,
-      openCodeSessionAvailable: next.available,
+      openCodeSessionViews: refreshed.views,
+      openCodeSessionDrafts: refreshed.drafts,
+      openCodeSessionDirty: refreshed.dirty,
+      openCodeSessionFound: refreshed.found,
+      openCodeSessionAvailable: refreshed.available,
+      subagent: view.subagent,
+      subagentDraft: view.draft,
+      subagentCustom: view.custom,
+      notice,
     }
   }
 
@@ -267,17 +301,15 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       // the host exposes. The legacy `dsh-thinking-effort` namespace no longer
       // exists under 0.1.7, where every plugin setting lives in the entry
       // section, so the resolved section supersedes the id-specific lookup.
-      const plugin = pluginSection(response.value.namespaces)
-      const entrySection = pluginEntrySection(response.value.namespaces)
-      const openCodeFound = plugin
+      const plugin = pluginSection(response.value.namespaces) ?? null
       if (!found) {
         setState((current) => {
-          const next = { ...current, loading: false, busy: false, nsFound: false, namespace: null, entrySection: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, subagent: null }
-          return applyOpenCodeSessionNamespace(next, openCodeFound)
+          const next = { ...current, loading: false, busy: false, nsFound: false, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, subagent: null }
+          return applyPluginSectionView(next, plugin, null)
         })
         return
       }
-      setState((current) => applyOpenCodeSessionNamespace(applyNamespaceView(current, found, null, entrySection ?? null), openCodeFound))
+      setState((current) => applyPluginSectionView(applyNamespaceView(current, found, null, plugin), plugin, null))
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       setState((current) => ({ ...current, loading: false, busy: false, error: t('readSettingsFailed', { message }) }))
@@ -341,34 +373,11 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       }
       onSuccess?.()
       setState((current) => {
-        if (ns === NS) return applyNamespaceView(current, response.value, successMessage, current.entrySection)
-        if (entrySectionWrite === true) return applyEntrySectionView(current, response.value, successMessage)
-        const previous: OpenCodeSessionState = {
-          namespace: current.openCodeSessionNamespace,
-          views: current.openCodeSessionViews,
-          drafts: current.openCodeSessionDrafts,
-          dirty: current.openCodeSessionDirty,
-          found: current.openCodeSessionFound,
-          available: current.openCodeSessionAvailable,
-        }
-        const refreshed = applyOpenCodeSessionMutation(
-          previous,
-          { ok: true, value: response.value },
-          current.inventory,
-          savedKey!,
-        )
-        return {
-          ...current,
-          openCodeSessionNamespace: refreshed.namespace,
-          openCodeSessionReads: current.openCodeSessionReads + 1,
-          openCodeSessionViews: refreshed.views,
-          openCodeSessionDrafts: refreshed.drafts,
-          openCodeSessionDirty: refreshed.dirty,
-          openCodeSessionFound: refreshed.found,
-          openCodeSessionAvailable: refreshed.available,
-          notice: successMessage,
-          busy: false,
-        }
+        if (ns === NS) return applyNamespaceView(current, response.value, successMessage, current.pluginSection)
+        // Every other accepted write targets the plugin's own section, so its
+        // response refreshes the OpenCode view and the subagent view together.
+        if (entrySectionWrite === true) return applyPluginSectionView(current, response.value, successMessage)
+        return applyPluginSectionView(current, response.value, successMessage, savedKey)
       })
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
@@ -445,8 +454,11 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
 
   const patchOpenCodeSession = (item: InventoryItem, enabled: boolean): void => {
     const key = keyOf(item)
-    const namespace = state.openCodeSessionNamespace
-    if (!namespace) return
+    const namespace = state.pluginSection
+    // The section the switch writes is the plugin's own; it is only addressable
+    // when it carries a readable OpenCode session view, which is also what the
+    // switch's availability is rendered from.
+    if (namespace === null || !isOpenCodeSessionNamespace(namespace)) return
     const operation = openCodeSessionOp(item.route, item.model, enabled)
     if (operation === undefined) return
     // The switch saves immediately: the draft reflects the newly toggled value
@@ -514,7 +526,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     const value = state.subagentDraft === 'default' ? undefined : state.subagentDraft === 'custom' ? state.subagentCustom.trim() : state.subagentDraft
     if (state.subagentDraft !== 'default' && !value) { setState((current) => ({ ...current, notice: null, error: t('customEffortRequired') })); return }
     const ops: SettingsOp[] = state.subagentDraft === 'default' ? [{ op: 'unset', path: ['subagentEffort'] }] : [{ op: 'set', path: ['subagentEffort'], value }]
-    const target = subagentEffortTarget(state.entrySection, state.revision)
+    const target = subagentEffortTarget(isPluginEntrySection(state.pluginSection) ? state.pluginSection : null, state.revision)
     runOps({
       ns: target.ns,
       revision: target.revision,
@@ -621,7 +633,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     {state.error ? <div role="alert" aria-live="assertive" style={{ fontSize: '12px', lineHeight: '18px', color: palette.danger, backgroundColor: palette.dangerBg, border: `1px solid ${palette.dangerBorder}`, borderRadius: '8px', padding: '6px 8px', margin: '0 0 8px' }}>{state.error}</div> : null}
     <SubagentSettings effort={state.subagent?.effort ?? null} namespaceFound={state.subagent !== null} draft={state.subagentDraft} custom={state.subagentCustom} busy={state.busy} palette={palette} t={t} onDraftChange={(value) => setState((current) => ({ ...current, notice: null, subagentDraft: value }))} onCustomChange={(value) => setState((current) => ({ ...current, notice: null, subagentCustom: value }))} onSave={applySubagentEffort} />
     <ConfigBackupCard settings={settings} palette={palette} t={t} onApplied={load} />
-    <OpenCodeFormatCard settings={settings} palette={palette} t={t} revision={state.openCodeSessionReads} namespace={state.openCodeSessionNamespace?.ns ?? OPENCODE_SESSION_NS} onApplied={load} />
+    <OpenCodeFormatCard settings={settings} palette={palette} t={t} revision={state.openCodeSessionReads} namespace={state.pluginSection?.ns ?? OPENCODE_SESSION_NS} onApplied={load} />
     {state.nsFound === false ? <p style={{ fontSize: '12px', opacity: 0.75 }}>{t('noNamespace')}</p> : <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: state.quickSettingsOpen ? '4px' : '6px' }}><ActionButton text={t('quickSettings')} onClick={() => setState((current) => ({ ...current, quickSettingsOpen: !current.quickSettingsOpen }))} disabled={state.busy} palette={palette} icon={state.quickSettingsOpen ? 'chevronUp' : 'sliders'} />{state.quickSettingsOpen ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flexBasis: '100%', padding: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.field }}>{PRESETS.map((preset) => <ActionButton key={preset.key} text={t(preset.labelKey)} onClick={() => { setState((current) => ({ ...current, quickSettingsOpen: false })); applyPreset(preset.levels) }} disabled={state.busy} palette={palette} icon={preset.key === 'official' ? 'sparkles' : 'sliders'} />)}</div> : null}</div>
       <div style={{ position: 'relative', marginBottom: '7px' }}><span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: palette.secondary, pointerEvents: 'none' }}><Icon name="search" size={15} /></span><input type="text" value={state.query} placeholder={t('searchPlaceholder')} onChange={(event) => { const value = event.currentTarget.value; setState((current) => ({ ...current, query: value })) }} style={{ boxSizing: 'border-box', width: '100%', height: '30px', padding: '0 10px 0 30px', border: `1px solid ${palette.border}`, borderRadius: '8px', fontSize: '13px', backgroundColor: palette.field, color: palette.text, outline: 'none', boxShadow: palette.shadow }} /></div>

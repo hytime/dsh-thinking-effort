@@ -97,6 +97,22 @@ const expectedOfficialDshVersions = [
   '0.1.7-alpha.1',
 ] as const
 
+/**
+ * Poll `read` until it answers something other than `undefined`, then return
+ * that. The provider-defaults fill is driven by the `settings/document-updated`
+ * event that the write triggering it raises, so no test can observe the result
+ * in the same turn as the write.
+ */
+async function waitForFill<T>(read: () => Promise<T | undefined>, timeoutMs = 20000): Promise<T> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const value = await read()
+    if (value !== undefined) return value
+    if (Date.now() > deadline) throw new Error(`timed out after ${timeoutMs}ms waiting for the provider-defaults fill`)
+    await new Promise<void>((resolveWait) => setTimeout(resolveWait, 250))
+  }
+}
+
 const loaderSeedProvider = {
   api: 'openai-completions',
   baseURL: 'http://gateway.test/v1',
@@ -1975,6 +1991,62 @@ integrationDescribe('official DSH loader composition', () => {
           profiles: expect.any(Object),
           autoBackup: expect.any(Object),
         })
+
+        // Invariant (c): the provider-defaults fill writes on this model too.
+        // The route seeded above already declares `reasoningEfforts`, so the fill
+        // is a no-op on it; this route states none, which is the state the fill
+        // exists for. The write it performs is triggered by the change event the
+        // seed raises — a path the plugin can only take from outside that
+        // event's async context (see `fillScope` in `src/host/settings.ts`) — and
+        // its own write raises the event again, so the queued pass is the
+        // self-triggered re-run asserted below.
+        const fillRoute = 'entry-config-fill'
+        // A route the installed catalog does not describe needs its own
+        // `baseURL`, exactly as the seed above carries one.
+        const fillSeed = {
+          api: 'openai-completions',
+          baseURL: 'http://gateway.test/v1',
+          models: [{ id: 'entry-config-fill-model', name: 'Fill Model' }],
+        }
+        const beforeFill = await readNamespaces()
+        const fillSeedResult = await liveResult('settings/mutate', {
+          ns: 'llm-pi-ai',
+          ops: [{ op: 'set', path: ['providers', fillRoute], value: fillSeed }],
+          expectedRevision: beforeFill.find(({ ns }) => ns === 'llm-pi-ai')?.revision,
+        })
+        expect(fillSeedResult).toMatchObject({ ok: true, value: { ns: 'llm-pi-ai' } })
+
+        const fillUser = async (): Promise<Record<string, unknown> | undefined> => {
+          const llm = (await readNamespaces()).find(({ ns }) => ns === 'llm-pi-ai')
+          return (llm?.user?.providers as Record<string, unknown> | undefined)?.[fillRoute] as Record<string, unknown> | undefined
+        }
+
+        // The fill writes the default level set into the user's own layer and
+        // nothing else: the route keeps the fields the user declared, and no
+        // resolved-only field (`input`, `compat`, …) reaches the document. The
+        // route states no `reasoningEfforts`, which is the state the fill exists
+        // for, and `waitForFill` reads the write rather than the read that
+        // preceded it.
+        const filledRoute = await waitForFill(async () => {
+          const route = await fillUser()
+          const models = route?.['models']
+          return Array.isArray(models) && (models[0] as Record<string, unknown> | undefined)?.['reasoningEfforts'] !== undefined
+            ? route
+            : undefined
+        })
+        expect(filledRoute).toEqual({
+          ...fillSeed,
+          models: [{ ...fillSeed.models[0], reasoningEfforts: { off: null, high: 'high', max: 'max' } }],
+        })
+
+        // The self-triggered re-run: the fill's own write raises the event, the
+        // queued pass re-reads and finds nothing to do, so the section settles
+        // rather than being written a second time.
+        const settled = (await readNamespaces()).find(({ ns }) => ns === 'llm-pi-ai')?.revision
+        expect(settled).toEqual(expect.any(Number))
+        await new Promise<void>((resolveWait) => setTimeout(resolveWait, 2500))
+        expect((await readNamespaces()).find(({ ns }) => ns === 'llm-pi-ai')?.revision).toBe(settled)
+        expect(await fillUser()).toEqual(filledRoute)
 
         // The RPC checks above prove this host *lists* the section; the browser
         // is what proves the served Client resolves and renders it, which is

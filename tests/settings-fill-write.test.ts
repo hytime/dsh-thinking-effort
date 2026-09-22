@@ -149,21 +149,32 @@ function applyPathOpLegacy(section: Json, op: SettingsPathOp): Json {
 }
 
 /**
+ * The service's op shape. This plugin's host-side face only writes `set`, but
+ * the walk the double mirrors also carries `unset`, and the bounds rule differs
+ * between the two, so the double has to be able to express both.
+ */
+type ServicePathOp = SettingsPathOp | { readonly op: 'unset'; readonly path: readonly string[] }
+
+/**
  * The 0.1.7 path walk, copied from the shipped service minus its schema node.
  * Without the node an absent intermediate becomes `{}` rather than the schema
- * default, and an out-of-range index is rejected by the length check below.
- * It is array-aware: a numeric step descends an existing array.
+ * default. It is array-aware: a numeric step descends an existing array, and
+ * the bounds rule is the shipped one — an index past the end throws, an index
+ * AT the end is accepted for a trailing `set` (which appends) and refused for
+ * an `unset` or a step that continues into the element, because there is no
+ * element there to edit.
  */
-function applyPathOp017(section: unknown, op: SettingsPathOp, path: readonly string[] = op.path): unknown {
+function applyPathOp017(section: unknown, op: ServicePathOp, path: readonly string[] = op.path): unknown {
   const [head, ...rest] = path
-  if (head === undefined) return op.value
+  if (head === undefined) return op.op === 'set' ? op.value : undefined
   if (Array.isArray(section)) {
     const index = Number(head)
-    if (!/^(0|[1-9][0-9]*)$/.test(head) || index >= section.length) {
+    if (!/^(0|[1-9][0-9]*)$/.test(head) || index > section.length || (index === section.length && (rest.length > 0 || op.op === 'unset'))) {
       throw new TypeError(`Config array index "${head}" is out of range`)
     }
     const result = [...section]
-    result[index] = applyPathOp017(section[index], op, rest)
+    if (rest.length === 0 && op.op === 'unset') result.splice(index, 1)
+    else result[index] = applyPathOp017(section[index], op, rest)
     return result
   }
   const result: Json = { ...(asRecord(section) ?? {}) }
@@ -348,6 +359,31 @@ describe.each(['entry-config', 'namespace'] as const)('a provider-defaults fill 
 
     expect(service.mutations).toHaveLength(1)
     expect(service.document()).toEqual(afterFirst)
+  })
+})
+
+/**
+ * The double's own bounds rule, pinned because the fill's reachability argument
+ * rests on it: the shipped 0.1.7 walk accepts a trailing `set` at exactly the
+ * array length (it appends) and refuses an index past it. A double that
+ * rejected the length index would make "a retry could still reach this entry"
+ * unsound.
+ */
+describe('the 0.1.7 path walk double', () => {
+  it('accepts a trailing set at the array length and refuses one past it', async () => {
+    const service = createService('entry-config')
+    const mutate = service.settings.mutate as (ns: string, ops: readonly SettingsPathOp[]) => Promise<void>
+    const modelsOf = (): readonly unknown[] =>
+      (((service.document().providers as Json).sub2api as Json).models) as readonly unknown[]
+
+    const length = modelsOf().length
+    await mutate(NS, [{ op: 'set', path: ['providers', 'sub2api', 'models', String(length)], value: { id: 'appended' } }])
+
+    expect(modelsOf()).toHaveLength(length + 1)
+    expect(modelsOf()[length]).toEqual({ id: 'appended' })
+
+    await expect(mutate(NS, [{ op: 'set', path: ['providers', 'sub2api', 'models', String(length + 5)], value: { id: 'past-end' } }]))
+      .rejects.toThrow('out of range')
   })
 })
 

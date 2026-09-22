@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { pluginEntrySection, pluginSection, pluginSectionId, subagentEffortTarget } from '../src/client/subagent-section.ts'
+import { isPluginEntrySection, pluginEntrySection, pluginSection, pluginSectionId, subagentEffortTarget } from '../src/client/subagent-section.ts'
 import type { SettingsNamespace } from '../src/client/types.ts'
 
 const llmNamespace = (): SettingsNamespace => ({
@@ -65,6 +65,13 @@ describe('active plugin section resolution', () => {
 })
 
 describe('subagent effort write target', () => {
+  it('tells the entry section apart from the legacy one, which is what decides the write target', () => {
+    expect(isPluginEntrySection(entryNamespace())).toBe(true)
+    expect(isPluginEntrySection(registeredNamespace())).toBe(false)
+    expect(isPluginEntrySection(null)).toBe(false)
+    expect(isPluginEntrySection(undefined)).toBe(false)
+  })
+
   it('writes the plugin section under the entry-config model, with that section revision', () => {
     const entry = entryNamespace()
     expect(subagentEffortTarget(entry, 4)).toEqual({

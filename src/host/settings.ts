@@ -1,3 +1,4 @@
+import { AsyncResource } from 'node:async_hooks'
 import { hostCapabilities } from '../compat/capabilities.js'
 import { readSettingsSection, readSettingsSectionUser, settingsChangeEvents } from '../compat/settings-model.js'
 import { settingsModelForRuntime } from '../compat/version-map.js'
@@ -21,7 +22,9 @@ const LOG_PREFIX = '[@hytime/dsh-thinking-effort]'
  * end of `write()`, and the queued pass re-reads the filled section and finds
  * nothing to do. A host whose write is accepted but never becomes observable
  * raises that event after every pass, so the count is bounded here rather than
- * left to spin. The budget is per trigger, so a later change still gets one.
+ * left to spin. The budget belongs to the running chain, not to the trigger
+ * that started it: an event that arrives mid-fill is queued into that chain and
+ * spends the same budget rather than beginning a fresh one.
  */
 const MAX_FILL_PASSES = 5
 
@@ -289,10 +292,10 @@ function reportSkipped(skipped: SkippedDefaults): void {
  * `describe()` lists an entry only when a volatile field makes its form live
  * (`volatileForm`), so dropping that `.volatile()` removes the entry from the
  * service reads entirely and this fill goes dead rather than inflating.
- * `tests/loader-composition.test.ts` asserts both halves — the entry is listed
- * and a write under `providers` is accepted — against the pinned
+ * `tests/loader-composition.test.ts` asserts all three halves against the pinned
  * `0.1.7-alpha.1` root when the opt-in integration suite runs
- * (`DSH_LOADER_INTEGRATION=1`).
+ * (`DSH_LOADER_INTEGRATION=1`): the entry is listed, a write under `providers`
+ * is accepted, and the fill's own write lands.
  */
 function readSection(settings: HostSettings): unknown {
   return readSettingsSection(settings, SETTINGS_NAMESPACE)
@@ -373,6 +376,22 @@ export function installSettingsWatcher(ctx: HostContext): void {
      * The pass count is bounded by {@link MAX_FILL_PASSES}, because the fill's
      * own write is one of the triggers this loop consumes.
      */
+    /**
+     * The context the fill's write runs in.
+     *
+     * Under 0.1.7 the change event is raised from inside the write that caused
+     * it: `dsh-settings` `write` → `describe` → emit, while
+     * `dsh-config-editor.edit` still holds its `hmr.runExclusive` transaction
+     * open. That transaction is tracked with `AsyncLocalStorage`, so a listener
+     * that writes back is refused with "HMR transactions cannot be nested" —
+     * and so is anything it defers, because a timer or promise created inside
+     * the transaction inherits its context. The fill would then never write on
+     * this model, which is exactly the case this resource exists for: it is
+     * created while the plugin is applied, outside that transaction, so
+     * entering it gives the write a context the host accepts.
+     */
+    const fillScope = new AsyncResource('dsh-thinking-effort:settings-fill')
+
     const runFill = (): Promise<FillOutcome> => {
       if (inFlight) {
         queued = true
@@ -452,7 +471,10 @@ export function installSettingsWatcher(ctx: HostContext): void {
       for (const event of settingsChangeEvents(model)) {
         const disposer = ctx.on(event, (...args: unknown[]) => {
           if (!alive || args[0] !== SETTINGS_NAMESPACE) return
-          void runFill().catch((error: unknown) => {
+          // See `fillScope`: the event arrives inside the host's own write
+          // transaction, so the fill has to run outside the context it was
+          // raised in or its write is refused.
+          void fillScope.runInAsyncScope(() => runFill()).catch((error: unknown) => {
             if (alive) log('watch fill error:', error instanceof Error ? error.message : String(error))
           })
         })

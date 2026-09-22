@@ -1,5 +1,5 @@
 import { LLM_NAMESPACE, PLUGIN_NAMESPACE } from './types.js'
-import { deepEqualJson, isRecord, userSectionOf } from './snapshot.js'
+import { deepEqualJson, isRecord, pluginSectionKey, userSectionOf } from './snapshot.js'
 import { isOpenCodeSessionSectionId } from '../../compat/opencode-session.js'
 import { pluginSectionId } from '../subagent-section.js'
 import type { ConfigSnapshot, SnapshotSection, WiringEndpoint, WiringReport } from './types.js'
@@ -176,8 +176,14 @@ export function wiringReport(
   namespaces: readonly SettingsNamespace[],
 ): WiringReport {
   const pluginId = pluginSectionId(namespaces)
-  return mergeWiringReports(
-    [LLM_NAMESPACE, pluginId].map((ns) =>
-      adjustIncoming(ns, snapshot.sections[ns] ?? {}, userSectionOf(namespaces, ns), false).report),
-  )
+  // The plugin half is keyed the way `planImport` keys it: a file exported by
+  // the other settings model carries the other id, and reading only this
+  // host's id would report no script for a file that has one. The FILE is read
+  // under that key while this machine's own value still comes from the section
+  // this host publishes.
+  const pluginKey = pluginSectionKey(snapshot.sections, pluginId)
+  return mergeWiringReports([
+    adjustIncoming(LLM_NAMESPACE, snapshot.sections[LLM_NAMESPACE] ?? {}, userSectionOf(namespaces, LLM_NAMESPACE), false).report,
+    adjustIncoming(pluginId, snapshot.sections[pluginKey] ?? {}, userSectionOf(namespaces, pluginId), false).report,
+  ])
 }

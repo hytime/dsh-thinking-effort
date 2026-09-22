@@ -43,6 +43,20 @@ export function pluginSectionId(namespaces: readonly SettingsNamespace[]): strin
   return pluginSection(namespaces)?.ns ?? OPENCODE_SESSION_NAMESPACE
 }
 
+/**
+ * Whether `section` is the plugin's own Loader entry section — the one the
+ * 0.1.7 entry-config model derives from this plugin's exported `Config`.
+ *
+ * The published section id is the only discriminator the Client has, so this is
+ * the one place that compares it. Callers hold the plugin's section in a single
+ * field and ask this when the answer decides where a setting is written: a
+ * section that is not the entry section is the legacy registered namespace, and
+ * `subagentEffort` may only be written into the entry section.
+ */
+export function isPluginEntrySection(section: SettingsNamespace | null | undefined): boolean {
+  return section !== null && section !== undefined && section.ns === PLUGIN_ENTRY_ID
+}
+
 /** One resolved `subagentEffort` write: the section to address and its revision. */
 export interface SubagentEffortTarget {
   readonly ns: string

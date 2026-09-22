@@ -7,6 +7,11 @@ AGENTS.md
 docs/superpowers/
 .worktrees/
 
+# Swift Package Manager's build cache, written beside the checkout by a local
+# build; it is tool state, not part of the package (a `git add -A` would
+# otherwise commit a CACHEDIR.TAG and a debug marker).
+.build/
+
 # Local runtime and manual-test artifacts.
 thinking-effort-loaded.json
 pnpm-lock.yaml

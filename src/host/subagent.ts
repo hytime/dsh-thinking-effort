@@ -47,21 +47,24 @@ function effortFromUserLayer(settings: HostSettings, namespace: string): string 
  * the Loader entry id under `entry-config`, the registered namespace under
  * `namespace`. Callers holding a live context resolve it with
  * `settingsEntryId`; the compile-time default answers for the rest.
+ *
+ * The logger sits in the signature because callers pass it positionally beside
+ * that id; this read has nothing to log, since a missing or unreadable section
+ * is `undefined` rather than an error.
  */
 export function readSubagentEffort(
   settings: HostSettings | undefined,
-  logger: Logger = log,
+  _logger: Logger = log,
   ownSectionId: string = PLUGIN_ENTRY_ID,
 ): string | undefined {
   if (settings === undefined) return undefined
-  try {
-    const own = effortFromUserLayer(settings, ownSectionId)
-    if (own !== undefined) return own
-    return effortFromUserLayer(settings, SETTINGS_NAMESPACE)
-  } catch (error) {
-    logger('read subagent effort error:', error instanceof Error ? error.message : String(error))
-    return undefined
-  }
+  // No failure handling here on purpose: both reads go through
+  // `readSettingsSectionUser`, which already answers `undefined` for a missing
+  // section and swallows a throwing `describe()`, so a `catch` around them
+  // could never run.
+  const own = effortFromUserLayer(settings, ownSectionId)
+  if (own !== undefined) return own
+  return effortFromUserLayer(settings, SETTINGS_NAMESPACE)
 }
 
 function findModel(settings: HostSettings, config: AgentRequestConfig): unknown {

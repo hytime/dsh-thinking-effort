@@ -15,10 +15,12 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * The namespace's RAW user layer — what `settings.yaml` actually stores, with
- * schema defaults and the composition base left out. Reading `value` instead
- * would bake derived data into the snapshot and turn it into user config on
- * import.
+ * The namespace's RAW user layer — the override layer as the settings document
+ * actually stores it, with schema defaults and the composition base left out.
+ * Reading `value` instead would bake derived data into the snapshot and turn it
+ * into user config on import. (On 0.1.7 and later that document is the active
+ * profile's config rather than `settings.yaml`, which the entry-config model no
+ * longer uses; both are the same user layer through `describe()`.)
  */
 export function userSectionOf(namespaces: readonly SettingsNamespace[], ns: string): SnapshotSection {
   const found = namespaces.find((entry) => entry.ns === ns)
@@ -36,10 +38,12 @@ export function userSectionOf(namespaces: readonly SettingsNamespace[], ns: stri
  * by a constant: reading the wrong key would silently snapshot the plugin's
  * settings as `{}` and write them back nowhere.
  *
- * Content decides, not mere presence. An exporter always writes both of
- * `CONFIG_NAMESPACES`, so a file at the other model's id carries one empty
- * plugin key and one populated one; keying on presence alone would pick the
- * empty one whenever it happens to be the host's own id.
+ * Content decides, not mere presence. An exporter writes ONE plugin key — the
+ * id of the model that produced the file, beside the always-present
+ * `llm-pi-ai` key — so a file from the other model has that key empty and the
+ * other one populated. Keying on presence alone would still be wrong for a
+ * hand-edited file that carries both: the populated one is the one that means
+ * something, and the final fallback only decides between two empty sections.
  */
 export function pluginSectionKey(
   sections: Readonly<Record<string, unknown>>,
