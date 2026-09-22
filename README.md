@@ -155,7 +155,7 @@ The model editor has a separate **OpenCode session Header** switch, stored in th
 
 When enabled and no `format` is configured, the Host sends a deterministic value in the canonical `ses_` shape derived from the current DSH session: `ses_` + 12 hex characters (a 48-bit millisecond timestamp minted once per session) + 14 Base62 characters (an 80-bit digest of the normalized DSH session id). The same DSH session always sends the same value: the value is stickied per session, and eviction from the bounded value cache drops only the cached value — never the first-use mint — so an evicted session keeps its value when revisited. Only a DSH restart re-mints the hex timestamp, and only in `firstUse` mode (`time: hash` needs no state at all). The 14-character suffix is stable across DSH restarts because it is derived, not stored. Different sessions — including each subagent run — derive distinct values.
 
-The generator is configurable under `dsh-thinking-effort.opencodeSession.format` in the DSH settings document. Four modes cover upstream format changes without rebuilding the plugin:
+The generator is configurable either from the **Session value generator** card on the settings page or by hand under `dsh-thinking-effort.opencodeSession.format` in the DSH settings document; the two are equivalent. Four modes cover upstream format changes without rebuilding the plugin:
 
 - `ses-derive` (default) — the canonical generator above. `time: firstUse` mints the hex block once per session; `time: hash` derives it from the session digest so the whole value is identical on every machine.
 - `passthrough` — the previous behavior: send the raw DSH session id.

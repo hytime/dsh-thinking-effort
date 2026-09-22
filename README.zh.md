@@ -214,7 +214,7 @@ providers:
 
 启用后、未配置 `format` 时，Host 会发送符合 `ses_` 规范形态、**由当前 DSH 会话确定性派生**的值：`ses_` + 12 位十六进制（48 位毫秒时间戳，会话内首次使用时铸造一次）+ 14 位 Base62（对归一化的 DSH 会话 ID 取 80 位 SHA-256 摘要）。同一 DSH 会话总是发送同一个值：该值按会话粘性保留，有界缓存淘汰只丢弃缓存值、绝不丢弃首次铸造的铸币，因此被淘汰的会话再次访问时值仍不变；只有 DSH 重启且处于 `firstUse` 模式时才会重新铸造 hex 时间戳（`time: hash` 则完全无状态）。14 位后缀因为是派生而非存储，在 DSH 重启后依然稳定。不同会话（包括每次子 agent 运行）派生不同值。
 
-生成器在 DSH 设置文档的 `dsh-thinking-effort.opencodeSession.format` 下配置，共四档，可应对上游格式变化而无需重建插件：
+生成器参数可在设置页的**会话值生成器**卡片中调整，也可在设置文档的 `dsh-thinking-effort.opencodeSession.format` 中手写；两种方式等价。共四档，可应对上游格式变化而无需重建插件：
 
 - `ses-derive`（默认）——上面的规范生成器。`time: firstUse` 按会话铸造一次 hex 段；`time: hash` 改为从会话摘要派生，使整个值在任何机器上完全一致。
 - `passthrough`——旧行为：发送原始 DSH 会话 ID。

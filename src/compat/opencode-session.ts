@@ -6,9 +6,21 @@
 export const OPENCODE_SESSION_NAMESPACE = 'dsh-thinking-effort'
 export const OPENCODE_SESSION_HEADER = 'x-opencode-session'
 
-export type OpenCodeSessionFormatMode = 'ses-derive' | 'passthrough' | 'template' | 'expression' | 'script'
-export type OpenCodeSessionTimeSource = 'firstUse' | 'hash'
-export type OpenCodeSessionInvalidPolicy = 'warn' | 'drop' | 'send'
+/**
+ * The generator mode list: the Host resolves stored values against it and the
+ * Client renders the mode select in this order, so both sides read one copy.
+ * Kept in this module because the Client bundle imports it and must not pull a
+ * `node:` built-in in.
+ */
+export const FORMAT_MODES = ['ses-derive', 'passthrough', 'template', 'expression', 'script'] as const
+/** The timestamp-source list; same single-copy rule as `FORMAT_MODES`. */
+export const FORMAT_TIMES = ['firstUse', 'hash'] as const
+/** The on-invalid policy list; same single-copy rule as `FORMAT_MODES`. */
+export const FORMAT_INVALID_POLICIES = ['warn', 'drop', 'send'] as const
+
+export type OpenCodeSessionFormatMode = (typeof FORMAT_MODES)[number]
+export type OpenCodeSessionTimeSource = (typeof FORMAT_TIMES)[number]
+export type OpenCodeSessionInvalidPolicy = (typeof FORMAT_INVALID_POLICIES)[number]
 
 /** Configurable generator shape stored under `opencodeSession.format`. */
 export interface OpenCodeSessionFormatSettings {

@@ -1,6 +1,19 @@
 import { createHash } from 'node:crypto'
+import {
+  evaluateNode,
+  ExpressionParser,
+  EXPRESSION_HELPER_NAMES,
+  SESSION_CONTEXT_KEYS,
+  tokenize,
+} from '../compat/opencode-expression.js'
+import type { Node } from '../compat/opencode-expression.js'
 import { stat } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
+import {
+  FORMAT_INVALID_POLICIES as INVALID_POLICIES,
+  FORMAT_MODES,
+  FORMAT_TIMES as TIME_SOURCES,
+} from '../compat/opencode-session.js'
 import type {
   OpenCodeSessionFormatMode,
   OpenCodeSessionFormatSettings,
@@ -22,9 +35,6 @@ const BASE62_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrs
 const DSH_SESSION_PREFIX = 'session-'
 const CACHE_MAX_ENTRIES = 4096
 const SCRIPT_STAT_MIN_INTERVAL_MS = 1000
-const FORMAT_MODES: readonly OpenCodeSessionFormatMode[] = ['ses-derive', 'passthrough', 'template', 'expression', 'script']
-const TIME_SOURCES: readonly OpenCodeSessionTimeSource[] = ['firstUse', 'hash']
-const INVALID_POLICIES: readonly OpenCodeSessionInvalidPolicy[] = ['warn', 'drop', 'send']
 
 /** Context passed to template / expression / script modes and to the script export. */
 export interface SessionFormatContext {
@@ -43,6 +53,19 @@ export interface SessionFormatContext {
   /** Full lowercase SHA-256 hex of the normalized session id. */
   readonly sha256: string
 }
+
+// Compile-time guards: the shared name lists must equal what evaluation really
+// provides. Adding a context key or a helper without updating the shared list
+// (or the reverse) becomes a type error rather than a silent client misjudgement.
+// The Client validates an expression against these lists before saving it, so a
+// name the evaluator would reject has to be caught there rather than by the
+// catch-and-fall-back in `computeValue`.
+type ContextKeysExact =
+  (typeof SESSION_CONTEXT_KEYS)[number] extends keyof SessionFormatContext
+    ? keyof SessionFormatContext extends (typeof SESSION_CONTEXT_KEYS)[number] ? true : never
+    : never
+const contextKeysExact: ContextKeysExact = true
+void contextKeysExact
 
 export interface SessionFormatRequest {
   readonly provider: string
@@ -185,176 +208,13 @@ interface ScriptSlot {
   loading: Promise<ScriptModule | undefined> | undefined
 }
 
-type Token =
-  | { readonly type: 'string'; readonly value: string }
-  | { readonly type: 'number'; readonly value: string }
-  | { readonly type: 'ident'; readonly value: string }
-  | { readonly type: 'op'; readonly value: string }
-  | { readonly type: 'lparen' | 'rparen' | 'comma' | 'eof'; readonly value: string }
-
-function tokenize(source: string): Token[] {
-  const tokens: Token[] = []
-  let index = 0
-  while (index < source.length) {
-    const char = source[index]
-    if (char === ' ' || char === '\t' || char === '\n' || char === '\r') {
-      index += 1
-      continue
-    }
-    if (char === '"' || char === "'") {
-      const quote = char
-      index += 1
-      let value = ''
-      let closed = false
-      while (index < source.length) {
-        const current = source[index]
-        if (current === '\\') {
-          value += source[index + 1] ?? ''
-          index += 2
-          continue
-        }
-        if (current === quote) {
-          index += 1
-          closed = true
-          break
-        }
-        value += current
-        index += 1
-      }
-      if (!closed) throw new Error('unterminated string literal')
-      tokens.push({ type: 'string', value })
-      continue
-    }
-    if (/[0-9]/.test(char)) {
-      let value = ''
-      while (index < source.length && /[0-9.]/.test(source[index]!)) {
-        value += source[index]
-        index += 1
-      }
-      tokens.push({ type: 'number', value })
-      continue
-    }
-    if (/[A-Za-z_]/.test(char)) {
-      let value = ''
-      while (index < source.length && /[A-Za-z0-9_]/.test(source[index]!)) {
-        value += source[index]
-        index += 1
-      }
-      tokens.push({ type: 'ident', value })
-      continue
-    }
-    if (char === '(') { tokens.push({ type: 'lparen', value: '(' }); index += 1; continue }
-    if (char === ')') { tokens.push({ type: 'rparen', value: ')' }); index += 1; continue }
-    if (char === ',') { tokens.push({ type: 'comma', value: ',' }); index += 1; continue }
-    if (char === '+') { tokens.push({ type: 'op', value: '+' }); index += 1; continue }
-    throw new Error(`unexpected character '${char}'`)
-  }
-  tokens.push({ type: 'eof', value: '' })
-  return tokens
-}
-
-type Node =
-  | { readonly kind: 'literal'; readonly value: string | number }
-  | { readonly kind: 'ref'; readonly name: string }
-  | { readonly kind: 'call'; readonly name: string; readonly args: readonly Node[] }
-  | { readonly kind: 'binary'; readonly op: '+'; readonly left: Node; readonly right: Node }
-
-class ExpressionParser {
-  private index = 0
-  constructor(private readonly tokens: readonly Token[]) {}
-
-  parse(): Node {
-    const node = this.parseAdditive()
-    const tail = this.tokens[this.index]
-    if (tail?.type !== 'eof') throw new Error(`unexpected token '${tail?.value ?? ''}'`)
-    return node
-  }
-
-  private parseAdditive(): Node {
-    let left = this.parsePrimary()
-    while (this.tokens[this.index]?.type === 'op' && this.tokens[this.index]?.value === '+') {
-      this.index += 1
-      const right = this.parsePrimary()
-      left = { kind: 'binary', op: '+', left, right }
-    }
-    return left
-  }
-
-  private parsePrimary(): Node {
-    const token = this.tokens[this.index]
-    if (token === undefined) throw new Error('unexpected end of expression')
-    if (token.type === 'string') { this.index += 1; return { kind: 'literal', value: token.value } }
-    if (token.type === 'number') { this.index += 1; return { kind: 'literal', value: Number(token.value) } }
-    if (token.type === 'lparen') {
-      this.index += 1
-      const node = this.parseAdditive()
-      if (this.tokens[this.index]?.type !== 'rparen') throw new Error("expected ')'")
-      this.index += 1
-      return node
-    }
-    if (token.type === 'ident') {
-      const name = token.value
-      this.index += 1
-      if (this.tokens[this.index]?.type === 'lparen') {
-        this.index += 1
-        const args: Node[] = []
-        if (this.tokens[this.index]?.type !== 'rparen') {
-          args.push(this.parseAdditive())
-          while (this.tokens[this.index]?.type === 'comma') {
-            this.index += 1
-            args.push(this.parseAdditive())
-          }
-        }
-        if (this.tokens[this.index]?.type !== 'rparen') throw new Error("expected ')' after arguments")
-        this.index += 1
-        return { kind: 'call', name, args }
-      }
-      return { kind: 'ref', name }
-    }
-    throw new Error(`unexpected token '${token.value}'`)
-  }
-}
-
-function evaluateNode(
-  node: Node,
-  scope: object,
-  funcs: Record<string, (...args: unknown[]) => unknown>,
-): unknown {
-  switch (node.kind) {
-    case 'literal':
-      return node.value
-    case 'ref': {
-      const lookup = scope as Record<string, unknown>
-      if (!Object.prototype.hasOwnProperty.call(lookup, node.name)) {
-        throw new Error(`unknown identifier '${node.name}'`)
-      }
-      return lookup[node.name]
-    }
-    case 'call': {
-      // Own-property check mirrors the scope lookup below: a plain object
-      // literal inherits Object.prototype, so without it names like
-      // `constructor` / `toString` / `__defineGetter__` would resolve.
-      if (!Object.prototype.hasOwnProperty.call(funcs, node.name)) {
-        throw new Error(`unknown function '${node.name}'`)
-      }
-      const fn = funcs[node.name]!
-      return fn(...node.args.map((arg) => evaluateNode(arg, scope, funcs)))
-    }
-    case 'binary': {
-      const left = evaluateNode(node.left, scope, funcs)
-      const right = evaluateNode(node.right, scope, funcs)
-      if (typeof left === 'number' && typeof right === 'number') return left + right
-      return String(left) + String(right)
-    }
-  }
-}
-
 /**
- * The documented helper functions for `expression` mode. Built on a
- * null-prototype object so the inherited Object.prototype members are not even
- * present, and the evaluator additionally checks own-property ownership.
+ * The documented helper functions for `expression` mode. The `satisfies` clause
+ * pins the table to the shared name list in both directions: a helper that is
+ * not listed, and a listed helper without an implementation, are both type
+ * errors.
  */
-const EXPRESSION_FUNCS: Record<string, (...args: unknown[]) => unknown> = Object.assign(Object.create(null), {
+const EXPRESSION_FUNCS_TABLE = {
   sha256(value: unknown): string {
     return sha256Hex(String(value))
   },
@@ -367,7 +227,14 @@ const EXPRESSION_FUNCS: Record<string, (...args: unknown[]) => unknown> = Object
   upper(value: unknown): string {
     return String(value).toUpperCase()
   },
-})
+} satisfies Record<(typeof EXPRESSION_HELPER_NAMES)[number], (...args: unknown[]) => unknown>
+
+/**
+ * Built on a null-prototype object so the inherited Object.prototype members
+ * are not even present, and the evaluator additionally checks own-property
+ * ownership.
+ */
+const EXPRESSION_FUNCS: Record<string, (...args: unknown[]) => unknown> = Object.assign(Object.create(null), EXPRESSION_FUNCS_TABLE)
 
 function evaluateExpression(
   source: string,
