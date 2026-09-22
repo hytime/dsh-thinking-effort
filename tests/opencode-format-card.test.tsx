@@ -275,6 +275,19 @@ function setInput(element: HTMLInputElement, value: string): void {
   element.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
+/**
+ * The `role="alert"` message rendered inside one field's own block, located
+ * from that field's input rather than from the card's whole text: a message
+ * paired with the wrong input cannot satisfy this lookup.
+ */
+function fieldAlert(container: HTMLElement, label: string): HTMLElement {
+  const block = inputByLabel(container, label).closest('div')
+  if (block === null) throw new Error(`field has no wrapper: ${label}`)
+  const alert = block.querySelector('[role="alert"]')
+  if (alert === null) throw new Error(`missing alert in field: ${label}`)
+  return alert as HTMLElement
+}
+
 async function openCard(view: { container: HTMLElement }): Promise<void> {
   act(() => button(view.container, text('formatCardTitle')).click())
   await settle()
@@ -368,6 +381,64 @@ describe('OpenCodeFormatCard dynamic fields', () => {
     act(() => setInput(inputByLabel(view.container, text('formatScriptLabel')), './s.mjs'))
     await settle()
     expect(view.container.textContent).toContain(text('formatErrScriptNotAbsolute'))
+    expect(button(view.container, text('formatApply')).disabled).toBe(true)
+  })
+
+  // The three messages below had no rendering assertion at all: only the
+  // `formatFieldErrors` codes were covered, so a code mapped to the wrong
+  // localization key would pass typecheck and every other case while showing
+  // the user an error about a different field. Each case therefore stores a
+  // *valid* value, opens the card, and only then edits the field — an
+  // already-invalid draft would leave `dirty` false, making the disabled Apply
+  // assertion below true for a reason unrelated to `blocked`.
+
+  it('blocks Apply and explains an empty expression in expression mode', async () => {
+    const view = harness({ user: { 'dsh-thinking-effort': { opencodeSession: { format: { mode: 'expression', expression: 'hex12' } } } } })
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    expect(inputByLabel(view.container, text('formatExpressionLabel')).getAttribute('aria-invalid')).toBeNull()
+    act(() => setInput(inputByLabel(view.container, text('formatExpressionLabel')), ''))
+    await settle()
+    expect(fieldAlert(view.container, text('formatExpressionLabel')).textContent).toBe(text('formatErrExpressionRequired'))
+    expect(inputByLabel(view.container, text('formatExpressionLabel')).getAttribute('aria-invalid')).toBe('true')
+    // The sibling free-text messages belong to fields that are not even
+    // rendered here, so seeing either one would mean a crossed mapping.
+    expect(view.container.textContent).not.toContain(text('formatErrTemplateRequired'))
+    expect(view.container.textContent).not.toContain(text('formatErrScriptRequired'))
+    expect(button(view.container, text('formatApply')).disabled).toBe(true)
+  })
+
+  it('blocks Apply and explains an unknown expression name', async () => {
+    const view = harness({ user: { 'dsh-thinking-effort': { opencodeSession: { format: { mode: 'expression', expression: 'hex12' } } } } })
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    expect(inputByLabel(view.container, text('formatExpressionLabel')).getAttribute('aria-invalid')).toBeNull()
+    // `hex_12` parses as a plain identifier, so this is the unknown-name branch
+    // rather than the syntax branch.
+    act(() => setInput(inputByLabel(view.container, text('formatExpressionLabel')), 'hex_12'))
+    await settle()
+    expect(fieldAlert(view.container, text('formatExpressionLabel')).textContent).toBe(text('formatErrExpressionUnknownName'))
+    expect(inputByLabel(view.container, text('formatExpressionLabel')).getAttribute('aria-invalid')).toBe('true')
+    expect(view.container.textContent).not.toContain(text('formatErrExpressionSyntax'))
+    expect(view.container.textContent).not.toContain(text('formatErrExpressionRequired'))
+    expect(button(view.container, text('formatApply')).disabled).toBe(true)
+  })
+
+  it('blocks Apply and explains an empty script path in script mode', async () => {
+    const view = harness({ user: { 'dsh-thinking-effort': { opencodeSession: { format: { mode: 'script', script: '/srv/session.mjs' } } } } })
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    expect(inputByLabel(view.container, text('formatScriptLabel')).getAttribute('aria-invalid')).toBeNull()
+    act(() => setInput(inputByLabel(view.container, text('formatScriptLabel')), ''))
+    await settle()
+    expect(fieldAlert(view.container, text('formatScriptLabel')).textContent).toBe(text('formatErrScriptRequired'))
+    expect(inputByLabel(view.container, text('formatScriptLabel')).getAttribute('aria-invalid')).toBe('true')
+    expect(view.container.textContent).not.toContain(text('formatErrScriptNotAbsolute'))
+    expect(view.container.textContent).not.toContain(text('formatErrTemplateRequired'))
+    expect(view.container.textContent).not.toContain(text('formatErrExpressionRequired'))
     expect(button(view.container, text('formatApply')).disabled).toBe(true)
   })
 
