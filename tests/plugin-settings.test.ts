@@ -42,7 +42,7 @@ describe('PLUGIN_SETTINGS_SCHEMA', () => {
   it('resolves a full section without altering it apart from owned field defaults', () => {
     const resolved = PLUGIN_SETTINGS_SCHEMA(section) as { opencodeSession?: Record<string, unknown> }
     const { opencodeSession, ...rest } = resolved
-    expect(rest).toEqual({ ...section, opencodeSession: undefined })
+    expect(rest).toEqual({ ...section, opencodeSession: undefined, subagentEffort: '' })
     expect(opencodeSession).toEqual({
       providers: { p: { models: { m: true } } },
       format: formatDefaults,
@@ -52,7 +52,8 @@ describe('PLUGIN_SETTINGS_SCHEMA', () => {
 
   it('materializes every owned field for an empty section so editors see a stable shape', () => {
     const resolved = PLUGIN_SETTINGS_SCHEMA({ opencodeSession: { providers: {} } }) as unknown as Record<string, unknown>
-    expect(Object.keys(resolved)).toEqual(['opencodeSession', 'profiles', 'autoBackup'])
+    expect(Object.keys(resolved)).toEqual(['opencodeSession', 'subagentEffort', 'profiles', 'autoBackup'])
+    expect(resolved.subagentEffort).toBe('')
     expect(resolved.profiles).toEqual({})
     expect((resolved.opencodeSession as Record<string, unknown>).format).toEqual(formatDefaults)
     expect((resolved.opencodeSession as Record<string, unknown>).userAgent).toEqual(userAgentDefaults)
@@ -113,6 +114,7 @@ function fieldPaths(schema: { toJSON(): unknown }): readonly string[] {
 
 const pluginSettingsDefaults = {
   opencodeSession: { providers: {}, format: formatDefaults, userAgent: userAgentDefaults },
+  subagentEffort: '',
   profiles: {},
   autoBackup: {
     kind: 'dsh-thinking-effort/config-snapshot',

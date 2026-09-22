@@ -12,7 +12,7 @@ export {
   takeoverSupportedForVersion,
   takeoverTransportForVersion,
 } from './version-map.js'
-export { readSettingsSection, settingsChangeEvents, settingsEntryId, settingsModelOf } from './settings-model.js'
+export { PLUGIN_ENTRY_ID, readSettingsSection, readSettingsSectionUser, settingsChangeEvents, settingsEntryId, settingsModelOf } from './settings-model.js'
 
 type MethodName = 'describe' | 'mutate' | 'get' | 'update' | 'modelCatalog'
 

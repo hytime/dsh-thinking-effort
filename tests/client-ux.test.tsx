@@ -98,6 +98,24 @@ const namespace = (overrides: Partial<SettingsNamespace> = {}): SettingsNamespac
   ...overrides,
 })
 
+/**
+ * The plugin's own section under the 0.1.7 entry-config model: the Loader entry
+ * id names it, and every plugin setting — including `subagentEffort` — lives in
+ * it rather than in the `llm-pi-ai` section.
+ */
+const entryConfigNamespace = (overrides: Partial<SettingsNamespace> = {}): SettingsNamespace => ({
+  ns: 'thinking-effort',
+  revision: 9,
+  value: {
+    opencodeSession: { providers: { provider: { models: { 'model-a': true } } } },
+    subagentEffort: 'medium',
+    profiles: {},
+    autoBackup: { kind: 'dsh-thinking-effort/config-snapshot', version: 1, createdAt: '', pluginVersion: '', sourceProfile: 'unknown', sections: {} },
+  },
+  user: { subagentEffort: 'medium' },
+  ...overrides,
+})
+
 const openCodeNamespace = (overrides: Partial<SettingsNamespace> = {}): SettingsNamespace => ({
   ns: 'dsh-thinking-effort',
   revision: 17,
@@ -1761,6 +1779,38 @@ describe('SectionEditor user behavior', () => {
     act(() => button(view.container, text('apply')).click())
     await settle()
     expect(view.mutate).toHaveBeenCalledWith('llm-pi-ai', [{ op: 'set', path: ['subagentEffort'], value: 'deep' }], 2)
+    expect(view.container.textContent).toContain(text('subagentSaved'))
+    view.unmount()
+  })
+
+  it('saves the subagent effort into the plugin section under the entry-config model', async () => {
+    const entry = entryConfigNamespace()
+    const view = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [namespace(), entry] } }),
+      mutate: async (ns, _ops, _revision) => ({
+        ok: true as const,
+        value: ns === 'thinking-effort'
+          ? entryConfigNamespace({ revision: 10, user: { subagentEffort: 'deep' }, value: { ...entry.value, subagentEffort: 'deep' } })
+          : namespace(),
+      }),
+    })
+    await settle()
+
+    const select = view.container.querySelectorAll('select')[1] as HTMLSelectElement
+    // The draft comes from the plugin's own section, not from `llm-pi-ai`.
+    expect(select.value).toBe('medium')
+    act(() => {
+      setValue(select, 'custom')
+    })
+    const custom = view.container.querySelector(`input[placeholder="${text('customPlaceholder')}"]`) as HTMLInputElement
+    act(() => {
+      setValue(custom, 'deep')
+    })
+    act(() => button(view.container, text('apply')).click())
+    await settle()
+
+    // The plugin section carries its own revision (9), not the llm-pi-ai one (2).
+    expect(view.mutate).toHaveBeenCalledWith('thinking-effort', [{ op: 'set', path: ['subagentEffort'], value: 'deep' }], 9)
     expect(view.container.textContent).toContain(text('subagentSaved'))
     view.unmount()
   })

@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { apply } from '../src/index.ts'
 import { installOpenCodeSession } from '../src/host/opencode-session.ts'
+import { readSubagentEffort, resolveSubagentEffort } from '../src/host/subagent.ts'
 import { OPENCODE_SESSION_NAMESPACE } from '../src/compat/opencode-session.ts'
 import { hasModelSourceConflict } from '../src/compat/model-source.ts'
 
@@ -57,6 +58,8 @@ type HarnessOptions = {
   descriptors?: Array<Record<string, unknown>>
   rejectUpdates?: number
   pendingUpdate?: boolean
+  /** The Loader entry id the plugin's fiber carries; absent means no fiber. */
+  entryId?: string
 }
 
 function createHarness(options: HarnessOptions = {}) {
@@ -70,6 +73,7 @@ function createHarness(options: HarnessOptions = {}) {
   const listeners: Array<{ name: string; callback: (...args: any[]) => unknown; options?: unknown }> = []
   const cleanups: Array<() => void> = []
   const ctx = {
+    ...(options.entryId === undefined ? {} : { fiber: { entry: { options: { id: options.entryId } } } }),
     settings: {
       writable: options.writable ?? true,
       get: (_ns: string) => section,
@@ -200,6 +204,7 @@ describe('real Settings-backed OpenCode registration', () => {
       }])).rejects.toThrow()
       expect(host.ctx.settings.describe().find((entry) => entry.ns === OPENCODE_SESSION_NAMESPACE)?.value).toEqual({
         opencodeSession: { providers: {}, format: openCodeSessionFormatDefaults, userAgent: openCodeSessionUserAgentDefaults },
+        subagentEffort: '',
         profiles: {},
         autoBackup: snapshotDefaults,
       })
@@ -233,6 +238,7 @@ describe('real Settings-backed OpenCode registration', () => {
           format: openCodeSessionFormatDefaults,
           userAgent: openCodeSessionUserAgentDefaults,
         },
+        subagentEffort: '',
         profiles: {},
         autoBackup: snapshotDefaults,
       })
@@ -481,6 +487,93 @@ describe('Host composition', () => {
     } finally {
       log.mockRestore()
     }
+  })
+})
+
+describe('subagent effort section read order', () => {
+  const own = (user: unknown) => ({ ns: 'thinking-effort', user })
+  const legacy = (user: unknown) => ({ ns: 'llm-pi-ai', user })
+
+  it('reads the plugin section first, so it wins when both locations are set', () => {
+    const settings = { describe: () => [own({ subagentEffort: 'high' }), legacy({ subagentEffort: 'max' })] }
+
+    expect(readSubagentEffort(settings as never, () => {}, 'thinking-effort')).toBe('high')
+  })
+
+  it('falls back to the legacy llm-pi-ai location the older releases wrote to', () => {
+    const missing = { describe: () => [legacy({ subagentEffort: 'max' })] }
+    expect(readSubagentEffort(missing as never, () => {}, 'thinking-effort')).toBe('max')
+
+    // An empty string is "unset", not a stored value, so the legacy setting still wins.
+    const empty = { describe: () => [own({ subagentEffort: '' }), legacy({ subagentEffort: 'max' })] }
+    expect(readSubagentEffort(empty as never, () => {}, 'thinking-effort')).toBe('max')
+  })
+
+  it('keeps the legacy read when the plugin section is present but unreadable', () => {
+    const settings = { describe: () => [own('not-a-user-layer'), legacy({ subagentEffort: 'off' })] }
+    expect(readSubagentEffort(settings as never, () => {}, 'thinking-effort')).toBe('off')
+    expect(readSubagentEffort({ describe: () => [] } as never, () => {}, 'thinking-effort')).toBeUndefined()
+    expect(readSubagentEffort(undefined)).toBeUndefined()
+  })
+
+  it('resolves a custom wire value from the plugin section through the provider model', () => {
+    const settings = {
+      describe: () => [own({ subagentEffort: 'ultra' })],
+      get: () => ({ providers: { route: { models: [{ id: 'model', reasoningEfforts: { high: 'ultra' } }] } } }),
+    }
+
+    expect(resolveSubagentEffort(
+      settings as never,
+      { provider: 'route', model: 'model' },
+      () => {},
+      'thinking-effort',
+    )).toBe('high')
+  })
+
+  it('leaves an unmapped custom wire value alone and logs why', () => {
+    const log = vi.fn()
+    const settings = {
+      describe: () => [own({ subagentEffort: 'ultra' })],
+      get: () => ({ providers: { route: { models: [{ id: 'model', reasoningEfforts: { high: 'high' } }] } } }),
+    }
+
+    expect(resolveSubagentEffort(
+      settings as never,
+      { provider: 'route', model: 'model' },
+      log,
+      'thinking-effort',
+    )).toBeUndefined()
+    expect(log).toHaveBeenCalledWith('subagent custom effort is not mapped for', 'route/model')
+  })
+
+  it('addresses the plugin section by the live Loader entry id', async () => {
+    const harness = createHarness({
+      writable: false,
+      entryId: 'thinking-effort',
+      descriptors: [own({ subagentEffort: 'max' }), legacy({ subagentEffort: 'off' })],
+    })
+
+    const result = await harness.listener('agent/request')?.callback(
+      { agent: { session: { header: { origin: 'subagent' } } } },
+      async () => ({ provider: 'provider', model: 'model' }),
+    )
+
+    expect(result).toEqual({ provider: 'provider', model: 'model', reasoningEffort: 'max' })
+  })
+
+  it('follows a renamed Loader entry id rather than the compiled default', async () => {
+    const harness = createHarness({
+      writable: false,
+      entryId: 'renamed-entry',
+      descriptors: [{ ns: 'renamed-entry', user: { subagentEffort: 'low' } }, legacy({ subagentEffort: 'max' })],
+    })
+
+    const result = await harness.listener('agent/request')?.callback(
+      { agent: { session: { header: { origin: 'subagent' } } } },
+      async () => ({ provider: 'provider', model: 'model' }),
+    )
+
+    expect(result).toEqual({ provider: 'provider', model: 'model', reasoningEffort: 'low' })
   })
 })
 

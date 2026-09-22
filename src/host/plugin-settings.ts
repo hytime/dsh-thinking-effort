@@ -92,6 +92,13 @@ export interface PluginStoredSnapshot {
 
 /** The namespace's resolved shape: an OpenCode session section plus the snapshot fields. */
 export interface PluginSettings extends OpenCodeSessionSettings {
+  /**
+   * The subagent thinking effort the plugin applies when a request carries no
+   * explicit `reasoningEffort`. Empty means "unset, follow the provider
+   * default", which is why its default is an empty string rather than a level:
+   * the stored value is a wire spelling, not necessarily a level key.
+   */
+  readonly subagentEffort?: string
   readonly profiles?: Readonly<Record<string, PluginStoredSnapshot>>
   readonly autoBackup?: PluginStoredSnapshot
 }
@@ -100,9 +107,14 @@ export interface PluginSettings extends OpenCodeSessionSettings {
  * The fields both schema roots expose: the namespace the older releases
  * register, and the Loader entry schema `Config` below. They are declared once
  * so a field can never reach one root without the other.
+ *
+ * `subagentEffort` belongs here rather than in a section of its own because
+ * the 0.1.7 entry-config model derives one form per Loader entry, so the
+ * plugin owns exactly one section and every plugin setting lives in it.
  */
 const PLUGIN_SETTINGS_FIELDS = {
   opencodeSession: openCodeSession,
+  subagentEffort: z.string().default(''),
   profiles: z.dict(configSnapshot).default({}),
   autoBackup: configSnapshot,
 }
@@ -117,6 +129,7 @@ const PLUGIN_SETTINGS_FIELDS = {
  */
 const PLUGIN_SETTINGS_DEFAULTS = {
   opencodeSession: { ...OPENCODE_SESSION_DEFAULTS },
+  subagentEffort: '',
   profiles: {},
   autoBackup: {
     kind: 'dsh-thinking-effort/config-snapshot',

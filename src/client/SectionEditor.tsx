@@ -7,6 +7,7 @@ import { inventoryFrom, modelCompatKey, modelGatewayCompatViewsFrom, providerGat
 import { emptyTakeoverRuntimeResolution } from './takeover-runtime.js'
 import { openCodeSessionOp, openCodeSessionStateFor, isOpenCodeSessionNamespace } from './model-header-ops.js'
 import { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from './model-ops.js'
+import { pluginEntrySection, subagentEffortTarget } from './subagent-section.js'
 import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, validateContextWindow, validateLevels } from './validation.js'
 import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, OpenCodeSessionState, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
 import type { Palette } from './theme.js'
@@ -29,6 +30,11 @@ interface RunOpsRequest {
   readonly successMessage: string
   readonly onSuccess?: () => void
   readonly openCodeSessionSavedKey?: string
+  /**
+   * The write targets the plugin's own entry section, so its response refreshes
+   * the subagent view instead of the `llm-pi-ai` inventory.
+   */
+  readonly entrySectionWrite?: boolean
 }
 interface SubagentState { effort: string | null; revision: number }
 interface EditorState {
@@ -71,6 +77,12 @@ interface EditorState {
   notice: string | null
   query: string
   nsFound: boolean
+  /**
+   * The plugin's own section under the 0.1.7 entry-config model, absent on
+   * legacy hosts. It is both the source of the subagent effort `user` layer and
+   * the write target for it, so the two can never disagree.
+   */
+  entrySection: SettingsNamespace | null
   subagent: SubagentState | null
   subagentDraft: string
   subagentCustom: string
@@ -86,7 +98,7 @@ export interface SectionEditorProps {
 }
 
 const initialState: EditorState = {
-  loading: true, namespace: null, openCodeSessionNamespace: null, openCodeSessionReads: 0, openCodeSessionViews: {}, openCodeSessionDrafts: {}, openCodeSessionDirty: {}, openCodeSessionFound: false, openCodeSessionAvailable: false, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
+  loading: true, namespace: null, openCodeSessionNamespace: null, openCodeSessionReads: 0, openCodeSessionViews: {}, openCodeSessionDrafts: {}, openCodeSessionDirty: {}, openCodeSessionFound: false, openCodeSessionAvailable: false, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, entrySection: null, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
 }
 
 export type { OpenCodeSessionState } from './types.js'
@@ -179,8 +191,8 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     takeoverRuntime?.getSnapshot ?? noRuntimeSnapshot,
   )
 
-  const applyNamespaceView = (current: EditorState, nextNamespace: SettingsNamespace, notice: string | null): EditorState => {
-    const view = subagentView(nextNamespace)
+  const applyNamespaceView = (current: EditorState, nextNamespace: SettingsNamespace, notice: string | null, entrySection: SettingsNamespace | null): EditorState => {
+    const view = subagentView(entrySection ?? nextNamespace)
     const nextInventory = inventoryFrom(nextNamespace)
     const providerViews = providerGatewayCompatViewsFrom(nextNamespace, settings.compatibilityProfile, takeoverResolution)
     const modelCompatViews = modelGatewayCompatViewsFrom(nextNamespace, nextInventory, settings.compatibilityProfile, takeoverResolution)
@@ -204,7 +216,17 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     for (const [provider, providerView] of Object.entries(providerViews)) {
       if (current.providerDirty[provider] !== true) providerDrafts[provider] = providerView
     }
-    return { ...current, loading: false, namespace: nextNamespace, busy: false, nsFound: true, inventory: nextInventory, providerViews, providerDrafts, modelCompatViews, modelCompatDrafts, revision: revisionOf(nextNamespace), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom, notice }
+    return { ...current, loading: false, namespace: nextNamespace, busy: false, nsFound: true, entrySection, inventory: nextInventory, providerViews, providerDrafts, modelCompatViews, modelCompatDrafts, revision: revisionOf(nextNamespace), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom, notice }
+  }
+
+  /**
+   * Refresh the subagent view from the plugin's own section after a write to
+   * it. The response is a full descriptor view, so it supersedes the stored
+   * section and carries the new revision the next write has to send back.
+   */
+  const applyEntrySectionView = (current: EditorState, entrySection: SettingsNamespace, notice: string | null): EditorState => {
+    const view = subagentView(entrySection)
+    return { ...current, busy: false, entrySection, subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom, notice }
   }
 
   const applyOpenCodeSessionNamespace = (current: EditorState, nextNamespace: SettingsNamespace | undefined): EditorState => {
@@ -238,14 +260,15 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       }
       const found = response.value.namespaces.find((entry) => entry.ns === NS)
       const openCodeFound = response.value.namespaces.find((entry) => entry.ns === OPENCODE_SESSION_NS)
+      const entrySection = pluginEntrySection(response.value.namespaces)
       if (!found) {
         setState((current) => {
-          const next = { ...current, loading: false, busy: false, nsFound: false, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, subagent: null }
+          const next = { ...current, loading: false, busy: false, nsFound: false, namespace: null, entrySection: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, subagent: null }
           return applyOpenCodeSessionNamespace(next, openCodeFound)
         })
         return
       }
-      setState((current) => applyOpenCodeSessionNamespace(applyNamespaceView(current, found, null), openCodeFound))
+      setState((current) => applyOpenCodeSessionNamespace(applyNamespaceView(current, found, null, entrySection ?? null), openCodeFound))
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       setState((current) => ({ ...current, loading: false, busy: false, error: t('readSettingsFailed', { message }) }))
@@ -283,7 +306,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     })
   }, [takeoverResolution])
 
-  const runOps = ({ ns, revision, ops, successMessage, onSuccess, openCodeSessionSavedKey }: RunOpsRequest): void => {
+  const runOps = ({ ns, revision, ops, successMessage, onSuccess, openCodeSessionSavedKey, entrySectionWrite }: RunOpsRequest): void => {
     const writeError = (message: string): string => ns === OPENCODE_SESSION_NS
       ? t('opencodeSessionSaveFailed', { message })
       : t('writeError', { message })
@@ -298,13 +321,14 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
         return
       }
       const savedKey = openCodeSessionSavedKey
-      if (ns !== NS && (savedKey === undefined || !isOpenCodeSessionNamespace(response.value))) {
+      if (ns !== NS && entrySectionWrite !== true && (savedKey === undefined || !isOpenCodeSessionNamespace(response.value))) {
         setState((current) => ({ ...current, busy: false, error: t('saveMissingNamespace') }))
         return
       }
       onSuccess?.()
       setState((current) => {
-        if (ns === NS) return applyNamespaceView(current, response.value, successMessage)
+        if (ns === NS) return applyNamespaceView(current, response.value, successMessage, current.entrySection)
+        if (entrySectionWrite === true) return applyEntrySectionView(current, response.value, successMessage)
         const previous: OpenCodeSessionState = {
           namespace: current.openCodeSessionNamespace,
           views: current.openCodeSessionViews,
@@ -476,11 +500,13 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     const value = state.subagentDraft === 'default' ? undefined : state.subagentDraft === 'custom' ? state.subagentCustom.trim() : state.subagentDraft
     if (state.subagentDraft !== 'default' && !value) { setState((current) => ({ ...current, notice: null, error: t('customEffortRequired') })); return }
     const ops: SettingsOp[] = state.subagentDraft === 'default' ? [{ op: 'unset', path: ['subagentEffort'] }] : [{ op: 'set', path: ['subagentEffort'], value }]
+    const target = subagentEffortTarget(state.entrySection, state.revision)
     runOps({
-      ns: NS,
-      revision: state.revision,
+      ns: target.ns,
+      revision: target.revision,
       ops,
       successMessage: t('subagentSaved'),
+      entrySectionWrite: target.ownSection,
     })
   }
 
