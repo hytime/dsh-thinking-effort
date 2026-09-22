@@ -65,6 +65,24 @@ describe('PLUGIN_SETTINGS_SCHEMA', () => {
     expect(json).toContain('ses-derive')
     expect(json).toContain('onInvalid')
   })
+
+  /**
+   * Only `Config` may be volatile. If this root gained `.volatile()` — or the
+   * field definitions were hoisted so the two roots swapped — the pre-0.1.7
+   * `register`/`installSection` path would start handing those hosts a
+   * `Volatile` ref instead of a plain section value. Its default parity with
+   * `Config` cannot catch that, because volatility is meta, not a field.
+   */
+  it('keeps its root non-volatile so the legacy path still hands over a plain value', () => {
+    const serialized = PLUGIN_SETTINGS_SCHEMA.toJSON() as unknown as {
+      uid: number
+      refs: Readonly<Record<string, { meta?: { volatile?: boolean } }>>
+    }
+    expect(serialized.refs[String(serialized.uid)]?.meta?.volatile).toBeUndefined()
+
+    const resolved = PLUGIN_SETTINGS_SCHEMA(undefined) as unknown as Record<PropertyKey, unknown>
+    expect(Symbol.for('cosmokit.volatile.write') in resolved).toBe(false)
+  })
 })
 
 /** One node of the uid-keyed reference table `toJSON()` returns. */
