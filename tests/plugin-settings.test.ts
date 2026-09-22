@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { schemaNodeAtPath } from '../src/compat/gateway/validation.ts'
 import { Config, PLUGIN_SETTINGS_SCHEMA } from '../src/host/plugin-settings.ts'
 
 const section = {
@@ -152,5 +153,27 @@ describe('Config', () => {
     const resolved = Config(undefined) as unknown as Record<PropertyKey, unknown>
     expect(Symbol.for('cosmokit.volatile.write') in resolved).toBe(true)
     expect(typeof resolved.get).toBe('function')
+  })
+
+  /**
+   * The wire shape `settings/describe` publishes for this entry.
+   *
+   * DSH 0.1.7 sends `schema: form.toJSON()`, and `toJSON()` returns a
+   * `{ uid, refs }` envelope with the root node at `refs[String(uid)]` and
+   * numeric references for its children. A reader that looks at `schema.dict`
+   * therefore sees `undefined` for every entry and concludes the form declares
+   * no fields at all. This pins both halves against the real serialization, so
+   * the shared `schemaNodeAtPath` accessor — not `schema.dict` — stays the way
+   * a form's fields are read. The opt-in loader suite asserts the same
+   * accessor against the live 0.1.7 host.
+   */
+  it('publishes its fields through the settings envelope, not at schema.dict', () => {
+    const envelope = Config.toJSON()
+    expect((envelope as { dict?: unknown }).dict).toBeUndefined()
+
+    const root = schemaNodeAtPath(envelope, [])
+    expect(root?.type).toBe('object')
+    expect(Object.keys(root?.dict ?? {}).sort())
+      .toEqual(['autoBackup', 'opencodeSession', 'profiles', 'subagentEffort'])
   })
 })

@@ -29,7 +29,20 @@ function dereference(value: unknown, refs: Record<string, unknown> | undefined):
   return current
 }
 
-function schemaNodeAtPath(schema: unknown, path: readonly string[]): Record<string, unknown> | undefined {
+/**
+ * The schema node one field path addresses.
+ *
+ * `schema` is whatever a `settings/describe` row publishes — under the
+ * `entry-config` model that is `Schema.prototype.toJSON()`, a `{ uid, refs }`
+ * envelope whose root sits at `refs[String(uid)]` and whose children are
+ * numeric references into the same table. An envelope carries no top-level
+ * `dict`, so `schema.dict` reads nothing there: reading a form's fields means
+ * resolving the root through here first. Paths name `dict`/`properties` keys,
+ * with `*` for the `additionalProperties`/inner node of a dict or array. A
+ * plain (non-envelope) schema is walked in place, which is what the
+ * hand-written fixtures use.
+ */
+export function schemaNodeAtPath(schema: unknown, path: readonly string[]): Record<string, unknown> | undefined {
   const envelope = record(schema)
   const refs = record(envelope?.refs)
   let node: unknown = refs !== undefined && envelope?.uid !== undefined

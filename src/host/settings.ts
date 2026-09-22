@@ -101,10 +101,13 @@ function record(value: unknown): Record<string, unknown> | undefined {
  *   resolved value.
  *
  * No in-process test can observe either behaviour, because both live in the
- * host. `tests/loader-composition.test.ts` asserts them against a real
- * `0.1.7-alpha.1` host when the opt-in loader integration suite runs
- * (`DSH_LOADER_INTEGRATION=1`), so a host release that changes either one fails
- * that suite rather than silently re-inflating the user's document.
+ * host. `tests/loader-composition.test.ts` asserts both against the pinned
+ * `0.1.7-alpha.1` root when the opt-in loader integration suite runs
+ * (`DSH_LOADER_INTEGRATION=1`): it writes one minimal path into this section
+ * and requires the user layer to hold exactly that path while the resolved
+ * value still carries the fields the user never wrote. A later host release is
+ * covered once that root moves; until then a change there reaches this fill
+ * unobserved.
  */
 function readUserLayer(settings: HostSettings, namespace: string): UserLayerRead {
   const user = readSettingsSectionUser(settings, namespace)
@@ -287,8 +290,9 @@ function reportSkipped(skipped: SkippedDefaults): void {
  * (`volatileForm`), so dropping that `.volatile()` removes the entry from the
  * service reads entirely and this fill goes dead rather than inflating.
  * `tests/loader-composition.test.ts` asserts both halves — the entry is listed
- * and a write under `providers` is accepted — against a real `0.1.7-alpha.1`
- * host when the opt-in integration suite runs (`DSH_LOADER_INTEGRATION=1`).
+ * and a write under `providers` is accepted — against the pinned
+ * `0.1.7-alpha.1` root when the opt-in integration suite runs
+ * (`DSH_LOADER_INTEGRATION=1`).
  */
 function readSection(settings: HostSettings): unknown {
   return readSettingsSection(settings, SETTINGS_NAMESPACE)

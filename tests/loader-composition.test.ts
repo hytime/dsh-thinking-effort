@@ -8,7 +8,7 @@ import { runInNewContext } from 'node:vm'
 import { settingsBridge } from '../src/client/settings-bridge.js'
 import { inventoryFrom } from '../src/client/model-inventory.js'
 import { opsForModelArrayCompat } from '../src/client/model-ops.js'
-import { editableProviderCompatFields } from '../src/compat/gateway/validation.js'
+import { editableProviderCompatFields, schemaNodeAtPath } from '../src/compat/gateway/validation.js'
 import { PLUGIN_ENTRY_ID } from '../src/compat/settings-model.js'
 import type { SettingsModel } from '../src/compat/settings-model.js'
 import { capabilitiesForVersion } from '../src/compat/version-map.js'
@@ -39,13 +39,30 @@ type PackageManifest = {
  * The subset of one `settings/describe` entry-config row this suite reads. The
  * host's wire view is `SettingsNamespaceView`; only these fields are asserted,
  * and `user` is the raw layer a path write merges into.
+ *
+ * `schema` stays `unknown` because the host publishes
+ * `Schema.prototype.toJSON()`, whose `{ uid, refs }` envelope has no top-level
+ * `dict` — {@link entryFormFields} resolves it.
  */
 type EntryConfigNamespaceView = {
   readonly ns?: string
   readonly revision?: number
-  readonly schema?: { readonly dict?: Record<string, unknown> }
+  readonly schema?: unknown
   readonly value?: Record<string, unknown>
   readonly user?: Record<string, unknown>
+}
+
+/**
+ * The field names one published entry-config form declares, sorted.
+ *
+ * `describe` publishes `schema: form.toJSON()`, and that envelope puts the root
+ * node at `refs[String(uid)]`, so `schema.dict` is always empty on the wire and
+ * the shared `schemaNodeAtPath` accessor is the only correct read.
+ */
+function entryFormFields(schema: unknown): string[] {
+  const dict = schemaNodeAtPath(schema, [])?.dict
+  if (typeof dict !== 'object' || dict === null || Array.isArray(dict)) return []
+  return Object.keys(dict).sort()
 }
 
 const root = resolve(import.meta.dirname, '..')
@@ -98,6 +115,18 @@ const localizedNavigationLabels = {
   settings: /^(设置|Settings)$/,
   plugins: /^(插件|Plugins)$/,
 } as const
+
+/**
+ * The titles this plugin's settings section renders under, one per shipped
+ * locale. The real-browser probe uses them both to decide whether it still has
+ * to expand a navigation group and to report whether the section is on screen.
+ */
+const thinkingEffortSectionTitles = [
+  '模型能力与档位',
+  'Model capabilities and effort',
+  'モデルの能力と推論強度',
+  '모델 기능 및 추론 강도',
+] as const
 
 const cliRoots = integrationEnabled ? parseCliRoots(process.env.DSH_CLI_ROOTS ?? '') : []
 const integrationDescribe = integrationEnabled ? describe : describe.skip
@@ -608,7 +637,7 @@ async function probePackagedArtifactHandMountedRuntime(
 }
 
 type BrowserLocator = {
-  click: () => Promise<void>
+  click: (options?: { readonly timeout?: number }) => Promise<void>
   count: () => Promise<number>
   waitFor: (options?: Record<string, unknown>) => Promise<void>
   getByRole: (role: string, options: { name: string | RegExp }) => BrowserLocator
@@ -726,23 +755,70 @@ async function probeOfficialSettingsDom(cliRoot: string, web: RunningWeb): Promi
     }
     await page.getByRole('button', { name: localizedNavigationLabels.settings }).click()
     await page.waitForTimeout(500)
-    await page.getByRole('button', { name: localizedNavigationLabels.plugins }).click()
+    /**
+     * The namespace model nests plugin sections under a "Plugins" group, so the
+     * group has to be expanded before the section appears. The entry-config
+     * model lists every section in its own nav, and the regex then matches the
+     * background toolbar's Plugins button instead — which the settings modal
+     * leaves behind an inert mask, so its click can never land.
+     *
+     * Only that case is tolerated, and it is recognised by the section already
+     * being on screen. Any other failure — a host whose nav the click cannot
+     * reach within the bounded wait — is rethrown, so the probe cannot degrade
+     * into "the group did not open, so I looked at the wrong page".
+     */
+    const pluginsGroup = page.getByRole('button', { name: localizedNavigationLabels.plugins })
+    try {
+      await pluginsGroup.click({ timeout: 10000 })
+    } catch (error) {
+      const currentText = await page.locator('body').innerText()
+      const reachedWithoutGroup = thinkingEffortSectionTitles.some((title) => currentText.includes(title))
+      if (!reachedWithoutGroup) throw error
+      console.log('[probe] settings nav lists the section directly; no Plugins group to expand')
+    }
     await page.waitForTimeout(3000)
     const settingsText = await page.locator('body').innerText()
     return {
       bodyText,
       buttons,
       settingsText,
-      thinkingEffortVisible: [
-        '模型能力与档位',
-        'Model capabilities and effort',
-        'モデルの能力と推論強度',
-        '모델 기능 및 추론 강도',
-      ].some((title) => settingsText.includes(title)),
+      thinkingEffortVisible: thinkingEffortSectionTitles.some((title) => settingsText.includes(title)),
       errors,
     }
   } finally {
     await browser.close()
+  }
+}
+
+/**
+ * Run the real-browser settings probe against a served Web host and turn its
+ * outcome into assertions.
+ *
+ * `DSH_REQUIRE_THINKING_EFFORT_DOM=1` (the publish workflow) makes both a probe
+ * blocked by the environment and a page that does not render the section hard
+ * failures. Without it a blocked probe or a missing section is logged with the
+ * caller's context instead of skipped silently.
+ */
+async function assertSettingsDomProbe(
+  cliRoot: string,
+  web: RunningWeb,
+  logContext: string,
+): Promise<void> {
+  const domProbe = await probeOfficialSettingsDom(cliRoot, web)
+  if (domProbe.blocked !== undefined) {
+    if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
+      throw new Error(`required DSH Web DOM probe was blocked: ${domProbe.blocked}`)
+    }
+    console.log(`[BLOCKED] browser probe: ${domProbe.blocked}`)
+    return
+  }
+  expect(domProbe.settingsText).toMatch(/插件|Plugins/)
+  expect(domProbe.errors).toEqual([])
+  if (!domProbe.thinkingEffortVisible) {
+    if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
+      throw new Error('thinking-effort settings section is absent from the real DSH Web DOM')
+    }
+    console.log(`[BLOCKED] thinking-effort section missing; DOM=${JSON.stringify(domProbe.settingsText)}; ${logContext}`)
   }
 }
 
@@ -1298,7 +1374,14 @@ integrationDescribe('official DSH loader composition', () => {
     expect(existsSync(clientEntry)).toBe(true)
 
          const hostCode = readFileSync(hostEntry, 'utf8')
-     expect(hostCode).toContain('export { apply, inject, name }')
+     // `Config` joined the entry's exports when the 0.1.7 form started deriving
+     // from it, so the whole named-export list is asserted rather than the three
+     // legacy names alone: a build that stopped exporting `Config` would leave
+     // every entry-config host with no settings form at all, which is the
+     // regression this matrix exists to catch.
+     const hostExports = /export \{ ([^}]+) \}/.exec(hostCode)?.[1]
+       ?.split(',').map((exported) => exported.trim()).sort()
+     expect(hostExports).toEqual(['Config', 'apply', 'inject', 'name'])
 
     const clientCode = readFileSync(clientEntry, 'utf8')
     const registered: Array<{
@@ -1560,26 +1643,13 @@ integrationDescribe('official DSH loader composition', () => {
         })
         // The real-browser DOM probe validates client-side rendering of the
         // settings section. The client bundle is identical across the
-        // representative DSH versions, so launch Playwright once on the newest
-        // representative (0.1.6-alpha.1) and keep the RPC/profile/写入 verification
-        // for every version, which needs no browser.
+        // representative DSH versions, so launch Playwright on the
+        // namespace-model representative (0.1.6-alpha.1) and on the
+        // entry-config representative (0.1.7-alpha.1, in its own case below)
+        // while keeping the RPC/profile/写入 verification for every version,
+        // which needs no browser.
         if (version === '0.1.6-alpha.1') {
-          const domProbe = await probeOfficialSettingsDom(cliRoot, web)
-          if (domProbe.blocked !== undefined) {
-            if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
-              throw new Error(`required DSH Web DOM probe was blocked: ${domProbe.blocked}`)
-            }
-            console.log(`[BLOCKED] browser probe: ${domProbe.blocked}`)
-          } else {
-            expect(domProbe.settingsText).toMatch(/插件|Plugins/)
-            expect(domProbe.errors).toEqual([])
-            if (!domProbe.thinkingEffortVisible) {
-              if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
-                throw new Error('thinking-effort settings section is absent from the real DSH Web DOM')
-              }
-              console.log(`[BLOCKED] thinking-effort section missing; DOM=${JSON.stringify(domProbe.settingsText)}; bootRows=${JSON.stringify(bootRows)}`)
-            }
-          }
+          await assertSettingsDomProbe(cliRoot, web, `bootRows=${JSON.stringify(bootRows)}`)
         }
       } finally {
         await web.stop()
@@ -1742,6 +1812,10 @@ integrationDescribe('official DSH loader composition', () => {
     expect(version).toBe('0.1.7-alpha.1')
 
     const home = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-entry-'))
+    // The Web profile gets its own home, as the namespace loop does: a marker
+    // read from the compat home could have been written by the compat profile
+    // rather than by the Web host this case asserts.
+    const webHome = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-entry-web-'))
     const packDestination = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-pack-'))
     try {
       const tarball = packLocalPackage(packDestination)
@@ -1752,8 +1826,8 @@ integrationDescribe('official DSH loader composition', () => {
       expect(dump).toContain("name: '@hytime/dsh-thinking-effort'")
       expect(dump).not.toContain('name: dsh-thinking-effort')
 
-      runOfficialDsh(cliRoot, home, ['plugin', '--profile', 'web', 'add', tarball])
-      const web = await startOfficialWeb(cliRoot, home, {
+      runOfficialDsh(cliRoot, webHome, ['plugin', '--profile', 'web', 'add', tarball])
+      const web = await startOfficialWeb(cliRoot, webHome, {
         args: ['dsh', '--profile', 'web', '--no-open', '--port', '0'],
       })
       try {
@@ -1765,12 +1839,41 @@ integrationDescribe('official DSH loader composition', () => {
           })
         )
         const readNamespaces = async (): Promise<readonly EntryConfigNamespaceView[]> => {
+          // The RPC result is the service's `{ ok, value }` envelope, exactly as
+          // `settingsBridge` reads it in the namespace loop above.
           const described = await liveResult('settings/describe', {}) as
-            | { readonly namespaces?: readonly EntryConfigNamespaceView[] }
+            | { readonly ok?: boolean; readonly value?: { readonly namespaces?: readonly EntryConfigNamespaceView[] } }
             | undefined
-          expect(described?.namespaces).toEqual(expect.any(Array))
-          return described?.namespaces ?? []
+          expect(described).toMatchObject({ ok: true, value: { namespaces: expect.any(Array) } })
+          return described?.value?.namespaces ?? []
         }
+
+        // The Host publishes the section; the Web host must also serve the
+        // Client bundle that renders it, or nothing reaches the browser. This
+        // is the half the namespace loop checks for its roots and the half a
+        // 0.1.7 Web host could break on its own (boot-graph entry, plugin asset
+        // route) without the RPC reads noticing.
+        const webInstalled = join(webHome, 'profiles', 'web', 'node_modules', '@hytime', 'dsh-thinking-effort')
+        const clientEntry = join(webInstalled, 'lib', 'client.js')
+        expect(existsSync(clientEntry)).toBe(true)
+        const clientCode = readFileSync(clientEntry, 'utf8')
+        const indexResponse = await fetch(web.url, { headers, signal: AbortSignal.timeout(10000) })
+        expect(indexResponse.status).toBe(200)
+        const indexHtml = await indexResponse.text()
+        const bootRows = extractBootRows(indexHtml)
+        const bundleUrl = extractBundleUrl(indexHtml, '@hytime/dsh-thinking-effort')
+        // 0.1.6 advertises this entry as a root-absolute URL and 0.1.7 as a
+        // page-relative one, so the leading slash is optional here; both are
+        // resolved against the served origin below either way.
+        expect(bundleUrl).toMatch(/(?:^|\/)plugins\/(?:\?\?@hytime\/dsh-thinking-effort\/client\.js&rev=|@hytime\/dsh-thinking-effort\/client\.js\?rev=)/)
+        const bundleResponse = await fetch(new URL(bundleUrl, web.url), {
+          headers,
+          signal: AbortSignal.timeout(10000),
+        })
+        expect(bundleResponse.status).toBe(200)
+        const servedCode = await bundleResponse.text()
+        expect(servedCode).toContain(clientCode)
+        expect(servedCode).toContain("id: '@hytime/dsh-thinking-effort'")
 
         const namespaces = await readNamespaces()
 
@@ -1780,14 +1883,18 @@ integrationDescribe('official DSH loader composition', () => {
         // write below is the causal half of this check.
         const piAi = namespaces.find(({ ns }) => ns === 'llm-pi-ai')
         expect(piAi, '0.1.7 must keep the llm-pi-ai providers form published').toBeDefined()
-        expect(piAi?.value?.providers).toEqual(expect.any(Object))
-        expect(Object.keys(piAi?.schema?.dict ?? {})).toContain('providers')
+        // A fresh profile has written nothing, so the resolved form is exactly
+        // the one volatile field. An absent key means the entry no longer
+        // publishes the form the fill reads, and the exact key set catches a
+        // form that started resolving fields the fill never asked for.
+        expect(Object.keys(piAi?.value ?? {})).toEqual(['providers'])
+        expect(entryFormFields(piAi?.schema)).toContain('providers')
 
         // The published section itself: addressed by the Loader entry id, and
         // covering exactly the fields the exported `Config` declares.
         const own = namespaces.find(({ ns }) => ns === PLUGIN_ENTRY_ID)
         expect(own, `0.1.7 must publish the ${PLUGIN_ENTRY_ID} settings section`).toBeDefined()
-        expect(Object.keys(own?.schema?.dict ?? {}).sort())
+        expect(entryFormFields(own?.schema))
           .toEqual(['autoBackup', 'opencodeSession', 'profiles', 'subagentEffort'])
         expect(own?.value).toMatchObject({
           opencodeSession: expect.any(Object),
@@ -1797,7 +1904,7 @@ integrationDescribe('official DSH loader composition', () => {
         })
         expect(own?.revision).toEqual(expect.any(Number))
 
-        const markerPath = join(home, 'thinking-effort-loaded.json')
+        const markerPath = join(webHome, 'thinking-effort-loaded.json')
         expect(existsSync(markerPath)).toBe(true)
         const marker = JSON.parse(readFileSync(markerPath, 'utf8')) as { event?: string; name?: string }
         expect(marker).toMatchObject({ event: 'apply', name: '@hytime/dsh-thinking-effort' })
@@ -1868,11 +1975,20 @@ integrationDescribe('official DSH loader composition', () => {
           profiles: expect.any(Object),
           autoBackup: expect.any(Object),
         })
+
+        // The RPC checks above prove this host *lists* the section; the browser
+        // is what proves the served Client resolves and renders it, which is
+        // the user-visible outcome of the entry-config model. Running the probe
+        // on this root as well as on the namespace representative costs one
+        // more Chromium launch in the opt-in workflow and closes the gap where
+        // 0.1.7 had no client-side coverage at all.
+        await assertSettingsDomProbe(cliRoot, web, `version=${version} bootRows=${JSON.stringify(bootRows)}`)
       } finally {
         await web.stop()
       }
     } finally {
       rmSync(home, { recursive: true, force: true })
+      rmSync(webHome, { recursive: true, force: true })
       rmSync(packDestination, { recursive: true, force: true })
     }
   })
