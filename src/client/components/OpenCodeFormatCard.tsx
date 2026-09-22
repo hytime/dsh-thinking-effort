@@ -3,12 +3,14 @@ import { ActionButton, Icon } from './Controls.js'
 import {
   DEFAULT_FORMAT_DRAFT,
   draftFromSettings,
+  FORMAT_INVALID_POLICIES,
   FORMAT_MODES,
+  FORMAT_TIMES,
   formatFieldErrors,
   formatOps,
   FORMAT_NAMESPACE,
 } from '../opencode-format-validation.js'
-import type { FormatDraft } from '../opencode-format-validation.js'
+import type { FormatDraft, FormatField } from '../opencode-format-validation.js'
 import type { Palette } from '../theme.js'
 import type { SettingsApi, SettingsDescribeValue, SettingsNamespace, Translation } from '../types.js'
 
@@ -21,13 +23,33 @@ const MODE_LABEL_KEYS: Readonly<Record<string, string>> = {
   'script': 'formatModeScript',
 }
 
-/** The modes that read a timestamp source; the others never consult it. */
-const TIME_MODES = ['ses-derive', 'template'] as const
+/** Localization key naming each enum field in the fallback notice. */
+const ENUM_LABEL_KEYS: Readonly<Partial<Record<FormatField, string>>> = {
+  mode: 'formatModeLabel',
+  time: 'formatTimeLabel',
+  onInvalid: 'formatOnInvalidLabel',
+}
+
+/**
+ * The modes whose value consumes the timestamp source. Only `passthrough`
+ * never does: it hands `request.sessionId` straight to validation, while
+ * `ses-derive` derives from the source and `template`, `expression` and
+ * `script` all read `hex12` through `context(request, session, config.time)` —
+ * as does `derive(session, config.time)`, which each of them falls back to when
+ * its source is empty or fails.
+ */
+const TIME_MODES = ['ses-derive', 'template', 'expression', 'script'] as const
 
 export interface OpenCodeFormatCardProps {
   readonly settings: SettingsApi
   readonly palette: Palette
   readonly t: Translation
+  /**
+   * Called after a successful write. This card shares its namespace with the
+   * model editor's session switch, so the surrounding editor has to re-read the
+   * registry too or its next write goes out with the revision this one retired.
+   */
+  readonly onApplied?: () => void
 }
 
 interface CardState {
@@ -36,8 +58,8 @@ interface CardState {
   saved: FormatDraft
   /** The edited draft awaiting Apply. */
   draft: FormatDraft
-  /** True when the stored `mode` was not one this card offers. */
-  unsupportedStored: boolean
+  /** Stored enum values the Host would reject, and what it resolves them to. */
+  unsupportedStored: readonly { field: FormatField; fallback: string }[]
   /**
    * Whether the active settings provider accepts writes. It lives on the
    * `describe()` result, not on `SettingsApi`, and is optional there.
@@ -52,7 +74,7 @@ const initialState: CardState = {
   open: false,
   saved: DEFAULT_FORMAT_DRAFT,
   draft: DEFAULT_FORMAT_DRAFT,
-  unsupportedStored: false,
+  unsupportedStored: [],
   writable: true,
   busy: false,
   error: null,
@@ -67,20 +89,47 @@ function userOf(namespaces: readonly SettingsNamespace[]): Record<string, unknow
   return namespaces.find((entry) => entry.ns === FORMAT_NAMESPACE)?.user
 }
 
-/** Whether the stored mode was one this card can present. */
-function storedModeUnsupported(stored: unknown): boolean {
-  if (typeof stored !== 'object' || stored === null) return false
-  const session = (stored as Record<string, unknown>)['opencodeSession']
-  if (typeof session !== 'object' || session === null) return false
-  const format = (session as Record<string, unknown>)['format']
-  if (typeof format !== 'object' || format === null) return false
-  const mode = (format as Record<string, unknown>)['mode']
-  return mode !== undefined && !(FORMAT_MODES as readonly string[]).includes(String(mode))
+/**
+ * Stored enum values the Host would reject, with the value it resolves them to.
+ *
+ * All three enum fields are reported, not just `mode`: a hand-written document
+ * can put garbage in any of them, and showing the resolved default without
+ * saying so leaves the user unable to tell "stored as firstUse" from "stored as
+ * garbage, resolved to firstUse".
+ */
+function unsupportedStoredEnums(stored: unknown): readonly { field: FormatField; fallback: string }[] {
+  const format = ownRecord(ownRecord(stored, 'opencodeSession'), 'format')
+  const found: { field: FormatField; fallback: string }[] = []
+  const check = (field: FormatField, allowed: readonly string[], fallback: string): void => {
+    const value = ownValue(format, field)
+    if (value !== undefined && !allowed.includes(String(value))) found.push({ field, fallback })
+  }
+  check('mode', FORMAT_MODES, DEFAULT_FORMAT_DRAFT.mode)
+  check('time', FORMAT_TIMES, DEFAULT_FORMAT_DRAFT.time)
+  check('onInvalid', FORMAT_INVALID_POLICIES, DEFAULT_FORMAT_DRAFT.onInvalid)
+  return found
+}
+
+/** Read one own property of a possibly-absent record. */
+function ownValue(object: Record<string, unknown> | undefined, key: string): unknown {
+  if (object === undefined || !Object.prototype.hasOwnProperty.call(object, key)) return undefined
+  return object[key]
+}
+
+/** Read one own property that must itself be a record. */
+function ownRecord(value: unknown, key: string): Record<string, unknown> | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const object = value as Record<string, unknown>
+  if (!Object.prototype.hasOwnProperty.call(object, key)) return undefined
+  const nested = object[key]
+  return typeof nested === 'object' && nested !== null && !Array.isArray(nested)
+    ? nested as Record<string, unknown>
+    : undefined
 }
 
 const isConflict = (message: string): boolean => /conflict/i.test(message)
 
-export function OpenCodeFormatCard({ settings, palette, t }: OpenCodeFormatCardProps): React.ReactElement {
+export function OpenCodeFormatCard({ settings, palette, t, onApplied }: OpenCodeFormatCardProps): React.ReactElement {
   const [state, setState] = React.useState<CardState>(initialState)
 
   const applyRead = (current: CardState, value: SettingsDescribeValue): CardState => {
@@ -90,7 +139,7 @@ export function OpenCodeFormatCard({ settings, palette, t }: OpenCodeFormatCardP
       ...current,
       saved: draft,
       draft,
-      unsupportedStored: storedModeUnsupported(user),
+      unsupportedStored: unsupportedStoredEnums(user),
       writable: value.writable !== false,
       busy: false,
       error: null,
@@ -146,6 +195,7 @@ export function OpenCodeFormatCard({ settings, palette, t }: OpenCodeFormatCardP
         }
         setState((current) => ({ ...current, busy: false, saved: current.draft, notice: t('formatSaved') }))
         load()
+        onApplied?.()
         return undefined
       })
     }).catch((error: unknown) => {
@@ -205,7 +255,11 @@ export function OpenCodeFormatCard({ settings, palette, t }: OpenCodeFormatCardP
     {state.error ? <div role="alert" aria-live="assertive" style={{ fontSize: '12px', lineHeight: '18px', color: palette.danger, backgroundColor: palette.dangerBg, border: `1px solid ${palette.dangerBorder}`, borderRadius: '8px', padding: '6px 8px', margin: '0 8px 8px' }}>{state.error}</div> : null}
     {state.notice === null ? null : <div role="status" aria-live="polite" style={{ fontSize: '12px', lineHeight: '18px', color: palette.accent, backgroundColor: palette.accentSoft, border: `1px solid ${palette.accentBorder}`, borderRadius: '8px', padding: '6px 8px', margin: '0 8px 8px' }}>{state.notice}</div>}
     {state.open ? <div style={{ display: 'grid', gap: '9px', padding: '8px', borderTop: `1px solid ${palette.divider}` }}>
-      {state.unsupportedStored ? <div style={{ fontSize: '11px', color: palette.secondary }}>{t('formatUnsupportedStored')}</div> : null}
+      {state.unsupportedStored.length === 0 ? null : <div style={{ fontSize: '11px', color: palette.secondary }}>
+        {t('formatUnsupportedStored', {
+          detail: state.unsupportedStored.map((entry) => `${t(ENUM_LABEL_KEYS[entry.field]!)} → ${entry.fallback}`).join(', '),
+        })}
+      </div>}
       <label style={rowStyle}>
         <span style={labelStyle}>{t('formatModeLabel')}</span>
         {modeSelect}

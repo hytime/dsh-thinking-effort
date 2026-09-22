@@ -19,6 +19,8 @@ interface HarnessOptions {
   readonly userByCall?: readonly Record<string, Record<string, unknown>>[]
   readonly writable?: boolean
   readonly describeError?: string
+  /** Forwarded to the card, standing in for the surrounding editor's reload. */
+  readonly onApplied?: () => void
 }
 
 function harness(options: HarnessOptions = {}) {
@@ -54,12 +56,13 @@ function harness(options: HarnessOptions = {}) {
   document.body.append(container)
   const root = createRoot(container)
   act(() => {
-    root.render(<OpenCodeFormatCard settings={settings} palette={iosPalette({ prefersDark: true })} t={text as Translation} />)
+    root.render(<OpenCodeFormatCard settings={settings} palette={iosPalette({ prefersDark: true })} t={text as Translation} onApplied={options.onApplied} />)
   })
   return {
     container,
     describe,
     mutate,
+    onApplied: options.onApplied,
     unmount: () => { act(() => root.unmount()); container.remove() },
   }
 }
@@ -176,5 +179,86 @@ describe('OpenCodeFormatCard', () => {
     act(() => button(view.container, text('formatCardTitle')).click())
     await settle()
     expect(view.container.querySelector(`select[aria-label="${text('formatTimeLabel')}"]`)).toBeNull()
+  })
+
+  it('calls onApplied once after a successful apply', async () => {
+    const onApplied = vi.fn()
+    const view = harness({ onApplied })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('formatCardTitle')).click())
+    await settle()
+    act(() => setSelect(selectByLabel(view.container, text('formatModeLabel')), 'passthrough'))
+    await settle()
+    expect(onApplied).not.toHaveBeenCalled()
+
+    act(() => button(view.container, text('formatApply')).click())
+    await settle()
+    expect(view.mutate).toHaveBeenCalledTimes(1)
+    expect(onApplied).toHaveBeenCalledTimes(1)
+  })
+
+  // The four modes whose values consume the timestamp source in the Host:
+  // `ses-derive` derives from it, and `template` / `expression` / `script` all
+  // read `hex12` through `context(request, session, config.time)`. Only
+  // `passthrough` hands `request.sessionId` straight through without it.
+  for (const mode of ['ses-derive', 'template', 'expression', 'script']) {
+    it(`offers the time source in ${mode} mode`, async () => {
+      const view = harness({ user: { 'dsh-thinking-effort': { opencodeSession: { format: { mode } } } } })
+      cleanup = view.unmount
+      await settle()
+      act(() => button(view.container, text('formatCardTitle')).click())
+      await settle()
+      expect(selectByLabel(view.container, text('formatTimeLabel'))).toBeDefined()
+    })
+  }
+
+  // The notice's fixed prefix, without the `{detail}` list that follows it.
+  const noticePrefix = text('formatUnsupportedStored').split('{detail}')[0]!
+
+  it('names the field and fallback value of each unsupported stored enum', async () => {
+    const cases: readonly { stored: Record<string, string>; detail: string }[] = [
+      { stored: { mode: 'unknown' }, detail: `${text('formatModeLabel')} → ses-derive` },
+      { stored: { time: 'bogus' }, detail: `${text('formatTimeLabel')} → firstUse` },
+      { stored: { onInvalid: 'explode' }, detail: `${text('formatOnInvalidLabel')} → warn` },
+    ]
+    for (const entry of cases) {
+      const view = harness({ user: { 'dsh-thinking-effort': { opencodeSession: { format: entry.stored } } } })
+      try {
+        await settle()
+        act(() => button(view.container, text('formatCardTitle')).click())
+        await settle()
+        expect(view.container.textContent).toContain(noticePrefix)
+        expect(view.container.textContent).toContain(entry.detail)
+      } finally {
+        view.unmount()
+      }
+    }
+  })
+
+  it('names every unsupported field when several are stored at once', async () => {
+    const view = harness({
+      user: { 'dsh-thinking-effort': { opencodeSession: { format: { mode: 'unknown', time: 'bogus', onInvalid: 'explode' } } } },
+    })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('formatCardTitle')).click())
+    await settle()
+    const shown = view.container.textContent ?? ''
+    expect(shown).toContain(noticePrefix)
+    expect(shown).toContain(`${text('formatModeLabel')} → ses-derive`)
+    expect(shown).toContain(`${text('formatTimeLabel')} → firstUse`)
+    expect(shown).toContain(`${text('formatOnInvalidLabel')} → warn`)
+  })
+
+  it('shows no fallback notice when every stored value is supported', async () => {
+    const view = harness({
+      user: { 'dsh-thinking-effort': { opencodeSession: { format: { mode: 'ses-derive', time: 'hash', onInvalid: 'drop' } } } },
+    })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('formatCardTitle')).click())
+    await settle()
+    expect(view.container.textContent).not.toContain(noticePrefix)
   })
 })
