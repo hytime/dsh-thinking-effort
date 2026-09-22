@@ -25,7 +25,7 @@
 >
 > 发布包的运行入口是 `lib/index.js`（Host）和 `lib/client.js`（Client）。修改 TypeScript 或 locale 源文件后，运行 `npm run build`，再启动 DSH 或打包插件。当前 DSH 没有公开的 semver metadata 契约，因此运行时能力探测是权威来源。只有显式 metadata 或测试输入提供时才使用可选版本；未知合法版本仍按实际能力运行。插件同时支持新版 `remote.settings` 和旧版 `connection.api.settings`。
 >
-> Host 在宿主提供 Settings `installSection` 时用它注册插件自有的 `dsh-thinking-effort` namespace，否则回退到旧版 `register` 路径。插件不在运行时依赖 `@deepseek-ai/dsh-settings`，因此在配置为 `autoInstallPeers: false` 的 DSH profile 中也能干净安装，不会引入第二份 Cordis 运行时。
+> Host 在宿主提供 Settings `installSection` 时用它注册插件自有的 `dsh-thinking-effort` namespace，否则回退到旧版 `register` 路径。在 `0.1.7` 及以后的 entry-config 模型下这两条路径都不存在，设置分区改由导出的 `Config` 提供。插件不在运行时依赖 `@deepseek-ai/dsh-settings`，因此在配置为 `autoInstallPeers: false` 的 DSH profile 中也能干净安装，不会引入第二份 Cordis 运行时。
 
 ## DSH 版本兼容
 
@@ -38,13 +38,16 @@
 从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。上表表示各 DSH 版本最多可用的字段集合；当前网关协议还可能进一步缩小集合。
 
 实际可配置字段需要同时满足三项条件：DSH 版本支持、运行时 schema 暴露，以及当前路由的 `api` 协议支持。不支持的字段不会显示，也不会写入 Settings。15 个字段中，`openai-completions` 支持全部 15 个；`openai-responses`、`azure-openai-responses` 和 `openai-codex-responses` 只支持 `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention`。如果 `api` 缺失或无法识别，最终仍以运行时 schema 和 DSH 校验为准。
+
+DSH `0.1.7` 起改为从 Loader 条目自身的 `Config` schema 派生设置表单（entry-config 模型）；没有导出该 schema 的插件不会出现设置表单。本插件已导出该 schema，因此在 `0.1.7` 及以后，它的设置分区使用 Loader 条目 ID `thinking-effort`；`0.1.0-rc.7` 至 `0.1.6` 仍使用注册的 namespace `dsh-thinking-effort`，客户端会自动解析宿主实际发布的那个 ID。`subagentEffort` 现在存放在本插件自己的分区（宿主仍会回退读取旧的 `llm-pi-ai` 位置）；`0.1.7` 及以后设置保存在当前 profile 的 `cordis.patch.yml`，而不再是 `~/.dsh/settings.yaml`（`0.1.7` 不再使用该文件）。
+
 ## 为什么需要它？
 
 DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模型通常没有 `reasoningEfforts` 配置。因此，Composer 的模型选择器不会显示「推理等级」，你也无法把网关实际支持的值（例如 `ultra`）映射到 DSH 的标准档位。
 
 这个插件解决的是配置层问题：
 
-- 自动为没有声明档位的第三方模型补上默认选项，安装后即可在 Composer 中看到「推理等级」；
+- 为你自己 profile 声明的、缺少档位的模型补上默认选项，安装后即可在 Composer 中看到「推理等级」；只由组合 base 或 schema 默认值提供的模型不会被补全，跳过的数量会写入宿主日志；
 - 在设置页按模型自定义档位，并把 `high` 映射为网关需要的任意字符串，例如 `ultra`；
 - 为子 agent 设置统一的默认思考强度，同时保留显式指定值的优先级；
 - 子 agent 的自定义线上值会按实际模型的 `reasoningEfforts` 映射回标准档位，找不到映射时不会注入非法档位；
@@ -74,7 +77,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 
 | 功能 | 作用 |
 | --- | --- |
-| 默认档位补齐 | 为缺少配置的模型添加 `off`、`high`、`max`，不覆盖已有自定义值 |
+| 默认档位补齐 | 为用户层中缺少配置的模型添加 `off`、`high`、`max`，不覆盖已有自定义值；只由组合 base 或 schema 默认值提供的模型不补全，并在宿主日志中报出数量 |
 | 模型级编辑 | 在「设置 → 模型能力与档位」中逐模型勾选档位并填写线上值；catalog/modelOverrides 和 `models[]` 模型都可编辑 compat |
 | 网关兼容配置 | 按 provider 全局或单个模型配置 15 个常用标量字段，按角色与推理、格式与输出、流式与工具、存储与缓存分组并默认收起 |
 | OpenCode 会话 Header | 按精确模型启用动态 `x-opencode-session`，默认生成与 DSH 会话绑定的确定性 `ses_` 值（提供 template / expression / script 等模式以应对上游格式变化），不保存固定 Header 值 |
@@ -210,7 +213,7 @@ providers:
 
 ### OpenCode 会话 Header 生成器
 
-模型编辑器提供独立的「OpenCode 会话 Header」开关。它默认关闭，保存在插件自有的 `dsh-thinking-effort` Settings namespace 中，不写入 `llm-pi-ai.compat`。只有确实需要 `x-opencode-session` 的精确 `provider/model` 才应启用；同一路由中的其他模型（包括 GPT 模型）不会继承该设置。拨动开关即立即保存，没有单独的保存按钮；重新打开模型时显示的是已持久化的值。
+模型编辑器提供独立的「OpenCode 会话 Header」开关。它默认关闭，保存在插件自有的设置分区中，不写入 `llm-pi-ai.compat`。只有确实需要 `x-opencode-session` 的精确 `provider/model` 才应启用；同一路由中的其他模型（包括 GPT 模型）不会继承该设置。拨动开关即立即保存，没有单独的保存按钮；重新打开模型时显示的是已持久化的值。
 
 启用后、未配置 `format` 时，Host 会发送符合 `ses_` 规范形态、**由当前 DSH 会话确定性派生**的值：`ses_` + 12 位十六进制（48 位毫秒时间戳，会话内首次使用时铸造一次）+ 14 位 Base62（对归一化的 DSH 会话 ID 取 80 位 SHA-256 摘要）。同一 DSH 会话总是发送同一个值：该值按会话粘性保留，有界缓存淘汰只丢弃缓存值、绝不丢弃首次铸造的铸币，因此被淘汰的会话再次访问时值仍不变；只有 DSH 重启且处于 `firstUse` 模式时才会重新铸造 hex 时间戳（`time: hash` 则完全无状态）。14 位后缀因为是派生而非存储，在 DSH 重启后依然稳定。不同会话（包括每次子 agent 运行）派生不同值。
 
@@ -315,7 +318,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 - `off` 和未设置都可能表现为不发送 `reasoning` 参数，是否真正关闭思考取决于第三方网关的协议语义。
 - Composer 滑块只在 Web 运行时提供可选 `modelDirectories` 服务时注册。该服务不可用时，不会注册 `seat`，插件也不会修改 Composer。
 - 宿主逻辑修改需要重启 DSH；Settings、locale 和 Client bundle 修改需要刷新 Web 页面。
-- 「配置备份与方案」的方案库和导入前的自动备份都保存在插件自有的 `dsh-thinking-effort` namespace 中，不会随导出文件迁移。要把命名方案带到另一台机器，需要逐个「导出」再在目标机器上导入。
+- 「配置备份与方案」的方案库和导入前的自动备份都保存在插件自有的设置分区中，不会随导出文件迁移。要把命名方案带到另一台机器，需要逐个「导出」再在目标机器上导入。
 
 ## CI 与发布维护
 

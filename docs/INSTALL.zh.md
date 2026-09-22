@@ -45,6 +45,7 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 - **DSH Runtime：** Settings 传输在新版 DSH 中使用 `remote.settings`，在旧版 DSH 中使用 `connection.api.settings`。插件按运行时实际能力进行探测，旧版回退路径保持可选。
 - **Gateway Protocol：** DSH schema 提供时，插件使用官方 `llm-pi-ai.compat` 字段。安装并启用可选的 `dsh-llm-openai-completions` transport 后，插件可以接管符合条件的自定义 OpenAI 兼容思考模型供应商。
+- **Settings 模型：** DSH `0.1.7` 起从各 Loader 条目自身的 `Config` schema 派生设置表单（`entry-config`），设置文档保存在当前 profile 的 `cordis.patch.yml`；DSH `0.1.0-rc.7` 至 `0.1.6` 改为注册 namespace，并把设置存放在 DSH 设置文档（例如 `~/.dsh/settings.yaml`）中。插件同时支持两种模型，客户端会解析宿主实际发布的分区 ID——`entry-config` 下是 `thinking-effort`，namespace 模型下是 `dsh-thinking-effort`。
 
 version-map 按以下规则判断网关能力：
 
@@ -80,7 +81,7 @@ OpenCode 会话 Header 是模型编辑器中的模型级设置，不是 provider
 
 ### 配置生成器
 
-生成器在 DSH 设置文档（例如 `~/.dsh/settings.yaml` 或当前 profile 的设置）的 `dsh-thinking-effort.opencodeSession.format` 下配置：
+生成器的位置取决于 DSH 版本：`0.1.7` 及以后是当前 profile 的 `cordis.patch.yml` 中的 `opencodeSession.format` 分区（由 Loader 条目 ID `thinking-effort` 定位）；`0.1.0-rc.7` 至 `0.1.6` 是 DSH 设置文档（例如 `~/.dsh/settings.yaml`）中的 `dsh-thinking-effort.opencodeSession.format`。两种位置都由设置页代写。下面的 YAML 展示 `0.1.7` 之前版本读取的 namespace 形态：
 
 ```yaml
 dsh-thinking-effort:
@@ -163,7 +164,7 @@ export function format(ctx) {
 
 `llm-pi-ai` 适配器会在每个 provider 请求上强制盖上自己的归因 `user-agent`（`deepseek-harness/<版本> (+https://github.com/deepseek-ai/deepseek-harness)`），并删除 provider 配置的同名头，因此 `llm-pi-ai.providers.<route>.headers.user-agent` 不生效。本插件在匹配的 `llm/stream` 请求离开发送前的最后一层改写该 header——这也是唯一能存活的重写点。
 
-在 `dsh-thinking-effort.opencodeSession.userAgent` 下配置，默认关闭：
+与上面的生成器位于同一设置分区的 `opencodeSession.userAgent` 下配置，默认关闭：
 
 ```yaml
 dsh-thinking-effort:

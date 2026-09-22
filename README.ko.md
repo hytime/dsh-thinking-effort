@@ -24,7 +24,7 @@
 >
 > 게시 패키지의 실행 진입점은 `lib/index.js`(Host)와 `lib/client.js`(Client)입니다. TypeScript 또는 locale 소스를 변경한 뒤 DSH를 실행하거나 패키지를 만들기 전에 `npm run build`를 실행하세요. 현재 DSH에는 공개된 semver metadata 계약이 없으므로 런타임 capability detection이 권위 있는 출처입니다. 선택적 버전은 명시적인 metadata 또는 테스트 입력이 있을 때만 사용하며, 알 수 없는 유효한 버전도 감지된 capability에 따라 계속 실행합니다. 최신 `remote.settings`와 이전 `connection.api.settings`를 모두 지원합니다.
 >
-> Host는 호스트가 제공하는 Settings `installSection`을 사용할 수 있으면 그것으로 플러그인 전용 `dsh-thinking-effort` namespace를 등록하고, 그렇지 않으면 이전 `register` 경로로 폴백합니다. 런타임에 `@deepseek-ai/dsh-settings`에 의존하지 않으므로 `autoInstallPeers: false`로 설정된 DSH profile에서도 Cordis 런타임을 중복 도입하지 않고 깔끔하게 설치할 수 있습니다.
+> Host는 호스트가 제공하는 Settings `installSection`을 사용할 수 있으면 그것으로 플러그인 전용 `dsh-thinking-effort` namespace를 등록하고, 그렇지 않으면 이전 `register` 경로로 폴백합니다. `0.1.7` 이상의 entry-config 모델에서는 두 경로가 모두 존재하지 않으며, 설정 섹션은 내보낸 `Config`에서 제공됩니다. 런타임에 `@deepseek-ai/dsh-settings`에 의존하지 않으므로 `autoInstallPeers: false`로 설정된 DSH profile에서도 Cordis 런타임을 중복 도입하지 않고 깔끔하게 설치할 수 있습니다.
 
 ## DSH 버전 호환성
 
@@ -37,13 +37,16 @@
 DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 런타임 schema 노출에 따라 결정됩니다. 위 표는 각 DSH 버전의 최대 필드 집합이며, 라우트의 프로토콜에 따라 더 줄어들 수 있습니다.
 
 게이트웨이 호환 필드는 DSH 버전, 런타임 schema, 현재 라우트의 `api` 프로토콜이 모두 지원할 때만 설정할 수 있습니다. 지원하지 않는 필드는 UI에 표시되지 않으며 Settings에도 기록되지 않습니다. 이 15개 필드 중 `openai-completions`는 모두 제공하고, `openai-responses`, `azure-openai-responses`, `openai-codex-responses`는 `supportsDeveloperRole`, `supportsStrictMode`, `supportsLongCacheRetention`만 제공합니다. `api`가 없거나 인식되지 않으면 런타임 schema와 DSH 검증을 최종 기준으로 사용합니다.
+
+DSH `0.1.7`부터는 각 Loader 항목 자체의 `Config` schema에서 설정 폼을 도출합니다(entry-config 모델). 이 schema를 내보내지 않는 플러그인에는 설정 폼이 나타나지 않습니다. 이 플러그인은 해당 schema를 내보내므로 `0.1.7` 이상에서 설정 섹션은 Loader 항목 ID인 `thinking-effort`가 됩니다. `0.1.0-rc.7`부터 `0.1.6`까지는 등록된 namespace `dsh-thinking-effort`를 그대로 사용하며, Client는 실행 중인 Host가 게시한 ID를 해석합니다. `subagentEffort`는 이 플러그인 자체 섹션에 저장되고(Host는 이전 `llm-pi-ai` 위치도 폴백으로 읽습니다), `0.1.7` 이상의 설정은 `~/.dsh/settings.yaml`이 아니라 현재 profile의 `cordis.patch.yml`에 저장됩니다.
+
 ## 왜 필요한가요?
 
 `llm-pi-ai` 어댑터는 타사 모델을 수동으로 선언할 수 있지만, 모델에 `reasoningEfforts`가 없는 경우가 많습니다. 그러면 Composer에 추론 강도 선택기가 표시되지 않고, `ultra`와 같은 게이트웨이 전용 값을 DSH 표준 단계에 매핑할 수도 없습니다.
 
 이 플러그인은 다음 설정 기능을 제공합니다.
 
-- 설정이 없는 모델에 `off`, `high`, `max` 기본 항목을 추가합니다.
+- 직접 선언한 profile의 설정 없는 모델에 `off`, `high`, `max` 기본 항목을 추가합니다. 컴포지션 베이스나 스키마 기본값만 제공하는 모델은 보완하지 않고 건너뛴 개수를 Host 로그에 남깁니다.
 - DSH 설정 페이지에서 모델별 추론 단계를 설정합니다.
 - DSH의 `high`를 게이트웨이의 `ultra`와 같은 값으로 매핑합니다.
 - 명시적인 요청 값을 유지하면서 Subagent 기본 추론 강도를 설정합니다.
@@ -62,7 +65,7 @@ DSH 내장 모델만 사용하고 이미 추론 제어가 정상 작동한다면
 
 | 기능 | 설명 |
 | --- | --- |
-| 기본 단계 | 사용자 지정 값을 덮어쓰지 않고 `off`, `high`, `max` 추가 |
+| 기본 단계 | 사용자 레이어에서 선언한 모델에 한해 사용자 지정 값을 덮어쓰지 않고 `off`, `high`, `max` 추가. 베이스나 스키마 기본값만 제공하는 모델은 보완하지 않고 개수를 Host 로그에 기록 |
 | 모델별 편집 | Settings에서 단계를 설정하고 catalog/modelOverrides와 `models[]` 항목의 게이트웨이 호환 값을 모두 편집 |
 | 게이트웨이 호환 설정 | 15개의 일반적인 스칼라 필드를 provider 전체 또는 모델별로 설정하며, 역할/추론, 형식/출력, 스트리밍/도구, 저장/캐시로 나뉘고 기본으로 접혀 있음 |
 | OpenCode 세션 Header | 정확한 모델에만 동적 `x-opencode-session`을 활성화합니다. 기본값은 DSH 세션에 묶인 결정적 `ses_` 값을 생성하며(template / expression / script 모드로 상류 형식 변경에 대응), 고정 Header 값을 저장하지 않습니다 |
@@ -139,7 +142,7 @@ Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델
 
 ### OpenCode 세션 Header 생성기
 
-모델 편집기에는 별도의 **OpenCode 세션 Header** 스위치가 있습니다. 기본값은 꺼져 있으며 `llm-pi-ai.compat`가 아니라 플러그인 전용 `dsh-thinking-effort` Settings namespace에 저장됩니다. `x-opencode-session`이 필요한 정확한 `provider/model`에만 활성화하세요. 같은 route의 다른 모델(GPT 모델 포함)에는 상속되지 않습니다. 토글하면 즉시 저장되며 별도의 저장 버튼이 없습니다. 모델을 다시 열면 저장된 값이 표시됩니다.
+모델 편집기에는 별도의 **OpenCode 세션 Header** 스위치가 있습니다. 기본값은 꺼져 있으며 `llm-pi-ai.compat`가 아니라 플러그인 전용 설정 섹션에 저장됩니다. `x-opencode-session`이 필요한 정확한 `provider/model`에만 활성화하세요. 같은 route의 다른 모델(GPT 모델 포함)에는 상속되지 않습니다. 토글하면 즉시 저장되며 별도의 저장 버튼이 없습니다. 모델을 다시 열면 저장된 값이 표시됩니다.
 
 활성화했는데 `format`을 설정하지 않으면 Host는 `ses_` 정규 형태를 가지며 **현재 DSH 세션에서 결정적으로 파생된** 값을 보냅니다. `ses_` + 16진수 12자리(세션마다 한 번 주조되는 48비트 밀리초 타임스탬프) + Base62 14자리(정규화한 DSH 세션 ID의 80비트 SHA-256 다이제스트)입니다. 같은 DSH 세션은 항상 같은 값을 보냅니다. 값은 세션별로 유지되며, 크기가 제한된 값 캐시의 축출은 캐시 값만 버리고 첫 주조는 절대 버리지 않으므로 축출된 세션을 다시 방문해도 값이 바뀌지 않습니다. 16진수 타임스탬프가 다시 주조되는 것은 DSH 재시작 후의 `firstUse` 모드뿐입니다(`time: hash`는 완전히 무상태). 14자리 접미사는 저장 값이 아니라 파생 값이므로 DSH 재시작 후에도 안정적입니다. 다른 세션(각 subagent 실행 포함)은 서로 다른 값을 파생합니다.
 
@@ -216,7 +219,7 @@ dsh-thinking-effort:
 - Subagent 단계가 대상 모델에서 지원되지 않으면 게이트웨이가 `UNSUPPORTED_REASONING_EFFORT`를 반환할 수 있습니다.
 - `off`와 설정되지 않은 추론 강도가 모두 `reasoning`을 생략할 수 있으며, 실제로 사고를 비활성화하는지는 게이트웨이 프로토콜에 달려 있습니다.
 - Host 변경에는 DSH 재시작이 필요합니다. 설정과 언어 변경은 브라우저에서 적용됩니다.
-- 프로필 목록과 가져오기 전 자동 백업은 플러그인 전용 `dsh-thinking-effort` namespace에 저장되며 내보내기 파일에 포함되지 않습니다. 이름 있는 프로필을 다른 머신으로 옮기려면 하나씩 내보내 대상 머신에서 가져와야 합니다.
+- 프로필 목록과 가져오기 전 자동 백업은 플러그인 전용 설정 섹션에 저장되며 내보내기 파일에 포함되지 않습니다. 이름 있는 프로필을 다른 머신으로 옮기려면 하나씩 내보내 대상 머신에서 가져와야 합니다.
 
 ## CI 및 릴리스 유지 관리
 

@@ -39,6 +39,7 @@ These are separate compatibility layers:
 
 - **DSH Runtime:** the Settings transport is `remote.settings` on modern DSH and `connection.api.settings` on legacy DSH. The plugin detects the available runtime capability and keeps the legacy fallback optional.
 - **Gateway Protocol:** the plugin uses the official `llm-pi-ai.compat` fields when the DSH schema exposes them. The optional `dsh-llm-openai-completions` transport can take over eligible custom OpenAI-compatible thinking providers when installed and enabled.
+- **Settings model:** DSH `0.1.7` and later derive each settings form from its Loader entry's own `Config` schema (`entry-config`) and keep the document in the active profile's `cordis.patch.yml`; DSH `0.1.0-rc.7` through `0.1.6` register a namespace instead and store it in the DSH settings document, for example `~/.dsh/settings.yaml`. The plugin supports both, and the Client resolves the section id the running Host publishes — `thinking-effort` under `entry-config`, `dsh-thinking-effort` under the namespace model.
 
 The version map applies these gateway capability rules:
 
@@ -74,7 +75,7 @@ The guarantees this provides:
 
 ### Configuring the generator
 
-The generator is configured under `dsh-thinking-effort.opencodeSession.format` in the DSH settings document (for example `~/.dsh/settings.yaml` or the active profile's settings):
+Where the generator lives depends on the DSH line: on `0.1.7`+ it is the `opencodeSession.format` section of the active profile's `cordis.patch.yml` (addressed by the Loader entry id `thinking-effort`); on `0.1.0-rc.7` through `0.1.6` it is `dsh-thinking-effort.opencodeSession.format` in the DSH settings document, for example `~/.dsh/settings.yaml`. The settings page writes either location for you. The YAML below shows the namespace shape the releases before `0.1.7` read:
 
 ```yaml
 dsh-thinking-effort:
@@ -157,7 +158,7 @@ The card validates before writing and disables **Apply** when a check fails:
 
 The `llm-pi-ai` adapter forces its own attribution `user-agent` (`deepseek-harness/<version> (+https://github.com/deepseek-ai/deepseek-harness)`) onto every provider request and strips any provider-configured value with the same name, so `llm-pi-ai.providers.<route>.headers.user-agent` has no effect. This plugin rewrites the header on the matching `llm/stream` request at the last layer before it leaves, which is the only place a rewrite survives.
 
-It is configured under `dsh-thinking-effort.opencodeSession.userAgent` and is off by default:
+It is configured under `opencodeSession.userAgent` in the same settings section as the generator above, and is off by default:
 
 ```yaml
 dsh-thinking-effort:

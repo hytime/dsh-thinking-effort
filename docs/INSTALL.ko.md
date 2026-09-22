@@ -39,6 +39,7 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 - **DSH Runtime:** Settings transport는 최신 DSH에서 `remote.settings`, 이전 DSH에서 `connection.api.settings`입니다. 플러그인은 실제 런타임 capability를 감지하고 이전 경로 fallback을 선택 사항으로 유지합니다.
 - **Gateway Protocol:** DSH schema가 제공하는 경우 공식 `llm-pi-ai.compat` 필드를 사용합니다. 선택 사항인 `dsh-llm-openai-completions` transport를 설치하고 활성화하면 조건을 충족하는 사용자 지정 OpenAI 호환 사고 provider를 takeover할 수 있습니다.
+- **Settings model:** DSH `0.1.7`부터는 각 Loader 항목 자체의 `Config` schema에서 설정 폼을 도출하고(`entry-config`) 설정 문서를 현재 profile의 `cordis.patch.yml`에 저장합니다. DSH `0.1.0-rc.7`부터 `0.1.6`까지는 namespace를 등록하는 방식이며 DSH 설정 문서(예: `~/.dsh/settings.yaml`)에 저장합니다. 플러그인은 두 모델을 모두 지원하고, Client는 실행 중인 Host가 게시한 섹션 ID(`entry-config`에서는 `thinking-effort`, namespace 모델에서는 `dsh-thinking-effort`)를 해석합니다.
 
 version-map은 다음 규칙으로 게이트웨이 capability를 판정합니다.
 
@@ -74,7 +75,7 @@ OpenCode 세션 Header는 모델 편집기의 모델별 설정이며 provider �
 
 ### 생성기 설정
 
-생성기는 DSH 설정 문서(예: `~/.dsh/settings.yaml` 또는 현재 profile의 설정)의 `dsh-thinking-effort.opencodeSession.format`에서 설정합니다.
+생성기 위치는 DSH 계열에 따라 다릅니다. `0.1.7` 이상에서는 현재 profile의 `cordis.patch.yml`에 있는 `opencodeSession.format` 섹션(Loader 항목 ID `thinking-effort`로 지정)입니다. `0.1.0-rc.7`부터 `0.1.6`까지는 DSH 설정 문서(예: `~/.dsh/settings.yaml`)의 `dsh-thinking-effort.opencodeSession.format`입니다. 두 위치 모두 설정 페이지가 대신 기록합니다. 아래 YAML은 `0.1.7` 이전 릴리스가 읽는 namespace 형태를 보여 줍니다:
 
 ```yaml
 dsh-thinking-effort:
@@ -157,7 +158,7 @@ export function format(ctx) {
 
 `llm-pi-ai` adapter는 모든 provider 요청에 자체 attribution `user-agent`(`deepseek-harness/<버전> (+https://github.com/deepseek-ai/deepseek-harness)`)를 강제하고 같은 이름의 provider 설정 값을 제거합니다. 따라서 `llm-pi-ai.providers.<route>.headers.user-agent`는 효과가 없습니다. 이 플러그인은 일치하는 `llm/stream` 요청에서 전송 직전의 마지막 레이어에서 헤더를 다시 씁니다. 이것이 유일하게 살아남는 재정의 지점입니다.
 
-`dsh-thinking-effort.opencodeSession.userAgent`에서 설정하며 기본값은 꺼져 있습니다.
+위의 생성기와 같은 설정 섹션의 `opencodeSession.userAgent`에서 설정하며 기본값은 꺼져 있습니다:
 
 ```yaml
 dsh-thinking-effort:

@@ -25,7 +25,7 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 >
 > The published runtime entries are `lib/index.js` (Host) and `lib/client.js` (Client). After changing TypeScript or locale sources, run `npm run build` before running DSH or packing the plugin. Current DSH does not expose a public semver metadata contract, so runtime capability detection is authoritative. An optional version is used only when explicit metadata or test input supplies it; unknown valid versions still use the detected capabilities. The plugin supports both modern `remote.settings` and legacy `connection.api.settings`.
 >
-> The Host registers its `dsh-thinking-effort` Settings namespace through the host-provided Settings `installSection` when available, and falls back to the legacy `register` path otherwise. It does not depend on `@deepseek-ai/dsh-settings` at runtime, so the package installs cleanly into DSH profiles configured with `autoInstallPeers: false` without introducing a second Cordis runtime.
+> The Host registers its `dsh-thinking-effort` Settings namespace through the host-provided Settings `installSection` when available, and falls back to the legacy `register` path otherwise. Under the `0.1.7`+ entry-config model neither path exists, and the section comes from the exported `Config` instead. It does not depend on `@deepseek-ai/dsh-settings` at runtime, so the package installs cleanly into DSH profiles configured with `autoInstallPeers: false` without introducing a second Cordis runtime.
 
 ## DSH compatibility
 
@@ -38,13 +38,16 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 From DSH `0.1.0-rc.8` onward, field availability follows the runtime schema. The table shows the maximum field set for each DSH version; the route protocol can further reduce it.
 
 A gateway compat field can be configured only when the DSH version, runtime schema, and route's `api` protocol all support it. Unsupported fields stay hidden and are not written to Settings. Among these 15 fields, `openai-completions` supports all 15, while `openai-responses`, `azure-openai-responses`, and `openai-codex-responses` support only `supportsDeveloperRole`, `supportsStrictMode`, and `supportsLongCacheRetention`. If `api` is missing or unrecognized, the runtime schema and DSH validation remain the final authority.
+
+DSH `0.1.7` and later derive each settings form from the Loader entry's own `Config` schema (the entry-config model); a plugin that exports none gets no form at all. This plugin exports that schema, so on `0.1.7`+ its section is the Loader entry id `thinking-effort`, while `0.1.0-rc.7` through `0.1.6` keep the registered namespace `dsh-thinking-effort`; the Client resolves whichever id the running Host publishes. `subagentEffort` now lives in this plugin's own section (the Host still falls back to the old `llm-pi-ai` location), and on `0.1.7`+ settings are stored in the active profile's `cordis.patch.yml` instead of `~/.dsh/settings.yaml`, which `0.1.7` no longer uses.
+
 ## Why use it?
 
 The `llm-pi-ai` adapter supports hand-declared third-party models, but those entries often do not declare `reasoningEfforts`. As a result, Composer does not show a reasoning effort selector, and gateway-specific values such as `ultra` cannot be mapped to DSH's standard levels.
 
 This plugin provides the configuration layer needed to:
 
-- Add default `off`, `high`, and `max` options to models without a declaration;
+- Add default `off`, `high`, and `max` options to models your own profile declares without a declaration; a model that only a composition base or a schema default supplies is left unfilled and counted in the Host log;
 - Configure reasoning levels per model from the DSH settings page;
 - Map a DSH level such as `high` to a gateway value such as `ultra`;
 - Set a default reasoning effort for subagents while preserving explicit request values;
@@ -65,7 +68,7 @@ These identifiers have different responsibilities:
 
 | Feature | Description |
 | --- | --- |
-| Default levels | Adds `off`, `high`, and `max` without overwriting custom values |
+| Default levels | Adds `off`, `high`, and `max` without overwriting custom values, for the models your user layer declares; a model only a composition base or a schema default supplies is left unfilled and counted in the Host log |
 | Per-model editor | Select levels and configure gateway values for both catalog/modelOverrides and `models[]` entries in Settings |
 | Gateway compatibility | Configure 15 common scalar fields globally per provider or separately per model, grouped by role/reasoning, format/output, streaming/tools, and storage/cache; groups are collapsed by default |
 | OpenCode session Header | Enable a dynamic `x-opencode-session` per exact model. By default a deterministic `ses_…` generator bound to the DSH session (with template / expression / script modes to survive upstream format changes), without storing a fixed Header value |
@@ -151,7 +154,7 @@ These compat values are control plane configuration. They do not implement or re
 
 ### OpenCode session Header generator
 
-The model editor has a separate **OpenCode session Header** switch, stored in the plugin's own `dsh-thinking-effort` Settings namespace, not in `llm-pi-ai.compat`. Enable it only for the exact `provider/model` that requires `x-opencode-session`; another model on the same route, including a GPT model, does not inherit it. Flipping the switch saves immediately — there is no separate save button — and reopening the model shows the persisted value.
+The model editor has a separate **OpenCode session Header** switch, stored in the plugin's own settings section, not in `llm-pi-ai.compat`. Enable it only for the exact `provider/model` that requires `x-opencode-session`; another model on the same route, including a GPT model, does not inherit it. Flipping the switch saves immediately — there is no separate save button — and reopening the model shows the persisted value.
 
 When enabled and no `format` is configured, the Host sends a deterministic value in the canonical `ses_` shape derived from the current DSH session: `ses_` + 12 hex characters (a 48-bit millisecond timestamp minted once per session) + 14 Base62 characters (an 80-bit digest of the normalized DSH session id). The same DSH session always sends the same value: the value is stickied per session, and eviction from the bounded value cache drops only the cached value — never the first-use mint — so an evicted session keeps its value when revisited. Only a DSH restart re-mints the hex timestamp, and only in `firstUse` mode (`time: hash` needs no state at all). The 14-character suffix is stable across DSH restarts because it is derived, not stored. Different sessions — including each subagent run — derive distinct values.
 
@@ -229,7 +232,7 @@ See the complete Chinese, English, Japanese, and Korean screenshot gallery in [`
 - `off` and an unset effort may both omit `reasoning`; whether this disables thinking depends on the gateway protocol.
 - The Composer slider is available only when the Web runtime provides the optional `modelDirectories` service. The `seat` is not registered when that service is unavailable, and the plugin leaves Composer unchanged.
 - Host changes require a DSH restart. Settings, locale, and Client bundle changes take effect after a Web page refresh.
-- The profile library and the pre-import backup live in the plugin's own `dsh-thinking-effort` namespace and are not carried by an export. To move named profiles to another machine, export each profile and import it there.
+- The profile library and the pre-import backup live in the plugin's own settings section and are not carried by an export. To move named profiles to another machine, export each profile and import it there.
 
 ## CI and release maintenance
 
