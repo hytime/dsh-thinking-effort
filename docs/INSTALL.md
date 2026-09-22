@@ -33,7 +33,7 @@ Use the built package entries `lib/index.js` for Host and `lib/client.js` for Cl
 
 Current DSH does not expose a public semver metadata contract, so runtime capability detection is authoritative. An optional version is used only when explicit metadata or test input supplies it; unknown valid versions still use the detected capabilities. Both modern `remote.settings` and legacy `connection.api.settings` are supported.
 
-### DSH Runtime and Gateway Protocol compatibility
+### DSH Runtime, Gateway Protocol, and Settings model compatibility
 
 These are separate compatibility layers:
 
@@ -158,7 +158,7 @@ The card validates before writing and disables **Apply** when a check fails:
 
 The `llm-pi-ai` adapter forces its own attribution `user-agent` (`deepseek-harness/<version> (+https://github.com/deepseek-ai/deepseek-harness)`) onto every provider request and strips any provider-configured value with the same name, so `llm-pi-ai.providers.<route>.headers.user-agent` has no effect. This plugin rewrites the header on the matching `llm/stream` request at the last layer before it leaves, which is the only place a rewrite survives.
 
-It is configured under `opencodeSession.userAgent` in the same settings section as the generator above, and is off by default:
+It is configured under `opencodeSession.userAgent` in the same settings section as the generator above, and is off by default. The YAML below shows the namespace shape the releases before `0.1.7` read:
 
 ```yaml
 dsh-thinking-effort:

@@ -38,7 +38,7 @@ DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行
 
 ゲートウェイ互換フィールドを設定できるのは、DSH のバージョン、実行時 schema、ルートの `api` プロトコルのすべてが対応している場合だけです。対応しないフィールドは UI に表示されず、Settings にも書き込まれません。この 15 フィールドでは `openai-completions` がすべてを提供し、`openai-responses`、`azure-openai-responses`、`openai-codex-responses` は `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention` だけを提供します。`api` がない、または認識できない場合は、実行時 schema と DSH の検証を最終的な基準にします。
 
-DSH `0.1.7` 以降は、各 Loader エントリ自身の `Config` schema から設定フォームを導出します（entry-config モデル）。この schema を公開しないプラグインには設定フォームが表示されません。本プラグインはこれを公開しているため、`0.1.7` 以降の設定セクションは Loader エントリ ID の `thinking-effort` になります。`0.1.0-rc.7` から `0.1.6` までは登録済み namespace の `dsh-thinking-effort` のままで、Client は実行中の Host が公開している方の ID を解決します。`subagentEffort` は本プラグイン自身のセクションに移り（Host は旧 `llm-pi-ai` の場所もフォールバックとして読みます）、`0.1.7` 以降の設定は `~/.dsh/settings.yaml` ではなく現在の profile の `cordis.patch.yml` に保存されます。
+DSH `0.1.7` 以降は、各 Loader エントリ自身の `Config` schema から設定フォームを導出します（entry-config モデル）。この schema を公開しないプラグインには設定フォームが表示されません。本プラグインはこれを公開しているため、`0.1.7` 以降の設定セクションは Loader エントリ ID の `thinking-effort` になります。`0.1.0-rc.7` から `0.1.6` までは登録済み namespace の `dsh-thinking-effort` のままで、Client は実行中の Host が公開している方の ID を解決します。`subagentEffort` は本プラグイン自身のセクションに移り（Host は旧 `llm-pi-ai` の場所もフォールバックとして読みます）、`0.1.7` 以降の設定は `~/.dsh/settings.yaml` ではなく現在の profile の `cordis.patch.yml` に保存されます（`0.1.7` はこのファイルを使用しません）。
 
 ## なぜ使うのか
 
@@ -146,7 +146,7 @@ Settings の provider グローバル領域では、その provider の全モデ
 
 有効時で `format` 未設定の場合、Host は `ses_` の正規形を持ち**現在の DSH セッションから決定論的に導出**した値を送信します。`ses_` + 12 桁の 16 進（セッションごとに 1 回鋳造する 48 ビットのミリ秒タイムスタンプ）+ 14 桁の Base62（正規化した DSH セッション ID の 80 ビット SHA-256 ダイジェスト）です。同じ DSH セッションは常に同じ値を送ります。値はセッション単位で保持され、サイズ上限付きキャッシュの淘汰はキャッシュした値だけを捨て、初回鋳造は決して捨てないため、淘汰されたセッションを再訪しても値は変わりません。16 進タイムスタンプが再鋳造されるのは DSH 再起動後の `firstUse` モードだけです（`time: hash` は完全にステートレス）。14 桁の接尾辞は導出値であって保存値ではないため、DSH 再起動後も安定しています。別のセッション（各 subagent 実行を含む）は別の値を導出します。
 
-生成器のパラメーターは、設定ページの**セッション値ジェネレーター**カードからも、DSH 設定ドキュメントの `dsh-thinking-effort.opencodeSession.format` に直接書いても設定できます。どちらも等価です。上流の形式変更にプラグインの再ビルドなしで対応できる 4 つのモードがあります。
+生成器のパラメーターは、設定ページの**セッション値ジェネレーター**カードからも、設定ドキュメントに直接書いても設定できます。`0.1.7` 以降は現在の profile の `cordis.patch.yml` にある `opencodeSession.format` セクション（Loader エントリ ID `thinking-effort` で指定）、`0.1.0-rc.7` から `0.1.6` までは `dsh-thinking-effort.opencodeSession.format`（例：`~/.dsh/settings.yaml`）です。どちらも等価です。上流の形式変更にプラグインの再ビルドなしで対応できる 4 つのモードがあります。
 
 - `ses-derive`（既定）— 上記の正規生成器。`time: firstUse` はセッションごとに hex 部を 1 回鋳造し、`time: hash` はセッションダイジェストから導出してどのマシンでも値が完全に一致します。
 - `passthrough` — 旧動作：生の DSH セッション ID を送信します。
@@ -160,7 +160,7 @@ Sub2API、CPA、その他の転送ゲートウェイは `x-opencode-session` を
 
 ### OpenCode user-agent 上書き
 
-上流の中には `user-agent` ヘッダーを検査するものもあります。`llm-pi-ai` アダプターはすべての provider リクエストに帰属 `user-agent`（`deepseek-harness/…`）を強制し、provider 設定の同名ヘッダーを削除するため、DSH 経由では変更できません。このプラグインは送信直前の最後のレイヤーで書き換えます。provider/model 単位・既定無効です。
+上流の中には `user-agent` ヘッダーを検査するものもあります。`llm-pi-ai` アダプターはすべての provider リクエストに帰属 `user-agent`（`deepseek-harness/…`）を強制し、provider 設定の同名ヘッダーを削除するため、DSH 経由では変更できません。このプラグインは送信直前の最後のレイヤーで書き換えます。provider/model 単位・既定無効です。以下の YAML は `0.1.7` より前のリリースが読む namespace 形式を示します。
 
 ```yaml
 dsh-thinking-effort:
@@ -187,7 +187,7 @@ dsh-thinking-effort:
 
 **設定のバックアップとプロファイル** カードは言語セレクターと **Subagent default effort** カードの下にあり、現在の設定の書き出し、名前付きプロファイルの保存と切り替え、以前に書き出したファイルの読み込みができます。
 
-1. **現在の設定を書き出す** を押すと `dsh-config-<タイムスタンプ>.json` がダウンロードされます。ファイルには `llm-pi-ai` と `dsh-thinking-effort` のユーザーレイヤーがそのまま入ります。認証情報の値は書き出されません（provider が持つのは鍵を入れた環境変数の名前 `apiKeyEnv` だけです）が、ユーザーレイヤーの値はそのまま記録されるため、provider の `headers` に置いた平文トークンもそのまま残ります。保管に注意してください。
+1. **現在の設定を書き出す** を押すと `dsh-config-<タイムスタンプ>.json` がダウンロードされます。ファイルには `llm-pi-ai` のユーザーレイヤーと本プラグイン自身の設定セクションがそのまま入ります（`0.1.0-rc.7` から `0.1.6` までは `dsh-thinking-effort`、`0.1.7` 以降は Loader エントリ ID の `thinking-effort` がキーになります）。認証情報の値は書き出されません（provider が持つのは鍵を入れた環境変数の名前 `apiKeyEnv` だけです）が、これらのセクションの値はそのまま記録されるため、provider の `headers` に置いた平文トークンもそのまま残ります。保管に注意してください。
 2. **プロファイル一覧** で名前を入力して **現在の設定を保存** を押すと、現在の設定が名前付きプロファイルとして保存されます。**書き出し** でファイルに保存し、**削除** で削除できます。保存できるのは最大 20 件です。**適用** は読み込みと同じプレビューを開くため、既定の **マージ** ではファイルにない provider が残ります。完全に戻すにはプレビューで **置換** を選びます。
 3. **設定を読み込む** の **ファイルを選択…** を押すと、**読み込みプレビュー** に追加 / 上書き / 削除の件数が表示されます。確認するまで設定は書き換えられません。
 4. 読み込みの既定は **マージ**（ファイルにない設定は保持）です。**置換** は明示的に選択する必要があり、ファイルにない provider を削除します。**読み込みを実行** はまず現在の設定を **読み込み前の自動バックアップ** として保存し、そのあとで変更を書き込みます。戻すときも同じプレビューを使います。
@@ -209,7 +209,7 @@ dsh-thinking-effort:
 
 - **Host：** 起動時と設定変更時に `llm-pi-ai` の `models` と `modelOverrides` を確認し、`reasoningEfforts` がない場合だけ既定値を追加します。書き込みはユーザーレイヤーだけを対象とするため、補完されるのは自身のプロファイルで宣言したモデルです。コンポジションのベースやスキーマ既定値だけが供給するモデルには書き込む先のエントリがないため補完せず、スキップした件数を Host ログに出力します。さらにモデル単位の OpenCode セッション設定を読み、一致する `llm/stream` リクエストにだけ `opencodeSession.format` に従って生成（既定 `ses-derive`）した `x-opencode-session` を注入し、`opencodeSession.userAgent` で選択したモデルの `user-agent` を書き換えます（それ以外は `llm-pi-ai` アダプターの帰属ヘッダーが強制）。
 - **Client：** DSH Settings Remote（`ctx.remote.settings`）と locale service を使って設定ページを登録します。モデル編集では OpenCode セッション Header を専用 namespace に保存し、`llm-pi-ai.compat` とは分離します。辞書は `src/locales/ja.json` と `src/locales/ko.json` などで管理し、公開前にクライアント bundle へ生成します。
-- **Subagent：** `llm-pi-ai` のユーザーレイヤーに `subagentEffort` を保存します。`agent/request` waterfall は明示値のないリクエストにだけ既定値を追加します。
+- **Subagent：** `0.1.7` 以降は本プラグイン自身の設定セクションに `subagentEffort` を保存します（`0.1.0-rc.7` から `0.1.6` までは `llm-pi-ai` のユーザーレイヤー）。Host は実際に値がある方のセクションを読みます。`agent/request` waterfall は明示値のないリクエストにだけ既定値を追加します。
 - **既定値なし：** プラグインは `off`、`high`、`max` を自動選択しません。`reasoning` を省略し、ゲートウェイの既定動作に任せます。
 
 ## 制限事項

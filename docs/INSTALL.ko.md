@@ -33,9 +33,9 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 현재 DSH에는 공개된 semver metadata 계약이 없으므로 런타임 capability detection이 권위 있는 출처입니다. 선택적 버전은 명시적인 metadata 또는 테스트 입력이 있을 때만 사용하며, 알 수 없는 유효한 버전도 감지된 capability에 따라 계속 실행합니다. 최신 `remote.settings`와 이전 `connection.api.settings`를 모두 지원합니다.
 
-### DSH Runtime 및 Gateway Protocol 호환 경계
+### DSH Runtime, Gateway Protocol 및 Settings 모델 호환 경계
 
-두 호환성 계층은 서로 별개입니다.
+이 호환성 계층들은 서로 별개입니다.
 
 - **DSH Runtime:** Settings transport는 최신 DSH에서 `remote.settings`, 이전 DSH에서 `connection.api.settings`입니다. 플러그인은 실제 런타임 capability를 감지하고 이전 경로 fallback을 선택 사항으로 유지합니다.
 - **Gateway Protocol:** DSH schema가 제공하는 경우 공식 `llm-pi-ai.compat` 필드를 사용합니다. 선택 사항인 `dsh-llm-openai-completions` transport를 설치하고 활성화하면 조건을 충족하는 사용자 지정 OpenAI 호환 사고 provider를 takeover할 수 있습니다.
@@ -158,7 +158,7 @@ export function format(ctx) {
 
 `llm-pi-ai` adapter는 모든 provider 요청에 자체 attribution `user-agent`(`deepseek-harness/<버전> (+https://github.com/deepseek-ai/deepseek-harness)`)를 강제하고 같은 이름의 provider 설정 값을 제거합니다. 따라서 `llm-pi-ai.providers.<route>.headers.user-agent`는 효과가 없습니다. 이 플러그인은 일치하는 `llm/stream` 요청에서 전송 직전의 마지막 레이어에서 헤더를 다시 씁니다. 이것이 유일하게 살아남는 재정의 지점입니다.
 
-위의 생성기와 같은 설정 섹션의 `opencodeSession.userAgent`에서 설정하며 기본값은 꺼져 있습니다:
+위의 생성기와 같은 설정 섹션의 `opencodeSession.userAgent`에서 설정하며 기본값은 꺼져 있습니다. 아래 YAML은 `0.1.7` 이전 릴리스가 읽는 namespace 형태를 보여 줍니다:
 
 ```yaml
 dsh-thinking-effort:

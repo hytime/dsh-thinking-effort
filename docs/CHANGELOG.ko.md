@@ -18,7 +18,7 @@
 
 - 설정 페이지에 「세션 값 생성기」 카드를 추가했습니다. UI에서 `opencodeSession.format`의 모든 필드(생성 모드, 타임스탬프 원본, 템플릿 / 표현식 / 스크립트 경로, 검증 정규식, 검증 실패 시 동작)를 읽고 쓸 수 있으므로 설정 문서를 직접 편집할 필요가 없습니다. 카드는 현재 모드에서 쓰는 필드만 표시하고 쓰기 전에 검증합니다. 잘못된 정규식, 빈 템플릿 / 표현식 / 스크립트, 상대 스크립트 경로, 해석할 수 없거나 존재하지 않는 이름을 참조하는 표현식은 이유와 함께 거부됩니다. 이런 값은 호스트 쪽에서 조용히 폴백하므로(정규식은 '검증 없음', 나머지는 파생 값) UI에서 보이지 않으면 오해를 부릅니다. 표현식 검증은 호스트와 같은 파서를 공유합니다. 쓰기는 필드 단위로 이루어지므로 같은 namespace의 다른 설정을 덮어쓰지 않습니다.
 
-- DSH 0.1.7의 entry-config 설정 모델을 지원합니다. 플러그인이 루트 `.volatile()` `Config`를 내보내면서 해당 릴리스에서 설정 폼이 표시됩니다(이전에는 0.1.7에서 `register is missing`으로 로드에 실패했습니다). `0.1.7` 이상의 설정 섹션은 Loader 항목 ID `thinking-effort`이고, `0.1.0-rc.7`부터 `0.1.6`까지는 등록된 namespace `dsh-thinking-effort`를 그대로 사용하며, Client는 실행 중인 Host가 게시한 쪽을 해석합니다. `subagentEffort`는 이 플러그인 자체 설정 섹션으로 옮겨졌고(0.1.7의 `llm-pi-ai` schema는 `providers`만 선언하므로 이전 위치는 쓰기도 읽기도 불가능했습니다), Host는 이전 `llm-pi-ai` 위치도 폴백으로 읽습니다. 설정은 `~/.dsh/settings.yaml`이 아니라 현재 profile의 `cordis.patch.yml`에 저장됩니다(`0.1.7`은 이전 파일을 자동으로 마이그레이션하거나 이름을 바꿉니다).
+- DSH 0.1.7의 entry-config 설정 모델을 지원합니다. 플러그인이 루트 `.volatile()` `Config`를 내보내면서 해당 릴리스에서 설정 폼이 표시됩니다(이전에는 0.1.7에서 `register is missing`으로 로드에 실패했습니다). `0.1.7` 이상의 설정 섹션은 Loader 항목 ID `thinking-effort`이고, `0.1.0-rc.7`부터 `0.1.6`까지는 등록된 namespace `dsh-thinking-effort`를 그대로 사용하며, Client는 실행 중인 Host가 게시한 쪽을 해석합니다. `subagentEffort`는 이 플러그인 자체 설정 섹션으로 옮겨졌고(0.1.7의 `llm-pi-ai` schema는 `providers`만 선언하므로 이전 위치에는 더 이상 쓸 수 없습니다), Host는 이전 `llm-pi-ai` 위치도 폴백으로 읽습니다. 설정은 `~/.dsh/settings.yaml`이 아니라 현재 profile의 `cordis.patch.yml`에 저장됩니다(`0.1.7`은 이전 파일을 자동으로 마이그레이션하거나 이름을 바꿉니다).
 
 ## [0.3.1] - 2026-09-19
 

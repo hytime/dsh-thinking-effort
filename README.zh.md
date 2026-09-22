@@ -217,7 +217,7 @@ providers:
 
 启用后、未配置 `format` 时，Host 会发送符合 `ses_` 规范形态、**由当前 DSH 会话确定性派生**的值：`ses_` + 12 位十六进制（48 位毫秒时间戳，会话内首次使用时铸造一次）+ 14 位 Base62（对归一化的 DSH 会话 ID 取 80 位 SHA-256 摘要）。同一 DSH 会话总是发送同一个值：该值按会话粘性保留，有界缓存淘汰只丢弃缓存值、绝不丢弃首次铸造的铸币，因此被淘汰的会话再次访问时值仍不变；只有 DSH 重启且处于 `firstUse` 模式时才会重新铸造 hex 时间戳（`time: hash` 则完全无状态）。14 位后缀因为是派生而非存储，在 DSH 重启后依然稳定。不同会话（包括每次子 agent 运行）派生不同值。
 
-生成器参数可在设置页的**会话值生成器**卡片中调整，也可在设置文档的 `dsh-thinking-effort.opencodeSession.format` 中手写；两种方式等价。共四档，可应对上游格式变化而无需重建插件：
+生成器参数可在设置页的**会话值生成器**卡片中调整，也可在设置文档中手写：`0.1.7` 及以后是当前 profile 的 `cordis.patch.yml` 中的 `opencodeSession.format` 分区（由 Loader 条目 ID `thinking-effort` 定位）；`0.1.0-rc.7` 至 `0.1.6` 是 `dsh-thinking-effort.opencodeSession.format`，例如 `~/.dsh/settings.yaml`。两种方式等价。共四档，可应对上游格式变化而无需重建插件：
 
 - `ses-derive`（默认）——上面的规范生成器。`time: firstUse` 按会话铸造一次 hex 段；`time: hash` 改为从会话摘要派生，使整个值在任何机器上完全一致。
 - `passthrough`——旧行为：发送原始 DSH 会话 ID。
@@ -231,7 +231,7 @@ Sub2API、CPA 和其他中转服务必须保留并继续把 `x-opencode-session`
 
 ### OpenCode user-agent 覆盖
 
-部分上游还会校验 `user-agent` 头。`llm-pi-ai` 适配器会在每个 provider 请求上强制盖上自己的归因 `user-agent`（`deepseek-harness/…`）并删除 provider 配置的同名头，因此无法通过 DSH 本身修改。本插件在请求离开发送前的最后一层改写它——按 provider/model 生效、默认关闭：
+部分上游还会校验 `user-agent` 头。`llm-pi-ai` 适配器会在每个 provider 请求上强制盖上自己的归因 `user-agent`（`deepseek-harness/…`）并删除 provider 配置的同名头，因此无法通过 DSH 本身修改。本插件在请求离开发送前的最后一层改写它——按 provider/model 生效、默认关闭。下面的 YAML 展示 `0.1.7` 之前版本读取的 namespace 形态：
 
 ```yaml
 dsh-thinking-effort:
@@ -258,7 +258,7 @@ dsh-thinking-effort:
 
 「配置备份与方案」卡片位于语言选择器和「子 agent 默认档位」卡片下方，可以导出当前配置、在本机保存命名方案，并导入先前导出的文件。
 
-1. 点击「导出当前配置」下载 `dsh-config-<时间戳>.json`。文件按原样包含 `llm-pi-ai` 与 `dsh-thinking-effort` 的用户层配置：凭据值不会被导出（provider 只记录保存密钥的环境变量名 `apiKeyEnv`），但这两个用户层里的值都会原样写入，放在 provider `headers` 里的明文 token 就是其中之一。请妥善保管。
+1. 点击「导出当前配置」下载 `dsh-config-<时间戳>.json`。文件按原样包含 `llm-pi-ai` 用户层与本插件自有设置分区的配置（`0.1.0-rc.7` 至 `0.1.6` 的键为 `dsh-thinking-effort`，`0.1.7` 及以后为 Loader 条目 ID `thinking-effort`）：凭据值不会被导出（provider 只记录保存密钥的环境变量名 `apiKeyEnv`），但这些分区里的值都会原样写入，放在 provider `headers` 里的明文 token 就是其中之一。请妥善保管。
 2. 在「方案库」中输入名称后点击「保存当前配置」，即可把当前配置存为命名方案；「导出」写成文件，「删除」移除方案，最多保存 20 份。「应用」切回方案时走的是与导入相同的预览，默认的「合并」会保留方案里没有的 provider，要完全还原需在预览中改选「替换」。
 3. 点击「导入配置」中的「选择文件…」后，「导入预览」会先列出新增 / 覆盖 / 删除的条数，确认之前不会写入任何内容。
 4. 导入默认使用「合并」（保留文件里没有的配置）；「替换」必须显式选择，它会删除文件里没有的 provider。点击「确认导入」会先把当前配置存为「导入前的自动备份」，再写入变更；还原这份备份同样走这个预览。
@@ -280,7 +280,7 @@ dsh-thinking-effort:
 
 - **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位。补齐只写入用户层，因此覆盖的是你自己 profile 声明的模型：由组合 base 或 schema 默认值提供的模型在该层没有可写入的条目，插件不会为其补全，并在宿主日志中说明跳过了多少个。插件同时读取模型级 OpenCode 会话设置，只在匹配的 `llm/stream` 请求中注入按 `opencodeSession.format` 生成（默认 `ses-derive`）的 `x-opencode-session`，并为 `opencodeSession.userAgent` 命中的模型改写 `user-agent`（否则会被 `llm-pi-ai` 适配器的归因头强制覆盖）。
 - **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页；运行时提供 `modelDirectories` 服务时，为可选 Composer `seat` 注册低优先级 `shadow` 实现，并显示宿主已解析的推理档位滑块。模型编辑器把 OpenCode 会话 Header 设置保存在插件自有 namespace，与 `llm-pi-ai.compat` 分开。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
-- **子 agent：** 默认值存储在 `llm-pi-ai` 用户层的 `subagentEffort`；`agent/request` waterfall 只对未显式指定档位的子 agent 请求进行补全。
+- **子 agent：** `0.1.7` 及以后默认值存储在本插件自有设置分区的 `subagentEffort`（`0.1.0-rc.7` 至 `0.1.6` 为 `llm-pi-ai` 用户层），宿主从实际承载它的分区读取；`agent/request` waterfall 只对未显式指定档位的子 agent 请求进行补全。
 - **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.14`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
 
 ## 安装验证

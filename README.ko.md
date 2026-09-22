@@ -38,7 +38,7 @@ DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 �
 
 게이트웨이 호환 필드는 DSH 버전, 런타임 schema, 현재 라우트의 `api` 프로토콜이 모두 지원할 때만 설정할 수 있습니다. 지원하지 않는 필드는 UI에 표시되지 않으며 Settings에도 기록되지 않습니다. 이 15개 필드 중 `openai-completions`는 모두 제공하고, `openai-responses`, `azure-openai-responses`, `openai-codex-responses`는 `supportsDeveloperRole`, `supportsStrictMode`, `supportsLongCacheRetention`만 제공합니다. `api`가 없거나 인식되지 않으면 런타임 schema와 DSH 검증을 최종 기준으로 사용합니다.
 
-DSH `0.1.7`부터는 각 Loader 항목 자체의 `Config` schema에서 설정 폼을 도출합니다(entry-config 모델). 이 schema를 내보내지 않는 플러그인에는 설정 폼이 나타나지 않습니다. 이 플러그인은 해당 schema를 내보내므로 `0.1.7` 이상에서 설정 섹션은 Loader 항목 ID인 `thinking-effort`가 됩니다. `0.1.0-rc.7`부터 `0.1.6`까지는 등록된 namespace `dsh-thinking-effort`를 그대로 사용하며, Client는 실행 중인 Host가 게시한 ID를 해석합니다. `subagentEffort`는 이 플러그인 자체 섹션에 저장되고(Host는 이전 `llm-pi-ai` 위치도 폴백으로 읽습니다), `0.1.7` 이상의 설정은 `~/.dsh/settings.yaml`이 아니라 현재 profile의 `cordis.patch.yml`에 저장됩니다.
+DSH `0.1.7`부터는 각 Loader 항목 자체의 `Config` schema에서 설정 폼을 도출합니다(entry-config 모델). 이 schema를 내보내지 않는 플러그인에는 설정 폼이 나타나지 않습니다. 이 플러그인은 해당 schema를 내보내므로 `0.1.7` 이상에서 설정 섹션은 Loader 항목 ID인 `thinking-effort`가 됩니다. `0.1.0-rc.7`부터 `0.1.6`까지는 등록된 namespace `dsh-thinking-effort`를 그대로 사용하며, Client는 실행 중인 Host가 게시한 ID를 해석합니다. `subagentEffort`는 이 플러그인 자체 섹션에 저장되고(Host는 이전 `llm-pi-ai` 위치도 폴백으로 읽습니다), `0.1.7` 이상의 설정은 `~/.dsh/settings.yaml`이 아니라 현재 profile의 `cordis.patch.yml`에 저장됩니다(`0.1.7`은 이 파일을 더 이상 사용하지 않습니다).
 
 ## 왜 필요한가요?
 
@@ -146,7 +146,7 @@ Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델
 
 활성화했는데 `format`을 설정하지 않으면 Host는 `ses_` 정규 형태를 가지며 **현재 DSH 세션에서 결정적으로 파생된** 값을 보냅니다. `ses_` + 16진수 12자리(세션마다 한 번 주조되는 48비트 밀리초 타임스탬프) + Base62 14자리(정규화한 DSH 세션 ID의 80비트 SHA-256 다이제스트)입니다. 같은 DSH 세션은 항상 같은 값을 보냅니다. 값은 세션별로 유지되며, 크기가 제한된 값 캐시의 축출은 캐시 값만 버리고 첫 주조는 절대 버리지 않으므로 축출된 세션을 다시 방문해도 값이 바뀌지 않습니다. 16진수 타임스탬프가 다시 주조되는 것은 DSH 재시작 후의 `firstUse` 모드뿐입니다(`time: hash`는 완전히 무상태). 14자리 접미사는 저장 값이 아니라 파생 값이므로 DSH 재시작 후에도 안정적입니다. 다른 세션(각 subagent 실행 포함)은 서로 다른 값을 파생합니다.
 
-생성기 매개변수는 설정 페이지의 **세션 값 생성기** 카드에서 조정하거나 DSH 설정 문서의 `dsh-thinking-effort.opencodeSession.format`에 직접 작성할 수 있으며, 두 방식은 동일합니다. 상류 형식 변경에 플러그인 재빌드 없이 대응할 수 있는 4가지 모드를 제공합니다.
+생성기 매개변수는 설정 페이지의 **세션 값 생성기** 카드에서 조정하거나 설정 문서에 직접 작성할 수 있습니다. `0.1.7` 이상에서는 현재 profile의 `cordis.patch.yml`에 있는 `opencodeSession.format` 섹션(Loader 항목 ID `thinking-effort`로 지정)이고, `0.1.0-rc.7`부터 `0.1.6`까지는 `dsh-thinking-effort.opencodeSession.format`(예: `~/.dsh/settings.yaml`)입니다. 두 방식은 동일합니다. 상류 형식 변경에 플러그인 재빌드 없이 대응할 수 있는 4가지 모드를 제공합니다.
 
 - `ses-derive`(기본값) — 위의 정규 생성기. `time: firstUse`는 세션마다 hex 부분을 한 번 주조하고, `time: hash`는 세션 다이제스트에서 파생해 어떤 머신에서도 값이 완전히 동일합니다.
 - `passthrough` — 이전 동작: 원시 DSH 세션 ID를 보냅니다.
@@ -160,7 +160,7 @@ Sub2API, CPA 및 다른 forwarding gateway는 `x-opencode-session`을 보존하�
 
 ### OpenCode user-agent 재정의
 
-일부 상류는 `user-agent` 헤더도 검사합니다. `llm-pi-ai` adapter는 모든 provider 요청에 attribution `user-agent`(`deepseek-harness/…`)를 강제하고 provider 설정의 같은 이름 헤더를 제거하므로 DSH를 통해서는 바꿀 수 없습니다. 이 플러그인은 전송 직전 마지막 레이어에서 다시 씁니다. provider/model 단위로 적용되며 기본값은 꺼져 있습니다.
+일부 상류는 `user-agent` 헤더도 검사합니다. `llm-pi-ai` adapter는 모든 provider 요청에 attribution `user-agent`(`deepseek-harness/…`)를 강제하고 provider 설정의 같은 이름 헤더를 제거하므로 DSH를 통해서는 바꿀 수 없습니다. 이 플러그인은 전송 직전 마지막 레이어에서 다시 씁니다. provider/model 단위로 적용되며 기본값은 꺼져 있습니다. 아래 YAML은 `0.1.7` 이전 릴리스가 읽는 namespace 형태를 보여 줍니다.
 
 ```yaml
 dsh-thinking-effort:
@@ -187,7 +187,7 @@ dsh-thinking-effort:
 
 **설정 백업 및 프로필** 카드는 언어 선택기와 **Subagent default effort** 카드 아래에 있으며, 현재 설정을 내보내고, 이름 있는 프로필을 저장해 전환하며, 이전에 내보낸 파일을 가져올 수 있습니다.
 
-1. **현재 설정 내보내기**를 누르면 `dsh-config-<타임스탬프>.json` 파일이 다운로드됩니다. 파일에는 `llm-pi-ai`와 `dsh-thinking-effort`의 사용자 레이어가 그대로 담깁니다. 자격 증명 값은 내보내지 않습니다(provider가 보관하는 것은 키를 담은 환경 변수 이름 `apiKeyEnv`뿐입니다). 다만 사용자 레이어의 값은 그대로 기록되므로 provider `headers`에 둔 평문 token도 그대로 남습니다. 파일을 안전하게 보관하세요.
+1. **현재 설정 내보내기**를 누르면 `dsh-config-<타임스탬프>.json` 파일이 다운로드됩니다. 파일에는 `llm-pi-ai` 사용자 레이어와 이 플러그인 자체 설정 섹션이 그대로 담깁니다(`0.1.0-rc.7`부터 `0.1.6`까지는 `dsh-thinking-effort`, `0.1.7` 이상에서는 Loader 항목 ID `thinking-effort`가 키입니다). 자격 증명 값은 내보내지 않습니다(provider가 보관하는 것은 키를 담은 환경 변수 이름 `apiKeyEnv`뿐입니다). 다만 이 섹션들의 값은 그대로 기록되므로 provider `headers`에 둔 평문 token도 그대로 남습니다. 파일을 안전하게 보관하세요.
 2. **프로필 목록**에서 이름을 입력하고 **현재 설정 저장**을 누르면 현재 설정이 이름 있는 프로필로 저장됩니다. **내보내기**로 파일에 저장하며, **삭제**로 제거할 수 있습니다. 최대 20개까지 보관합니다. **적용**은 가져오기와 같은 미리보기를 열므로 기본값인 **병합**은 파일에 없는 provider를 남겨 둡니다. 완전히 되돌리려면 미리보기에서 **교체**를 선택합니다.
 3. **설정 가져오기**의 **파일 선택…**을 누르면 **가져오기 미리보기**에 추가 / 덮어쓰기 / 삭제 건수가 표시됩니다. 확인하기 전에는 아무것도 기록되지 않습니다.
 4. 가져오기의 기본값은 **병합**(파일에 없는 설정 유지)입니다. **교체**는 직접 선택해야 하며 파일에 없는 provider를 삭제합니다. **가져오기 실행**은 먼저 현재 설정을 **가져오기 전 자동 백업**으로 저장한 뒤 변경을 기록합니다. 되돌릴 때도 같은 미리보기를 사용합니다.
@@ -209,7 +209,7 @@ dsh-thinking-effort:
 
 - **Host:** 시작 및 설정 변경 시 `llm-pi-ai`의 `models`와 `modelOverrides`를 검사하고 `reasoningEfforts`가 없는 경우에만 기본값을 추가합니다. 쓰기는 사용자 레이어에만 적용되므로, 직접 선언한 프로필의 모델만 보완됩니다. 컴포지션 베이스나 스키마 기본값만 제공하는 모델은 쓸 대상 항목이 없어 보완하지 않고, 건너뛴 개수를 Host 로그에 남깁니다. 또한 모델별 OpenCode 세션 설정을 읽고 일치하는 `llm/stream` 요청에만 `opencodeSession.format`에 따라 생성(기본값 `ses-derive`)한 `x-opencode-session`을 주입하며, `opencodeSession.userAgent`로 선택한 모델의 `user-agent`를 다시 씁니다(그 외에는 `llm-pi-ai` adapter의 attribution 헤더가 강제).
 - **Client:** DSH Settings Remote(`ctx.remote.settings`)와 locale service로 설정 페이지를 등록합니다. 모델 편집기는 OpenCode 세션 Header를 전용 namespace에 저장하며 `llm-pi-ai.compat`와 분리합니다. 사전은 `src/locales/ja.json`, `src/locales/ko.json` 등에서 관리하고 게시 전에 클라이언트 bundle로 생성합니다.
-- **Subagent:** `llm-pi-ai` 사용자 레이어에 `subagentEffort`를 저장합니다. `agent/request` waterfall은 명시적 값이 없는 요청에만 기본값을 추가합니다.
+- **Subagent:** `0.1.7` 이상에서는 이 플러그인 자체 설정 섹션에 `subagentEffort`를 저장합니다(`0.1.0-rc.7`부터 `0.1.6`까지는 `llm-pi-ai` 사용자 레이어). Host는 값이 있는 쪽 섹션을 읽습니다. `agent/request` waterfall은 명시적 값이 없는 요청에만 기본값을 추가합니다.
 - **기본값 없음:** 플러그인은 `off`, `high`, `max`를 자동으로 선택하지 않습니다. `reasoning`을 생략하고 게이트웨이 기본 동작을 따릅니다.
 
 ## 제한 사항
