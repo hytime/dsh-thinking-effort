@@ -368,12 +368,13 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 
 npm 패키지에 GitHub Trusted Publishing을 설정하세요. 저장소는 `hytime/dsh-thinking-effort`, workflow는 `publish.yml`입니다. 게시에는 GitHub OIDC와 provenance를 사용하고 `npm publish --provenance --access public`을 실행합니다. `NPM_TOKEN`이나 장기 token은 사용하지 않습니다. npm에 같은 버전이 이미 있으면 게시가 중단됩니다.
 
-게시 전에 workflow는 rc7 → rc2 → alpha2 → latest 순서로 네 개의 임시 공식 DSH capability representative checkout을 만들고, 공식 `dsh plugin` 명령으로 현재 tarball을 설치한 뒤 실제 호환성 테스트를 실행합니다.
+게시 전에 workflow는 rc7 → rc2 → alpha2 → namespace → entry 순서로 다섯 개의 임시 공식 DSH capability representative checkout을 만들고, 공식 `dsh plugin` 명령으로 현재 tarball을 설치한 뒤 실제 호환성 테스트를 실행합니다.
 
 - `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`) — rc7 capability representative
 - `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`) — rc2 capability representative
 - `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`) — alpha2 capability representative
-- `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`) — 최신 capability representative(실제 브라우저 DOM 프로브도 실행)
+- `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`) — 최신 namespace 모델 capability representative(실제 브라우저 DOM 프로브도 실행)
+- `dsh-v0.1.7-alpha.1` (`0.1.7-alpha.1`) — entry-config capability representative(설정 폼은 각 Loader 엔트리 자체의 `Config`에서 도출)
 
 일반 CI는 테스트 전용이며 Pull Request와 `main` 푸시에서 실행됩니다. `npm ci`를 사용하므로 의존성 변경 시 `package-lock.json`을 커밋하세요.
 

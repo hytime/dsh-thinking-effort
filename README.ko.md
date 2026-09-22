@@ -228,7 +228,7 @@ dsh-thinking-effort:
 - 일반 CI workflow는 npm에 게시하지 않습니다. `publish.yml`은 `v<version>` tag에서만 게시를 시작합니다.
 - 릴리스 tag를 만들기 전에 유지 관리자는 `package.json` 버전과 각 언어의 `CHANGELOG`를 업데이트하여 커밋하고 일치하는 `v<version>` tag를 만듭니다. tag가 가리키는 커밋은 `main` 기록에 포함되어야 합니다.
 - npm 패키지에 GitHub Trusted Publisher를 설정해야 합니다. 저장소는 `hytime/dsh-thinking-effort`, workflow는 `publish.yml`입니다. 게시에는 GitHub OIDC provenance가 포함되며 `NPM_TOKEN`이 필요하지 않습니다.
-- 게시 전에 workflow는 rc7 → rc2 → alpha2 → latest 순서로 네 공식 DSH capability representative를 빌드하고 테스트합니다: `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`), `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`). 공식 `dsh plugin` 명령으로 설치한 뒤 실제 호환성 테스트를 실행하며, 최신 representative에서 실제 브라우저 DOM 프로브도 수행합니다.
+- 게시 전에 workflow는 rc7 → rc2 → alpha2 → namespace → entry 순서로 다섯 공식 DSH capability representative를 빌드하고 테스트합니다: `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`), `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`), `dsh-v0.1.7-alpha.1` (`0.1.7-alpha.1`). 공식 `dsh plugin` 명령으로 설치한 뒤 실제 호환성 테스트를 실행하며, 실제 브라우저 DOM 프로브는 `0.1.6-alpha.1` representative에서 수행합니다.
 - workflow는 버전이나 `CHANGELOG`를 자동으로 변경하지 않습니다. npm에 같은 버전이 이미 있으면 게시도 중단됩니다.
 
 ## 라이선스

@@ -99,6 +99,12 @@ function record(value: unknown): Record<string, unknown> | undefined {
  *   config-update path passes `noSave = true`; `update` and `mutate` both go
  *   through it. A write therefore merges into the user's layer, not into a
  *   resolved value.
+ *
+ * No in-process test can observe either behaviour, because both live in the
+ * host. `tests/loader-composition.test.ts` asserts them against a real
+ * `0.1.7-alpha.1` host when the opt-in loader integration suite runs
+ * (`DSH_LOADER_INTEGRATION=1`), so a host release that changes either one fails
+ * that suite rather than silently re-inflating the user's document.
  */
 function readUserLayer(settings: HostSettings, namespace: string): UserLayerRead {
   const user = readSettingsSectionUser(settings, namespace)
@@ -274,6 +280,15 @@ function reportSkipped(skipped: SkippedDefaults): void {
  * Read the pi-ai section under either settings model. The `entry-config` model
  * has no `get`, so the value comes from `describe()`; `readSettingsSection`
  * covers both and never throws.
+ *
+ * This read only has a `providers` to fill because `llm-pi-ai` declares its
+ * `Config` as `z.object({ providers: z.dict(profile).default({}).volatile() })`:
+ * `describe()` lists an entry only when a volatile field makes its form live
+ * (`volatileForm`), so dropping that `.volatile()` removes the entry from the
+ * service reads entirely and this fill goes dead rather than inflating.
+ * `tests/loader-composition.test.ts` asserts both halves — the entry is listed
+ * and a write under `providers` is accepted — against a real `0.1.7-alpha.1`
+ * host when the opt-in integration suite runs (`DSH_LOADER_INTEGRATION=1`).
  */
 function readSection(settings: HostSettings): unknown {
   return readSettingsSection(settings, SETTINGS_NAMESPACE)

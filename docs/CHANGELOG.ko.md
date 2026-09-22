@@ -12,6 +12,7 @@
 
 ### 변경
 
+- 게시 전 호환성 매트릭스에 `dsh-v0.1.7-alpha.1`(entry-config 설정 모델)을 다섯 번째 공식 capability representative로 추가했습니다. 0.1.7 루트에서는 플러그인이 실제로 로드되는지, 설정 섹션이 게시되는지, 그리고 호스트의 두 가지 불변 조건(`llm-pi-ai`의 `providers`가 volatile로 유지되는지, 경로 쓰기가 사용자 원본 레이어에서 파생되는지)을 검증합니다.
 - 기본값 보완은 이제 사용자 레이어에만 씁니다. 컴포지션 베이스나 스키마 기본값만 제공하는 모델은 보완하지 않습니다(0.1.7의 entry-config 설정 서비스는 해석된 하위 트리를 그대로 디스크에 기록하므로, 그런 모델을 보완하면 `input`, `compat`, `headers`, `thinkingBudgets`, `defaultContextWindow` 같은 스키마 기본값이 설정 문서에 고정됩니다). 건너뛴 개수는 Host 로그에 남습니다.
 
 ### 추가

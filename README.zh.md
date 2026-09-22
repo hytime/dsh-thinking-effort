@@ -327,7 +327,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 - 普通 CI workflow 不会发布 npm；发布只由 `publish.yml` 接收匹配的 `v<version>` tag 后执行。
 - 创建发布 tag 前，维护者先更新 `package.json` 版本和各语言 `CHANGELOG`，提交这些变更，再创建匹配的 `v<version>` tag。tag 指向的提交必须位于 `main` 历史中。
 - npm 包必须配置 GitHub Trusted Publisher：仓库为 `hytime/dsh-thinking-effort`，workflow 为 `publish.yml`。发布使用 GitHub OIDC 生成 provenance，不需要 `NPM_TOKEN`。
-- 发布前 workflow 会按 rc7 → rc2 → alpha2 → latest 顺序构建并测试四个官方 DSH 能力代表：`dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）、`dsh-v0.1.3-alpha.2`（`0.1.3-alpha.2`）和 `dsh-v0.1.6-alpha.1`（`0.1.6-alpha.1`）；通过官方 `dsh plugin` 命令安装并执行真实兼容检查，最新代表版本还会运行真实浏览器 DOM 探针。
+- 发布前 workflow 会按 rc7 → rc2 → alpha2 → namespace → entry 顺序构建并测试五个官方 DSH 能力代表：`dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）、`dsh-v0.1.3-alpha.2`（`0.1.3-alpha.2`）、`dsh-v0.1.6-alpha.1`（`0.1.6-alpha.1`）和 `dsh-v0.1.7-alpha.1`（`0.1.7-alpha.1`）；通过官方 `dsh plugin` 命令安装并执行真实兼容检查，真实浏览器 DOM 探针仍在 `0.1.6-alpha.1` 代表版本上运行。
 - workflow 不会自动修改版本或任何 `CHANGELOG`；如果 npm 中已经存在相同版本，发布也会被阻止。
 
 ## 排查

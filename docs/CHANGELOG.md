@@ -16,6 +16,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### 变更 / Changed
 
+- 发布前的兼容矩阵新增 `dsh-v0.1.7-alpha.1`（entry-config 设置模型）作为第五个官方能力代表，0.1.7 根节点上会验证插件确实加载成功、其设置分区被发布，以及宿主的两条不变量（`llm-pi-ai` 的 `providers` 仍为 volatile；路径写入仍基于用户原始层）。
+- The pre-publish compatibility matrix adds `dsh-v0.1.7-alpha.1` (the entry-config settings model) as a fifth official capability representative; the 0.1.7 root verifies that the plugin loads, that its settings section is published, and that the two host invariants hold (`llm-pi-ai`'s `providers` stays volatile; a path write is still derived from the raw user layer).
 - 默认档位补齐改为只写入用户层：由组合 base 或 schema 默认值提供的模型不会被补全（0.1.7 的 entry-config 设置服务会把整棵解析后的子树落盘，为它们补全会把 `input`、`compat`、`headers`、`thinkingBudgets`、`defaultContextWindow` 等 schema 默认值钉进你的设置文档）。跳过的模型会在宿主日志中报出数量。
 - The provider-default fill now writes through the user layer only: a model a composition base or a schema default supplies is left unfilled (under the 0.1.7 entry-config settings service a resolved subtree lands on disk whole, so filling those models pinned `input`, `compat`, `headers`, `thinkingBudgets`, `defaultContextWindow` and other schema defaults into your settings document). The Host logs how many models it skipped.
 

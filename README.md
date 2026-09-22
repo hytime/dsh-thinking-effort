@@ -241,7 +241,7 @@ See the complete Chinese, English, Japanese, and Korean screenshot gallery in [`
 - The ordinary CI workflow does not publish to npm. Publishing is triggered only by a `v<version>` tag through `publish.yml`.
 - Before creating a release tag, update `package.json` version and `CHANGELOG.md` files, commit those changes, and create the matching `v<version>` tag. The tag must point to a commit in the `main` history.
 - npm Trusted Publishing must be configured for repository `hytime/dsh-thinking-effort` and workflow `publish.yml`. The workflow publishes provenance through GitHub OIDC and does not require `NPM_TOKEN`.
-- Before publishing, the workflow builds and tests four official DSH capability representatives in this order: `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`), and `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`), using the official `dsh plugin` command and real compatibility checks. The newest representative runs the real-browser DOM probe.
+- Before publishing, the workflow builds and tests five official DSH capability representatives in this order: `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`), `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`), and `dsh-v0.1.7-alpha.1` (`0.1.7-alpha.1`), using the official `dsh plugin` command and real compatibility checks. The `0.1.6-alpha.1` representative runs the real-browser DOM probe.
 - The workflow never changes the package version or any `CHANGELOG` file automatically; an existing npm version also blocks publishing.
 
 ## License
