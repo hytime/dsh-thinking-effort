@@ -77,6 +77,12 @@ type HarnessOptions = {
    * two fills the way a user's own write does.
    */
   onRead?: () => void
+  /**
+   * Report every accepted write as a settings change, the way the live service
+   * does at the end of `write()`. Lets a fixture exercise the fill's own
+   * re-run, including a host whose write never becomes observable.
+   */
+  emitChangeOnWrite?: boolean
 }
 
 /** One recorded write, tagged with the service method the caller reached. */
@@ -159,6 +165,17 @@ function createHarness(options: HarnessOptions = {}) {
       throw new Error('update unavailable')
     }
   }
+  /**
+   * Announce a landed write the way `write()` does, by the end of which the
+   * service has reported the document change. The plugin's own listener is one
+   * of the subscribers, so this is what re-triggers a fill.
+   */
+  const announceWrite = (): void => {
+    if (options.emitChangeOnWrite !== true) return
+    for (const listener of [...listeners]) {
+      if (listener.name === 'settings/updated') listener.callback('llm-pi-ai')
+    }
+  }
   const ctx = {
     ...(options.entryId === undefined ? {} : { fiber: { entry: { options: { id: options.entryId } } } }),
     settings: {
@@ -168,11 +185,13 @@ function createHarness(options: HarnessOptions = {}) {
         writes.push({ kind: 'update', ns, value })
         await beforeWrite()
         section = { ...(section ?? {}), ...value }
+        announceWrite()
       },
       mutate: async (ns: string, ops: readonly SettingsPathOp[]) => {
         writes.push({ kind: 'mutate', ns, ops })
         await beforeWrite()
         section = ops.reduce(applyPathOp, section ?? {})
+        announceWrite()
       },
       describe,
       installSection: (_owner: unknown, _namespace: string, _schema: unknown, _entry: unknown, hooks: { setSource: (source: () => unknown) => void; onChange: () => void }) => {
@@ -548,6 +567,40 @@ describe('Host composition', () => {
     expect(harness.writes).toHaveLength(1)
   })
 
+  it('keeps retrying while the resolved section reads but the user layer does not', async () => {
+    // Under the namespace model the resolved read (`get`) and the user layer
+    // read (`describe`) are separate service calls, so a section can resolve
+    // before its user layer is available. Every entry then looks unreachable,
+    // but that is not a verdict — the layer may still land, and the old chain
+    // re-checked for it rather than giving up after the first attempt.
+    const harness = createHarness({
+      descriptors: [],
+      resolved: { providers: { route: { models: [{ id: 'model' }] } } },
+    })
+
+    await runInitial(harness)
+
+    expect(harness.writes).toEqual([])
+    expect(harness.scheduled.map((task) => task.delay)).toEqual([500, 2000])
+
+    // The retry is what the fill needed: with the layer readable it fills.
+    harness.setDescriptors([{
+      ns: 'llm-pi-ai',
+      user: { providers: { route: { models: [{ id: 'model' }] } } },
+    }])
+    await harness.runScheduled(1)
+
+    expect(harness.writes).toEqual([{
+      kind: 'mutate',
+      ns: 'llm-pi-ai',
+      ops: [{
+        op: 'set',
+        path: ['providers', 'route', 'models'],
+        value: [{ id: 'model', reasoningEfforts: defaults }],
+      }],
+    }])
+  })
+
   it('does not retry or surface a rejected update after disposal', async () => {
     const harness = createHarness({
       pendingUpdate: true,
@@ -628,6 +681,35 @@ describe('Host composition', () => {
         ],
       }],
     })
+  })
+
+  it('bounds the re-runs of a host whose write never becomes observable', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    let reads = 0
+    // Every write raises the change event at the end of `write()`, but the
+    // resolved read keeps reporting the same unfilled model no matter how many
+    // writes land. A healthy host converges on the second pass; this one would
+    // re-trigger itself forever, so the pass budget is what stops it.
+    const harness = createHarness({
+      section: { providers: { route: { models: [{ id: 'model' }] } } },
+      resolved: { providers: { route: { models: [{ id: 'model' }] } } },
+      emitChangeOnWrite: true,
+      onRead: () => { reads += 1 },
+    })
+
+    try {
+      await runInitial(harness)
+      for (let turn = 0; turn < 20; turn += 1) await Promise.resolve()
+
+      expect(reads).toBe(5)
+      expect(harness.writes).toHaveLength(5)
+      // The fill's own verdict is `filled`, so no retry is scheduled either.
+      expect(harness.scheduled.map((task) => task.delay)).toEqual([500])
+      const lines = log.mock.calls.map((call) => call.join(' '))
+      expect(lines.some((line) => line.includes('stopped the fill after 5 passes'))).toBe(true)
+    } finally {
+      log.mockRestore()
+    }
   })
 
   it('stops retrying when every missing model comes from a lower settings layer', async () => {

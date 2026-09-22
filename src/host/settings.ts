@@ -14,10 +14,32 @@ export const SETTINGS_NAMESPACE = 'llm-pi-ai'
 export const DEFAULT_LEVELS = { off: null, high: 'high', max: 'max' } as const
 const LOG_PREFIX = '[@hytime/dsh-thinking-effort]'
 
+/**
+ * Most fill passes one trigger may run before it stops re-running itself.
+ *
+ * A healthy host needs two: the write raises `settings/document-updated` at the
+ * end of `write()`, and the queued pass re-reads the filled section and finds
+ * nothing to do. A host whose write is accepted but never becomes observable
+ * raises that event after every pass, so the count is bounded here rather than
+ * left to spin. The budget is per trigger, so a later change still gets one.
+ */
+const MAX_FILL_PASSES = 5
+
 /** The minimal path edits one fill performs, and how many models they cover. */
 export interface ProviderDefaultsResult {
   readonly ops: readonly SettingsPathOp[]
   readonly filled: number
+}
+
+/** One read of the user's own layer, by {@link readUserLayer}. */
+interface UserLayerRead {
+  /** The layer's `providers`, or `undefined` when it declares none. */
+  readonly providers: unknown
+  /**
+   * False when the service returned no user layer at all. Distinct from an
+   * empty layer: the section may still be registering.
+   */
+  readonly readable: boolean
 }
 
 /**
@@ -43,8 +65,17 @@ function record(value: unknown): Record<string, unknown> | undefined {
 }
 
 /**
- * The `providers` object of the user's own layer: the only value any fill
+ * One read of the user's own layer.
+ *
+ * `providers` is the `providers` object of that layer — the only value any fill
  * payload may quote.
+ *
+ * `readable` says whether the service returned a layer at all. It is not the
+ * same as `providers` being empty: under the namespace model the resolved read
+ * (`get`) and this layer read (`describe`) are separate service calls, so a
+ * resolved section can be available while the layer has not landed yet. An
+ * absent layer makes every resolved entry look unreachable, which must not be
+ * mistaken for a verdict (see {@link fillDefaults}).
  *
  * Deliberately not {@link readSettingsSection}, which returns the *resolved*
  * section (schema defaults under composition base under the user's own keys).
@@ -69,19 +100,21 @@ function record(value: unknown): Record<string, unknown> | undefined {
  *   through it. A write therefore merges into the user's layer, not into a
  *   resolved value.
  */
-function readUserProviders(settings: HostSettings, namespace: string): unknown {
+function readUserLayer(settings: HostSettings, namespace: string): UserLayerRead {
   const user = readSettingsSectionUser(settings, namespace)
-  return isUnknownRecord(user) ? user.providers : undefined
+  if (!isUnknownRecord(user)) return { providers: undefined, readable: false }
+  return { providers: user.providers, readable: true }
 }
 
 /**
  * One model array with the default level set added where the resolved entry
  * lacks it.
  *
- * Only entries the user's own layer carries can be written — an array is
- * written whole, so an entry the user never declared would arrive with every
- * resolved field on it. Those entries, and every resolved entry past the user's
- * own list, are counted as missing but unreachable.
+ * Only entries the user's own layer carries can be written: the array is
+ * written whole, so an entry the user never declared has no user-layer fields
+ * to contribute, and adding it would replace the lower layer's copy of that
+ * entry (see {@link fillProviderDefaults}). Those entries, and every resolved
+ * entry past the user's own list, are counted as missing but unreachable.
  */
 function withDefaultLevels(
   userModels: readonly unknown[],
@@ -137,9 +170,20 @@ function countUnreachable(
  *
  * A model array is addressed as a whole because the older settings service
  * walks paths through plain objects only: a numeric index would replace the
- * array with an object. That is also why a resolved entry the user's layer does
- * not carry is reported in `skipped` rather than materialized — the older walk
- * aside, adding one would require writing the entry's resolved fields.
+ * array with an object.
+ *
+ * That is also why a resolved entry the user's layer does not carry is reported
+ * in `skipped` rather than materialized. The reason is not that the service
+ * refuses the write: 0.1.7 accepts a `set` at `models[<userArrayLength>]` (its
+ * bounds check allows an index equal to the length when the op is a `set` and
+ * the path ends there), and a minimal `{ id, reasoningEfforts }` entry pins no
+ * resolved field. The reason is the container. An array has no per-element
+ * layer: `mergeLayers` replaces it wholesale (`if (!isPlainObject(under) ||
+ * !isPlainObject(over)) return over`), so materializing a base-only entry in
+ * the user's layer replaces the lower layer's copy of that entry. Its `name`,
+ * `contextWindow`, `input`, `compat` and the rest are then lost from the
+ * resolved section unless this fill restates them — the inflation this function
+ * exists to avoid.
  *
  * A model override is a dict keyed by model id, so its partial entry does merge
  * over whatever a lower layer already describes. That asymmetry is the shape of
@@ -244,8 +288,15 @@ async function fillDefaults(settings: HostSettings): Promise<FillOutcome> {
   const section = readSection(settings)
   if (!isUnknownRecord(section)) return notYet
 
-  const user = readUserProviders(settings, SETTINGS_NAMESPACE)
-  const result = fillProviderDefaults(section.providers, user)
+  const user = readUserLayer(settings, SETTINGS_NAMESPACE)
+  // The resolved section and the user's own layer are separate service reads
+  // under the namespace model, so the resolved read can succeed while the layer
+  // is still unavailable. Every entry then looks unreachable, and this fill
+  // would settle on `remaining: 0` after one attempt where the old chain
+  // re-checked; the retry is not speculative, it is the read the fill needs.
+  if (!user.readable) return notYet
+
+  const result = fillProviderDefaults(section.providers, user.providers)
   reportSkipped(result.skipped)
   // Every entry still missing a level that the user's own layer does not carry
   // is one a retry cannot reach either, so only the reachable remainder is
@@ -299,6 +350,9 @@ export function installSettingsWatcher(ctx: HostContext): void {
      * `finally` chain, so a trigger's continuation — including the retry a failed
      * fill schedules — runs in the same turn the last fill settles, and one
      * awaited trigger still performs exactly one scheduling decision.
+     *
+     * The pass count is bounded by {@link MAX_FILL_PASSES}, because the fill's
+     * own write is one of the triggers this loop consumes.
      */
     const runFill = (): Promise<FillOutcome> => {
       if (inFlight) {
@@ -316,10 +370,18 @@ export function installSettingsWatcher(ctx: HostContext): void {
       void (async () => {
         try {
           let outcome: FillOutcome = { filled: 0 }
+          let passes = 0
           do {
             queued = false
             outcome = await fillDefaults(settings)
-          } while (alive && queued)
+            passes += 1
+          } while (alive && queued && passes < MAX_FILL_PASSES)
+          if (alive && queued) {
+            // The budget ran out with another pass already queued: this host's
+            // write never became observable, so the pass would repeat forever.
+            queued = false
+            log('stopped the fill after', passes, 'passes: the settings change never settled')
+          }
           finish(outcome)
         } catch (error) {
           fail(error)

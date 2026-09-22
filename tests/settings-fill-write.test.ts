@@ -412,10 +412,11 @@ describe('the provider-defaults fill derives its payload from the raw user layer
 
 /**
  * The shapes in which the fill deliberately does nothing. Stating them keeps a
- * later change from quietly re-widening the contract: a model array can only be
- * written whole, so filling an entry the user's layer does not carry would
- * restate that entry's resolved fields — the inflation this file exists to
- * catch — and a numeric array index is unsafe on the older settings walk.
+ * later change from quietly re-widening the contract: an array has no
+ * per-element layer, so materializing an entry the user's layer does not carry
+ * would replace the lower layer's copy of it, and the inflation this file
+ * exists to catch is what restoring that copy costs; a numeric array index is
+ * also unsafe on the older settings walk.
  */
 describe('the provider-defaults fill leaves entries a lower layer supplies alone', () => {
   it('does not materialize models the user layer does not declare', async () => {
