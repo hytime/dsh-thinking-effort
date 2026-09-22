@@ -1,5 +1,9 @@
 import type { InventoryItem, OpenCodeSessionState, SettingsNamespace, SettingsOp } from './types.js'
-import { isOpenCodeSessionEnabled, modelPath, OPENCODE_SESSION_NAMESPACE } from '../compat/opencode-session.js'
+import {
+  isOpenCodeSessionEnabled,
+  isOpenCodeSessionSectionId,
+  modelPath,
+} from '../compat/opencode-session.js'
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -27,7 +31,8 @@ function validSettingsValue(value: unknown): boolean {
 
 export function isOpenCodeSessionNamespace(value: unknown): value is SettingsNamespace {
   const namespace = record(value)
-  return namespace?.ns === OPENCODE_SESSION_NAMESPACE
+  return namespace !== undefined
+    && isOpenCodeSessionSectionId(namespace.ns)
     && typeof namespace.revision === 'number'
     && Number.isSafeInteger(namespace.revision)
     && namespace.revision >= 0

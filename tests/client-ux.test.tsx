@@ -511,6 +511,48 @@ describe('OpenCode session Client namespace state', () => {
     view.unmount()
   })
 
+  it('writes the entry-id section a 0.1.7 host publishes instead of the legacy namespace', async () => {
+    const llm = openCodeLlmNamespace()
+    // The 0.1.7 entry-config model publishes one section per Loader entry and
+    // no legacy namespace at all, so the switch has to resolve that section or
+    // the whole OpenCode surface reads as unavailable.
+    const entry = entryConfigNamespace({
+      revision: 21,
+      value: { opencodeSession: { providers: { provider: { models: { 'model-a': false } } } } },
+    })
+    const savedEntry = entryConfigNamespace({
+      revision: 22,
+      value: { opencodeSession: { providers: { provider: { models: { 'model-a': true } } } } },
+    })
+    const mutate = vi.fn<SettingsApi['mutate']>(async (ns, ops, revision) => {
+      expect(ns).toBe('thinking-effort')
+      expect(ops).toEqual([{
+        op: 'set',
+        path: ['opencodeSession', 'providers', 'provider', 'models', 'model-a'],
+        value: true,
+      }])
+      expect(revision).toBe(entry.revision)
+      return { ok: true as const, value: savedEntry }
+    })
+    const view = renderEditor({
+      namespaces: [entry],
+      describe: async () => ({ ok: true, value: { namespaces: [llm, entry] } }),
+      mutate,
+      compatibilityProfile: 'modern',
+    })
+    await settle()
+
+    openFirstModel(view.container)
+    const headerSwitch = view.container.querySelector(`[data-scope="opencode-session"] button[role="switch"][aria-label="${text('opencodeSessionHeaderTitle')}"]`) as HTMLButtonElement
+    expect(headerSwitch).not.toBeNull()
+    act(() => headerSwitch.click())
+    await settle()
+
+    expect(mutate).toHaveBeenCalledTimes(1)
+    expect(view.container.textContent).toContain(text('opencodeSessionSaved'))
+    view.unmount()
+  })
+
   it('renders the OpenCode transport setting only inside the model editor and toggles it immediately', () => {
     const item = modelItem()
     const onSave = vi.fn()

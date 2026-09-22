@@ -1,6 +1,6 @@
-import { CONFIG_NAMESPACES } from './types.js'
+import { CONFIG_NAMESPACES, PLUGIN_NAMESPACE } from './types.js'
 import type { ConfigSnapshot, ImportMode, ImportPlan, NamespacePlan, SnapshotSection, WiringReport } from './types.js'
-import { userSectionOf, isRecord, isSnapshotLibraryKey, deepEqualJson } from './snapshot.js'
+import { userSectionOf, isRecord, isSnapshotLibraryKey, deepEqualJson, pluginSectionKey } from './snapshot.js'
 import { adjustIncoming, mergeWiringReports } from './wiring.js'
 import type { SettingsNamespace, SettingsOp } from '../types.js'
 
@@ -23,6 +23,13 @@ function countRemoved(value: unknown): number {
 export interface PlanOptions {
   /** Apply the file's endpoint / credential / script wiring too. Defaults to false. */
   readonly importWiring?: boolean
+  /**
+   * The id the running host addresses the plugin section by — `pluginSectionId`
+   * of the same `describe()` result. Writes are planned against it, while the
+   * file's own section is looked up under whichever id it carries, so a
+   * snapshot exported by the other settings model still applies.
+   */
+  readonly pluginNamespace?: string
 }
 
 /**
@@ -61,10 +68,16 @@ export function planImport(
   const summary: { added: number; overwritten: number; removed: number } = { added: 0, overwritten: 0, removed: 0 }
   const plans: NamespacePlan[] = []
   const reports: WiringReport[] = []
+  const pluginNamespace = options.pluginNamespace ?? PLUGIN_NAMESPACE
+  const fileKey = pluginSectionKey(snapshot.sections, pluginNamespace)
 
   for (const ns of CONFIG_NAMESPACES) {
-    const current = userSectionOf(namespaces, ns)
-    const adjusted = adjustIncoming(ns, snapshot.sections[ns] ?? {}, current, options.importWiring ?? false)
+    // The plugin entry is written where THIS host keeps the plugin section,
+    // which is the entry id under 0.1.7 and the registered namespace before it.
+    const target = ns === PLUGIN_NAMESPACE ? pluginNamespace : ns
+    const current = userSectionOf(namespaces, target)
+    const fileSection = ns === PLUGIN_NAMESPACE ? snapshot.sections[fileKey] : snapshot.sections[ns]
+    const adjusted = adjustIncoming(ns, fileSection ?? {}, current, options.importWiring ?? false)
     const incoming = adjusted.value
     reports.push(adjusted.report)
     const unsets: SettingsOp[] = []
@@ -139,7 +152,7 @@ export function planImport(
     }
 
     const ops = [...unsets, ...sets]
-    if (ops.length > 0) plans.push({ ns, ops })
+    if (ops.length > 0) plans.push({ ns: target, ops })
   }
 
   return { mode, summary, namespaces: plans, wiring: mergeWiringReports(reports), empty: plans.length === 0 }

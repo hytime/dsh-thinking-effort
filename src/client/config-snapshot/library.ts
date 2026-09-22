@@ -25,9 +25,18 @@ function isStoredSnapshot(value: unknown): value is ConfigSnapshot {
 /**
  * Read the profile library defensively: `settings.yaml` is user-editable, so a
  * hand-written entry must be dropped rather than crash the settings page.
+ *
+ * `pluginNamespace` is the id the running host addresses the plugin section by
+ * — the Loader entry under the 0.1.7 entry-config model, and the legacy
+ * registered namespace on older releases. The library and the rest of the
+ * plugin's settings live in the same section, so keying it by a constant would
+ * read the library as absent on 0.1.7.
  */
-export function profilesFromNamespaces(namespaces: readonly SettingsNamespace[]): Record<string, ConfigSnapshot> {
-  const user = userSectionOf(namespaces, PLUGIN_NAMESPACE)
+export function profilesFromNamespaces(
+  namespaces: readonly SettingsNamespace[],
+  pluginNamespace: string = PLUGIN_NAMESPACE,
+): Record<string, ConfigSnapshot> {
+  const user = userSectionOf(namespaces, pluginNamespace)
   const raw = user.profiles
   if (!isRecord(raw)) return {}
 
@@ -44,8 +53,11 @@ export function profilesFromNamespaces(namespaces: readonly SettingsNamespace[])
 }
 
 /** The auto backup written before a destructive apply; absent until one is written. */
-export function autoBackupFromNamespaces(namespaces: readonly SettingsNamespace[]): ConfigSnapshot | undefined {
-  const value = userSectionOf(namespaces, PLUGIN_NAMESPACE).autoBackup
+export function autoBackupFromNamespaces(
+  namespaces: readonly SettingsNamespace[],
+  pluginNamespace: string = PLUGIN_NAMESPACE,
+): ConfigSnapshot | undefined {
+  const value = userSectionOf(namespaces, pluginNamespace).autoBackup
   if (!isStoredSnapshot(value) || value.createdAt === '') return undefined
   return value
 }

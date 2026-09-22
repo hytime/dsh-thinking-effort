@@ -1,4 +1,5 @@
 import { PLUGIN_ENTRY_ID } from '../compat/settings-model.js'
+import { OPENCODE_SESSION_NAMESPACE } from '../compat/opencode-session.js'
 import { NS } from './constants.js'
 import type { SettingsNamespace } from './types.js'
 
@@ -16,6 +17,30 @@ export function pluginEntrySection(
   namespaces: readonly SettingsNamespace[],
 ): SettingsNamespace | undefined {
   return namespaces.find((entry) => entry.ns === PLUGIN_ENTRY_ID)
+}
+
+/**
+ * The one section this plugin's configuration lives in under whichever model
+ * the running host exposes.
+ *
+ * The Client cannot detect the model itself: its settings bridge exposes only
+ * `describe`/`mutate`, so `settingsModelOf` always answers `entry-config`
+ * there. The published section ids are the only discriminator, so they are
+ * read once here rather than as an `ns === …` comparison at every call site:
+ * the entry section when the host published one (0.1.7 and later), and the
+ * registered `dsh-thinking-effort` namespace otherwise (rc.7 … 0.1.6), which
+ * is also the answer when neither exists — a missing section reads as
+ * unconfigured either way.
+ */
+export function pluginSection(
+  namespaces: readonly SettingsNamespace[],
+): SettingsNamespace | undefined {
+  return pluginEntrySection(namespaces) ?? namespaces.find((entry) => entry.ns === OPENCODE_SESSION_NAMESPACE)
+}
+
+/** The id of `pluginSection`, resolved the same way and falling back to the legacy namespace id. */
+export function pluginSectionId(namespaces: readonly SettingsNamespace[]): string {
+  return pluginSection(namespaces)?.ns ?? OPENCODE_SESSION_NAMESPACE
 }
 
 /** One resolved `subagentEffort` write: the section to address and its revision. */

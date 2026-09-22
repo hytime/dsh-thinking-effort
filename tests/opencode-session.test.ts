@@ -8,11 +8,14 @@ const settingsStub = {
 import { installOpenCodeSession, OPENCODE_SESSION_SETTINGS_SCHEMA, resolveUserAgentValue } from '../src/host/opencode-session.ts'
 import {
   isOpenCodeSessionEnabled,
+  isOpenCodeSessionSectionId,
   modelPath,
   OPENCODE_SESSION_HEADER,
   OPENCODE_SESSION_NAMESPACE,
+  PLUGIN_ENTRY_ID,
 } from '../src/compat/opencode-session.ts'
-import { openCodeSessionOp } from '../src/client/model-header-ops.ts'
+import { isOpenCodeSessionNamespace, openCodeSessionOp } from '../src/client/model-header-ops.ts'
+import { createOpenCodeSessionState } from '../src/client/SectionEditor.js'
 
 const baseFetch = globalThis.fetch
 
@@ -132,6 +135,51 @@ describe('OpenCode session settings', () => {
   it('exports the namespace and Header constants', () => {
     expect(OPENCODE_SESSION_NAMESPACE).toBe('dsh-thinking-effort')
     expect(OPENCODE_SESSION_HEADER).toBe('x-opencode-session')
+  })
+
+  it('accepts both section ids this plugin owns', () => {
+    expect(PLUGIN_ENTRY_ID).toBe('thinking-effort')
+    expect(isOpenCodeSessionSectionId(OPENCODE_SESSION_NAMESPACE)).toBe(true)
+    expect(isOpenCodeSessionSectionId(PLUGIN_ENTRY_ID)).toBe(true)
+  })
+
+  it('rejects ids that are neither this plugin section nor the llm-pi-ai namespace', () => {
+    expect(isOpenCodeSessionSectionId('llm-pi-ai')).toBe(false)
+    expect(isOpenCodeSessionSectionId('dsh-thinking-effort/config-snapshot')).toBe(false)
+    expect(isOpenCodeSessionSectionId('')).toBe(false)
+    expect(isOpenCodeSessionSectionId(undefined)).toBe(false)
+    expect(isOpenCodeSessionSectionId(null)).toBe(false)
+    expect(isOpenCodeSessionSectionId(42)).toBe(false)
+    expect(isOpenCodeSessionSectionId({ ns: OPENCODE_SESSION_NAMESPACE })).toBe(false)
+  })
+
+  it('treats a section with either id as the OpenCode session namespace', () => {
+    const value = { opencodeSession: { providers: { 'opencode-go': { models: { 'deepseek-v4-flash': true } } } } }
+    expect(isOpenCodeSessionNamespace({ ns: OPENCODE_SESSION_NAMESPACE, revision: 3, value })).toBe(true)
+    expect(isOpenCodeSessionNamespace({ ns: PLUGIN_ENTRY_ID, revision: 3, value })).toBe(true)
+    expect(isOpenCodeSessionNamespace({ ns: 'llm-pi-ai', revision: 3, value })).toBe(false)
+    expect(isOpenCodeSessionNamespace({ ns: PLUGIN_ENTRY_ID, revision: 3, value: [] })).toBe(false)
+  })
+
+  it('reaches the available state from a section carrying either id', () => {
+    const item = {
+      route: 'opencode-go', model: 'deepseek-v4-flash', name: 'Flash', levels: null,
+      input: [] as readonly never[], raw: {}, index: 0, inOverrides: false,
+    }
+    const value = { opencodeSession: { providers: { 'opencode-go': { models: { 'deepseek-v4-flash': true } } } } }
+    for (const ns of [OPENCODE_SESSION_NAMESPACE, PLUGIN_ENTRY_ID]) {
+      expect(createOpenCodeSessionState({ ns, revision: 3, value }, [item])).toMatchObject({
+        found: true,
+        available: true,
+        namespace: { ns },
+        views: { [JSON.stringify(['opencode-go', 'deepseek-v4-flash'])]: true },
+      })
+    }
+    expect(createOpenCodeSessionState({ ns: 'llm-pi-ai', revision: 3, value }, [item])).toMatchObject({
+      found: true,
+      available: false,
+      namespace: null,
+    })
   })
 })
 

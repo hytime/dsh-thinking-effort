@@ -1,13 +1,14 @@
 import React from 'react'
 import { GATEWAY_COMPAT_FIELD_KEYS, type GatewayCompatFieldKey } from '../compat/gateway/fields.js'
 import { editableProviderCompatFields } from '../compat/gateway/validation.js'
+import { isOpenCodeSessionSectionId } from '../compat/opencode-session.js'
 import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
 import { DEFAULT_LEVELS, INPUT_MODALITIES, LEVEL_LABEL_KEYS, NS, OPENCODE_SESSION_NS, PRESETS, ALL_LEVELS, CONTEXT_1M } from './constants.js'
 import { inventoryFrom, modelCompatKey, modelGatewayCompatViewsFrom, providerGatewayCompatViewsFrom } from './model-inventory.js'
 import { emptyTakeoverRuntimeResolution } from './takeover-runtime.js'
 import { openCodeSessionOp, openCodeSessionStateFor, isOpenCodeSessionNamespace } from './model-header-ops.js'
 import { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from './model-ops.js'
-import { pluginEntrySection, subagentEffortTarget } from './subagent-section.js'
+import { pluginEntrySection, pluginSection, subagentEffortTarget } from './subagent-section.js'
 import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, validateContextWindow, validateLevels } from './validation.js'
 import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, OpenCodeSessionState, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
 import type { Palette } from './theme.js'
@@ -136,7 +137,9 @@ export async function saveOpenCodeSession(
   if (operation === undefined) {
     return { ok: false, error: { message: 'OpenCode session settings require a provider and model' } }
   }
-  return settings.mutate(OPENCODE_SESSION_NS, [operation], namespace.revision)
+  // The section the namespace came from, which is the entry id under 0.1.7
+  // rather than the legacy registered namespace.
+  return settings.mutate(namespace.ns, [operation], namespace.revision)
 }
 
 function keyOf(item: InventoryItem): string { return modelCompatKey(item.route, item.model) }
@@ -259,8 +262,14 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
         return
       }
       const found = response.value.namespaces.find((entry) => entry.ns === NS)
-      const openCodeFound = response.value.namespaces.find((entry) => entry.ns === OPENCODE_SESSION_NS)
+      // One description answers both questions: which section this plugin's
+      // settings live in, and the id that section carries under whichever model
+      // the host exposes. The legacy `dsh-thinking-effort` namespace no longer
+      // exists under 0.1.7, where every plugin setting lives in the entry
+      // section, so the resolved section supersedes the id-specific lookup.
+      const plugin = pluginSection(response.value.namespaces)
       const entrySection = pluginEntrySection(response.value.namespaces)
+      const openCodeFound = plugin
       if (!found) {
         setState((current) => {
           const next = { ...current, loading: false, busy: false, nsFound: false, namespace: null, entrySection: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, subagent: null }
@@ -307,7 +316,9 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   }, [takeoverResolution])
 
   const runOps = ({ ns, revision, ops, successMessage, onSuccess, openCodeSessionSavedKey, entrySectionWrite }: RunOpsRequest): void => {
-    const writeError = (message: string): string => ns === OPENCODE_SESSION_NS
+    // Either section id is this plugin's own, so a failed toggle keeps the
+    // OpenCode-specific copy under both settings models.
+    const writeError = (message: string): string => isOpenCodeSessionSectionId(ns)
       ? t('opencodeSessionSaveFailed', { message })
       : t('writeError', { message })
     setState((current) => ({ ...current, busy: true, error: null, notice: null }))
@@ -443,7 +454,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       openCodeSessionDrafts: { ...current.openCodeSessionDrafts, [key]: enabled },
     }))
     runOps({
-      ns: OPENCODE_SESSION_NS,
+      ns: namespace.ns,
       revision: namespace.revision,
       ops: [operation],
       successMessage: t('opencodeSessionSaved'),
@@ -607,7 +618,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     {state.error ? <div role="alert" aria-live="assertive" style={{ fontSize: '12px', lineHeight: '18px', color: palette.danger, backgroundColor: palette.dangerBg, border: `1px solid ${palette.dangerBorder}`, borderRadius: '8px', padding: '6px 8px', margin: '0 0 8px' }}>{state.error}</div> : null}
     <SubagentSettings effort={state.subagent?.effort ?? null} namespaceFound={state.subagent !== null} draft={state.subagentDraft} custom={state.subagentCustom} busy={state.busy} palette={palette} t={t} onDraftChange={(value) => setState((current) => ({ ...current, notice: null, subagentDraft: value }))} onCustomChange={(value) => setState((current) => ({ ...current, notice: null, subagentCustom: value }))} onSave={applySubagentEffort} />
     <ConfigBackupCard settings={settings} palette={palette} t={t} onApplied={load} />
-    <OpenCodeFormatCard settings={settings} palette={palette} t={t} revision={state.openCodeSessionReads} onApplied={load} />
+    <OpenCodeFormatCard settings={settings} palette={palette} t={t} revision={state.openCodeSessionReads} namespace={state.openCodeSessionNamespace?.ns ?? OPENCODE_SESSION_NS} onApplied={load} />
     {state.nsFound === false ? <p style={{ fontSize: '12px', opacity: 0.75 }}>{t('noNamespace')}</p> : <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: state.quickSettingsOpen ? '4px' : '6px' }}><ActionButton text={t('quickSettings')} onClick={() => setState((current) => ({ ...current, quickSettingsOpen: !current.quickSettingsOpen }))} disabled={state.busy} palette={palette} icon={state.quickSettingsOpen ? 'chevronUp' : 'sliders'} />{state.quickSettingsOpen ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flexBasis: '100%', padding: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.field }}>{PRESETS.map((preset) => <ActionButton key={preset.key} text={t(preset.labelKey)} onClick={() => { setState((current) => ({ ...current, quickSettingsOpen: false })); applyPreset(preset.levels) }} disabled={state.busy} palette={palette} icon={preset.key === 'official' ? 'sparkles' : 'sliders'} />)}</div> : null}</div>
       <div style={{ position: 'relative', marginBottom: '7px' }}><span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: palette.secondary, pointerEvents: 'none' }}><Icon name="search" size={15} /></span><input type="text" value={state.query} placeholder={t('searchPlaceholder')} onChange={(event) => { const value = event.currentTarget.value; setState((current) => ({ ...current, query: value })) }} style={{ boxSizing: 'border-box', width: '100%', height: '30px', padding: '0 10px 0 30px', border: `1px solid ${palette.border}`, borderRadius: '8px', fontSize: '13px', backgroundColor: palette.field, color: palette.text, outline: 'none', boxShadow: palette.shadow }} /></div>

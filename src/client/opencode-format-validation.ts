@@ -8,11 +8,17 @@ import {
   FORMAT_INVALID_POLICIES,
   FORMAT_MODES,
   FORMAT_TIMES,
+  OPENCODE_SESSION_NAMESPACE,
 } from '../compat/opencode-session.js'
 import type { SettingsOp } from './types.js'
 
-/** The namespace the generator settings live in. */
-export const FORMAT_NAMESPACE = 'dsh-thinking-effort'
+/**
+ * The section the generator settings live in — the legacy registered namespace.
+ * Under the 0.1.7 entry-config model they live in the plugin's own entry
+ * section instead, so the card that reads and writes them is handed the id
+ * `pluginSectionId` resolved from its own `describe()`.
+ */
+export const FORMAT_NAMESPACE = OPENCODE_SESSION_NAMESPACE
 
 /** The path prefix every generated op addresses. */
 export const FORMAT_PATH = ['opencodeSession', 'format'] as const

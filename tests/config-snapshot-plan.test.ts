@@ -28,6 +28,78 @@ const current = (sections: Record<string, Record<string, unknown>>): SettingsNam
 const opsFor = (plan: ReturnType<typeof planImport>, ns: string): readonly unknown[] =>
   plan.namespaces.find((entry) => entry.ns === ns)?.ops ?? []
 
+describe('planImport under the entry-config settings model', () => {
+  /** The 0.1.7 host: the plugin section is addressed by the Loader entry id. */
+  const entryHost = (sections: Record<string, Record<string, unknown>>): SettingsNamespace[] => [
+    { ns: 'llm-pi-ai', revision: 5, value: {}, user: sections['llm-pi-ai'] ?? {} },
+    { ns: 'thinking-effort', revision: 9, value: {}, user: sections['thinking-effort'] ?? {} },
+  ]
+
+  it('writes the plugin section under the entry id a 0.1.7 host publishes', () => {
+    const plan = planImport(
+      snapshotOf({ 'thinking-effort': { opencodeSession: { providers: { p: { models: { m: true } } } } } }),
+      entryHost({}),
+      'merge',
+      { pluginNamespace: 'thinking-effort' },
+    )
+
+    expect(opsFor(plan, 'thinking-effort')).toEqual([
+      { op: 'set', path: ['opencodeSession'], value: { providers: { p: { models: { m: true } } } } },
+    ])
+    expect(opsFor(plan, 'dsh-thinking-effort')).toEqual([])
+  })
+
+  it('applies a snapshot exported by the legacy model to the entry section', () => {
+    const plan = planImport(
+      snapshotOf({ 'dsh-thinking-effort': { opencodeSession: { providers: { p: { models: { m: true } } } } } }),
+      entryHost({}),
+      'merge',
+      { pluginNamespace: 'thinking-effort' },
+    )
+
+    expect(opsFor(plan, 'thinking-effort')).toEqual([
+      { op: 'set', path: ['opencodeSession'], value: { providers: { p: { models: { m: true } } } } },
+    ])
+  })
+
+  it('applies a snapshot exported by the entry model to a legacy host', () => {
+    const plan = planImport(
+      snapshotOf({ 'thinking-effort': { opencodeSession: { providers: { p: { models: { m: true } } } } } }),
+      current({}),
+      'merge',
+      { pluginNamespace: 'dsh-thinking-effort' },
+    )
+
+    expect(opsFor(plan, 'dsh-thinking-effort')).toEqual([
+      { op: 'set', path: ['opencodeSession'], value: { providers: { p: { models: { m: true } } } } },
+    ])
+  })
+
+  it('keeps the legacy key by default, so a pre-0.1.7 host is unaffected', () => {
+    const plan = planImport(
+      snapshotOf({ 'dsh-thinking-effort': { opencodeSession: { providers: { p: { models: { m: true } } } } } }),
+      current({}),
+      'merge',
+    )
+
+    expect(opsFor(plan, 'dsh-thinking-effort')).toHaveLength(1)
+    expect(opsFor(plan, 'thinking-effort')).toEqual([])
+  })
+
+  it('never plans the snapshot library out of an entry section either', () => {
+    const plan = planImport(
+      snapshotOf({ 'thinking-effort': { profiles: { work: {} }, autoBackup: {}, opencodeSession: { providers: {} } } }),
+      entryHost({}),
+      'replace',
+      { pluginNamespace: 'thinking-effort' },
+    )
+
+    expect(opsFor(plan, 'thinking-effort')).toEqual([
+      { op: 'set', path: ['opencodeSession'], value: { providers: {} } },
+    ])
+  })
+})
+
 describe('deepEqualJson', () => {
   it('compares nested structures regardless of key order', () => {
     expect(deepEqualJson({ a: 1, b: { c: [1, 2] } }, { b: { c: [1, 2] }, a: 1 })).toBe(true)

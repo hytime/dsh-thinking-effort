@@ -12,6 +12,13 @@ export interface ApplyRequest {
   readonly autoBackup: boolean
   /** Apply the snapshot's endpoint / credential / script wiring too. Defaults to false. */
   readonly importWiring?: boolean
+  /**
+   * The id the running host addresses the plugin section by — `pluginSectionId`
+   * of the fresh `describe()` below. The auto backup is written there and the
+   * plugin half of the plan targets it; absent, the legacy registered namespace
+   * is kept, which is what an older host publishes.
+   */
+  readonly pluginNamespace?: string
   /** Injected for tests; defaults to the real clock. */
   readonly now?: () => Date
   readonly pluginVersion?: string
@@ -46,7 +53,11 @@ export async function applySnapshot(request: ApplyRequest): Promise<ApplyOutcome
   }
 
   const namespaces = fresh.value.namespaces
-  const plan = planImport(snapshot, namespaces, mode, { importWiring: request.importWiring ?? false })
+  const pluginNamespace = request.pluginNamespace ?? PLUGIN_NAMESPACE
+  const plan = planImport(snapshot, namespaces, mode, {
+    importWiring: request.importWiring ?? false,
+    pluginNamespace,
+  })
   if (plan.empty) {
     return { ok: true, skipped: true, outcomes: [], restartRequired: [] }
   }
@@ -59,7 +70,7 @@ export async function applySnapshot(request: ApplyRequest): Promise<ApplyOutcome
   let autoBackupError: string | undefined
   let backedUpNamespace: SettingsNamespace | undefined
   if (request.autoBackup) {
-    const backup = await writeAutoBackup(request, namespaces)
+    const backup = await writeAutoBackup(request, namespaces, pluginNamespace)
     autoBackupError = backup.error
     backedUpNamespace = backup.namespace
   }
@@ -122,15 +133,19 @@ interface AutoBackupWrite {
  * that revision is still the current one, and a second `describe()` would only
  * read the same value back.
  */
-async function writeAutoBackup(request: ApplyRequest, preApply: readonly SettingsNamespace[]): Promise<AutoBackupWrite> {
+async function writeAutoBackup(
+  request: ApplyRequest,
+  preApply: readonly SettingsNamespace[],
+  pluginNamespace: string,
+): Promise<AutoBackupWrite> {
   const { settings, now, pluginVersion } = request
   const backup = snapshotFromNamespaces(preApply, {
     createdAt: (now ?? (() => new Date()))().toISOString(),
     pluginVersion: pluginVersion ?? '',
     sourceProfile: 'unknown',
-  })
+  }, pluginNamespace)
 
-  const revision = revisionOf(preApply, PLUGIN_NAMESPACE)
-  const response = await settings.mutate(PLUGIN_NAMESPACE, autoBackupOps(backup), revision)
+  const revision = revisionOf(preApply, pluginNamespace)
+  const response = await settings.mutate(pluginNamespace, autoBackupOps(backup), revision)
   return response.ok ? { namespace: response.value } : { error: response.error.message }
 }

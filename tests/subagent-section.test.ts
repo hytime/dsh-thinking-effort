@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { pluginEntrySection, subagentEffortTarget } from '../src/client/subagent-section.ts'
+import { pluginEntrySection, pluginSection, pluginSectionId, subagentEffortTarget } from '../src/client/subagent-section.ts'
 import type { SettingsNamespace } from '../src/client/types.ts'
 
 const llmNamespace = (): SettingsNamespace => ({
@@ -35,6 +35,32 @@ describe('plugin entry section', () => {
     expect(pluginEntrySection([llmNamespace(), registeredNamespace()])).toBeUndefined()
     expect(pluginEntrySection([llmNamespace()])).toBeUndefined()
     expect(pluginEntrySection([])).toBeUndefined()
+  })
+})
+
+describe('active plugin section resolution', () => {
+  it('resolves the entry section and its id under the entry-config model', () => {
+    const entry = entryNamespace()
+    expect(pluginSection([llmNamespace(), entry])).toBe(entry)
+    expect(pluginSectionId([llmNamespace(), entry])).toBe('thinking-effort')
+  })
+
+  it('keeps resolving the registered namespace and its id on legacy hosts', () => {
+    const registered = registeredNamespace()
+    expect(pluginSection([llmNamespace(), registered])).toBe(registered)
+    expect(pluginSectionId([llmNamespace(), registered])).toBe('dsh-thinking-effort')
+  })
+
+  it('falls back to the legacy id when the host publishes neither section', () => {
+    expect(pluginSection([llmNamespace()])).toBeUndefined()
+    expect(pluginSectionId([llmNamespace()])).toBe('dsh-thinking-effort')
+    expect(pluginSectionId([])).toBe('dsh-thinking-effort')
+  })
+
+  it('never resolves an unrelated namespace, even when it looks like a configured section', () => {
+    const unrelated = { ns: 'llm-pi-ai', revision: 2, value: { providers: {} } }
+    expect(pluginSection([unrelated])).toBeUndefined()
+    expect(pluginSectionId([unrelated])).toBe('dsh-thinking-effort')
   })
 })
 

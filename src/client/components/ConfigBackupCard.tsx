@@ -11,7 +11,8 @@ import {
 } from '../config-snapshot/library.js'
 import { parseSnapshot, serializeSnapshot } from '../config-snapshot/parse.js'
 import { planImport } from '../config-snapshot/plan.js'
-import { isSnapshotLibraryKey, snapshotFileName, snapshotFromNamespaces } from '../config-snapshot/snapshot.js'
+import { isSnapshotLibraryKey, pluginSectionKey, snapshotFileName, snapshotFromNamespaces } from '../config-snapshot/snapshot.js'
+import { pluginSectionId } from '../subagent-section.js'
 import {
   MAX_PROFILES,
   MAX_PROFILE_NAME,
@@ -109,17 +110,20 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   // One describe answer is the whole registry, and three consumers read it —
   // the profile library, the export snapshot and the import summary — so they
   // all take it through this mapping and cannot disagree about what the
-  // settings hold.
+  // settings hold. The plugin section's id is resolved here too, once per read:
+  // under the 0.1.7 entry-config model it is the Loader entry rather than the
+  // legacy registered namespace, and every one of those readers keys on it.
   const withNamespaces = (current: CardState, value: SettingsDescribeValue): CardState => {
     const namespaces = value.namespaces
-    const profiles = profilesFromNamespaces(namespaces)
+    const pluginId = pluginSectionId(namespaces)
+    const profiles = profilesFromNamespaces(namespaces, pluginId)
     return {
       ...current,
       namespaces,
       writable: value.writable !== false,
       profiles,
       profileNames: Object.keys(profiles).sort(),
-      autoBackupAt: autoBackupFromNamespaces(namespaces)?.createdAt ?? null,
+      autoBackupAt: autoBackupFromNamespaces(namespaces, pluginId)?.createdAt ?? null,
     }
   }
 
@@ -146,6 +150,12 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   React.useEffect(() => { load() }, [])
 
   const revisionOf = (namespaces: readonly SettingsNamespace[], ns: string): number => namespaces.find((entry) => entry.ns === ns)?.revision ?? 0
+  /**
+   * The id this host addresses the plugin section by, resolved from the read
+   * the caller is working with and falling back to the legacy registered
+   * namespace. Every write and every snapshot key uses it.
+   */
+  const pluginId = (namespaces: readonly SettingsNamespace[] = state.namespaces): string => pluginSectionId(namespaces)
   const fail = (message: string): void => setState((current) => ({ ...current, busy: false, notice: [], error: message }))
   // Import failures drop the preview: a confirmation must never apply a snapshot
   // other than the file the user just chose.
@@ -174,8 +184,8 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
       }
       const namespaces = response.value.namespaces
       const fresh: FreshSettings = {
-        snapshot: snapshotFromNamespaces(namespaces, snapshotMeta()),
-        revision: revisionOf(namespaces, PLUGIN_NAMESPACE),
+        snapshot: snapshotFromNamespaces(namespaces, snapshotMeta(), pluginId(namespaces)),
+        revision: revisionOf(namespaces, pluginId(namespaces)),
       }
       setState((current) => ({ ...current, busy: false }))
       return fresh
@@ -212,7 +222,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
     void freshSnapshot().then((fresh) => {
       if (fresh === undefined) return
       setState((current) => ({ ...current, busy: true, error: null, notice: [] }))
-      settings.mutate(PLUGIN_NAMESPACE, saveProfileOps(name, fresh.snapshot), fresh.revision).then((response) => {
+      settings.mutate(pluginId(), saveProfileOps(name, fresh.snapshot), fresh.revision).then((response) => {
         if (!response.ok) {
           fail(t('backupSaveProfileFailed', { message: response.error.message }))
           return
@@ -233,7 +243,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
     void freshSnapshot().then((fresh) => {
       if (fresh === undefined) return
       setState((current) => ({ ...current, busy: true, error: null, notice: [] }))
-      settings.mutate(PLUGIN_NAMESPACE, deleteProfileOps(name), fresh.revision).then((response) => {
+      settings.mutate(pluginId(), deleteProfileOps(name), fresh.revision).then((response) => {
         if (!response.ok) {
           fail(t('backupDeleteProfileFailed', { message: response.error.message }))
           return
@@ -362,8 +372,14 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   // matches this configuration" would assert an equivalence the file never
   // expressed. `previewPlan.empty` covers a file that agrees with the settings;
   // this flag covers a file with nothing left to agree about.
-  const previewKeys = state.preview === null ? [] : Object.keys(state.preview.snapshot.sections[PLUGIN_NAMESPACE] ?? {})
-  const previewLibraryOnly = previewKeys.length > 0 && previewKeys.every((key) => isSnapshotLibraryKey(PLUGIN_NAMESPACE, key))
+  // The file may carry the other model's id for the plugin section, so the key
+  // is resolved from the file itself: reading only the host's id would call a
+  // library-only file empty instead.
+  const previewPluginKey = state.preview === null
+    ? pluginId()
+    : pluginSectionKey(state.preview.snapshot.sections, pluginId())
+  const previewKeys = state.preview === null ? [] : Object.keys(state.preview.snapshot.sections[previewPluginKey] ?? {})
+  const previewLibraryOnly = previewKeys.length > 0 && previewKeys.every((key) => isSnapshotLibraryKey(previewPluginKey, key))
   // Only an endpoint URL or a script path is ever shown. `apiKeyEnv` names a
   // credential and `headers` can hold a plaintext token, so both are reported
   // as counts and route names only. The string can therefore be empty while

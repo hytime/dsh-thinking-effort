@@ -47,6 +47,12 @@ interface HarnessOptions {
   applies?: Readonly<Record<string, string>>
   /** Refuse the pre-import backup write, so an applied import has no rollback copy. */
   failAutoBackup?: boolean
+  /**
+   * The id this host addresses the plugin section by. Defaults to the legacy
+   * registered namespace; `'thinking-effort'` models a 0.1.7 entry-config host,
+   * which publishes no `dsh-thinking-effort` section at all.
+   */
+  pluginNamespace?: string
 }
 
 /** The op list `autoBackupOps` builds — what separates the rollback copy from a namespace write. */
@@ -58,7 +64,8 @@ function harness(options: HarnessOptions = {}) {
   // The revisions the host reports: llm-pi-ai 4, plugin namespace 8. A later
   // describe can answer with a bumped revision, and a stale mutate is then
   // refused with settings/conflict just like the real provider.
-  const revisions: Record<string, number> = { 'llm-pi-ai': 4, 'dsh-thinking-effort': 8 }
+  const revisions: Record<string, number> = { 'llm-pi-ai': 4, 'dsh-thinking-effort': 8, 'thinking-effort': 8 }
+  const pluginId = options.pluginNamespace ?? 'dsh-thinking-effort'
   const mutate = vi.fn(async (ns: string, ops: readonly SettingsOp[], revision: number): Promise<ClientResult<SettingsNamespace>> => {
     if (options.failAutoBackup === true && isAutoBackup(ops)) {
       return { ok: false, error: { message: 'settings rejected the backup' } }
@@ -94,7 +101,7 @@ function harness(options: HarnessOptions = {}) {
         writable: options.writable ?? true,
         namespaces: [
           { ns: 'llm-pi-ai', revision: revisions['llm-pi-ai'], value: {}, user: user?.['llm-pi-ai'] ?? { subagentEffort: 'off' }, applies: options.applies?.['llm-pi-ai'] },
-          { ns: 'dsh-thinking-effort', revision: revisions['dsh-thinking-effort'], value: {}, user: user?.['dsh-thinking-effort'] ?? {}, applies: options.applies?.['dsh-thinking-effort'] },
+          { ns: pluginId, revision: revisions[pluginId], value: {}, user: user?.[pluginId] ?? {}, applies: options.applies?.[pluginId] },
         ],
       },
     })
@@ -199,6 +206,40 @@ describe('ConfigBackupCard', () => {
     expect(view.container.textContent).toContain(text('backupCardTitle'))
     expect(view.container.textContent).toContain(text('backupCollapsedHint', { count: 1 }))
     expect(view.container.textContent).not.toContain(text('backupProfilesTitle'))
+  })
+
+  it('reads the profile library out of the entry section a 0.1.7 host publishes', async () => {
+    // The raw `user` layer is captured from the section the card keys on, so a
+    // card that kept reading the legacy id would report an empty library here
+    // and export the plugin's settings as `{}`.
+    const view = harness({
+      pluginNamespace: 'thinking-effort',
+      user: { 'thinking-effort': { profiles: { work: storedSnapshot({ 'llm-pi-ai': { a: 1 } }) } } },
+    })
+    cleanup = view.unmount
+    await settle()
+
+    expect(view.container.textContent).toContain(text('backupCollapsedHint', { count: 1 }))
+  })
+
+  it('exports and saves the entry section under its own id', async () => {
+    const view = harness({ pluginNamespace: 'thinking-effort' })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    act(() => button(view.container, text('backupExportCurrent')).click())
+    await settle()
+
+    const [, body] = view.download.mock.calls[0] as [string, string]
+    const parsed = JSON.parse(body) as { sections: Record<string, unknown> }
+    expect(parsed.sections['thinking-effort']).toBeDefined()
+
+    setProfileName(view.container, 'work')
+    act(() => button(view.container, text('backupSaveCurrent')).click())
+    await settle()
+
+    expect(view.mutate.mock.calls.some(([ns]) => ns === 'thinking-effort')).toBe(true)
   })
 
   it('downloads the current configuration as a snapshot file when expanded', async () => {
