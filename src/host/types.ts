@@ -30,6 +30,15 @@ export interface SettingsScope {
   readonly watch: (callback: (...args: unknown[]) => unknown) => () => void
 }
 
+/**
+ * One path-addressed settings edit. The shape mirrors the settings service's
+ * own `mutate` op, which exists under both settings models and applies the op
+ * to the section as it stands when the write runs.
+ */
+export type SettingsPathOp =
+  | { readonly op: 'set'; readonly path: readonly string[]; readonly value: unknown }
+  | { readonly op: 'unset'; readonly path: readonly string[] }
+
 export interface SettingsInjectionContext {
   readonly settings: HostSettings
   readonly effect: (callback: () => void | (() => void), label?: string) => unknown
@@ -46,6 +55,12 @@ export interface HostSettings {
   /** Absent from the `entry-config` model, which exposes values through `describe` only. */
   readonly get?: (namespace: string) => unknown
   readonly update: (namespace: string, value: UnknownRecord) => unknown
+  /**
+   * Path-addressed edit, present under both settings models. Preferred over
+   * `update` for a partial change: a merge carries whole subtrees, so a value
+   * read from the resolved section would pin every schema default it took on.
+   */
+  readonly mutate?: (namespace: string, ops: readonly SettingsPathOp[]) => unknown
   readonly describe?: () => unknown
   readonly installSection?: (
     owner: unknown,

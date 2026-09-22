@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { apply } from '../src/index.ts'
 import { installOpenCodeSession } from '../src/host/opencode-session.ts'
 import { readSubagentEffort, resolveSubagentEffort } from '../src/host/subagent.ts'
+import type { SettingsPathOp } from '../src/host/types.ts'
 import { OPENCODE_SESSION_NAMESPACE } from '../src/compat/opencode-session.ts'
 import { hasModelSourceConflict } from '../src/compat/model-source.ts'
 
@@ -54,6 +55,10 @@ async function bootRealOpenCodeHost(): Promise<{
 
 type HarnessOptions = {
   writable?: boolean
+  /**
+   * The stored user section. These fixtures read it back as the resolved value
+   * too, so a path write and a later read stay in step.
+   */
   section?: SettingsSection
   descriptors?: Array<Record<string, unknown>>
   rejectUpdates?: number
@@ -62,37 +67,93 @@ type HarnessOptions = {
   entryId?: string
 }
 
+/** One recorded write, tagged with the service method the caller reached. */
+type HarnessWrite =
+  | { readonly kind: 'update'; readonly ns: string; readonly value: Record<string, unknown> }
+  | { readonly kind: 'mutate'; readonly ns: string; readonly ops: readonly SettingsPathOp[] }
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const proto = Object.getPrototypeOf(value)
+  return proto === Object.prototype || proto === null
+}
+
+/**
+ * Apply one path op the way the rc.7 … 0.1.6 settings service does. That walk
+ * descends plain objects only, so a path reaching an array replaces the array
+ * rather than indexing into it: a caller addressing `models.<index>` would
+ * corrupt the model list here, which is why the fill addresses an array whole.
+ */
+function applyPathOp(section: Record<string, unknown>, op: SettingsPathOp): Record<string, unknown> {
+  const [head, ...rest] = op.path
+  if (head === undefined) {
+    if (op.op === 'unset') return {}
+    if (!isPlainRecord(op.value)) {
+      throw new TypeError('settings mutate: setting the section root requires a plain object')
+    }
+    return { ...op.value }
+  }
+  if (rest.length === 0) {
+    if (op.op === 'set') return { ...section, [head]: op.value }
+    const { [head]: _removed, ...kept } = section
+    return kept
+  }
+  const child = section[head]
+  if (!isPlainRecord(child)) {
+    if (op.op === 'unset') return section
+    return { ...section, [head]: applyPathOp({}, { ...op, path: rest } as SettingsPathOp) }
+  }
+  return { ...section, [head]: applyPathOp(child, { ...op, path: rest } as SettingsPathOp) }
+}
+
 function createHarness(options: HarnessOptions = {}) {
   let section = options.section
   let descriptors = options.descriptors ?? []
   let rejectsLeft = options.rejectUpdates ?? 0
-  let pendingUpdateResolve: (() => void) | undefined
-  let pendingUpdateReject: ((error: Error) => void) | undefined
-  const updates: Array<{ ns: string; value: Record<string, unknown> }> = []
+  const pendingUpdateResolvers: Array<() => void> = []
+  const pendingUpdateRejecters: Array<(error: Error) => void> = []
+  const writes: HarnessWrite[] = []
   const scheduled: Array<{ callback: () => void; delay: number }> = []
   const listeners: Array<{ name: string; callback: (...args: any[]) => unknown; options?: unknown }> = []
   const cleanups: Array<() => void> = []
+  /**
+   * The descriptor list the service reports. Without an explicit one, the
+   * stored section is the user's own layer — which is the layer a path write
+   * draws its values from.
+   */
+  const describe = (): Array<Record<string, unknown>> => {
+    if (options.descriptors !== undefined) return descriptors
+    return section === undefined ? [] : [{ ns: 'llm-pi-ai', user: section }]
+  }
+  /** One write barrier for both methods: a queued or failing write behaves alike. */
+  const beforeWrite = async (): Promise<void> => {
+    if (options.pendingUpdate === true) {
+      await new Promise<void>((resolve, reject) => {
+        pendingUpdateResolvers.push(resolve)
+        pendingUpdateRejecters.push(reject)
+      })
+    }
+    if (rejectsLeft > 0) {
+      rejectsLeft -= 1
+      throw new Error('update unavailable')
+    }
+  }
   const ctx = {
     ...(options.entryId === undefined ? {} : { fiber: { entry: { options: { id: options.entryId } } } }),
     settings: {
       writable: options.writable ?? true,
       get: (_ns: string) => section,
       update: async (ns: string, value: Record<string, unknown>) => {
-        updates.push({ ns, value })
-        if (options.pendingUpdate === true) {
-          await new Promise<void>((resolve, reject) => {
-            pendingUpdateResolve = resolve
-            pendingUpdateReject = reject
-          })
-        }
-        if (rejectsLeft > 0) {
-          rejectsLeft -= 1
-          throw new Error('update unavailable')
-        }
-        section = { ...(section ?? {}), ...value
-        }
+        writes.push({ kind: 'update', ns, value })
+        await beforeWrite()
+        section = { ...(section ?? {}), ...value }
       },
-      describe: () => descriptors,
+      mutate: async (ns: string, ops: readonly SettingsPathOp[]) => {
+        writes.push({ kind: 'mutate', ns, ops })
+        await beforeWrite()
+        section = ops.reduce(applyPathOp, section ?? {})
+      },
+      describe,
       installSection: (_owner: unknown, _namespace: string, _schema: unknown, _entry: unknown, hooks: { setSource: (source: () => unknown) => void; onChange: () => void }) => {
         hooks.setSource(() => ({}))
         hooks.onChange()
@@ -130,16 +191,18 @@ function createHarness(options: HarnessOptions = {}) {
     listener(name: string) {
       return listeners.find((entry) => entry.name === name)
     },
-    updates,
+    writes,
+    /** The stored section as every recorded write left it. */
+    document: () => section,
     scheduled,
     dispose() {
       for (const cleanup of cleanups.splice(0).reverse()) cleanup()
     },
     resolvePendingUpdate() {
-      pendingUpdateResolve?.()
+      for (const resolve of pendingUpdateResolvers.splice(0)) resolve()
     },
     rejectPendingUpdate(error: Error) {
-      pendingUpdateReject?.(error)
+      for (const reject of pendingUpdateRejecters.splice(0)) reject(error)
     },
     async runScheduled(index = 0) {
       const task = scheduled[index]
@@ -326,7 +389,7 @@ describe('Host composition', () => {
 
     await runInitial(harness)
 
-    expect(harness.updates).toEqual([])
+    expect(harness.writes).toEqual([])
   })
 
   it('fills models and model overrides while preserving fields and order', async () => {
@@ -357,25 +420,35 @@ describe('Host composition', () => {
 
     await runInitial(harness)
 
-    expect(harness.updates).toHaveLength(1)
-    expect(harness.updates[0]).toEqual({
+    const filledModels = [
+      { id: 'first', label: 'keep me', reasoningEfforts: defaults },
+      models[1],
+      models[2],
+      models[3],
+      models[4],
+    ]
+    expect(harness.writes).toEqual([{
+      kind: 'mutate',
       ns: 'llm-pi-ai',
-      value: {
-        providers: {
-          route: {
-            providerField: true,
-            models: [
-              { id: 'first', label: 'keep me', reasoningEfforts: defaults },
-              models[1],
-              models[2],
-              models[3],
-              models[4],
-            ],
-            modelOverrides: {
-              first: { id: 'first-override', family: 'keep', reasoningEfforts: defaults },
-              'explicit-null': modelOverrides['explicit-null'],
-              scalar: modelOverrides.scalar,
-            },
+      ops: [
+        { op: 'set', path: ['providers', 'route', 'models'], value: filledModels },
+        {
+          op: 'set',
+          path: ['providers', 'route', 'modelOverrides', 'first', 'reasoningEfforts'],
+          value: defaults,
+        },
+      ],
+    }])
+    expect(harness.document()).toEqual({
+      topLevel: 'preserve',
+      providers: {
+        route: {
+          providerField: true,
+          models: filledModels,
+          modelOverrides: {
+            first: { id: 'first-override', family: 'keep', reasoningEfforts: defaults },
+            'explicit-null': modelOverrides['explicit-null'],
+            scalar: modelOverrides.scalar,
           },
         },
       },
@@ -388,8 +461,8 @@ describe('Host composition', () => {
 
     await runInitial(harness)
 
-    expect(harness.updates).toHaveLength(1)
-    const providers = harness.updates[0]?.value.providers as Record<string, any>
+    expect(harness.writes).toHaveLength(1)
+    const providers = (harness.document() as Record<string, any>).providers
     expect(Object.keys(providers)).toEqual(['__proto__'])
     expect(Object.prototype.hasOwnProperty.call(providers, '__proto__')).toBe(true)
     expect(Object.getPrototypeOf(providers)).toBe(Object.prototype)
@@ -406,9 +479,8 @@ describe('Host composition', () => {
 
     await runInitial(harness)
 
-    expect(harness.updates).toHaveLength(1)
-    const providers = harness.updates[0]?.value.providers as Record<string, any>
-    const overrides = providers.route.modelOverrides as Record<string, any>
+    expect(harness.writes).toHaveLength(1)
+    const overrides = (harness.document() as Record<string, any>).providers.route.modelOverrides
     expect(Object.keys(overrides)).toEqual(['__proto__'])
     expect(Object.prototype.hasOwnProperty.call(overrides, '__proto__')).toBe(true)
     expect(Object.getPrototypeOf(overrides)).toBe(Object.prototype)
@@ -425,7 +497,7 @@ describe('Host composition', () => {
     expect(retry).toBe(-1)
     await harness.runScheduled(0)
 
-    expect(harness.updates).toHaveLength(1)
+    expect(harness.writes).toHaveLength(1)
   })
 
   it('only responds to llm-pi-ai settings updates', async () => {
@@ -435,12 +507,12 @@ describe('Host composition', () => {
     const listener = harness.listener('settings/updated')
 
     await listener?.callback('other-namespace')
-    expect(harness.updates).toEqual([])
+    expect(harness.writes).toEqual([])
 
     await listener?.callback('llm-pi-ai')
     await Promise.resolve()
     await Promise.resolve()
-    expect(harness.updates).toHaveLength(1)
+    expect(harness.writes).toHaveLength(1)
   })
 
   it('retries after a late namespace becomes available', async () => {
@@ -452,7 +524,7 @@ describe('Host composition', () => {
     harness.setSection({ providers: { route: { models: [{ id: 'late-model' }] } } })
     await harness.runScheduled(1)
 
-    expect(harness.updates).toHaveLength(1)
+    expect(harness.writes).toHaveLength(1)
   })
 
   it('does not retry or surface a rejected update after disposal', async () => {
@@ -462,7 +534,7 @@ describe('Host composition', () => {
     })
 
     await harness.runScheduled(0)
-    expect(harness.updates).toHaveLength(1)
+    expect(harness.writes).toHaveLength(1)
     harness.dispose()
     harness.rejectPendingUpdate(new Error('disposed update'))
     await Promise.resolve()
@@ -471,6 +543,26 @@ describe('Host composition', () => {
 
     expect(harness.scheduled.filter((task) => task.delay === 2000)).toHaveLength(0)
   })
+  it('writes one fill when the startup timer and a change event overlap', async () => {
+    const harness = createHarness({
+      pendingUpdate: true,
+      section: { providers: { route: { models: [{ id: 'model' }] } } },
+    })
+
+    // The startup timer fires and its write is still queued when a change
+    // event arrives, so both triggers read the same unfilled section. Without
+    // single-flighting the fill, both write it and bump the revision twice.
+    const initial = harness.runScheduled(0)
+    const event = harness.listener('settings/updated')?.callback('llm-pi-ai')
+    harness.resolvePendingUpdate()
+    await initial
+    await event
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(harness.writes).toHaveLength(1)
+  })
+
   it('logs rejected updates and continues retrying', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     const harness = createHarness({
@@ -482,7 +574,7 @@ describe('Host composition', () => {
       await runInitial(harness)
       expect(harness.scheduled[1]?.delay).toBe(2000)
       await harness.runScheduled(1)
-      expect(harness.updates).toHaveLength(2)
+      expect(harness.writes).toHaveLength(2)
       expect(log).toHaveBeenCalled()
     } finally {
       log.mockRestore()
