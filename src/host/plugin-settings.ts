@@ -60,6 +60,23 @@ const openCodeSessionUserAgent = z.object({
 }).default({ ...OPENCODE_SESSION_USER_AGENT_DEFAULTS })
 
 /**
+ * The resolved `opencodeSession` section, described once for both the section
+ * default and the namespace default below.
+ */
+const OPENCODE_SESSION_DEFAULTS = {
+  providers: {},
+  format: { ...OPENCODE_SESSION_FORMAT_DEFAULTS },
+  userAgent: { ...OPENCODE_SESSION_USER_AGENT_DEFAULTS },
+}
+
+/** The `opencodeSession` section, shared by both schema roots. */
+const openCodeSession = z.object({
+  providers: openCodeSessionProviders,
+  format: openCodeSessionFormat,
+  userAgent: openCodeSessionUserAgent,
+}).default({ ...OPENCODE_SESSION_DEFAULTS })
+
+/**
  * One stored configuration snapshot, as it appears in the settings document.
  * Every field is optional because a hand-written section may omit any of them
  * and the schema supplies the defaults on resolution.
@@ -80,37 +97,26 @@ export interface PluginSettings extends OpenCodeSessionSettings {
 }
 
 /**
- * The `dsh-thinking-effort` namespace schema. Keeping it in one module makes
- * the stored shape knowable without reading the settings UI.
- *
- * The explicit `z<PluginSettings>` annotation is load-bearing, not decoration:
- * without it the inferred type names a transitive dependency by its installed
- * path, so `tsc` refuses to emit a portable declaration (`TS2742`) under a
- * pnpm-style layout.
- *
- * The outer default is the value used when the namespace is absent, and it is
- * typed as the resolved output, so it must name every required field. It only
- * supplies an empty `autoBackup`; a section that was written but never had a
- * backup taken still resolves one from `configSnapshot`'s own defaults.
+ * The fields both schema roots expose: the namespace the older releases
+ * register, and the Loader entry schema `Config` below. They are declared once
+ * so a field can never reach one root without the other.
  */
-export const PLUGIN_SETTINGS_SCHEMA: z<PluginSettings> = z.object({
-  opencodeSession: z.object({
-    providers: openCodeSessionProviders,
-    format: openCodeSessionFormat,
-    userAgent: openCodeSessionUserAgent,
-  }).default({
-    providers: {},
-    format: { ...OPENCODE_SESSION_FORMAT_DEFAULTS },
-    userAgent: { ...OPENCODE_SESSION_USER_AGENT_DEFAULTS },
-  }),
+const PLUGIN_SETTINGS_FIELDS = {
+  opencodeSession: openCodeSession,
   profiles: z.dict(configSnapshot).default({}),
   autoBackup: configSnapshot,
-}).default({
-  opencodeSession: {
-    providers: {},
-    format: { ...OPENCODE_SESSION_FORMAT_DEFAULTS },
-    userAgent: { ...OPENCODE_SESSION_USER_AGENT_DEFAULTS },
-  },
+}
+
+/**
+ * The value an absent namespace resolves to. Both roots share it because
+ * schemastery deep-clones a fallback before normalizing it, so a resolution
+ * through one root is invisible to the other.
+ *
+ * It only supplies an empty `autoBackup`; a section that was written but never
+ * had a backup taken still resolves one from `configSnapshot`'s own defaults.
+ */
+const PLUGIN_SETTINGS_DEFAULTS = {
+  opencodeSession: { ...OPENCODE_SESSION_DEFAULTS },
   profiles: {},
   autoBackup: {
     kind: 'dsh-thinking-effort/config-snapshot',
@@ -120,4 +126,31 @@ export const PLUGIN_SETTINGS_SCHEMA: z<PluginSettings> = z.object({
     sourceProfile: 'unknown',
     sections: {},
   },
-})
+}
+
+/**
+ * The `dsh-thinking-effort` namespace schema. Keeping it in one module makes
+ * the stored shape knowable without reading the settings UI.
+ *
+ * The explicit `z<PluginSettings>` annotation is load-bearing, not decoration:
+ * without it the inferred type names a transitive dependency by its installed
+ * path, so `tsc` refuses to emit a portable declaration (`TS2742`) under a
+ * pnpm-style layout.
+ */
+export const PLUGIN_SETTINGS_SCHEMA: z<PluginSettings> = z.object(PLUGIN_SETTINGS_FIELDS)
+  .default({ ...PLUGIN_SETTINGS_DEFAULTS })
+
+/**
+ * The Loader entry's own config schema, from which DSH 0.1.7 derives this
+ * plugin's settings form; a plugin that exports no `Config` gets no form at
+ * all. It sits beside the namespace schema rather than replacing it, because
+ * `register`/`installSection` still serve the releases that predate entry
+ * configs.
+ *
+ * The root is volatile because the configuration snapshot writes `profiles`
+ * and `autoBackup` as whole sections, and entry-config rejects a write to a
+ * path that is not volatile.
+ */
+export const Config: z<PluginSettings, PluginSettings, 'volatile-defined'> = z.object(PLUGIN_SETTINGS_FIELDS)
+  .default({ ...PLUGIN_SETTINGS_DEFAULTS })
+  .volatile()
