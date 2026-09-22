@@ -20,8 +20,109 @@ export interface ProviderDefaultsResult {
   readonly filled: number
 }
 
+/**
+ * Work a fill found but could not perform. The resolved section is where a
+ * model supplied by a lower layer is visible, and the user's own layer is the
+ * only place its `reasoningEfforts` may be written: a path write merges into
+ * that layer, so restating a resolved entry would pin every schema default the
+ * entry took on. Both counters are accumulated in place by the scan.
+ */
+interface SkippedDefaults {
+  /** Resolved models or overrides that still lack `reasoningEfforts`. */
+  missing: number
+  /** Of those, the ones no user-layer entry covers, so no write can reach them. */
+  unmatched: number
+}
+
 function log(...args: unknown[]): void {
   console.log(LOG_PREFIX, ...args)
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  return isUnknownRecord(value) ? value : undefined
+}
+
+/**
+ * The `providers` object of the user's own layer: the only value any fill
+ * payload may quote.
+ *
+ * Deliberately not {@link readSettingsSection}, which returns the *resolved*
+ * section (schema defaults under composition base under the user's own keys).
+ * A path write merges into the user layer, so quoting a resolved entry is what
+ * pins `input`, `compat`, `headers`, `thinkingBudgets`, `defaultContextWindow`
+ * and friends into the user's document, where a later release can no longer
+ * reach them. `tests/settings-fill-write.test.ts` asserts the written payload
+ * against this layer alone, with the resolved layer carrying fields the user
+ * never wrote.
+ *
+ * Two host behaviours keep this the raw layer rather than a resolved snapshot,
+ * and a later DSH release changing either one re-introduces the inflation
+ * silently — the fill would keep writing what it reads here:
+ *
+ * - Under the `entry-config` model the descriptor's `user` value is
+ *   `projectForm(form, override)`, where `override` is the profile patch's own
+ *   row (`dsh-settings` `describe`). It carries only what that row states.
+ * - A path write's `current` is `projectForm(form, raw)` with
+ *   `raw = entry.options.config` (`dsh-settings` `write` → `dsh-config-editor`
+ *   `edit`), and `entry.options.config` stays raw because the loader's
+ *   config-update path passes `noSave = true`; `update` and `mutate` both go
+ *   through it. A write therefore merges into the user's layer, not into a
+ *   resolved value.
+ */
+function readUserProviders(settings: HostSettings, namespace: string): unknown {
+  const user = readSettingsSectionUser(settings, namespace)
+  return isUnknownRecord(user) ? user.providers : undefined
+}
+
+/**
+ * One model array with the default level set added where the resolved entry
+ * lacks it.
+ *
+ * Only entries the user's own layer carries can be written — an array is
+ * written whole, so an entry the user never declared would arrive with every
+ * resolved field on it. Those entries, and every resolved entry past the user's
+ * own list, are counted as missing but unreachable.
+ */
+function withDefaultLevels(
+  userModels: readonly unknown[],
+  resolvedModels: readonly unknown[],
+  skipped: SkippedDefaults,
+): { readonly models: unknown[]; readonly changed: number } {
+  const reachable = userModels.flatMap((userEntry, index) => {
+    const resolved = resolvedModels[index]
+    if (record(resolved)?.reasoningEfforts !== undefined) return []
+    skipped.missing += 1
+    if (!isUnknownRecord(userEntry)) {
+      skipped.unmatched += 1
+      return []
+    }
+    return [{ index, userEntry }]
+  })
+
+  for (const resolved of resolvedModels.slice(userModels.length)) {
+    if (record(resolved)?.reasoningEfforts !== undefined) continue
+    skipped.missing += 1
+    skipped.unmatched += 1
+  }
+
+  const models = [...userModels]
+  for (const { index, userEntry } of reachable) {
+    models[index] = { ...userEntry, reasoningEfforts: DEFAULT_LEVELS }
+  }
+  return { models, changed: reachable.length }
+}
+
+/** Every resolved entry that still lacks a level set, none of them writable. */
+function countUnreachable(
+  resolvedModels: readonly unknown[],
+  skipped: SkippedDefaults,
+): { readonly models: unknown[]; readonly changed: number } {
+  for (const resolved of resolvedModels) {
+    if (record(resolved)?.reasoningEfforts !== undefined) continue
+    skipped.missing += 1
+    skipped.unmatched += 1
+  }
+  return { models: [], changed: 0 }
 }
 
 /**
@@ -29,54 +130,58 @@ function log(...args: unknown[]): void {
  *
  * `providers` is the resolved section, which decides *where* a level is
  * missing; `user` is the user's own layer, which supplies *what* is written.
- * A path write merges into that user layer, so restating a resolved entry
- * would pin the schema defaults it took on (`input`, `compat`, `headers`,
- * `thinkingBudgets`, `defaultContextWindow`, …) into the user's document, and
- * a later release changing one of those defaults would never reach the user.
+ * No payload may quote `providers`, or the write pins the schema defaults the
+ * entry took on (`input`, `compat`, `headers`, `thinkingBudgets`,
+ * `defaultContextWindow`, …) into the user's document, and a later release
+ * changing one of those defaults would never reach the user.
  *
  * A model array is addressed as a whole because the older settings service
  * walks paths through plain objects only: a numeric index would replace the
- * array with an object. The array's entries therefore come from the user
- * layer, which is also why an entry no user-layer counterpart covers — one a
- * composition base or schema default alone supplies — is left unfilled
- * rather than materialized.
+ * array with an object. That is also why a resolved entry the user's layer does
+ * not carry is reported in `skipped` rather than materialized — the older walk
+ * aside, adding one would require writing the entry's resolved fields.
+ *
+ * A model override is a dict keyed by model id, so its partial entry does merge
+ * over whatever a lower layer already describes. That asymmetry is the shape of
+ * the two containers, not a preference: a lower-layer override is filled and
+ * left minimal.
  */
-export function fillProviderDefaults(providers: unknown, user: unknown): ProviderDefaultsResult {
-  if (!isUnknownRecord(providers)) return { ops: [], filled: 0 }
+export function fillProviderDefaults(
+  providers: unknown,
+  user: unknown,
+): ProviderDefaultsResult & { readonly skipped: SkippedDefaults } {
+  const skipped = { missing: 0, unmatched: 0 }
+  if (!isUnknownRecord(providers)) return { ops: [], filled: 0, skipped }
 
-  const userProviders = isUnknownRecord(user) ? user : {}
+  const userProviders = record(user)
   const ops: SettingsPathOp[] = []
   let filled = 0
 
   for (const [route, rawProfile] of Object.entries(providers)) {
     if (!isProviderProfile(rawProfile)) continue
-    const userProfile = userProviders[route]
-    const ownProfile = isUnknownRecord(userProfile) ? userProfile : undefined
+    const userProfile = userProviders?.[route]
+    const ownProfile = record(userProfile)
 
     const models = rawProfile.models
     const userModels = ownProfile?.models
-    if (Array.isArray(models) && Array.isArray(userModels)) {
-      let dirty = false
-      const nextModels = userModels.map((userEntry, index) => {
-        const resolved = models[index]
-        if (!isUnknownRecord(resolved) || resolved.reasoningEfforts !== undefined) return userEntry
-        if (!isUnknownRecord(userEntry)) return userEntry
-        dirty = true
-        filled += 1
-        return { ...userEntry, reasoningEfforts: DEFAULT_LEVELS }
-      })
-      if (dirty) {
-        ops.push({ op: 'set', path: ['providers', route, 'models'], value: nextModels })
+    if (Array.isArray(models)) {
+      // A route whose models exist only in a lower layer has no array to write
+      // into at all, but its entries are still missing levels and still
+      // unreachable, so they are counted rather than passed over.
+      const merged = Array.isArray(userModels)
+        ? withDefaultLevels(userModels, models, skipped)
+        : countUnreachable(models, skipped)
+      if (merged.changed > 0) {
+        ops.push({ op: 'set', path: ['providers', route, 'models'], value: merged.models })
+        filled += merged.changed
       }
     }
 
-    // A model override is a dict keyed by model id, so the missing field is
-    // addressable directly: the partial entry merges over whatever lower layer
-    // already describes that model.
     const overrides = rawProfile.modelOverrides
     if (isUnknownRecord(overrides)) {
       for (const [id, rawEntry] of Object.entries(overrides)) {
         if (!isUnknownRecord(rawEntry) || rawEntry.reasoningEfforts !== undefined) continue
+        skipped.missing += 1
         filled += 1
         ops.push({
           op: 'set',
@@ -87,7 +192,38 @@ export function fillProviderDefaults(providers: unknown, user: unknown): Provide
     }
   }
 
-  return { ops, filled }
+  return { ops, filled, skipped }
+}
+
+/**
+ * What one fill attempt achieved and what it could not reach.
+ *
+ * `filled` counts the models this call gave a level set. `remaining` counts the
+ * entries the attempt saw still missing one that a later attempt could still
+ * reach: `undefined` means the attempt never read a section (retry, the section
+ * may still be registering), a number means it read one and has a verdict, so
+ * `0` settles the startup chain.
+ */
+interface FillOutcome {
+  readonly filled: number
+  readonly remaining?: number
+}
+
+/**
+ * Report work the fill could see but could not reach, once per attempt. A
+ * section whose levels are all set stays silent, and so does a user who has
+ * written nothing yet: the line exists for the case an operator cannot
+ * otherwise distinguish from "nothing to do" — models supplied by a lower
+ * settings layer, whose entries cannot be materialized into the user's own
+ * layer without pinning the defaults resolution gave them. Without it, the only
+ * symptom is a reasoning-effort selector that never appears in Composer.
+ */
+function reportSkipped(skipped: SkippedDefaults): void {
+  if (skipped.unmatched === 0) return
+  log(
+    'left', skipped.unmatched, 'model(s) unfilled: declared by a lower settings layer,',
+    'which an array path write cannot address without pinning that layer’s resolved fields',
+  )
 }
 
 /**
@@ -99,15 +235,23 @@ function readSection(settings: HostSettings): unknown {
   return readSettingsSection(settings, SETTINGS_NAMESPACE)
 }
 
-async function fillDefaults(settings: HostSettings): Promise<number> {
-  if (settings.writable !== true) return 0
+async function fillDefaults(settings: HostSettings): Promise<FillOutcome> {
+  if (settings.writable !== true) return { filled: 0 }
+  // A section that is not readable yet (the namespace registers late, or the
+  // entry-config form has not materialized) is retryable, not settled.
+  const notYet: FillOutcome = { filled: 0 }
 
   const section = readSection(settings)
-  if (!isUnknownRecord(section)) return 0
+  if (!isUnknownRecord(section)) return notYet
 
-  const user = readSettingsSectionUser(settings, SETTINGS_NAMESPACE)
-  const result = fillProviderDefaults(section.providers, isUnknownRecord(user) ? user.providers : undefined)
-  if (result.filled === 0 || result.ops.length === 0) return 0
+  const user = readUserProviders(settings, SETTINGS_NAMESPACE)
+  const result = fillProviderDefaults(section.providers, user)
+  reportSkipped(result.skipped)
+  // Every entry still missing a level that the user's own layer does not carry
+  // is one a retry cannot reach either, so only the reachable remainder is
+  // worth another attempt. `0` settles the startup chain.
+  const reachable = result.skipped.missing - result.skipped.unmatched
+  if (result.filled === 0) return { filled: 0, remaining: reachable }
 
   const mutate = settings.mutate
   if (typeof mutate !== 'function') {
@@ -115,13 +259,13 @@ async function fillDefaults(settings: HostSettings): Promise<number> {
     // without `mutate` could only receive this fill by restating — and pinning
     // — the whole resolved provider subtree. Leave the levels alone instead.
     log('settings service cannot address paths; left', result.filled, 'model(s) unfilled')
-    return 0
+    return { filled: 0, remaining: reachable }
   }
 
   await mutate.call(settings, SETTINGS_NAMESPACE, result.ops)
   mark(`filled-${result.filled}`)
   log('filled default thinking levels for', result.filled, 'model(s)')
-  return result.filled
+  return { filled: result.filled, remaining: reachable }
 }
 
 export function installSettingsWatcher(ctx: HostContext): void {
@@ -135,21 +279,54 @@ export function installSettingsWatcher(ctx: HostContext): void {
   ctx.effect(() => {
     let alive = true
     let retries = 0
-    let inFlight: Promise<number> | undefined
+    let inFlight = false
+    let queued = false
+    let current: Promise<FillOutcome> = Promise.resolve({ filled: 0 })
     const timerDisposers: Array<() => void> = []
     /**
-     * Run at most one fill at a time. The startup timer and a change event can
-     * overlap, and both would read the section before either write lands, so
-     * each would write the same fill and bump the document revision twice.
+     * Run fills one at a time, and run one more when a trigger arrives while a
+     * fill is in progress.
+     *
+     * Running the second trigger alongside the first would make both read the
+     * section before either write lands, so it would write the same fill and
+     * bump the document revision twice. Dropping it instead is worse: a settings
+     * change that lands mid-fill is never re-evaluated, so a fill derived from a
+     * section the user was still writing stands. The queued run re-reads the
+     * section after the write it was racing, which is what makes a
+     * freshly-written section — the state a fill most needs to see — win.
+     *
+     * The caller's promise settles from inside the loop rather than through a
+     * `finally` chain, so a trigger's continuation — including the retry a failed
+     * fill schedules — runs in the same turn the last fill settles, and one
+     * awaited trigger still performs exactly one scheduling decision.
      */
-    const runFill = (): Promise<number> => {
-      if (inFlight !== undefined) return inFlight
-      const run = fillDefaults(settings)
-      inFlight = run
-      const settle = (): void => {
-        if (inFlight === run) inFlight = undefined
+    const runFill = (): Promise<FillOutcome> => {
+      if (inFlight) {
+        queued = true
+        return current
       }
-      void run.then(settle, settle)
+      inFlight = true
+      let finish: (outcome: FillOutcome) => void = () => {}
+      let fail: (error: unknown) => void = () => {}
+      const run = new Promise<FillOutcome>((resolve, reject) => {
+        finish = resolve
+        fail = reject
+      })
+      current = run
+      void (async () => {
+        try {
+          let outcome: FillOutcome = { filled: 0 }
+          do {
+            queued = false
+            outcome = await fillDefaults(settings)
+          } while (alive && queued)
+          finish(outcome)
+        } catch (error) {
+          fail(error)
+        } finally {
+          inFlight = false
+        }
+      })()
       return run
     }
     const schedule = (delay: number): void => {
@@ -162,14 +339,24 @@ export function installSettingsWatcher(ctx: HostContext): void {
     }
     const tryOnce = async (): Promise<void> => {
       if (!alive) return
+      let settled = false
+      let outcome: FillOutcome = { filled: 0, remaining: 0 }
       try {
-        if ((await runFill()) > 0) return
+        outcome = await runFill()
+        settled = true
+        if (outcome.filled > 0) return
       } catch (error) {
         if (!alive) return
         log('fill error:', error instanceof Error ? error.message : String(error))
       }
 
       if (!alive) return
+      // `remaining: 0` is the fill's verdict that the section is settled: every
+      // entry still missing a level is one the user's own layer cannot carry,
+      // so another attempt would read the same section and reach the same
+      // conclusion. A failed attempt, a readable section with reachable work,
+      // and a section that is not readable yet all stay retryable.
+      if (settled && outcome.remaining === 0) return
       retries += 1
       if (retries <= 5) schedule(2000)
     }

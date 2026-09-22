@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { SETTINGS_NAMESPACE, installSettingsWatcher } from '../src/host/settings.ts'
 import type { SettingsPathOp } from '../src/host/types.ts'
@@ -33,7 +33,16 @@ function asRecord(value: unknown): Json | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Json : undefined
 }
 
-/** The user's own section, exactly as they wrote it. */
+/**
+ * The user's own section, exactly as they wrote it. The two routes are shaped
+ * the way pi-ai's own validator requires: it refuses a `models` list standing
+ * beside a `modelOverrides` entry on one route ("models already replaces the
+ * served catalog"), so a single route carrying both could not exist in a live
+ * profile, and a fixture that did would prove nothing about one.
+ *
+ * `sub2api` is the user's declared route; `catalog` is one whose override list
+ * merges over the installed catalog.
+ */
 function userSection(): Json {
   return {
     providers: {
@@ -45,6 +54,8 @@ function userSection(): Json {
           { id: 'claude-sonnet-4-6', name: 'claude-sonnet-4-6' },
           { id: 'deepseek-v4-flash', name: 'deepseek-v4-flash', contextWindow: 1000000 },
         ],
+      },
+      catalog: {
         modelOverrides: { 'glm-5.2': { contextWindow: 200000 } },
       },
     },
@@ -63,6 +74,8 @@ function filledSection(): Json {
           { id: 'claude-sonnet-4-6', name: 'claude-sonnet-4-6', reasoningEfforts: LEVELS },
           { id: 'deepseek-v4-flash', name: 'deepseek-v4-flash', contextWindow: 1000000, reasoningEfforts: LEVELS },
         ],
+      },
+      catalog: {
         modelOverrides: { 'glm-5.2': { contextWindow: 200000, reasoningEfforts: LEVELS } },
       },
     },
@@ -126,18 +139,10 @@ function mergeLayers(under: unknown, over: unknown): unknown {
  */
 function applyPathOpLegacy(section: Json, op: SettingsPathOp): Json {
   const [head, ...rest] = op.path
-  if (head === undefined) {
-    if (op.op === 'unset') return {}
-    return { ...(asRecord(op.value) ?? {}) }
-  }
-  if (rest.length === 0) {
-    if (op.op === 'set') return { ...section, [head]: op.value }
-    const { [head]: _removed, ...kept } = section
-    return kept
-  }
+  if (head === undefined) return { ...(asRecord(op.value) ?? {}) }
+  if (rest.length === 0) return { ...section, [head]: op.value }
   const child = section[head]
   if (asRecord(child) === undefined) {
-    if (op.op === 'unset') return section
     return { ...section, [head]: applyPathOpLegacy({}, { ...op, path: rest } as SettingsPathOp) }
   }
   return { ...section, [head]: applyPathOpLegacy(child as Json, { ...op, path: rest } as SettingsPathOp) }
@@ -151,15 +156,14 @@ function applyPathOpLegacy(section: Json, op: SettingsPathOp): Json {
  */
 function applyPathOp017(section: unknown, op: SettingsPathOp, path: readonly string[] = op.path): unknown {
   const [head, ...rest] = path
-  if (head === undefined) return op.op === 'set' ? op.value : undefined
+  if (head === undefined) return op.value
   if (Array.isArray(section)) {
     const index = Number(head)
     if (!/^(0|[1-9][0-9]*)$/.test(head) || index >= section.length) {
       throw new TypeError(`Config array index "${head}" is out of range`)
     }
     const result = [...section]
-    if (rest.length === 0 && op.op === 'unset') result.splice(index, 1)
-    else result[index] = applyPathOp017(section[index], op, rest)
+    result[index] = applyPathOp017(section[index], op, rest)
     return result
   }
   const result: Json = { ...(asRecord(section) ?? {}) }
@@ -171,6 +175,22 @@ function applyPathOp017(section: unknown, op: SettingsPathOp, path: readonly str
 
 type SettingsModel = 'entry-config' | 'namespace'
 
+interface ServiceOptions {
+  /**
+   * Extra `providers` entries the resolved layer carries. They stand for the
+   * composition base and schema defaults a live section takes on: visible to
+   * the fill, absent from the user's own layer, and never a source of written
+   * values.
+   */
+  readonly resolved?: Json
+  /**
+   * The `models` array the resolved section carries for the route the user
+   * declares, when it should differ from the user's own — a later model
+   * appearing only in a lower layer, say.
+   */
+  readonly resolvedModels?: unknown
+}
+
 /**
  * A settings service that stores one section and writes to it the way the live
  * service does: `update` merges a whole subtree in (which is how a resolved
@@ -178,15 +198,30 @@ type SettingsModel = 'entry-config' | 'namespace'
  * write stays minimal). The two models differ only in the read method and the
  * path walk, so both are exercised against the same fixture.
  */
-function createService(model: SettingsModel) {
+function createService(model: SettingsModel, options: ServiceOptions = {}) {
   let document: Json = userSection()
   const mutations: Array<{ ns: string; ops: readonly SettingsPathOp[] }> = []
   const updates: Array<{ ns: string; value: Json }> = []
   const scheduled: Array<() => void> = []
 
+  /** The resolved section: the user's own keys under the schema's defaults and the composition base. */
+  const resolve = (): Json => {
+    const resolved = resolveSection(document) as Json
+    const providers = asRecord(resolved.providers) ?? {}
+    const routes: Json = { ...providers }
+    for (const [route, profile] of Object.entries(options.resolved ?? {})) {
+      routes[route] = { ...(asRecord(routes[route]) ?? {}), ...(asRecord(profile) ?? {}) }
+    }
+    if (options.resolvedModels !== undefined) {
+      const [route, profile] = Object.entries(routes)[0] ?? []
+      if (route !== undefined) routes[route] = { ...(asRecord(profile) ?? {}), models: options.resolvedModels }
+    }
+    return { ...resolved, providers: routes }
+  }
+
   const settings: Record<string, unknown> = {
     writable: true,
-    describe: () => [{ ns: NS, value: resolveSection(document), user: structuredClone(document) }],
+    describe: () => [{ ns: NS, value: resolve(), user: structuredClone(document) }],
     update: async (ns: string, value: Json) => {
       updates.push({ ns, value })
       document = mergeLayers(document, value) as Json
@@ -201,7 +236,7 @@ function createService(model: SettingsModel) {
   }
   if (model === 'namespace') {
     // The registered-namespace model exposes `get` and registers its own section.
-    settings.get = () => resolveSection(document)
+    settings.get = () => resolve()
     settings.register = () => ({ get: () => ({}), watch: () => () => {} })
   }
 
@@ -214,6 +249,12 @@ function createService(model: SettingsModel) {
   }
 }
 
+/**
+ * Run every fill the watcher schedules, including the ones a later trigger
+ * queues behind a running fill, and let each settle. A run already in flight
+ * queues its successor rather than starting it, so a test that awaits only the
+ * first scheduled callback would observe an intermediate document.
+ */
 async function runFill(service: ReturnType<typeof createService>): Promise<void> {
   const context = {
     settings: service.settings,
@@ -226,24 +267,28 @@ async function runFill(service: ReturnType<typeof createService>): Promise<void>
   }
 
   installSettingsWatcher(context as never)
-  for (const callback of [...service.scheduled]) await callback()
-  await Promise.resolve()
+  for (let index = 0; index < service.scheduled.length; index += 1) {
+    await service.scheduled[index]?.()
+    await Promise.resolve()
+    await Promise.resolve()
+  }
   await Promise.resolve()
 }
 
 const EXPECTED_KEY_PATHS = [
   'providers',
+  'providers.catalog',
+  'providers.catalog.modelOverrides',
+  'providers.catalog.modelOverrides.glm-5.2',
+  'providers.catalog.modelOverrides.glm-5.2.contextWindow',
+  'providers.catalog.modelOverrides.glm-5.2.reasoningEfforts',
+  'providers.catalog.modelOverrides.glm-5.2.reasoningEfforts.high',
+  'providers.catalog.modelOverrides.glm-5.2.reasoningEfforts.max',
+  'providers.catalog.modelOverrides.glm-5.2.reasoningEfforts.off',
   'providers.sub2api',
   'providers.sub2api.api',
   'providers.sub2api.apiKeyEnv',
   'providers.sub2api.baseURL',
-  'providers.sub2api.modelOverrides',
-  'providers.sub2api.modelOverrides.glm-5.2',
-  'providers.sub2api.modelOverrides.glm-5.2.contextWindow',
-  'providers.sub2api.modelOverrides.glm-5.2.reasoningEfforts',
-  'providers.sub2api.modelOverrides.glm-5.2.reasoningEfforts.high',
-  'providers.sub2api.modelOverrides.glm-5.2.reasoningEfforts.max',
-  'providers.sub2api.modelOverrides.glm-5.2.reasoningEfforts.off',
   'providers.sub2api.models',
   'providers.sub2api.models[].contextWindow',
   'providers.sub2api.models[].id',
@@ -266,7 +311,7 @@ const EXPECTED_OPS: readonly SettingsPathOp[] = [
   },
   {
     op: 'set',
-    path: ['providers', 'sub2api', 'modelOverrides', 'glm-5.2', 'reasoningEfforts'],
+    path: ['providers', 'catalog', 'modelOverrides', 'glm-5.2', 'reasoningEfforts'],
     value: LEVELS,
   },
 ]
@@ -316,5 +361,163 @@ describe('a settings service with no path-addressed write', () => {
     expect(service.updates).toEqual([])
     expect(service.mutations).toEqual([])
     expect(service.document()).toEqual(userSection())
+  })
+})
+
+/**
+ * The written payload is derived from the user's own layer and from nothing
+ * else. This is the load-bearing invariant behind the whole fill: a path write
+ * merges into that layer, so quoting the *resolved* section would pin every
+ * schema default and composition value the entry took on, and a later DSH
+ * release changing one of those defaults could never reach the user.
+ *
+ * The assertions below hold an adversarial split: the resolved layer carries
+ * fields and models the user never wrote, and `update` throws if the fill ever
+ * reaches for a merge instead of a path.
+ */
+describe('the provider-defaults fill derives its payload from the raw user layer', () => {
+  it('writes only fields the user wrote, never a resolved value the user did not', async () => {
+    const service = createService('entry-config', {
+      resolved: {
+        baseOnly: {
+          baseURL: 'https://base.invalid',
+          headers: { 'x-base': 'from-composition' },
+          defaultContextWindow: 262144,
+          models: [{ id: 'base-model', name: 'base-model', input: [] }],
+        },
+      },
+    })
+
+    await runFill(service)
+
+    const written = service.mutations.flatMap((mutation) => mutation.ops.map((op) => op.value))
+    expect(written).toEqual([
+      [
+        { id: 'claude-sonnet-4-6', name: 'claude-sonnet-4-6', reasoningEfforts: LEVELS },
+        { id: 'deepseek-v4-flash', name: 'deepseek-v4-flash', contextWindow: 1000000, reasoningEfforts: LEVELS },
+      ],
+      LEVELS,
+    ])
+    for (const value of written) {
+      expect(JSON.stringify(value)).not.toContain('base.invalid')
+      expect(JSON.stringify(value)).not.toContain('from-composition')
+      expect(JSON.stringify(value)).not.toContain('base-model')
+    }
+    // The base-only route stays out of the user's document entirely, and the
+    // user's own routes gain nothing but the level set.
+    expect(service.document()).toEqual(filledSection())
+    expect(Object.keys((service.document().providers as Json))).toEqual(['sub2api', 'catalog'])
+  })
+})
+
+/**
+ * The shapes in which the fill deliberately does nothing. Stating them keeps a
+ * later change from quietly re-widening the contract: a model array can only be
+ * written whole, so filling an entry the user's layer does not carry would
+ * restate that entry's resolved fields — the inflation this file exists to
+ * catch — and a numeric array index is unsafe on the older settings walk.
+ */
+describe('the provider-defaults fill leaves entries a lower layer supplies alone', () => {
+  it('does not materialize models the user layer does not declare', async () => {
+    const service = createService('entry-config', {
+      resolvedModels: [
+        { id: 'claude-sonnet-4-6', name: 'claude-sonnet-4-6' },
+        { id: 'deepseek-v4-flash', name: 'deepseek-v4-flash', contextWindow: 1000000 },
+        { id: 'base-only', name: 'base-only', input: ['text'], defaultContextWindow: 262144 },
+      ],
+    })
+
+    await runFill(service)
+
+    expect(service.mutations).toEqual([{
+      ns: NS,
+      ops: [
+        { op: 'set', path: ['providers', 'sub2api', 'models'], value: EXPECTED_OPS[0]?.value },
+        { op: 'set', path: ['providers', 'catalog', 'modelOverrides', 'glm-5.2', 'reasoningEfforts'], value: LEVELS },
+      ],
+    }])
+    // The third entry never reaches the document, and neither do its resolved fields.
+    const models = (service.document().providers as Json).sub2api as Json
+    expect((models.models as unknown[]).map((entry) => (entry as Json).id))
+      .toEqual(['claude-sonnet-4-6', 'deepseek-v4-flash'])
+    expect(JSON.stringify(service.document())).not.toContain('base-only')
+  })
+
+  it('never writes an array index, which the older walk would read as replacing the array', async () => {
+    const service = createService('entry-config', {
+      resolvedModels: [
+        { id: 'claude-sonnet-4-6', name: 'claude-sonnet-4-6' },
+        { id: 'deepseek-v4-flash', name: 'deepseek-v4-flash', contextWindow: 1000000 },
+      ],
+    })
+
+    await runFill(service)
+
+    const paths = service.mutations.flatMap((mutation) => mutation.ops.map((op) => op.path))
+    expect(paths.every((path) => path.every((step) => !/^(0|[1-9][0-9]*)$/.test(step)))).toBe(true)
+    // The model list survives intact rather than becoming an index-keyed object.
+    const providers = service.document().providers as Json
+    expect(Array.isArray((providers.sub2api as Json).models)).toBe(true)
+    expect((providers.sub2api as Json).models).toEqual(EXPECTED_OPS[0]?.value)
+  })
+
+  it('fills an override on a route the user layer never declares, and nothing beside it', async () => {
+    const service = createService('entry-config', {
+      resolved: {
+        catalog: {
+          baseURL: 'https://catalog.invalid',
+          headers: { 'x-catalog': 'from-composition' },
+          modelOverrides: { 'glm-5.2': { contextWindow: 200000, name: 'GLM' } },
+        },
+        other: {
+          modelOverrides: { 'pre-filled': { name: 'P', reasoningEfforts: { high: 'ultra' } } },
+        },
+      },
+    })
+
+    await runFill(service)
+
+    // The dict path can address one field, so the lower layer's fields are not restated.
+    expect(service.mutations).toEqual([{
+      ns: NS,
+      ops: [
+        { op: 'set', path: ['providers', 'sub2api', 'models'], value: EXPECTED_OPS[0]?.value },
+        { op: 'set', path: ['providers', 'catalog', 'modelOverrides', 'glm-5.2', 'reasoningEfforts'], value: LEVELS },
+      ],
+    }])
+    const providers = service.document().providers as Json
+    // The override merges under the lower layer's own fields rather than restating them.
+    expect(providers.catalog).toEqual({
+      modelOverrides: { 'glm-5.2': { contextWindow: 200000, reasoningEfforts: LEVELS } },
+    })
+    // A route whose only override already carries a level set is not written at all.
+    expect(Object.hasOwn(providers, 'other')).toBe(false)
+    expect(JSON.stringify(service.document())).not.toContain('catalog.invalid')
+    expect(JSON.stringify(service.document())).not.toContain('from-composition')
+  })
+
+  it('reports how many entries it could not reach instead of doing nothing silently', async () => {
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const service = createService('entry-config', {
+      resolved: {
+        // A route whose models exist only in a lower settings layer, so no
+        // user-layer entry can carry their `reasoningEfforts`.
+        baseOnly: { baseURL: 'https://base.invalid', models: [{ id: 'base-only', name: 'base-only', input: [] }] },
+      },
+    })
+
+    try {
+      await runFill(service)
+
+      const lines = spy.mock.calls.map((call) => call.join(' '))
+      // The fill still covers what it can reach …
+      expect(lines.some((line) => line.includes('filled default thinking levels for 3 model(s)'))).toBe(true)
+      // … and names what it could not reach, which an operator would otherwise
+      // have to infer from a selector that never appears in Composer.
+      expect(lines.some((line) => line.includes('left 1 model(s) unfilled'))).toBe(true)
+      expect(lines.some((line) => line.includes('lower settings layer'))).toBe(true)
+    } finally {
+      spy.mockRestore()
+    }
   })
 })

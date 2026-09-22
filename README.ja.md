@@ -204,7 +204,7 @@ dsh-thinking-effort:
 
 ## 仕組み
 
-- **Host：** 起動時と設定変更時に `llm-pi-ai` の `models` と `modelOverrides` を確認し、`reasoningEfforts` がない場合だけ既定値を追加します。さらにモデル単位の OpenCode セッション設定を読み、一致する `llm/stream` リクエストにだけ `opencodeSession.format` に従って生成（既定 `ses-derive`）した `x-opencode-session` を注入し、`opencodeSession.userAgent` で選択したモデルの `user-agent` を書き換えます（それ以外は `llm-pi-ai` アダプターの帰属ヘッダーが強制）。
+- **Host：** 起動時と設定変更時に `llm-pi-ai` の `models` と `modelOverrides` を確認し、`reasoningEfforts` がない場合だけ既定値を追加します。書き込みはユーザーレイヤーだけを対象とするため、補完されるのは自身のプロファイルで宣言したモデルです。コンポジションのベースやスキーマ既定値だけが供給するモデルには書き込む先のエントリがないため補完せず、スキップした件数を Host ログに出力します。さらにモデル単位の OpenCode セッション設定を読み、一致する `llm/stream` リクエストにだけ `opencodeSession.format` に従って生成（既定 `ses-derive`）した `x-opencode-session` を注入し、`opencodeSession.userAgent` で選択したモデルの `user-agent` を書き換えます（それ以外は `llm-pi-ai` アダプターの帰属ヘッダーが強制）。
 - **Client：** DSH Settings Remote（`ctx.remote.settings`）と locale service を使って設定ページを登録します。モデル編集では OpenCode セッション Header を専用 namespace に保存し、`llm-pi-ai.compat` とは分離します。辞書は `src/locales/ja.json` と `src/locales/ko.json` などで管理し、公開前にクライアント bundle へ生成します。
 - **Subagent：** `llm-pi-ai` のユーザーレイヤーに `subagentEffort` を保存します。`agent/request` waterfall は明示値のないリクエストにだけ既定値を追加します。
 - **既定値なし：** プラグインは `off`、`high`、`max` を自動選択しません。`reasoning` を省略し、ゲートウェイの既定動作に任せます。

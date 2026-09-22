@@ -34,10 +34,19 @@ export interface SettingsScope {
  * One path-addressed settings edit. The shape mirrors the settings service's
  * own `mutate` op, which exists under both settings models and applies the op
  * to the section as it stands when the write runs.
+ *
+ * The service also accepts `unset`, which the fill never issues: every fill
+ * adds a level set and none removes a value, and a variant the plugin cannot
+ * produce would leave the path walk of every model — including the older
+ * array-unaware one this plugin must stay safe against — without a compiler
+ * check on a branch it does not exercise. Narrowing here does not affect the
+ * service: an array of `set` ops is assignable to the service's wider union.
  */
-export type SettingsPathOp =
-  | { readonly op: 'set'; readonly path: readonly string[]; readonly value: unknown }
-  | { readonly op: 'unset'; readonly path: readonly string[] }
+export interface SettingsPathOp {
+  readonly op: 'set'
+  readonly path: readonly string[]
+  readonly value: unknown
+}
 
 export interface SettingsInjectionContext {
   readonly settings: HostSettings

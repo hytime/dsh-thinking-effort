@@ -65,6 +65,18 @@ type HarnessOptions = {
   pendingUpdate?: boolean
   /** The Loader entry id the plugin's fiber carries; absent means no fiber. */
   entryId?: string
+  /**
+   * The user's own layer when it differs from the resolved section a host
+   * reports. Omitted means the two are the same fixture.
+   */
+  user?: SettingsSection
+  /** The resolved section a host reports, when it differs from the stored one. */
+  resolved?: unknown
+  /**
+   * Runs before each resolved read, so a fixture can advance the store between
+   * two fills the way a user's own write does.
+   */
+  onRead?: () => void
 }
 
 /** One recorded write, tagged with the service method the caller reached. */
@@ -87,20 +99,14 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 function applyPathOp(section: Record<string, unknown>, op: SettingsPathOp): Record<string, unknown> {
   const [head, ...rest] = op.path
   if (head === undefined) {
-    if (op.op === 'unset') return {}
     if (!isPlainRecord(op.value)) {
       throw new TypeError('settings mutate: setting the section root requires a plain object')
     }
     return { ...op.value }
   }
-  if (rest.length === 0) {
-    if (op.op === 'set') return { ...section, [head]: op.value }
-    const { [head]: _removed, ...kept } = section
-    return kept
-  }
+  if (rest.length === 0) return { ...section, [head]: op.value }
   const child = section[head]
   if (!isPlainRecord(child)) {
-    if (op.op === 'unset') return section
     return { ...section, [head]: applyPathOp({}, { ...op, path: rest } as SettingsPathOp) }
   }
   return { ...section, [head]: applyPathOp(child, { ...op, path: rest } as SettingsPathOp) }
@@ -123,7 +129,22 @@ function createHarness(options: HarnessOptions = {}) {
    */
   const describe = (): Array<Record<string, unknown>> => {
     if (options.descriptors !== undefined) return descriptors
-    return section === undefined ? [] : [{ ns: 'llm-pi-ai', user: section }]
+    return section === undefined ? [] : [{ ns: 'llm-pi-ai', user: userLayer() }]
+  }
+  /**
+   * The user's own layer of the section. It defaults to the stored section —
+   * what a host resolving nothing extra reports — and a fixture whose resolved
+   * value differs from the user's own layer supplies it here.
+   */
+  const userLayer = (): SettingsSection => options.user ?? section
+  /**
+   * The `get` read, which reports the *resolved* section. It defaults to the
+   * stored section; a fixture whose resolved value differs from the user's own
+   * layer supplies it.
+   */
+  const resolved = (): unknown => {
+    options.onRead?.()
+    return options.resolved ?? section
   }
   /** One write barrier for both methods: a queued or failing write behaves alike. */
   const beforeWrite = async (): Promise<void> => {
@@ -142,7 +163,7 @@ function createHarness(options: HarnessOptions = {}) {
     ...(options.entryId === undefined ? {} : { fiber: { entry: { options: { id: options.entryId } } } }),
     settings: {
       writable: options.writable ?? true,
-      get: (_ns: string) => section,
+      get: (_ns: string) => resolved(),
       update: async (ns: string, value: Record<string, unknown>) => {
         writes.push({ kind: 'update', ns, value })
         await beforeWrite()
@@ -561,6 +582,76 @@ describe('Host composition', () => {
     await Promise.resolve()
 
     expect(harness.writes).toHaveLength(1)
+  })
+
+  it('re-runs the fill for a change that lands while one is in flight', async () => {
+    // The user wrote `first` with the fill's help, then adds `second`: two
+    // writes separated by the store's own latency gate. The second arrives while
+    // the first fill's write is still queued. Dropping that change event — the
+    // old behaviour — leaves `second` without defaults until the next restart;
+    // the queued run re-reads the section once the racing write has landed.
+    let reads = 0
+    const harness = createHarness({
+      pendingUpdate: true,
+      section: { providers: { route: { models: [{ id: 'first' }] } } },
+      onRead: () => {
+        reads += 1
+        if (reads === 2) {
+          harness.setSection({ providers: { route: { models: [{ id: 'first' }, { id: 'second' }] } } })
+        }
+      },
+    })
+
+    const initial = harness.runScheduled(0)
+    await Promise.resolve()
+    await Promise.resolve()
+    const event = harness.listener('settings/updated')?.callback('llm-pi-ai')
+    harness.resolvePendingUpdate()
+    await initial
+    await event
+    for (let turn = 0; turn < 6; turn += 1) await Promise.resolve()
+
+    // Two reads and two writes: the queued run re-read the section rather than
+    // the event being dropped, and its write covers the model the event was
+    // raised for.
+    expect(reads).toBe(2)
+    expect(harness.writes).toHaveLength(2)
+    expect(harness.writes[1]).toEqual({
+      kind: 'mutate',
+      ns: 'llm-pi-ai',
+      ops: [{
+        op: 'set',
+        path: ['providers', 'route', 'models'],
+        value: [
+          { id: 'first', reasoningEfforts: defaults },
+          { id: 'second', reasoningEfforts: defaults },
+        ],
+      }],
+    })
+  })
+
+  it('stops retrying when every missing model comes from a lower settings layer', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    // The descriptor's resolved value carries a model list the stored section
+    // does not have: the shape a composition base or a schema default gives a
+    // live host. Nothing can be written for it, so a retry would re-read the
+    // same section and reach the same verdict.
+    const harness = createHarness({
+      section: {},
+      resolved: { providers: { base: { models: [{ id: 'base-only' }] } } },
+    })
+
+    try {
+      await runInitial(harness)
+
+      expect(harness.writes).toEqual([])
+      // The startup timer only; the retry chain stops at the first verdict.
+      expect(harness.scheduled.map((task) => task.delay)).toEqual([500])
+      const lines = log.mock.calls.map((call) => call.join(' '))
+      expect(lines.some((line) => line.includes('left 1 model(s) unfilled'))).toBe(true)
+    } finally {
+      log.mockRestore()
+    }
   })
 
   it('logs rejected updates and continues retrying', async () => {

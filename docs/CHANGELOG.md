@@ -14,6 +14,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 变更 / Changed
+
+- 默认档位补齐改为只写入用户层：由组合 base 或 schema 默认值提供的模型不会被补全（0.1.7 的 entry-config 设置服务会把整棵解析后的子树落盘，为它们补全会把 `input`、`compat`、`headers`、`thinkingBudgets`、`defaultContextWindow` 等 schema 默认值钉进你的设置文档）。跳过的模型会在宿主日志中报出数量。
+- The provider-default fill now writes through the user layer only: a model a composition base or a schema default supplies is left unfilled (under the 0.1.7 entry-config settings service a resolved subtree lands on disk whole, so filling those models pinned `input`, `compat`, `headers`, `thinkingBudgets`, `defaultContextWindow` and other schema defaults into your settings document). The Host logs how many models it skipped.
+
 ### 新增 / Added
 
 - 设置页新增「会话值生成器」卡片，可在 UI 中读写 `opencodeSession.format` 的全部字段（生成模式、时间戳来源、模板 / 表达式 / 脚本路径、校验正则与校验失败策略），无需再手写设置文档。卡片按当前模式只显示相关字段，并在写入前校验：非法正则、空模板 / 表达式 / 脚本、相对脚本路径，以及无法解析或引用了不存在名字的表达式，都会被拦下并给出原因——这些取值在宿主侧会静默退化（正则失效为「不校验」、其余回退为派生值），UI 里看不到就会误导。表达式校验与宿主共用同一份解析代码。写入按字段进行，不覆盖同命名空间的其他配置。

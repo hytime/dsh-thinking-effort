@@ -204,7 +204,7 @@ dsh-thinking-effort:
 
 ## 작동 방식
 
-- **Host:** 시작 및 설정 변경 시 `llm-pi-ai`의 `models`와 `modelOverrides`를 검사하고 `reasoningEfforts`가 없는 경우에만 기본값을 추가합니다. 또한 모델별 OpenCode 세션 설정을 읽고 일치하는 `llm/stream` 요청에만 `opencodeSession.format`에 따라 생성(기본값 `ses-derive`)한 `x-opencode-session`을 주입하며, `opencodeSession.userAgent`로 선택한 모델의 `user-agent`를 다시 씁니다(그 외에는 `llm-pi-ai` adapter의 attribution 헤더가 강제).
+- **Host:** 시작 및 설정 변경 시 `llm-pi-ai`의 `models`와 `modelOverrides`를 검사하고 `reasoningEfforts`가 없는 경우에만 기본값을 추가합니다. 쓰기는 사용자 레이어에만 적용되므로, 직접 선언한 프로필의 모델만 보완됩니다. 컴포지션 베이스나 스키마 기본값만 제공하는 모델은 쓸 대상 항목이 없어 보완하지 않고, 건너뛴 개수를 Host 로그에 남깁니다. 또한 모델별 OpenCode 세션 설정을 읽고 일치하는 `llm/stream` 요청에만 `opencodeSession.format`에 따라 생성(기본값 `ses-derive`)한 `x-opencode-session`을 주입하며, `opencodeSession.userAgent`로 선택한 모델의 `user-agent`를 다시 씁니다(그 외에는 `llm-pi-ai` adapter의 attribution 헤더가 강제).
 - **Client:** DSH Settings Remote(`ctx.remote.settings`)와 locale service로 설정 페이지를 등록합니다. 모델 편집기는 OpenCode 세션 Header를 전용 namespace에 저장하며 `llm-pi-ai.compat`와 분리합니다. 사전은 `src/locales/ja.json`, `src/locales/ko.json` 등에서 관리하고 게시 전에 클라이언트 bundle로 생성합니다.
 - **Subagent:** `llm-pi-ai` 사용자 레이어에 `subagentEffort`를 저장합니다. `agent/request` waterfall은 명시적 값이 없는 요청에만 기본값을 추가합니다.
 - **기본값 없음:** 플러그인은 `off`, `high`, `max`를 자동으로 선택하지 않습니다. `reasoning`을 생략하고 게이트웨이 기본 동작을 따릅니다.
