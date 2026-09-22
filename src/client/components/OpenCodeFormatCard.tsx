@@ -10,7 +10,7 @@ import {
   formatOps,
   FORMAT_NAMESPACE,
 } from '../opencode-format-validation.js'
-import type { FormatDraft, FormatField } from '../opencode-format-validation.js'
+import type { FormatDraft, FormatField, FormatFieldError } from '../opencode-format-validation.js'
 import type { Palette } from '../theme.js'
 import type { SettingsApi, SettingsDescribeValue, SettingsNamespace, Translation } from '../types.js'
 
@@ -28,6 +28,38 @@ const ENUM_LABEL_KEYS: Readonly<Partial<Record<FormatField, string>>> = {
   mode: 'formatModeLabel',
   time: 'formatTimeLabel',
   onInvalid: 'formatOnInvalidLabel',
+}
+
+/** Localization keys for the three invalid policies, in `FORMAT_INVALID_POLICIES` order. */
+const POLICY_LABEL_KEYS: Readonly<Record<string, string>> = {
+  'warn': 'formatOnInvalidWarn',
+  'drop': 'formatOnInvalidDrop',
+  'send': 'formatOnInvalidSend',
+}
+
+/**
+ * Localization key per validation problem.
+ *
+ * Every `FormatFieldError` needs an entry: the card has already refused the
+ * write at this point, so an unmapped problem would show its raw key name and
+ * leave the user without the reason the Apply button is dark.
+ */
+const ERROR_LABEL_KEYS: Readonly<Record<FormatFieldError, string>> = {
+  validateRegex: 'formatErrValidateRegex',
+  templateRequired: 'formatErrTemplateRequired',
+  expressionRequired: 'formatErrExpressionRequired',
+  expressionSyntax: 'formatErrExpressionSyntax',
+  expressionUnknownName: 'formatErrExpressionUnknownName',
+  scriptRequired: 'formatErrScriptRequired',
+  scriptNotAbsolute: 'formatErrScriptNotAbsolute',
+}
+
+/** The hint key shown under each free-text field, keyed by field. */
+const HINT_LABEL_KEYS: Readonly<Partial<Record<FormatField, string>>> = {
+  template: 'formatTemplateHint',
+  expression: 'formatExpressionHint',
+  script: 'formatScriptHint',
+  validate: 'formatValidateHint',
 }
 
 /**
@@ -210,6 +242,42 @@ export function OpenCodeFormatCard({ settings, palette, t, onApplied }: OpenCode
   const blocked = dirty && errors.length > 0
   const readOnly = !state.writable
 
+  const errorFor = (field: FormatField): FormatFieldError | undefined =>
+    errors.find((problem) => problem.field === field)?.error
+
+  /**
+   * One free-text field with its hint and, when the draft has a problem, the
+   * reason the write is refused. Defined below `errors` on purpose: it closes
+   * over that value, and moving it above would read it before initialization.
+   */
+  const textField = (field: FormatField, labelKey: string): React.ReactElement => {
+    const problem = errorFor(field)
+    return <div style={{ display: 'grid', gap: '3px' }}>
+      <label style={rowStyle}>
+        <span style={labelStyle}>{t(labelKey)}</span>
+        <input
+          type="text"
+          value={state.draft[field]}
+          aria-label={t(labelKey)}
+          aria-invalid={problem === undefined ? undefined : true}
+          disabled={state.busy}
+          onChange={(event) => patch(field, event.currentTarget.value)}
+          // `color` and `borderColor` are assigned on every render, not only
+          // while invalid: dropping either one makes React strip a longhand it
+          // had set before, and it warns when a shorthand from `selectStyle`
+          // (`border`) sits beside the longhand it is removing.
+          style={{
+            ...selectStyle(palette),
+            borderColor: problem === undefined ? palette.border : palette.danger,
+            color: problem === undefined ? palette.text : palette.danger,
+          }}
+        />
+      </label>
+      <span style={{ fontSize: '11px', color: palette.secondary, lineHeight: '15px' }}>{t(HINT_LABEL_KEYS[field]!)}</span>
+      {problem === undefined ? null : <span role="alert" style={{ fontSize: '11px', color: palette.danger, lineHeight: '15px' }}>{t(ERROR_LABEL_KEYS[problem])}</span>}
+    </div>
+  }
+
   const modeSelect = (
     <select
       value={state.draft.mode}
@@ -267,6 +335,22 @@ export function OpenCodeFormatCard({ settings, palette, t, onApplied }: OpenCode
       {timeSelect === null ? null : <label style={rowStyle}>
         <span style={labelStyle}>{t('formatTimeLabel')}</span>
         {timeSelect}
+      </label>}
+      {state.draft.mode === 'template' ? textField('template', 'formatTemplateLabel') : null}
+      {state.draft.mode === 'expression' ? textField('expression', 'formatExpressionLabel') : null}
+      {state.draft.mode === 'script' ? textField('script', 'formatScriptLabel') : null}
+      {textField('validate', 'formatValidateLabel')}
+      {state.draft.validate === '' ? null : <label style={rowStyle}>
+        <span style={labelStyle}>{t('formatOnInvalidLabel')}</span>
+        <select
+          value={state.draft.onInvalid}
+          aria-label={t('formatOnInvalidLabel')}
+          disabled={state.busy}
+          onChange={(event) => patch('onInvalid', event.currentTarget.value)}
+          style={selectStyle(palette)}
+        >
+          {FORMAT_INVALID_POLICIES.map((policy) => <option key={policy} value={policy}>{t(POLICY_LABEL_KEYS[policy]!)}</option>)}
+        </select>
       </label>}
       <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
         <ActionButton text={t('formatApply')} onClick={apply} disabled={state.busy || readOnly || !dirty || blocked} tone="primary" palette={palette} icon="check" />

@@ -262,3 +262,149 @@ describe('OpenCodeFormatCard', () => {
     expect(view.container.textContent).not.toContain(noticePrefix)
   })
 })
+
+function inputByLabel(container: HTMLElement, label: string): HTMLInputElement {
+  const found = [...container.querySelectorAll('input')].find((candidate) => candidate.getAttribute('aria-label') === label)
+  if (found === undefined) throw new Error(`missing input: ${label}`)
+  return found
+}
+
+function setInput(element: HTMLInputElement, value: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  setter?.call(element, value)
+  element.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+async function openCard(view: { container: HTMLElement }): Promise<void> {
+  act(() => button(view.container, text('formatCardTitle')).click())
+  await settle()
+}
+
+describe('OpenCodeFormatCard dynamic fields', () => {
+  it('shows only the template input in template mode', async () => {
+    const view = harness({ user: { 'dsh-thinking-effort': { opencodeSession: { format: { mode: 'template', template: 'x' } } } } })
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    expect(inputByLabel(view.container, text('formatTemplateLabel')).value).toBe('x')
+    expect(view.container.querySelector(`input[aria-label="${text('formatExpressionLabel')}"]`)).toBeNull()
+    expect(view.container.querySelector(`input[aria-label="${text('formatScriptLabel')}"]`)).toBeNull()
+    // The template mode still consults the timestamp source.
+    expect(view.container.querySelector(`select[aria-label="${text('formatTimeLabel')}"]`)).not.toBeNull()
+  })
+
+  it('shows only the expression input in expression mode', async () => {
+    const view = harness({ user: { 'dsh-thinking-effort': { opencodeSession: { format: { mode: 'expression', expression: 'hex12' } } } } })
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    expect(inputByLabel(view.container, text('formatExpressionLabel')).value).toBe('hex12')
+    expect(view.container.querySelector(`input[aria-label="${text('formatTemplateLabel')}"]`)).toBeNull()
+    // `hex12` in an expression comes from the timestamp source, so it stays offered.
+    expect(view.container.querySelector(`select[aria-label="${text('formatTimeLabel')}"]`)).not.toBeNull()
+  })
+
+  it('shows only the script input in script mode', async () => {
+    const view = harness({ user: { 'dsh-thinking-effort': { opencodeSession: { format: { mode: 'script', script: '/srv/s.mjs' } } } } })
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    expect(inputByLabel(view.container, text('formatScriptLabel')).value).toBe('/srv/s.mjs')
+    expect(view.container.querySelector(`input[aria-label="${text('formatTemplateLabel')}"]`)).toBeNull()
+    // The timestamp source stays visible: the Host reads `hex12` from it in
+    // script mode too, so hiding it would take away a control that matters.
+    expect(view.container.querySelector(`select[aria-label="${text('formatTimeLabel')}"]`)).not.toBeNull()
+  })
+
+  it('keeps values entered for another mode when switching away and back', async () => {
+    const view = harness({ user: { 'dsh-thinking-effort': { opencodeSession: { format: { mode: 'template', template: 'keep-me' } } } } })
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    act(() => setSelect(selectByLabel(view.container, text('formatModeLabel')), 'ses-derive'))
+    await settle()
+    expect(view.container.querySelector(`input[aria-label="${text('formatTemplateLabel')}"]`)).toBeNull()
+    act(() => setSelect(selectByLabel(view.container, text('formatModeLabel')), 'template'))
+    await settle()
+    expect(inputByLabel(view.container, text('formatTemplateLabel')).value).toBe('keep-me')
+  })
+
+  it('blocks Apply and explains an unparseable validate source', async () => {
+    const view = harness()
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    act(() => setInput(inputByLabel(view.container, text('formatValidateLabel')), '('))
+    await settle()
+    expect(view.container.textContent).toContain(text('formatErrValidateRegex'))
+    expect(button(view.container, text('formatApply')).disabled).toBe(true)
+  })
+
+  it('blocks Apply and explains an empty template in template mode', async () => {
+    const view = harness({ user: { 'dsh-thinking-effort': { opencodeSession: { format: { mode: 'template' } } } } })
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    expect(view.container.textContent).toContain(text('formatErrTemplateRequired'))
+    expect(button(view.container, text('formatApply')).disabled).toBe(true)
+  })
+
+  it('blocks Apply and explains an unparseable expression', async () => {
+    const view = harness({ user: { 'dsh-thinking-effort': { opencodeSession: { format: { mode: 'expression', expression: 'hex12' } } } } })
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    act(() => setInput(inputByLabel(view.container, text('formatExpressionLabel')), "'x' + ("))
+    await settle()
+    expect(view.container.textContent).toContain(text('formatErrExpressionSyntax'))
+    expect(button(view.container, text('formatApply')).disabled).toBe(true)
+  })
+
+  it('blocks Apply and explains a relative script path', async () => {
+    const view = harness({ user: { 'dsh-thinking-effort': { opencodeSession: { format: { mode: 'script' } } } } })
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    act(() => setInput(inputByLabel(view.container, text('formatScriptLabel')), './s.mjs'))
+    await settle()
+    expect(view.container.textContent).toContain(text('formatErrScriptNotAbsolute'))
+    expect(button(view.container, text('formatApply')).disabled).toBe(true)
+  })
+
+  it('clears the error once the input becomes valid', async () => {
+    const view = harness()
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    act(() => setInput(inputByLabel(view.container, text('formatValidateLabel')), '('))
+    await settle()
+    expect(button(view.container, text('formatApply')).disabled).toBe(true)
+    act(() => setInput(inputByLabel(view.container, text('formatValidateLabel')), '^ses_'))
+    await settle()
+    expect(view.container.textContent).not.toContain(text('formatErrValidateRegex'))
+    expect(button(view.container, text('formatApply')).disabled).toBe(false)
+  })
+
+  it('warns when the stored mode is not one this card offers', async () => {
+    const view = harness({ user: { 'dsh-thinking-effort': { opencodeSession: { format: { mode: 'unknown-mode' } } } } })
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    // `text(key)` has no params here, so the raw template keeps its `{detail}`
+    // placeholder and would never appear rendered; the notice's fixed prefix
+    // is the part that is actually shown.
+    expect(view.container.textContent).toContain(text('formatUnsupportedStored').split('{detail}')[0]!)
+    expect(selectByLabel(view.container, text('formatModeLabel')).value).toBe('ses-derive')
+  })
+
+  it('shows the on-invalid policy only when a validate source is set', async () => {
+    const view = harness()
+    cleanup = view.unmount
+    await settle()
+    await openCard(view)
+    expect(view.container.querySelector(`select[aria-label="${text('formatOnInvalidLabel')}"]`)).toBeNull()
+    act(() => setInput(inputByLabel(view.container, text('formatValidateLabel')), '^ses_'))
+    await settle()
+    expect(view.container.querySelector(`select[aria-label="${text('formatOnInvalidLabel')}"]`)).not.toBeNull()
+  })
+})
