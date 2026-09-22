@@ -43,9 +43,10 @@ export interface SettingsSectionHooks {
 
 export interface HostSettings {
   readonly writable?: unknown
-  readonly get: (namespace: string) => unknown
+  /** Absent from the `entry-config` model, which exposes values through `describe` only. */
+  readonly get?: (namespace: string) => unknown
   readonly update: (namespace: string, value: UnknownRecord) => unknown
-  readonly describe: () => unknown
+  readonly describe?: () => unknown
   readonly installSection?: (
     owner: unknown,
     namespace: string,
@@ -62,6 +63,13 @@ export interface HostSettings {
 
 export interface HostContext {
   readonly settings?: HostSettings
+  /**
+   * The plugin's own Loader entry, which the `entry-config` settings model uses
+   * as its section id.
+   */
+  readonly fiber?: {
+    readonly entry?: { readonly options?: { readonly id?: unknown } }
+  }
   readonly inject?: (
     dependencies: readonly string[],
     callback: (scope: SettingsInjectionContext) => void,

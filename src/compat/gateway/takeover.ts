@@ -60,6 +60,11 @@ function runtimeCapabilities(input: TakeoverProvidersInput): DshVersionCapabilit
   return {
     settingsTransport: input.runtimeProfile,
     settingsApi: input.runtimeProfile === 'modern' ? 'remote.settings' : 'connection.api.settings',
+    // This fallback describes the runtime service a caller already probed for
+    // the modern/legacy transport, and every such service registers its
+    // namespaces. Newer unmapped releases still choose their model from the
+    // live service rather than from here.
+    settingsModel: 'namespace',
     baseModelFields: ['reasoningEfforts'],
     gatewayCompatFields: GATEWAY_COMPAT_FIELD_KEYS,
     externalLanguages: input.runtimeProfile === 'modern',

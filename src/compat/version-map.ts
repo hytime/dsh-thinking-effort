@@ -1,5 +1,7 @@
 import { ALPHA1_PLUS_COMPAT_FIELDS, GATEWAY_COMPAT_FIELDS, RC8_COMPAT_FIELDS } from './gateway/fields.js'
 import type { GatewayCompatFieldKey } from './gateway/fields.js'
+import { settingsModelOf } from './settings-model.js'
+import type { SettingsModel } from './settings-model.js'
 
 export type TakeoverTransport = 'unsupported' | 'optional'
 export type SettingsApi = 'connection.api.settings' | 'remote.settings'
@@ -8,6 +10,13 @@ export type GatewayCompatEditableField = keyof typeof GATEWAY_COMPAT_FIELDS
 export interface DshVersionCapabilities {
   settingsTransport: 'legacy' | 'modern'
   settingsApi: SettingsApi
+  /**
+   * Which settings architecture the release exposes. `namespace` covers the
+   * rc.7 through 0.1.6 lines; `entry-config` starts at the 0.1.7 line, where a
+   * plugin owns its section as a Loader entry instead of registering a
+   * namespace, so `register`/`installSection`/`get` no longer exist.
+   */
+  settingsModel: SettingsModel
   baseModelFields: readonly ('reasoningEfforts' | 'input' | 'contextWindow')[]
   gatewayCompatFields: readonly GatewayCompatEditableField[]
   externalLanguages: boolean
@@ -46,6 +55,12 @@ const completeBaseModelFields = ['reasoningEfforts', 'input', 'contextWindow'] a
  * Settings transport, `user`-layer reads, the same 15 editable compat fields,
  * external language packs, optional takeover) and the bound moved to `0.1.7-0`
  * so the whole `0.1.6` line resolves instead of falling out of the map.
+ *
+ * The `0.1.7` window records the settings rewrite: `0.1.7-alpha.1` was verified
+ * directly and keeps the modern transport, the `user` layer, the same 15
+ * editable compat fields, external language packs and optional takeover, but
+ * replaces namespace registration with per-entry `Config` forms. Its bound is
+ * `0.1.8-0` so the whole line resolves.
  */
 const versionRanges: readonly VersionRange[] = [
   {
@@ -54,6 +69,7 @@ const versionRanges: readonly VersionRange[] = [
     capabilities: {
       settingsTransport: 'legacy',
       settingsApi: 'connection.api.settings',
+      settingsModel: 'namespace',
       baseModelFields: legacyBaseModelFields,
       gatewayCompatFields: [],
       externalLanguages: false,
@@ -66,6 +82,7 @@ const versionRanges: readonly VersionRange[] = [
     capabilities: {
       settingsTransport: 'legacy',
       settingsApi: 'connection.api.settings',
+      settingsModel: 'namespace',
       baseModelFields: completeBaseModelFields,
       gatewayCompatFields: RC8_COMPAT_FIELDS,
       externalLanguages: false,
@@ -78,6 +95,20 @@ const versionRanges: readonly VersionRange[] = [
     capabilities: {
       settingsTransport: 'modern',
       settingsApi: 'remote.settings',
+      settingsModel: 'namespace',
+      baseModelFields: completeBaseModelFields,
+      gatewayCompatFields: ALPHA1_PLUS_COMPAT_FIELDS,
+      externalLanguages: true,
+      takeoverTransport: 'optional',
+    },
+  },
+  {
+    minimum: '0.1.7-0',
+    maximumExclusive: '0.1.8-0',
+    capabilities: {
+      settingsTransport: 'modern',
+      settingsApi: 'remote.settings',
+      settingsModel: 'entry-config',
       baseModelFields: completeBaseModelFields,
       gatewayCompatFields: ALPHA1_PLUS_COMPAT_FIELDS,
       externalLanguages: true,
@@ -145,4 +176,24 @@ export function takeoverTransportForVersion(version: string): TakeoverTransport 
 
 export function takeoverSupportedForVersion(version: string): boolean {
   return takeoverTransportForVersion(version) === 'optional'
+}
+
+export function settingsModelForVersion(version: string): SettingsModel | undefined {
+  return capabilitiesForVersion(version)?.settingsModel
+}
+
+/**
+ * The settings model the plugin must code against. The live service decides,
+ * because the same version can be reached through a compatibility provider;
+ * the version map only answers when the service exposes neither shape. An
+ * unknown version with an unknown service yields `undefined`, and callers keep
+ * their most conservative behaviour.
+ */
+export function settingsModelForRuntime(input: {
+  readonly settings?: unknown
+  readonly version?: unknown
+}): SettingsModel | undefined {
+  const detected = settingsModelOf(input.settings)
+  if (detected !== undefined) return detected
+  return typeof input.version === 'string' ? settingsModelForVersion(input.version) : undefined
 }

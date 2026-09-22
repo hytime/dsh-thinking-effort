@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS } from '../src/compat/gateway/fields.ts'
 import { clientCapabilities, hostCapabilities } from '../src/compat/capabilities.ts'
-import { capabilitiesForVersion, takeoverSupportedForVersion, takeoverTransportForVersion } from '../src/compat/version-map.ts'
+import { capabilitiesForVersion, settingsModelForVersion, takeoverSupportedForVersion, takeoverTransportForVersion } from '../src/compat/version-map.ts'
 import { resolveCompatibility } from '../src/compat/version-adapter.ts'
 
 const legacy = { settings: 'legacy', externalLanguages: false } as const
@@ -11,6 +11,7 @@ const noSettings = { settings: 'none', externalLanguages: false } as const
 const rc7Capabilities = {
   settingsTransport: 'legacy',
   settingsApi: 'connection.api.settings',
+  settingsModel: 'namespace',
   baseModelFields: ['reasoningEfforts'],
   gatewayCompatFields: [],
   externalLanguages: false,
@@ -20,6 +21,7 @@ const rc7Capabilities = {
 const rc8Capabilities = {
   settingsTransport: 'legacy',
   settingsApi: 'connection.api.settings',
+  settingsModel: 'namespace',
   baseModelFields: ['reasoningEfforts', 'input', 'contextWindow'],
   gatewayCompatFields: [...RC8_COMPAT_FIELDS],
   externalLanguages: false,
@@ -29,10 +31,20 @@ const rc8Capabilities = {
 const modernCapabilities = {
   settingsTransport: 'modern',
   settingsApi: 'remote.settings',
+  settingsModel: 'namespace',
   baseModelFields: ['reasoningEfforts', 'input', 'contextWindow'],
   gatewayCompatFields: [...ALPHA1_PLUS_COMPAT_FIELDS],
   externalLanguages: true,
   takeoverTransport: 'optional',
+} as const
+
+/**
+ * The `0.1.7` line keeps every transport fact and swaps the settings model:
+ * forms come from each Loader entry's Config, so no namespace is registered.
+ */
+const entryConfigCapabilities = {
+  ...modernCapabilities,
+  settingsModel: 'entry-config',
 } as const
 
 describe('version capability map', () => {
@@ -65,6 +77,14 @@ describe('version capability map', () => {
     expect(takeoverTransportForVersion('0.1.6-alpha.1')).toBe('optional')
   })
 
+  it('maps the 0.1.7 settings rewrite as its own window', () => {
+    expect(capabilitiesForVersion('0.1.7-alpha.1')).toEqual(entryConfigCapabilities)
+    expect(takeoverTransportForVersion('0.1.7-alpha.1')).toBe('optional')
+    expect(capabilitiesForVersion('0.1.7')).toEqual(entryConfigCapabilities)
+    expect(settingsModelForVersion('0.1.7-alpha.1')).toBe('entry-config')
+    expect(settingsModelForVersion('0.1.6-alpha.2')).toBe('namespace')
+  })
+
   it('keeps every half-open boundary and accepts semver build metadata', () => {
     expect(capabilitiesForVersion('0.1.0-rc.6')).toBeUndefined()
     expect(capabilitiesForVersion('0.1.0-rc.7+ci.1')).toEqual(rc7Capabilities)
@@ -79,7 +99,10 @@ describe('version capability map', () => {
     expect(capabilitiesForVersion('0.1.5-rc.2+ci.1')).toEqual(modernCapabilities)
     expect(capabilitiesForVersion('0.1.6-alpha.1')).toEqual(modernCapabilities)
     expect(capabilitiesForVersion('0.1.6')).toEqual(modernCapabilities)
-    expect(capabilitiesForVersion('0.1.7-0')).toBeUndefined()
+    expect(capabilitiesForVersion('0.1.6-alpha.2')).toEqual(modernCapabilities)
+    expect(capabilitiesForVersion('0.1.7-0')).toEqual(entryConfigCapabilities)
+    expect(capabilitiesForVersion('0.1.7-alpha.1+ci.1')).toEqual(entryConfigCapabilities)
+    expect(capabilitiesForVersion('0.1.8-0')).toBeUndefined()
     expect(capabilitiesForVersion('0.2.0')).toBeUndefined()
   })
 

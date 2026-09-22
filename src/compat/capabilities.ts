@@ -5,7 +5,14 @@ import type {
 
 export type { CompatibilitySettings, DshCompatibilityCapabilities } from '../client/types.js'
 export type { DshVersionCapabilities, GatewayCompatEditableField, SettingsApi, TakeoverTransport } from './version-map.js'
-export { takeoverSupportedForVersion, takeoverTransportForVersion } from './version-map.js'
+export type { SettingsModel } from './settings-model.js'
+export {
+  settingsModelForRuntime,
+  settingsModelForVersion,
+  takeoverSupportedForVersion,
+  takeoverTransportForVersion,
+} from './version-map.js'
+export { readSettingsSection, settingsChangeEvents, settingsEntryId, settingsModelOf } from './settings-model.js'
 
 type MethodName = 'describe' | 'mutate' | 'get' | 'update' | 'modelCatalog'
 
@@ -49,7 +56,9 @@ export function clientCapabilities(input: {
 export function hostCapabilities(input: {
   readonly settings?: unknown
 }): DshCompatibilityCapabilities {
-  const settings = hasMethods(input.settings, ['get', 'update', 'describe'])
+  // `describe` plus `update` is the floor under both settings models: the
+  // 0.1.7 line dropped `get`, but a section read still comes from `describe`.
+  const settings = hasMethods(input.settings, ['update', 'describe'])
     ? 'legacy'
     : 'none'
 

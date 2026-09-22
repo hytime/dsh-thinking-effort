@@ -1,3 +1,8 @@
+/**
+ * The section id under the registered-namespace settings model (rc.7 … 0.1.6).
+ * The 0.1.7 entry-config model addresses the section by Loader entry id
+ * instead, which `settingsEntryId` reads from the live fiber.
+ */
 export const OPENCODE_SESSION_NAMESPACE = 'dsh-thinking-effort'
 export const OPENCODE_SESSION_HEADER = 'x-opencode-session'
 

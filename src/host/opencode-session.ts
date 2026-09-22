@@ -4,6 +4,11 @@ import {
   OPENCODE_SESSION_HEADER,
   OPENCODE_SESSION_NAMESPACE,
 } from '../compat/opencode-session.js'
+import {
+  readSettingsSection,
+  settingsChangeEvents,
+  settingsEntryId,
+} from '../compat/settings-model.js'
 import { OpenCodeSessionFormatter, resolveFormatConfig } from './opencode-session-format.js'
 import { PLUGIN_SETTINGS_SCHEMA } from './plugin-settings.js'
 import type {
@@ -201,19 +206,48 @@ async function fetchWithSession(
   })
 }
 
+/**
+ * Install the section under the `entry-config` model, where the plugin owns no
+ * registered namespace: its value is the `Config` of its own Loader entry, read
+ * back through `describe()` and addressed by the entry id.
+ */
+function installEntryConfigSettingsSection(
+  ctx: HostContext,
+  fallbackNamespace: string,
+  hooks: SettingsSectionHooks,
+): void {
+  const settings = ctx.settings
+  const entryId = settingsEntryId(ctx, fallbackNamespace)
+  hooks.setSource(() => readSettingsSection(settings, entryId) ?? {})
+  hooks.onChange()
+
+  ctx.effect(() => () => {
+    hooks.setSource(() => ({}))
+    hooks.onChange()
+  }, `${LOG_PREFIX}: OpenCode session settings`)
+
+  for (const event of settingsChangeEvents('entry-config')) {
+    const disposer = ctx.on(event, (...args: unknown[]) => {
+      if (args[0] === entryId) hooks.onChange()
+    })
+    if (typeof disposer === 'function') {
+      ctx.effect(() => () => { disposer() }, `${LOG_PREFIX}: OpenCode session watcher`)
+    }
+  }
+}
+
 function installLegacySettingsSection(
   ctx: HostContext,
   namespace: string,
   hooks: SettingsSectionHooks,
 ): void {
   if (typeof ctx.inject !== 'function') {
-    throw new Error(`${LOG_PREFIX} Settings compatibility helper is unavailable: context injection is missing`)
+    installEntryConfigSettingsSection(ctx, namespace, hooks)
+    return
   }
   ctx.inject(['settings'], (settingsContext: SettingsInjectionContext) => {
     const register = settingsContext.settings.register
-    if (typeof register !== 'function') {
-      throw new Error(`${LOG_PREFIX} Settings compatibility helper is unavailable: register is missing`)
-    }
+    if (typeof register !== 'function') return
     const scope = register.call(settingsContext.settings, namespace, PLUGIN_SETTINGS_SCHEMA, { base: {} })
     hooks.setSource(() => scope.get())
     settingsContext.effect(() => () => {
@@ -228,6 +262,12 @@ function installLegacySettingsSection(
   })
 }
 
+/**
+ * Install the session settings section on whichever settings architecture the
+ * runtime exposes. The 0.1.7 line took `register`/`installSection` away, so a
+ * missing registration API selects the entry-config path instead of failing
+ * the plugin entry.
+ */
 function installSettingsSectionCompat(ctx: HostContext, hooks: SettingsSectionHooks): void {
   const settings = ctx.settings
   const installSection = settings?.installSection
@@ -236,7 +276,12 @@ function installSettingsSectionCompat(ctx: HostContext, hooks: SettingsSectionHo
     return
   }
 
-  installLegacySettingsSection(ctx, OPENCODE_SESSION_NAMESPACE, hooks)
+  if (typeof settings?.register === 'function') {
+    installLegacySettingsSection(ctx, OPENCODE_SESSION_NAMESPACE, hooks)
+    return
+  }
+
+  installEntryConfigSettingsSection(ctx, OPENCODE_SESSION_NAMESPACE, hooks)
 }
 
 /** Install the optional OpenCode session namespace and request Header bridge. */

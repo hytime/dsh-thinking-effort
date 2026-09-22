@@ -6,6 +6,7 @@ import {
   isUnknownRecord,
 } from './types.js'
 import { SETTINGS_NAMESPACE } from './settings.js'
+import { readSettingsSection } from '../compat/settings-model.js'
 import { hasModelSourceConflict } from '../compat/model-source.js'
 
 export const STANDARD_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
@@ -20,6 +21,7 @@ function log(...args: unknown[]): void {
 }
 
 function readDescriptorUser(settings: HostSettings): unknown {
+  if (typeof settings.describe !== 'function') return undefined
   const descriptors = settings.describe()
   if (!Array.isArray(descriptors)) return undefined
   const descriptor = descriptors.find((entry: unknown) => (
@@ -46,7 +48,7 @@ export function readSubagentEffort(
 }
 
 function findModel(settings: HostSettings, config: AgentRequestConfig): unknown {
-  const section = settings.get(SETTINGS_NAMESPACE)
+  const section = readSettingsSection(settings, SETTINGS_NAMESPACE)
   if (!isUnknownRecord(section) || !isUnknownRecord(section.providers)) return undefined
   if (typeof config.provider !== 'string' || typeof config.model !== 'string') return undefined
 

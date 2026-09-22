@@ -1,4 +1,6 @@
 import { hostCapabilities } from '../compat/capabilities.js'
+import { readSettingsSection, settingsChangeEvents } from '../compat/settings-model.js'
+import { settingsModelForRuntime } from '../compat/version-map.js'
 import { mark } from './marker.js'
 import {
   HostContext,
@@ -70,13 +72,13 @@ export function fillProviderDefaults(providers: unknown): ProviderDefaultsResult
   return { providers: nextProviders, filled }
 }
 
+/**
+ * Read the pi-ai section under either settings model. The `entry-config` model
+ * has no `get`, so the value comes from `describe()`; `readSettingsSection`
+ * covers both and never throws.
+ */
 function readSection(settings: HostSettings): unknown {
-  try {
-    return settings.get(SETTINGS_NAMESPACE)
-  } catch (error) {
-    log('read settings error:', error instanceof Error ? error.message : String(error))
-    return undefined
-  }
+  return readSettingsSection(settings, SETTINGS_NAMESPACE)
 }
 
 async function fillDefaults(settings: HostSettings): Promise<number> {
@@ -129,17 +131,27 @@ export function installSettingsWatcher(ctx: HostContext): void {
     }
 
     schedule(500)
-    const listenerDisposer = ctx.on('settings/updated', (...args: unknown[]) => {
-      if (!alive || args[0] !== SETTINGS_NAMESPACE) return
-      void fillDefaults(settings).catch((error: unknown) => {
-        if (alive) log('watch fill error:', error instanceof Error ? error.message : String(error))
-      })
-    })
+
+    // The 0.1.7 line removed `settings/updated` in favour of the
+    // document-scoped event, so the subscription follows the live model.
+    const model = settingsModelForRuntime({ settings })
+    const listenerDisposers: Array<() => void> = []
+    if (model !== undefined) {
+      for (const event of settingsChangeEvents(model)) {
+        const disposer = ctx.on(event, (...args: unknown[]) => {
+          if (!alive || args[0] !== SETTINGS_NAMESPACE) return
+          void fillDefaults(settings).catch((error: unknown) => {
+            if (alive) log('watch fill error:', error instanceof Error ? error.message : String(error))
+          })
+        })
+        if (typeof disposer === 'function') listenerDisposers.push(() => { disposer() })
+      }
+    }
 
     return () => {
       alive = false
       for (const dispose of timerDisposers.splice(0)) dispose()
-      if (typeof listenerDisposer === 'function') listenerDisposer()
+      for (const dispose of listenerDisposers.splice(0)) dispose()
     }
   }, 'dsh-thinking-effort: settings watcher')
 }
