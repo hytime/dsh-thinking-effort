@@ -121,7 +121,7 @@ describe('client registration through the guarded context', () => {
       connection: {},
       locale,
       // The composer seat needs the optional directory service; without it
-      // only the settings slot registers (asserted below).
+      // only the settings mount's two slots register (asserted below).
       modelDirectories: undefined,
     }
     const context = {
@@ -151,10 +151,14 @@ describe('client registration through the guarded context', () => {
     }
     for (const listener of listeners) listener('remote.settings')
 
-    expect(registrations).toHaveLength(1)
+    expect(registrations).toHaveLength(2)
     expect(registrations[0]?.descriptor).toMatchObject({
       name: 'settings.section',
       id: 'thinking-effort',
+    })
+    expect(registrations[1]?.descriptor).toMatchObject({
+      name: 'shell.overlay',
+      id: 'thinking-effort-legacy-migration',
     })
   })
 })
@@ -683,8 +687,9 @@ describe('client registration', () => {
     expect(harness.context.get).toHaveBeenCalledWith('remote.settings')
     expect(harness.context.on).toHaveBeenCalledWith('internal/service', expect.any(Function))
     expect(harness.slots.inject).toHaveBeenCalledWith('settings.section', expect.any(Function))
+    expect(harness.slots.inject).toHaveBeenCalledWith('shell.overlay', expect.any(Function))
     expect(harness.slots.inject).toHaveBeenCalledWith('conversation.input.model', expect.any(Function))
-    expect(harness.registrations).toHaveLength(2)
+    expect(harness.registrations).toHaveLength(3)
     expect(harness.registrations[0]?.descriptor).toMatchObject({
       name: 'settings.section',
       id: 'thinking-effort',
@@ -692,6 +697,11 @@ describe('client registration', () => {
       locale: LOCALE_NS,
     })
     expect(harness.registrations[1]?.descriptor).toMatchObject({
+      name: 'shell.overlay',
+      id: 'thinking-effort-legacy-migration',
+      order: 40,
+    })
+    expect(harness.registrations[2]?.descriptor).toMatchObject({
       name: 'conversation.input.model',
       priority: -10,
       locale: LOCALE_NS,
@@ -702,7 +712,7 @@ describe('client registration', () => {
     const harness = createHarness('modern')
     apply(harness.context)
 
-    const descriptor = harness.registrations[1]?.descriptor
+    const descriptor = harness.registrations[2]?.descriptor
     expect(descriptor).toMatchObject({
       name: 'conversation.input.model',
       priority: -10,
@@ -726,7 +736,7 @@ describe('client registration', () => {
     apply(harness.context)
 
     expect(harness.context.on).toHaveBeenCalledWith('internal/service', expect.any(Function))
-    expect(harness.registrations).toHaveLength(2)
+    expect(harness.registrations).toHaveLength(3)
     const render = harness.registrations[0]?.render
     const element = (render as () => { props?: { settings?: { describe: () => Promise<unknown> } } })()
     await element.props?.settings?.describe()
@@ -739,12 +749,12 @@ describe('client registration', () => {
 
     expect(harness.register).toHaveBeenCalledWith(LOCALE_NS, expect.objectContaining({ zh: expect.any(Object), en: expect.any(Object), ja: expect.any(Object), ko: expect.any(Object) }))
     expect(harness.addLanguage).toHaveBeenCalledTimes(2)
-    // One direct effect (language-pack dictionaries); the composer seat
-    // registers through slots.inject, whose teardown is the returned disposer
-    // (Cordis fiber effect). Both are torn down via disposeAllEffects.
+    // One direct effect (language-pack dictionaries); the three slot
+    // registrations go through slots.inject, whose teardown is the returned
+    // disposer (Cordis fiber effect). All are torn down via disposeAllEffects.
     expect(harness.context.effect).toHaveBeenCalledTimes(1)
     harness.disposeAllEffects()
-    expect(harness.disposed).toEqual(['slot', 'slot', 'ko', 'ja', 'dictionary'])
+    expect(harness.disposed).toEqual(['slot', 'slot', 'slot', 'ko', 'ja', 'dictionary'])
   })
 
   it('injects the per-session directory store and verbs into the composer seat', () => {
@@ -752,7 +762,7 @@ describe('client registration', () => {
     apply(harness.context)
 
     expect(harness.context.get).toHaveBeenCalledWith('modelDirectories')
-    const descriptor = harness.registrations[1]?.descriptor as { inject?: (sessionId: string) => unknown }
+    const descriptor = harness.registrations[2]?.descriptor as { inject?: (sessionId: string) => unknown }
     expect(descriptor?.inject).toEqual(expect.any(Function))
 
     const face = descriptor?.inject?.('session-1') as { directory: { getSnapshot: () => { status: string } }; load: () => void; select: unknown }
@@ -771,7 +781,7 @@ describe('client registration', () => {
     // `remoteSettings` starts unresolved so the settings mount path can be
     // announced AFTER apply. `registerComposerSeat` runs at the top of apply and
     // declares modelDirectories via inject; because that service is absent the
-    // inject callback never fires, so only the settings slot registers.
+    // inject callback never fires, so only the settings mount's slots register.
     let remoteSettings: unknown
     const slots = {
       inject: vi.fn((_name: string, callback: () => void) => callback()),
@@ -811,13 +821,14 @@ describe('client registration', () => {
     expect(calls).toContain('modelDirectories')
     expect(registrations).toHaveLength(0)
 
-    // Announce a working settings service: mount now runs and only the
-    // settings slot registers; the seat stays absent (modelDirectories missing).
+    // Announce a working settings service: mount now runs and the settings
+    // mount's slots register; the seat stays absent (modelDirectories missing).
     remoteSettings = { describe: vi.fn(), mutate: vi.fn() }
     for (const listener of listeners) listener('remote.settings')
 
-    expect(registrations).toHaveLength(1)
+    expect(registrations).toHaveLength(2)
     expect(registrations[0]?.descriptor?.name).toBe('settings.section')
+    expect(registrations[1]?.descriptor?.name).toBe('shell.overlay')
     expect(slots.inject).not.toHaveBeenCalledWith('conversation.input.model', expect.any(Function))
   })
 })

@@ -4,6 +4,7 @@ import { settingsBridge } from './settings-bridge.js'
 import { createTakeoverRuntimeStore, observeTakeoverSettings } from './takeover-runtime.js'
 import { LOCALE_NS } from './constants.js'
 import { SectionEditor } from './SectionEditor.js'
+import { LegacyMigrationModal } from './components/LegacyMigrationModal.js'
 import { apply as registerComposerSeat } from './thinking-slider/index.js'
 import type { ClientContext, ClientLocale, ClientSlots } from './types.js'
 
@@ -13,6 +14,9 @@ export const inject = ['slots', 'connection', 'locale'] as const
 const SLOT_NAME = 'settings.section'
 const SLOT_ID = 'thinking-effort'
 const SLOT_ORDER = 12
+const OVERLAY_NAME = 'shell.overlay'
+const OVERLAY_ID = 'thinking-effort-legacy-migration'
+const OVERLAY_ORDER = 40
 
 function hasLanguage(locale: ClientLocale, id: string): boolean {
   const snapshot = locale.getSnapshot?.()
@@ -67,6 +71,11 @@ export function apply(context: ClientContext): void {
         label: () => translate('pageTitle'),
       },
       () => createElement(SectionEditor, { settings: observedSettings, locale, t: translate, takeoverRuntime: runtime }),
+    ))
+
+    slots.inject(OVERLAY_NAME, () => slots.register(
+      { name: OVERLAY_NAME, id: OVERLAY_ID, order: OVERLAY_ORDER },
+      () => createElement(LegacyMigrationModal, { settings: observedSettings, t: translate }),
     ))
   }
 
