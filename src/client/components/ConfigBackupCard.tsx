@@ -1,5 +1,6 @@
 import React from 'react'
 import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
+import { LEGACY_FAILED_PREFIX, legacyMigrationOf } from '../../compat/legacy-migration.js'
 import { downloadJson as browserDownloadJson, type DownloadJson } from '../browser-download.js'
 import { applySnapshot } from '../config-snapshot/apply.js'
 import {
@@ -12,7 +13,7 @@ import {
 import { parseSnapshot, serializeSnapshot } from '../config-snapshot/parse.js'
 import { planImport } from '../config-snapshot/plan.js'
 import { isSnapshotLibraryKey, pluginSectionKey, snapshotFileName, snapshotFromNamespaces } from '../config-snapshot/snapshot.js'
-import { pluginSectionId } from '../subagent-section.js'
+import { pluginSection, pluginSectionId } from '../subagent-section.js'
 import {
   MAX_PROFILES,
   MAX_PROFILE_NAME,
@@ -270,6 +271,45 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
     }
   }
 
+  /**
+   * The manual entry point into the legacy-data migration. The startup prompt
+   * renders into the shell's overlay slot, which DSH lines before 0.1.7 do not
+   * publish, so on those hosts this card is the only way to ask for a scan.
+   *
+   * The write is the one decision the prompt makes, and `scan` rather than
+   * `migrate`: the host answers it by scanning again even after a previous
+   * "don't ask again", and it decides what to offer from that fresh scan — this
+   * card cannot see the legacy documents, so it must not offer to write them.
+   *
+   * The result line reads the same published control object the prompt does,
+   * through the plugin section `describe` already answered for the rest of the
+   * card, so there is no second read path to keep in step.
+   */
+  const ownSection = pluginSection(state.namespaces)
+  const legacyState = legacyMigrationOf(ownSection?.user)
+  const legacyResult = typeof legacyState?.lastResult === 'string' ? legacyState.lastResult : ''
+  const legacyCandidateCount = Array.isArray(legacyState?.candidates) ? legacyState.candidates.length : 0
+  /**
+   * A refused write is not a result to celebrate. The host keeps `pending` with
+   * its candidates in that case, so the nothing-pending sentence would state the
+   * opposite of what the section holds; the reason is what has to be read.
+   */
+  const legacyFailed = legacyResult.startsWith(LEGACY_FAILED_PREFIX)
+  const [legacyBusy, setLegacyBusy] = React.useState(false)
+
+  const rescanLegacyData = async (): Promise<void> => {
+    if (ownSection === undefined) return
+    setLegacyBusy(true)
+    try {
+      await settings.mutate(ownSection.ns, [
+        { op: 'set', path: ['legacyMigration', 'decision'], value: 'scan' },
+      ], typeof ownSection.revision === 'number' ? ownSection.revision : 0)
+      await refreshNamespaces()
+    } finally {
+      setLegacyBusy(false)
+    }
+  }
+
   const openPreview = (snapshot: ConfigSnapshot, label: string, ignored: readonly string[] = []): void => {
     setState((current) => ({ ...current, error: null, notice: [], mode: 'merge', importWiring: false, preview: { snapshot, label, ignored } }))
     void refreshNamespaces()
@@ -521,5 +561,30 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
         </div>
       </div>}
     </div> : null}
+    <div style={{ marginTop: '12px', paddingTop: '12px', paddingLeft: '8px', paddingRight: '8px', borderTop: `1px solid ${palette.divider}` }}>
+      <div style={{ fontSize: '13px', fontWeight: 600 }}>{t('legacyMigrationRescan')}</div>
+      <div style={{ fontSize: '12px', color: palette.secondary, margin: '4px 0 8px' }}>
+        {t('legacyMigrationRescanHint')}
+      </div>
+      {legacyResult !== '' ? (
+        <div style={{ fontSize: '12px', color: palette.secondary, marginBottom: '8px' }}>
+          {legacyFailed
+            ? t('legacyMigrationFailed', { reason: legacyResult.slice(LEGACY_FAILED_PREFIX.length).trim() })
+            : legacyResult === 'applied'
+              ? t('legacyMigrationApplied', { count: legacyCandidateCount })
+              : legacyResult === 'dismissed'
+                ? t('legacyMigrationDismissed')
+                : t('legacyMigrationNothingPending')}
+        </div>
+      ) : null}
+      <button
+        type="button"
+        data-testid="legacy-rescan"
+        disabled={legacyBusy}
+        onClick={() => { void rescanLegacyData() }}
+      >
+        {t('legacyMigrationRescan')}
+      </button>
+    </div>
   </div>
 }
