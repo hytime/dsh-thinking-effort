@@ -115,6 +115,28 @@ describe('LegacyMigrationModal', () => {
     expect(element.querySelectorAll('[data-testid="legacy-candidate"]').length).toBe(2)
   })
 
+  it('renders its actions with the plugin button primitive, not bare buttons', async () => {
+    const { settings } = bridge({ legacyMigration: { pending: true, candidates: CANDIDATES } })
+    const element = mount(settings)
+    await flush()
+    const apply = element.querySelector<HTMLButtonElement>('[data-testid="legacy-apply"]')
+    const dismiss = element.querySelector<HTMLButtonElement>('[data-testid="legacy-dismiss"]')
+    const later = element.querySelector<HTMLButtonElement>('[data-testid="legacy-later"]')
+    // A bare <button> carries none of the primitive's own metrics; this is the
+    // regression that shipped once and showed up as three default-styled
+    // controls under a card that was otherwise fully themed.
+    for (const button of [apply, dismiss, later]) {
+      expect(button?.style.height).toBe('28px')
+      expect(button?.style.borderRadius).toBe('8px')
+    }
+    // The hierarchy the question rests on: accepting is the filled action,
+    // refusing is an ordinary one, postponing is borderless.
+    expect(apply?.style.backgroundColor).not.toBe('')
+    expect(apply?.style.backgroundColor).not.toBe(dismiss?.style.backgroundColor)
+    expect(later?.style.backgroundColor).toBe('transparent')
+    expect(later?.style.borderColor).toBe('transparent')
+  })
+
   it('writes decision=migrate when the user accepts', async () => {
     const { settings, writes } = bridge({ legacyMigration: { pending: true, candidates: CANDIDATES } })
     const element = mount(settings)

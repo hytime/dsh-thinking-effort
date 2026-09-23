@@ -606,12 +606,22 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
       </div>}
     </div> : null}
     {legacyRescanAvailable ? <div style={{ marginTop: '12px', paddingTop: '12px', paddingLeft: '8px', paddingRight: '8px', borderTop: `1px solid ${palette.divider}` }}>
-      <div style={{ fontSize: '13px', fontWeight: 600 }}>{t('legacyMigrationRescan')}</div>
-      <div style={{ fontSize: '12px', color: palette.secondary, margin: '4px 0 8px' }}>
-        {t('legacyMigrationRescanHint')}
-      </div>
+      {/* Typography follows this card's own sections (`sectionTitle` / `muted`)
+          rather than a one-off scale, so the block reads as part of the card
+          even though it sits outside the collapse: on a host without the overlay
+          slot it is the only entry point, so it must stay visible. */}
+      <div style={sectionTitle}>{t('legacyMigrationRescan')}</div>
+      <div style={{ ...muted, margin: '3px 0 8px' }}>{t('legacyMigrationRescanHint')}</div>
+      <ActionButton text={t('legacyMigrationRescan')} onClick={() => { void rescanLegacyData() }} disabled={legacyBusy} palette={palette} icon="restore" testId="legacy-rescan" />
       {legacyResultMessage === null ? null : (
-        <div style={{ fontSize: '12px', color: palette.secondary, marginBottom: '8px' }}>
+        <div
+          role="status"
+          style={{
+            ...muted,
+            marginTop: '8px',
+            color: legacyFailed ? palette.danger : legacyResult === LEGACY_RESULT_APPLIED ? palette.accent : palette.secondary,
+          }}
+        >
           {/* No count: the Host clears `candidates` in the same write that records
               `applied`, so any count read here would always be 0. Making the
               number real needs a Host-side field for it, which the Client cannot
@@ -619,14 +629,6 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
           {legacyResultMessage}
         </div>
       )}
-      <button
-        type="button"
-        data-testid="legacy-rescan"
-        disabled={legacyBusy}
-        onClick={() => { void rescanLegacyData() }}
-      >
-        {t('legacyMigrationRescan')}
-      </button>
     </div> : null}
   </div>
 }

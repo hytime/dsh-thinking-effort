@@ -1194,6 +1194,22 @@ describe('ConfigBackupCard legacy rescan', () => {
     expect(test.writes().at(-1)).toMatchObject({ ns: 'thinking-effort', revision: 8 })
   })
 
+  it('renders the rescan control with the plugin button primitive', async () => {
+    const test = harness({
+      pluginNamespace: 'thinking-effort',
+      user: { 'thinking-effort': { legacyMigration: { pending: false, candidates: [] } } },
+    })
+    const element = await test.render()
+    const rescan = element.querySelector<HTMLButtonElement>('[data-testid="legacy-rescan"]')
+    // A bare <button> would carry none of these, which is how this control
+    // shipped once while every sibling action in the card was themed.
+    expect(rescan?.style.height).toBe('28px')
+    expect(rescan?.style.borderRadius).toBe('8px')
+    expect(rescan?.style.backgroundColor).not.toBe('')
+    // The affordance is what its icon says it is.
+    expect(rescan?.querySelector('svg')).not.toBeNull()
+  })
+
   // The Host clears `candidates` when it records a successful apply, so this is
   // the state that message is read from. What the case pins is which branch is
   // chosen: "applied" must not fall through to the nothing-pending sentence.

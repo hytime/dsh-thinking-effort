@@ -11,6 +11,7 @@ import {
   type LegacyMigrationRead,
 } from '../legacy-migration.js'
 import { iosPalette, type Palette } from '../theme.js'
+import { ActionButton } from './Controls.js'
 import type { SettingsApi, Translation } from '../types.js'
 
 /** Boot-time reads before the prompt gives up for this page load. */
@@ -170,7 +171,12 @@ export function LegacyMigrationModal({ settings, t, palette = iosPalette() }: Pr
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.35)',
+        padding: '24px',
+        // The shell's own modal mask is rgba(0,0,0,0.24) with a 2px backdrop
+        // blur, raised for dark themes. `iosPalette` carries no mask token, so
+        // one value between the two covers both.
+        background: 'rgba(0,0,0,0.32)',
+        backdropFilter: 'blur(2px)',
       }}
     >
       <div
@@ -178,48 +184,70 @@ export function LegacyMigrationModal({ settings, t, palette = iosPalette() }: Pr
         aria-modal="true"
         aria-label={t('legacyMigrationTitle')}
         style={{
-          width: 'min(560px, 92vw)', maxHeight: '80vh', overflow: 'auto',
+          display: 'flex', flexDirection: 'column', gap: '16px',
+          width: 'min(560px, 100%)', maxHeight: '100%', overflow: 'hidden',
+          // The shell's modal card is a 24px radius on the layer-2 fill with a
+          // prominent elevation shadow and no border. The border is the one
+          // addition: this card can open over an arbitrary page, and the raised
+          // fill sits close enough to the mask in dark themes to need an edge.
           background: palette.raised, color: palette.text,
           border: `1px solid ${palette.border}`,
-          borderRadius: '12px', padding: '18px 20px',
-          boxShadow: '0 12px 40px rgba(0,0,0,0.28)',
+          borderRadius: '24px', padding: '22px 0 20px',
+          boxShadow: '0 24px 60px rgba(0,0,0,0.42)',
         }}
       >
-        <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '8px' }}>
+        <div style={{ padding: '0 24px', fontSize: '16px', lineHeight: '24px', fontWeight: 500 }}>
           {t('legacyMigrationTitle')}
         </div>
-        <div style={{ fontSize: '13px', color: palette.secondary, marginBottom: '12px' }}>
-          {t('legacyMigrationBody', { count: candidates.length })}
-        </div>
-        <ul style={{ listStyle: 'none', margin: '0 0 14px', padding: 0 }}>
-          {candidates.map((candidate) => (
-            <li
-              key={candidate.path.join('.')}
-              data-testid="legacy-candidate"
-              style={{ fontSize: '12px', padding: '5px 0', borderBottom: `1px solid ${palette.divider}` }}
-            >
-              <code>{candidate.path.join('.')}</code>
-              {' = '}
-              <strong>{String(candidate.value)}</strong>
-              <span style={{ color: palette.secondary }}>{`  (${sourceLabel(candidate.source)})`}</span>
-            </li>
-          ))}
-        </ul>
-        {phase.kind === 'failed' ? (
-          <div style={{ fontSize: '12px', color: palette.danger, marginBottom: '10px' }}>
-            {t('legacyMigrationFailed', { reason: phase.reason })}
+        {/* Header and footer stay put; a long candidate list scrolls between them. */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', minHeight: 0, overflow: 'auto', padding: '0 24px' }}>
+          <div style={{ fontSize: '13px', lineHeight: '19px', color: palette.secondary }}>
+            {t('legacyMigrationBody', { count: candidates.length })}
           </div>
-        ) : null}
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-          <button type="button" data-testid="legacy-later" disabled={busy} onClick={() => { setPhase({ kind: 'later' }) }}>
-            {t('legacyMigrationLater')}
-          </button>
-          <button type="button" data-testid="legacy-dismiss" disabled={busy} onClick={() => { void commit(target, 'dismiss') }}>
-            {t('legacyMigrationDismiss')}
-          </button>
-          <button type="button" data-testid="legacy-apply" disabled={busy} onClick={() => { void commit(target, 'migrate') }}>
-            {t('legacyMigrationApply')}
-          </button>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: '4px' }}>
+            {candidates.map((candidate) => (
+              <li
+                key={candidate.path.join('.')}
+                data-testid="legacy-candidate"
+                style={{
+                  display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '6px',
+                  padding: '6px 8px', border: `1px solid ${palette.border}`, borderRadius: '8px',
+                  backgroundColor: palette.field,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  fontSize: '11.5px', lineHeight: '16px',
+                }}
+              >
+                <span style={{ color: palette.text, overflowWrap: 'anywhere' }}>{candidate.path.join('.')}</span>
+                <span style={{ color: palette.secondary }}>=</span>
+                <strong style={{ color: palette.accent, fontWeight: 700 }}>{String(candidate.value)}</strong>
+                {/* The source flows after the value rather than being pushed to
+                    the right edge: a long path wraps, and right-alignment then
+                    stranded the label on a second line across a wide empty gap. */}
+                <span style={{ padding: '0 6px', border: `1px solid ${palette.border}`, borderRadius: '999px', color: palette.secondary, fontFamily: 'inherit', fontSize: '10.5px', whiteSpace: 'nowrap' }}>
+                  {sourceLabel(candidate.source)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {phase.kind === 'failed' ? (
+            <div
+              role="alert"
+              style={{
+                padding: '6px 8px', border: `1px solid ${palette.dangerBorder}`, borderRadius: '8px',
+                backgroundColor: palette.dangerBg, color: palette.danger,
+                fontSize: '12px', lineHeight: '18px',
+              }}
+            >
+              {t('legacyMigrationFailed', { reason: phase.reason })}
+            </div>
+          ) : null}
+        </div>
+        {/* One primary action, rightmost: the question is "migrate or not", so
+            postponing and refusing carry less weight than accepting. */}
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', padding: '0 24px' }}>
+          <ActionButton text={t('legacyMigrationLater')} onClick={() => { setPhase({ kind: 'later' }) }} disabled={busy} tone="ghost" palette={palette} testId="legacy-later" />
+          <ActionButton text={t('legacyMigrationDismiss')} onClick={() => { void commit(target, 'dismiss') }} disabled={busy} palette={palette} testId="legacy-dismiss" />
+          <ActionButton text={t('legacyMigrationApply')} onClick={() => { void commit(target, 'migrate') }} disabled={busy} tone="primary" palette={palette} icon="check" testId="legacy-apply" />
         </div>
       </div>
     </div>

@@ -52,10 +52,12 @@ export interface ActionButtonProps {
   readonly palette: Palette
   readonly icon?: IconName
   readonly label?: string
+  /** Rendered as `data-testid`; the plugin's suites locate buttons by it. */
+  readonly testId?: string
   readonly children?: ReactNode
 }
 
-export function ActionButton({ text = '', onClick, disabled = false, tone = 'secondary', palette, icon, label, children }: ActionButtonProps): React.ReactElement {
+export function ActionButton({ text = '', onClick, disabled = false, tone = 'secondary', palette, icon, label, testId, children }: ActionButtonProps): React.ReactElement {
   const visual = tone === 'primary'
     ? { background: palette.accent, color: '#FFFFFF', border: palette.accent }
     : tone === 'danger'
@@ -64,7 +66,7 @@ export function ActionButton({ text = '', onClick, disabled = false, tone = 'sec
         ? { background: 'transparent', color: palette.accent, border: 'transparent' }
         : { background: palette.field, color: palette.text, border: palette.border }
   const iconOnly = text.length === 0 && children === undefined
-  return <button type="button" title={label} aria-label={label} disabled={disabled} onClick={onClick} style={{ height: '28px', minWidth: '28px', width: iconOnly ? '28px' : undefined, padding: iconOnly ? 0 : '0 9px', borderRadius: '8px', border: `1px solid ${visual.border}`, backgroundColor: visual.background, color: visual.color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '12px', fontWeight: 600, letterSpacing: 0, whiteSpace: 'nowrap', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1, boxShadow: tone === 'primary' ? palette.shadow : 'none', transition: 'background-color 150ms ease, opacity 150ms ease, transform 150ms ease' }}>{icon ? <Icon name={icon} size={14} /> : null}{text ? <span>{text}</span> : children}</button>
+  return <button type="button" data-testid={testId} title={label} aria-label={label} disabled={disabled} onClick={onClick} style={{ height: '28px', minWidth: '28px', width: iconOnly ? '28px' : undefined, padding: iconOnly ? 0 : '0 9px', borderRadius: '8px', border: `1px solid ${visual.border}`, backgroundColor: visual.background, color: visual.color, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '12px', fontWeight: 600, letterSpacing: 0, whiteSpace: 'nowrap', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1, boxShadow: tone === 'primary' ? palette.shadow : 'none', transition: 'background-color 150ms ease, opacity 150ms ease, transform 150ms ease' }}>{icon ? <Icon name={icon} size={14} /> : null}{text ? <span>{text}</span> : children}</button>
 }
 
 export interface SwitchControlProps {

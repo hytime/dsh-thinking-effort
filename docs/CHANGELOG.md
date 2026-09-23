@@ -14,6 +14,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 修复 / Fixed
+
+- 修复新增功能的按钮样式：启动提示的三个按钮与设置页的「重新扫描旧数据」此前渲染成未主题化的默认按钮，与旁边同类的按钮明显不一致。它们现在统一使用插件自己的按钮原语（28px 高、8px 圆角、按主次分级：迁移为主按钮、不再询问为次按钮、稍后为无边框），启动提示还在视觉上对齐了 DSH 自己的弹窗（24px 圆角、模糊遮罩、同一标题层级），候选行改为等宽字体并保留来源标签。
+- Fix the new feature's buttons: the startup prompt's three controls and the settings page's "Rescan legacy data" rendered as untinted default buttons, visibly unlike the equivalent buttons beside them. They now use the plugin's own button primitive (28px tall, 8px radius, ranked by weight: Migrate is the filled action, Don't ask again an ordinary one, Later borderless), and the prompt follows DSH's own dialog treatment (24px radius, blurred mask, same title scale), with candidate rows in a monospace face and the provenance label kept alongside.
+
 ## [0.3.2] - 2026-09-23
 
 ### 变更 / Changed
