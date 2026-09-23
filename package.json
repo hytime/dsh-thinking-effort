@@ -87,7 +87,8 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@deepseek-ai/schemastery": "^3.18.3"
+    "@deepseek-ai/schemastery": "^3.18.3",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
@@ -104,7 +105,6 @@
     "react-dom": "^18.3.1",
     "tsdown": "^0.22.14",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.7",
-    "yaml": "^2.9.0"
+    "vitest": "^3.2.7"
   }
 }
