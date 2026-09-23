@@ -108,6 +108,21 @@ describe('rollbackSnapshot', () => {
     rollbackSnapshot({ pluginNs: 'thinking-effort', createdAt: 'T', sections: { 'thinking-effort': plugin } })
     expect(plugin).toEqual({ profiles: { work: {} }, subagentEffort: 'off' })
   })
+
+  it('never copies a reserved key into the snapshot', () => {
+    // `JSON.parse` keeps `__proto__` as an own enumerable property, so a parsed
+    // document really can carry one; assigning it into an accumulator would drop
+    // the entry and rewrite the accumulator's prototype.
+    const plugin = JSON.parse('{"__proto__":{"polluted":true},"subagentEffort":"off"}') as Record<string, unknown>
+    const snapshot = rollbackSnapshot({
+      pluginNs: 'thinking-effort',
+      createdAt: 'T',
+      sections: { 'thinking-effort': plugin },
+    })
+    expect((snapshot.sections as Record<string, unknown>)['thinking-effort'])
+      .toEqual({ subagentEffort: 'off' })
+    expect(({} as Record<string, unknown>)['polluted']).toBeUndefined()
+  })
 })
 
 describe('applyLegacyMigration', () => {
@@ -124,11 +139,14 @@ describe('applyLegacyMigration', () => {
     expect(outcome).toBe(LEGACY_RESULT_APPLIED)
   })
 
-  it('takes the snapshot before the write, so it cannot capture the migration itself', async () => {
-    const { settings } = service()
+  it('builds the snapshot before the write and sends it as the batch first element', async () => {
+    const { settings, calls } = service()
     const snapshot = vi.fn(() => SNAPSHOT)
     await applyLegacyMigration({ settings, ...input({ snapshot }) })
     expect(snapshot).toHaveBeenCalledOnce()
+    // The order is the property: a batch where the values came first could land
+    // them without the copy the user asked for.
+    expect(calls[0]?.ops[0]).toEqual({ op: 'set', path: ['autoBackup'], value: SNAPSHOT })
   })
 
   it('writes neither values nor a snapshot when there is nothing to migrate', async () => {
@@ -172,5 +190,26 @@ describe('applyLegacyMigration', () => {
     const clear = vi.fn(async () => {})
     await applyLegacyMigration({ settings, ...input({ clear }) })
     expect(clear).not.toHaveBeenCalled()
+  })
+
+  it('reports applied when only clearing the prompt fails, so no retry can rebuild the snapshot', async () => {
+    const { settings, calls } = service()
+    const clear = vi.fn(async () => { throw new Error('bookkeeping refused') })
+    const outcome = await applyLegacyMigration({ settings, ...input({ clear }) })
+    expect(outcome).toBe(LEGACY_RESULT_APPLIED)
+    expect(calls[0]?.ops[0]?.path).toEqual(['autoBackup'])
+  })
+
+  it('reports a snapshot that cannot be built instead of throwing it out of the executor', async () => {
+    const { settings, calls } = service()
+    const outcome = await applyLegacyMigration({
+      settings,
+      ...input({
+        snapshot: () => { throw new Error('snapshot unavailable') },
+      }),
+    })
+    expect(outcome.startsWith(LEGACY_FAILED_PREFIX)).toBe(true)
+    expect(outcome).toContain('snapshot unavailable')
+    expect(calls).toEqual([])
   })
 })

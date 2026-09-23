@@ -23,6 +23,15 @@ const SNAPSHOT_VERSION = 1
  */
 const SNAPSHOT_EXCLUDED_KEYS = ['profiles', 'autoBackup', 'legacyMigration'] as const
 
+/**
+ * Keys that must never be copied into an accumulator, whatever a layer holds.
+ * A parsed document can carry an own `__proto__` (see `legacy-shape.ts`), and
+ * `copy[key] = value` on one would drop the entry and rewrite the accumulator's
+ * prototype — the same risk the repo already blocks in
+ * `src/client/config-snapshot/library.ts` and `parse.ts`.
+ */
+const RESERVED_PATH_KEYS = ['__proto__', 'constructor', 'prototype'] as const
+
 /** One candidate as a path write into the plugin's own section. */
 export function opsForCandidates(candidates: readonly LegacyCandidate[]): SettingsPathOp[] {
   return candidates.map((candidate) => ({
@@ -56,6 +65,7 @@ export function rollbackSnapshot(input: RollbackSnapshotInput): Record<string, u
   for (const [ns, user] of Object.entries(input.sections)) {
     const copy: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(user)) {
+      if ((RESERVED_PATH_KEYS as readonly string[]).includes(key)) continue
       if (ns === input.pluginNs && (SNAPSHOT_EXCLUDED_KEYS as readonly string[]).includes(key)) continue
       copy[key] = value
     }
@@ -117,12 +127,13 @@ export async function applyLegacyMigration(input: ApplyLegacyMigrationInput): Pr
     return `${LEGACY_FAILED_PREFIX} settings service cannot address paths (no mutate)`
   }
 
-  const batch: SettingsPathOp[] = [
-    { op: 'set', path: ['autoBackup'], value: input.snapshot() },
-    ...ops,
-  ]
-
   try {
+    // Built inside the `try` on purpose: this module promises never to throw, and
+    // a snapshot builder the caller supplies is code it does not control.
+    const batch: SettingsPathOp[] = [
+      { op: 'set', path: ['autoBackup'], value: input.snapshot() },
+      ...ops,
+    ]
     await mutate.call(input.settings, input.ns, batch)
   } catch (error) {
     return `${LEGACY_FAILED_PREFIX} ${reason(error)}`
@@ -130,11 +141,13 @@ export async function applyLegacyMigration(input: ApplyLegacyMigrationInput): Pr
 
   try {
     await input.clear()
-  } catch (error) {
-    // The values landed; only the bookkeeping failed. Report applied and let the
-    // next scan reconcile the control object, rather than claiming a failure
-    // that would offer a second, redundant write.
-    return `${LEGACY_FAILED_PREFIX} migrated, but clearing the prompt failed: ${reason(error)}`
+  } catch {
+    // Swallowed on purpose. The VALUES LANDED, so this must report `applied` and
+    // never `failed:` — a `failed:` result makes the prompt offer a retry, and a
+    // retry rebuilds the rollback snapshot from the now-migrated user layer,
+    // overwriting the one pre-migration copy with a copy of the migration
+    // itself. That is the opposite of what the snapshot is for. The control
+    // object is reconciled by the next scan instead.
   }
   return LEGACY_RESULT_APPLIED
 }
