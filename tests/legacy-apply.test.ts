@@ -111,17 +111,22 @@ describe('rollbackSnapshot', () => {
 
   it('never copies a reserved key into the snapshot', () => {
     // `JSON.parse` keeps `__proto__` as an own enumerable property, so a parsed
-    // document really can carry one; assigning it into an accumulator would drop
-    // the entry and rewrite the accumulator's prototype.
+    // document really can carry one. Without the guard, `copy['__proto__'] = …`
+    // does NOT create an own key: it invokes the setter and rewrites the
+    // accumulator's PROTOTYPE, which `toEqual` cannot observe and which never
+    // touches `Object.prototype`. So this case asserts the prototype and an
+    // inherited-name lookup — asserting own keys or global pollution alone would
+    // pass with or without the guard.
     const plugin = JSON.parse('{"__proto__":{"polluted":true},"subagentEffort":"off"}') as Record<string, unknown>
     const snapshot = rollbackSnapshot({
       pluginNs: 'thinking-effort',
       createdAt: 'T',
       sections: { 'thinking-effort': plugin },
     })
-    expect((snapshot.sections as Record<string, unknown>)['thinking-effort'])
-      .toEqual({ subagentEffort: 'off' })
-    expect(({} as Record<string, unknown>)['polluted']).toBeUndefined()
+    const captured = (snapshot.sections as Record<string, unknown>)['thinking-effort'] as Record<string, unknown>
+    expect(Object.keys(captured)).toEqual(['subagentEffort'])
+    expect(Object.getPrototypeOf(captured)).toBe(Object.prototype)
+    expect('polluted' in captured).toBe(false)
   })
 })
 
