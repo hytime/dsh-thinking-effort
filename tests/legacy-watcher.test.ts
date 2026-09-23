@@ -1,5 +1,6 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { describe, expect, it } from 'vitest'
-import { LEGACY_RESULT_DISMISSED } from '../src/compat/legacy-migration.ts'
+import { LEGACY_RESULT_APPLIED, LEGACY_RESULT_DISMISSED } from '../src/compat/legacy-migration.ts'
 import { installLegacyMigration } from '../src/host/legacy-watcher.ts'
 import type { SettingsPathOp } from '../src/host/types.ts'
 
@@ -11,9 +12,19 @@ const DOCUMENT = 'dsh-thinking-effort:\n  subagentEffort: off\n'
 type Listeners = Record<string, Array<(...args: unknown[]) => unknown>>
 
 /** One in-memory settings document plus the events a write raises. */
-function harness(options: { entryConfig?: boolean; failMutate?: boolean } = {}) {
+function harness(options: { entryConfig?: boolean; failMutate?: boolean; modelTransaction?: boolean } = {}) {
   const listeners: Listeners = {}
   const mutations: Array<{ ns: string; ops: readonly SettingsPathOp[] }> = []
+  /**
+   * The host's write transaction. 0.1.7 raises the settings-change event from
+   * inside the write that caused it and tracks that transaction with
+   * `AsyncLocalStorage`, so a listener that writes back is refused with "HMR
+   * transactions cannot be nested" — and so is anything it defers, because the
+   * context travels with the store. Modelling it here is the only way a case in
+   * this file can exercise the escape the watcher must use; without it the
+   * nesting bug is invisible to every case.
+   */
+  const transaction = new AsyncLocalStorage<true>()
   let document: Record<string, unknown> = {}
 
   const resolve = (value: Record<string, unknown>, path: readonly string[]): unknown =>
@@ -23,34 +34,49 @@ function harness(options: { entryConfig?: boolean; failMutate?: boolean } = {}) 
         : undefined
     ), value)
 
+  /** One host write: refuse inside a transaction, apply the ops, then raise the event. */
+  const hostWrite = async (ns: string, ops: readonly SettingsPathOp[]): Promise<void> => {
+    if (options.modelTransaction === true && transaction.getStore() === true) {
+      throw new Error('HMR transactions cannot be nested')
+    }
+    // `failMutate` refuses the MIGRATION batch only — a batch that writes the
+    // plugin's own settings rather than the migration control object. The
+    // control object must stay writable even then, because recording "the write
+    // was refused" is exactly how the prompt learns it can offer a retry;
+    // failing every write would leave that record unwritable.
+    if (options.failMutate === true && ops.some((op) => op.path[0] !== 'legacyMigration')) {
+      throw new Error('refused')
+    }
+    mutations.push({ ns, ops })
+    const next = structuredClone(document)
+    for (const op of ops) {
+      const parents = op.path.slice(0, -1)
+      let node = next as Record<string, unknown>
+      for (const key of parents) {
+        if (typeof node[key] !== 'object' || node[key] === null) node[key] = {}
+        node = node[key] as Record<string, unknown>
+      }
+      node[op.path[op.path.length - 1] as string] = op.value
+    }
+    document = next
+    const raise = (): void => {
+      for (const listener of listeners['settings/document-updated'] ?? []) listener(NS, 1)
+    }
+    if (options.modelTransaction === true) {
+      await transaction.run(true, async () => {
+        raise()
+        await Promise.resolve()
+      })
+      return
+    }
+    raise()
+  }
+
   const settings: Record<string, unknown> = {
     writable: true,
     update: async () => {},
     describe: () => [{ ns: NS, revision: 0, value: document, user: document }],
-    mutate: async (ns: string, ops: readonly SettingsPathOp[]) => {
-      // `failMutate` refuses the MIGRATION batch only — a batch that writes the
-      // plugin's own settings rather than the migration control object. The
-      // control object must stay writable even then, because recording "the
-      // write was refused" is exactly how the prompt learns it can offer a
-      // retry; failing every write would leave that record unwritable and the
-      // failure report unreachable.
-      if (options.failMutate === true && ops.some((op) => op.path[0] !== 'legacyMigration')) {
-        throw new Error('refused')
-      }
-      mutations.push({ ns, ops })
-      const next = structuredClone(document)
-      for (const op of ops) {
-        const parents = op.path.slice(0, -1)
-        let node = next as Record<string, unknown>
-        for (const key of parents) {
-          if (typeof node[key] !== 'object' || node[key] === null) node[key] = {}
-          node = node[key] as Record<string, unknown>
-        }
-        node[op.path[op.path.length - 1] as string] = op.value
-      }
-      document = next
-      for (const listener of listeners['settings/document-updated'] ?? []) listener(NS, 1)
-    },
+    mutate: hostWrite,
   }
   if (options.entryConfig !== true) {
     settings.get = () => document
@@ -75,6 +101,14 @@ function harness(options: { entryConfig?: boolean; failMutate?: boolean } = {}) 
     scheduled,
     document: () => document,
     user: () => resolve(document, ['legacyMigration']) as Record<string, unknown> | undefined,
+    /**
+     * Make a decision the way the Client does — through a write, so the event
+     * that carries it is raised inside the host transaction.
+     */
+    decide: (patch: Record<string, unknown>) => {
+      const current = (resolve(document, ['legacyMigration']) as Record<string, unknown> | undefined) ?? {}
+      return hostWrite(NS, [{ op: 'set', path: ['legacyMigration'], value: { ...current, ...patch } }])
+    },
     fire: (event: string, ...args: unknown[]) => {
       for (const listener of listeners[event] ?? []) listener(...args)
     },
@@ -128,10 +162,34 @@ describe('installLegacyMigration', () => {
     expect(test.user()?.lastResult).toBe('applied')
   })
 
+  it('migrates from inside the write transaction 0.1.7 raises the change event in', async () => {
+    // The decision is made the way the Client makes it — through a write whose
+    // event fires INSIDE the host transaction — so the pass that acts on it
+    // inherits that transaction. The migration batch must still be accepted,
+    // which is what the apply-time `AsyncResource` is for. Without it the batch
+    // is refused and this case reports `failed:` instead.
+    const test = harness({ entryConfig: true, modelTransaction: true })
+    installLegacyMigration(test.context as never, home)
+    await test.settle()
+    expect(test.user()?.pending).toBe(true)
+
+    await test.decide({ decision: 'migrate' })
+    await test.settle()
+
+    expect(test.document().subagentEffort).toBe('off')
+    expect(test.user()?.pending).toBe(false)
+    expect(test.user()?.lastResult).toBe(LEGACY_RESULT_APPLIED)
+  })
+
   it('leaves a rollback snapshot of the settings the migration extended', async () => {
     const test = harness({ entryConfig: true })
     installLegacyMigration(test.context as never, home)
     await test.settle()
+    // A setting the migration does NOT offer, so the snapshot has something it
+    // must copy. Asserting only on the excluded keys would hold for an
+    // implementation that copied nothing at all, because they are absent either
+    // way — the copy has to be shown positively.
+    test.document().opencodeSession = { format: { mode: 'template' } }
     test.document().legacyMigration = { ...(test.user() ?? {}), decision: 'migrate' }
     test.fire('settings/document-updated', NS, 2)
     await test.settle()
@@ -139,7 +197,9 @@ describe('installLegacyMigration', () => {
     expect(backup?.kind).toBe('dsh-thinking-effort/config-snapshot')
     expect(backup?.sourceProfile).toBe('migration')
     const captured = (backup?.sections as Record<string, Record<string, unknown>>)[NS] ?? {}
-    // The state the migration extended: no effort had been set yet.
+    // The user's own setting is in the copy ...
+    expect(captured.opencodeSession).toEqual({ format: { mode: 'template' } })
+    // ... and the state the migration extended had no effort set yet.
     expect(captured).not.toHaveProperty('subagentEffort')
     // and the copy must not nest the library, the slot it lives in, or the prompt state.
     expect(captured).not.toHaveProperty('autoBackup')

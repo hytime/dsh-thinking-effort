@@ -78,8 +78,18 @@ export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationF
     /** Read the plugin's own user layer as published. */
     const ownUser = (): unknown => readSettingsSectionUser(settings, ns)
 
+    /**
+     * Run one unit of work in the apply-time context. EVERY write the migration
+     * performs goes through here — the control-object writes below AND the
+     * migration batch itself. `applyLegacyMigration` invokes its `mutate` before
+     * its first `await`, so entering the scope around the call is what gives that
+     * batch the context the host accepts; without it the batch is refused as a
+     * nested transaction on 0.1.7 and `decision=migrate` could never land.
+     */
+    const inScope = <T,>(work: () => T): T => scope.runInAsyncScope(work)
+
     const write = (ops: readonly SettingsPathOp[]): Promise<void> => new Promise<void>((resolve, reject) => {
-      scope.runInAsyncScope(() => {
+      inScope(() => {
         const mutate = settings.mutate
         if (typeof mutate !== 'function') {
           reject(new Error('settings service cannot address paths'))
@@ -181,7 +191,15 @@ export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationF
         // so the host must not turn values it did not derive into path writes.
         // Re-scanning also settles whatever changed between prompt and click.
         const fresh = await scan()
-        const lastResult = await applyLegacyMigration({
+        if (fresh.candidates.length === 0) {
+          // Nothing survived the re-scan. Do NOT claim the values were applied:
+          // the documents may simply have been unreadable this pass, and a
+          // "migrated" record would close the prompt over a migration that never
+          // happened. Retire the offer instead, which is recoverable.
+          await settleEmpty(fresh)
+          return
+        }
+        const lastResult = await inScope(() => applyLegacyMigration({
           settings,
           ns,
           candidates: fresh.candidates,
@@ -196,7 +214,7 @@ export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationF
             },
           }),
           clear: async () => {},
-        })
+        }))
         await clearAfterApply(fresh.signature, fresh.candidates, lastResult)
         return
       }
@@ -256,6 +274,11 @@ export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationF
             }
           } while (queued && passes < MAX_MIGRATION_PASSES)
           finish()
+          // A burst that outran the budget must not swallow the wakeup it was
+          // holding: the decision it carried would sit unhandled until the next
+          // settings event. `inFlight` is cleared by the `finally` below, so this
+          // starts a fresh chain rather than re-entering this one.
+          if (queued) ctx.timeout(() => run(), 0)
         } catch (error) {
           fail(error)
         } finally {
@@ -277,8 +300,11 @@ export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationF
 
     ctx.effect(() => () => { alive = false }, `${LOG_PREFIX}: legacy migration lifetime`)
 
-    // Start scanning after the Loader has settled, so the section the plugin
-    // owns is already published and its user layer readable.
+    // Two kicks. The timeout defers the first scan until after the Loader has
+    // settled, so the section the plugin owns is published and its user layer
+    // readable; the immediate call covers a host where it already is. Both feed
+    // the same single-flight loop, so one pass runs at a time and the other is
+    // coalesced as `queued`.
     //
     // The scheduled callback RETURNS its promise rather than `void`-ing it. The
     // existing settings watcher does `void tryOnce()` because a fill settles
