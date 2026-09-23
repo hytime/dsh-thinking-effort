@@ -19,7 +19,7 @@ const DOCUMENT = 'dsh-thinking-effort:\n  subagentEffort: off\n'
 type Listeners = Record<string, Array<(...args: unknown[]) => unknown>>
 
 /** One in-memory settings document plus the events a write raises. */
-function harness(options: { entryConfig?: boolean; failMutate?: boolean; modelTransaction?: boolean; profileContext?: unknown } = {}) {
+function harness(options: { entryConfig?: boolean; failMutate?: boolean; modelTransaction?: boolean; profileContext?: unknown; sectionAbsentReads?: number } = {}) {
   const listeners: Listeners = {}
   const mutations: Array<{ ns: string; ops: readonly SettingsPathOp[] }> = []
   /**
@@ -33,6 +33,13 @@ function harness(options: { entryConfig?: boolean; failMutate?: boolean; modelTr
    */
   const transaction = new AsyncLocalStorage<true>()
   let document: Record<string, unknown> = {}
+  /**
+   * How many `describe` calls a host answers with no plugin section at all —
+   * the window between the entry being applied and its section materializing.
+   * While it is open, every path looks unset, so a scan that acts on it offers
+   * values that are in fact already migrated.
+   */
+  let sectionAbsentReads = options.sectionAbsentReads ?? 0
 
   const resolve = (value: Record<string, unknown>, path: readonly string[]): unknown =>
     path.reduce<unknown>((node, key) => (
@@ -82,7 +89,13 @@ function harness(options: { entryConfig?: boolean; failMutate?: boolean; modelTr
   const settings: Record<string, unknown> = {
     writable: true,
     update: async () => {},
-    describe: () => [{ ns: NS, revision: 0, value: document, user: document }],
+    describe: () => {
+      if (sectionAbsentReads > 0) {
+        sectionAbsentReads -= 1
+        return []
+      }
+      return [{ ns: NS, revision: 0, value: document, user: document }]
+    },
     mutate: hostWrite,
   }
   if (options.entryConfig !== true) {
@@ -314,6 +327,31 @@ describe('installLegacyMigration', () => {
     await test.settle()
     expect(String(test.user()?.lastResult)).toMatch(/^failed:/)
     expect(test.user()?.pending).toBe(true)
+  })
+
+  it('does not arm while its own section has not materialized yet', async () => {
+    // A restart after a successful migration: the values are already in the
+    // plugin's own section, but the section is not published for the first few
+    // reads. `declared()` reads that layer, so while it is absent every migrated
+    // value looks unmigrated and the scan re-offers the lot. Seen end to end: a
+    // real restart armed a spurious four-value offer and retired it a moment
+    // later, and a client sitting in `asking` does not poll — so that transient
+    // state could strand the prompt on screen over values already migrated.
+    const test = harness({ entryConfig: true, sectionAbsentReads: 8 })
+    // The migrated state, exactly as a completed migration leaves it: the one
+    // leaf the document states is already set in the plugin's own section, so a
+    // scan that can READ that layer finds nothing left to offer.
+    test.document().subagentEffort = 'off'
+    installLegacyMigration(test.context as never, home)
+    await test.settle()
+
+    // No control object is written at all: an absent layer is not a fact to act
+    // on, so the pass leaves the section exactly as it found it and a later
+    // event re-runs the scan once the section is readable.
+    const controllerWrites = test.mutations.filter(({ ops }) =>
+      ops.some((op) => op.path[0] === 'legacyMigration'))
+    expect(controllerWrites).toEqual([])
+    expect(test.user()).toBeUndefined()
   })
 
   it('honours a forced scan without a dismissal', async () => {

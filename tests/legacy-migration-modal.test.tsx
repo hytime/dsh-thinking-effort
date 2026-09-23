@@ -22,26 +22,50 @@ const CANDIDATES = [
  * A settings bridge holding one section whose user layer carries the control
  * object. `refuseMutate` models the CLIENT-side refusal (`ok: false`);
  * `vanishAfterDecision` models a host that accepts the write and then stops
- * publishing the section, so nothing can ever confirm it.
+ * publishing the section, so nothing can ever confirm it; `settleAfterReads`
+ * models the real race — the host takes a few reads to apply, so the reads
+ * immediately after the click still see `pending: true`.
  */
 function bridge(
   user: Record<string, unknown>,
-  options: { refuseMutate?: boolean; vanishAfterDecision?: boolean } = {},
+  options: { refuseMutate?: boolean; vanishAfterDecision?: boolean; settleAfterReads?: number } = {},
 ) {
   const writes: Array<{ ns: string; ops: readonly SettingsOp[] }> = []
   let vanished = false
+  let decision: 'migrate' | 'dismiss' | undefined
+  let readsSinceDecision = 0
+
+  /** What the host publishes right now, lag included. */
+  const published = (): Record<string, unknown> => {
+    if (decision === undefined) return user
+    readsSinceDecision += 1
+    if (readsSinceDecision <= (options.settleAfterReads ?? 0)) return user
+    return {
+      legacyMigration: {
+        pending: false,
+        candidates: [],
+        lastResult: decision === 'migrate' ? 'applied' : 'dismissed',
+      },
+    }
+  }
+
   const settings: SettingsApi = {
     externalLanguages: false,
     compatibilityProfile: 'modern',
-    describe: async () => ({
-      ok: true as const,
-      value: {
-        namespaces: vanished ? [] : [{ ns: 'thinking-effort', revision: 0, value: user, user }],
-      },
-    }),
+    describe: async () => {
+      const state = published()
+      return {
+        ok: true as const,
+        value: {
+          namespaces: vanished ? [] : [{ ns: 'thinking-effort', revision: 0, value: state, user: state }],
+        },
+      }
+    },
     mutate: async (ns, ops) => {
       if (options.refuseMutate === true) return { ok: false as const, error: { message: 'refused' } }
       writes.push({ ns, ops })
+      const value = ops[0]?.value
+      if (value === 'migrate' || value === 'dismiss') decision = value
       if (options.vanishAfterDecision === true) vanished = true
       return { ok: true as const, value: { ns, revision: 1, value: user, user } }
     },
@@ -160,6 +184,43 @@ describe('LegacyMigrationModal', () => {
     await flush()
     expect(element.textContent).toContain('HMR transactions cannot be nested')
     expect(element.querySelector<HTMLButtonElement>('[data-testid="legacy-apply"]')?.disabled).toBe(false)
+  })
+
+  it('stays submitted while the host has not applied yet, and closes once it has', async () => {
+    // The race a real click loses: the read that runs immediately after the
+    // click still sees `pending: true` with the candidates intact, because the
+    // host has not acted yet. A prompt that reopens on that read strands itself
+    // at `asking` — not a polling phase — so it never observes the result: it
+    // stayed on screen after a successful migration, buttons live, candidates
+    // stale. Seen end to end against a real 0.1.7 host before this case existed.
+    vi.useFakeTimers()
+    try {
+      const { settings, writes } = bridge(
+        { legacyMigration: { pending: true, candidates: CANDIDATES } },
+        { settleAfterReads: 2 },
+      )
+      const element = mount(settings)
+      await act(async () => { await Promise.resolve() })
+      const apply = (): HTMLButtonElement | null =>
+        element.querySelector<HTMLButtonElement>('[data-testid="legacy-apply"]')
+      expect(apply()?.disabled).toBe(false)
+
+      await act(async () => { apply()?.click() })
+      await act(async () => { await Promise.resolve() })
+      expect(writes.length).toBe(1)
+
+      // Reads still report the pre-apply state. The prompt must keep waiting
+      // (controls disabled) rather than reopen as a question.
+      expect(apply()?.disabled).toBe(true)
+
+      await act(async () => { vi.advanceTimersByTime(10_000) })
+      await act(async () => { await Promise.resolve() })
+
+      // The host has now applied: the prompt has nothing left to ask.
+      expect(element.textContent).toBe('')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('becomes actionable when the host never confirms the write', async () => {

@@ -90,12 +90,16 @@ export function LegacyMigrationModal({ settings, t, palette = iosPalette() }: Pr
     }
 
     if (pendingMigrationOf(target.user) && legacyCandidatesOf(target.user).length > 0) {
-      // Only the two waiting phases may open the prompt. A late read must not
-      // pull the user back after they postponed it, nor interrupt a failure they
-      // are reading.
-      setPhase((previous) => (previous.kind === 'idle' || previous.kind === 'submitting'
-        ? { kind: 'asking', target }
-        : previous))
+      // ONLY `idle` may open the prompt from a read.
+      //
+      // `submitting` must not return here. The read that runs the moment the
+      // user clicks happens before the Host has acted, so it still sees
+      // `pending: true` with the candidates intact; reopening the prompt would
+      // strand the phase at `asking`, which is not a polling phase, and the
+      // dialog would never observe the Host's result — it stayed on screen after
+      // a successful migration, with stale candidates and live buttons.
+      // `later` and `failed` are settled states a late read must not disturb.
+      setPhase((previous) => (previous.kind === 'idle' ? { kind: 'asking', target } : previous))
       return
     }
 

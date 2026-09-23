@@ -141,6 +141,17 @@ export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationF
     const ownUser = (): unknown => readSettingsSectionUser(settings, ns)
 
     /**
+     * That layer when the host actually publishes it, or `undefined` while the
+     * section has not materialized yet. The distinction matters: an absent layer
+     * makes every path look unset, which is not a fact to act on.
+     */
+    const ownLayer = (user: unknown): Record<string, unknown> | undefined => (
+      typeof user === 'object' && user !== null && !Array.isArray(user)
+        ? user as Record<string, unknown>
+        : undefined
+    )
+
+    /**
      * Run one unit of work in the apply-time context. EVERY write the migration
      * performs goes through here — the control-object writes below AND the
      * migration batch itself. `applyLegacyMigration` invokes its `mutate` before
@@ -164,11 +175,19 @@ export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationF
     const set = (path: readonly string[], value: unknown): Promise<void> =>
       write([{ op: 'set', path: [...path], value }])
 
-    /** One current read of the legacy documents against the live sections. */
-    const scan = (): Promise<LegacyScan> => scanLegacyData({
+    /**
+     * One current read of the legacy documents against the live sections.
+     *
+     * `own` is passed in rather than read here so that ONE pass decides "has my
+     * section materialized yet?" from ONE snapshot. Reading it twice lets the
+     * scan see an absent layer — every path then looks unset, so the whole set is
+     * offered — while a later read sees the section published, and the pass arms
+     * an offer computed from a state that no longer holds.
+     */
+    const scan = (own: unknown): Promise<LegacyScan> => scanLegacyData({
       home: files.home,
       read: files.read,
-      ownUser: ownUser(),
+      ownUser: own,
       llmPiAiUser: readSettingsSectionUser(settings, SETTINGS_NAMESPACE),
     })
 
@@ -254,15 +273,18 @@ export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationF
 
     /** One pass: act on a decision if the user has made one, then reconcile the offer. */
     const pass = async (): Promise<void> => {
-      const before = legacyMigrationOf(ownUser())
-      const decision = legacyDecisionOf(ownUser())
+      // ONE read of the section for the whole pass: the state this pass reasons
+      // about and the layer the scan diffs against must be the same snapshot.
+      const own = ownUser()
+      const before = legacyMigrationOf(own)
+      const decision = legacyDecisionOf(own)
 
       if (decision === 'migrate') {
         // The scan runs again here and ITS candidates are what gets written. The
         // published list is a display: the section is user-writable and volatile,
         // so the host must not turn values it did not derive into path writes.
         // Re-scanning also settles whatever changed between prompt and click.
-        const fresh = await scan()
+        const fresh = await scan(own)
         if (fresh.candidates.length === 0) {
           // Nothing survived the re-scan. Do NOT claim the values were applied:
           // the documents may simply have been unreadable this pass, and a
@@ -296,7 +318,7 @@ export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationF
         return
       }
 
-      const fresh = await scan()
+      const fresh = await scan(own)
 
       if (decision === 'scan') {
         // A forced rescan always answers, including "there is nothing left": the
@@ -310,9 +332,23 @@ export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationF
         return
       }
 
-      // No decision: arm only when this exact offer has not been declined. A
-      // dismissal that never expires would make the user permanently deaf to
-      // data they configure later, so the signature — not a boolean — decides.
+      // No decision. Before acting on the scan, require the plugin's OWN user
+      // layer to be readable.
+      //
+      // `declared()` answers "does the user already set this path?" from that
+      // layer, so while it is absent every migrated value looks unmigrated and
+      // the scan re-offers the lot. Seen end to end: a restart after a
+      // successful migration armed a spurious four-value offer, then retired it
+      // a moment later once the section became readable — and because a client
+      // sitting in `asking` does not poll, that transient state could strand the
+      // prompt on screen with values that were already migrated. The settings
+      // watcher treats the same condition as retryable rather than settled
+      // (`fillDefaults`'s `user.readable` check); this is that rule here.
+      if (ownLayer(own) === undefined) return
+
+      // Arm only when this exact offer has not been declined. A dismissal that
+      // never expires would make the user permanently deaf to data they
+      // configure later, so the signature — not a boolean — decides.
       if (fresh.candidates.length === 0) {
         // Nothing left to offer. An armed prompt would be stale (the user may
         // have set these values by hand), so retire it once; the write clears
