@@ -247,7 +247,7 @@
   "legacyMigrationApply": "Migrate",
   "legacyMigrationDismiss": "Don't ask again",
   "legacyMigrationLater": "Later",
-  "legacyMigrationApplied": "Migrated {count} settings.",
+  "legacyMigrationApplied": "Legacy settings migrated.",
   "legacyMigrationDismissed": "Ignored. You will be asked again if the legacy data changes.",
   "legacyMigrationFailed": "Migration failed: {reason}",
   "legacyMigrationTimedOut": "The host did not confirm the result in time. Please try again.",

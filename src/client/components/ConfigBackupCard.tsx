@@ -288,7 +288,6 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   const ownSection = pluginSection(state.namespaces)
   const legacyState = legacyMigrationOf(ownSection?.user)
   const legacyResult = typeof legacyState?.lastResult === 'string' ? legacyState.lastResult : ''
-  const legacyCandidateCount = Array.isArray(legacyState?.candidates) ? legacyState.candidates.length : 0
   /**
    * A refused write is not a result to celebrate. The host keeps `pending` with
    * its candidates in that case, so the nothing-pending sentence would state the
@@ -568,10 +567,14 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
       </div>
       {legacyResult !== '' ? (
         <div style={{ fontSize: '12px', color: palette.secondary, marginBottom: '8px' }}>
+          {/* No count: the Host clears `candidates` in the same write that records
+              `applied`, so any count read here would always be 0. Making the
+              number real needs a Host-side field for it, which the Client cannot
+              supply. */}
           {legacyFailed
             ? t('legacyMigrationFailed', { reason: legacyResult.slice(LEGACY_FAILED_PREFIX.length).trim() })
             : legacyResult === 'applied'
-              ? t('legacyMigrationApplied', { count: legacyCandidateCount })
+              ? t('legacyMigrationApplied')
               : legacyResult === 'dismissed'
                 ? t('legacyMigrationDismissed')
                 : t('legacyMigrationNothingPending')}

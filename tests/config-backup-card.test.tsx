@@ -1199,7 +1199,9 @@ describe('ConfigBackupCard legacy rescan', () => {
       user: { 'thinking-effort': { legacyMigration: { pending: false, candidates: [], lastResult: 'applied' } } },
     })
     const element = await test.render()
-    expect(element.textContent).toContain(text('legacyMigrationApplied', { count: 0 }))
+    // The message carries no count: the Host empties `candidates` as it records
+    // `applied`, so a rendered number would always be 0.
+    expect(element.textContent).toContain(text('legacyMigrationApplied'))
     expect(element.textContent).not.toContain(text('legacyMigrationNothingPending'))
   })
 

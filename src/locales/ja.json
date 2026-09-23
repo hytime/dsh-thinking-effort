@@ -247,7 +247,7 @@
   "legacyMigrationApply": "移行",
   "legacyMigrationDismiss": "今後表示しない",
   "legacyMigrationLater": "後で",
-  "legacyMigrationApplied": "{count} 件の設定を移行しました。",
+  "legacyMigrationApplied": "旧設定を移行しました。",
   "legacyMigrationDismissed": "無視しました。旧データが変わると再び表示されます。",
   "legacyMigrationFailed": "移行に失敗しました：{reason}",
   "legacyMigrationTimedOut": "ホストが時間内に結果を確認できませんでした。もう一度お試しください。",

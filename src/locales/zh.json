@@ -247,7 +247,7 @@
   "legacyMigrationApply": "迁移",
   "legacyMigrationDismiss": "不再询问",
   "legacyMigrationLater": "稍后",
-  "legacyMigrationApplied": "已迁移 {count} 项设置。",
+  "legacyMigrationApplied": "旧设置已迁移。",
   "legacyMigrationDismissed": "已忽略，旧数据变化时会再次提示。",
   "legacyMigrationFailed": "迁移失败：{reason}",
   "legacyMigrationTimedOut": "宿主没有在预期时间内确认结果，请重试。",
