@@ -7,6 +7,12 @@ import type { HostContext } from './host/types.js'
 export const name = '@hytime/dsh-thinking-effort'
 export const inject = ['settings', 'timer', 'llm'] as const
 
+/**
+ * The Loader entry's config schema. DSH 0.1.7 derives the settings form from
+ * it, so it must stay exported from the package entry.
+ */
+export { Config } from './host/plugin-settings.js'
+
 export function apply(ctx: HostContext): void {
   mark('apply')
   installSettingsWatcher(ctx)

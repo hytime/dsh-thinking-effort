@@ -1,12 +1,12 @@
 import {
   MAX_PROFILE_NAME,
-  PLUGIN_NAMESPACE,
   RESERVED_PATH_KEYS,
   SNAPSHOT_KIND,
   SNAPSHOT_VERSION,
 } from './types.js'
 import type { ConfigSnapshot, ProfileNameResult } from './types.js'
 import { isRecord, userSectionOf } from './snapshot.js'
+import { pluginSectionId } from '../subagent-section.js'
 import type { SettingsNamespace, SettingsOp } from '../types.js'
 
 export const PROFILES_PATH = ['profiles'] as const
@@ -23,11 +23,22 @@ function isStoredSnapshot(value: unknown): value is ConfigSnapshot {
 }
 
 /**
- * Read the profile library defensively: `settings.yaml` is user-editable, so a
- * hand-written entry must be dropped rather than crash the settings page.
+ * Read the profile library defensively: the user layer is hand-editable (in
+ * `settings.yaml` before 0.1.7 and in the active profile's config after it), so
+ * a hand-written entry must be dropped rather than crash the settings page.
+ *
+ * `pluginNamespace` is the id the running host addresses the plugin section by
+ * — the Loader entry under the 0.1.7 entry-config model, and the legacy
+ * registered namespace on older releases. It is resolved from `namespaces`,
+ * the very read being keyed, so no caller can omit it and read the library as
+ * absent on 0.1.7; the parameter is only an override for a caller that already
+ * resolved the id.
  */
-export function profilesFromNamespaces(namespaces: readonly SettingsNamespace[]): Record<string, ConfigSnapshot> {
-  const user = userSectionOf(namespaces, PLUGIN_NAMESPACE)
+export function profilesFromNamespaces(
+  namespaces: readonly SettingsNamespace[],
+  pluginNamespace: string = pluginSectionId(namespaces),
+): Record<string, ConfigSnapshot> {
+  const user = userSectionOf(namespaces, pluginNamespace)
   const raw = user.profiles
   if (!isRecord(raw)) return {}
 
@@ -44,8 +55,11 @@ export function profilesFromNamespaces(namespaces: readonly SettingsNamespace[])
 }
 
 /** The auto backup written before a destructive apply; absent until one is written. */
-export function autoBackupFromNamespaces(namespaces: readonly SettingsNamespace[]): ConfigSnapshot | undefined {
-  const value = userSectionOf(namespaces, PLUGIN_NAMESPACE).autoBackup
+export function autoBackupFromNamespaces(
+  namespaces: readonly SettingsNamespace[],
+  pluginNamespace: string = pluginSectionId(namespaces),
+): ConfigSnapshot | undefined {
+  const value = userSectionOf(namespaces, pluginNamespace).autoBackup
   if (!isStoredSnapshot(value) || value.createdAt === '') return undefined
   return value
 }

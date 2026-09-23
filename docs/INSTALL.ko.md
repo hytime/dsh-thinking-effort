@@ -33,12 +33,13 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 현재 DSH에는 공개된 semver metadata 계약이 없으므로 런타임 capability detection이 권위 있는 출처입니다. 선택적 버전은 명시적인 metadata 또는 테스트 입력이 있을 때만 사용하며, 알 수 없는 유효한 버전도 감지된 capability에 따라 계속 실행합니다. 최신 `remote.settings`와 이전 `connection.api.settings`를 모두 지원합니다.
 
-### DSH Runtime 및 Gateway Protocol 호환 경계
+### DSH Runtime, Gateway Protocol 및 Settings 모델 호환 경계
 
-두 호환성 계층은 서로 별개입니다.
+이 호환성 계층들은 서로 별개입니다.
 
 - **DSH Runtime:** Settings transport는 최신 DSH에서 `remote.settings`, 이전 DSH에서 `connection.api.settings`입니다. 플러그인은 실제 런타임 capability를 감지하고 이전 경로 fallback을 선택 사항으로 유지합니다.
 - **Gateway Protocol:** DSH schema가 제공하는 경우 공식 `llm-pi-ai.compat` 필드를 사용합니다. 선택 사항인 `dsh-llm-openai-completions` transport를 설치하고 활성화하면 조건을 충족하는 사용자 지정 OpenAI 호환 사고 provider를 takeover할 수 있습니다.
+- **Settings model:** DSH `0.1.7`부터는 각 Loader 항목 자체의 `Config` schema에서 설정 폼을 도출하고(`entry-config`) 설정 문서를 현재 profile의 `cordis.patch.yml`에 저장합니다. DSH `0.1.0-rc.7`부터 `0.1.6`까지는 namespace를 등록하는 방식이며 DSH 설정 문서(예: `~/.dsh/settings.yaml`)에 저장합니다. 플러그인은 두 모델을 모두 지원하고, Client는 실행 중인 Host가 게시한 섹션 ID(`entry-config`에서는 `thinking-effort`, namespace 모델에서는 `dsh-thinking-effort`)를 해석합니다.
 
 version-map은 다음 규칙으로 게이트웨이 capability를 판정합니다.
 
@@ -74,7 +75,7 @@ OpenCode 세션 Header는 모델 편집기의 모델별 설정이며 provider �
 
 ### 생성기 설정
 
-생성기는 DSH 설정 문서(예: `~/.dsh/settings.yaml` 또는 현재 profile의 설정)의 `dsh-thinking-effort.opencodeSession.format`에서 설정합니다.
+생성기 위치는 DSH 계열에 따라 다릅니다. `0.1.7` 이상에서는 현재 profile의 `cordis.patch.yml`에 있는 `opencodeSession.format` 섹션(Loader 항목 ID `thinking-effort`로 지정)입니다. `0.1.0-rc.7`부터 `0.1.6`까지는 DSH 설정 문서(예: `~/.dsh/settings.yaml`)의 `dsh-thinking-effort.opencodeSession.format`입니다. 두 위치 모두 설정 페이지가 대신 기록합니다. 아래 YAML은 `0.1.7` 이전 릴리스가 읽는 namespace 형태를 보여 줍니다:
 
 ```yaml
 dsh-thinking-effort:
@@ -157,7 +158,7 @@ export function format(ctx) {
 
 `llm-pi-ai` adapter는 모든 provider 요청에 자체 attribution `user-agent`(`deepseek-harness/<버전> (+https://github.com/deepseek-ai/deepseek-harness)`)를 강제하고 같은 이름의 provider 설정 값을 제거합니다. 따라서 `llm-pi-ai.providers.<route>.headers.user-agent`는 효과가 없습니다. 이 플러그인은 일치하는 `llm/stream` 요청에서 전송 직전의 마지막 레이어에서 헤더를 다시 씁니다. 이것이 유일하게 살아남는 재정의 지점입니다.
 
-`dsh-thinking-effort.opencodeSession.userAgent`에서 설정하며 기본값은 꺼져 있습니다.
+위의 생성기와 같은 설정 섹션의 `opencodeSession.userAgent`에서 설정하며 기본값은 꺼져 있습니다. 아래 YAML은 `0.1.7` 이전 릴리스가 읽는 namespace 형태를 보여 줍니다:
 
 ```yaml
 dsh-thinking-effort:
@@ -367,12 +368,13 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 
 npm 패키지에 GitHub Trusted Publishing을 설정하세요. 저장소는 `hytime/dsh-thinking-effort`, workflow는 `publish.yml`입니다. 게시에는 GitHub OIDC와 provenance를 사용하고 `npm publish --provenance --access public`을 실행합니다. `NPM_TOKEN`이나 장기 token은 사용하지 않습니다. npm에 같은 버전이 이미 있으면 게시가 중단됩니다.
 
-게시 전에 workflow는 rc7 → rc2 → alpha2 → latest 순서로 네 개의 임시 공식 DSH capability representative checkout을 만들고, 공식 `dsh plugin` 명령으로 현재 tarball을 설치한 뒤 실제 호환성 테스트를 실행합니다.
+게시 전에 workflow는 rc7 → rc2 → alpha2 → namespace → entry 순서로 다섯 개의 임시 공식 DSH capability representative checkout을 만들고, 공식 `dsh plugin` 명령으로 현재 tarball을 설치한 뒤 실제 호환성 테스트를 실행합니다.
 
 - `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`) — rc7 capability representative
 - `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`) — rc2 capability representative
 - `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`) — alpha2 capability representative
-- `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`) — 최신 capability representative(실제 브라우저 DOM 프로브도 실행)
+- `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`) — 최신 namespace 모델 capability representative(실제 브라우저 DOM 프로브 실행)
+- `dsh-v0.1.7-alpha.1` (`0.1.7-alpha.1`) — entry-config capability representative(설정 폼은 각 Loader 엔트리 자체의 `Config`에서 도출. 실제 브라우저 DOM 프로브도 실행)
 
 일반 CI는 테스트 전용이며 Pull Request와 `main` 푸시에서 실행됩니다. `npm ci`를 사용하므로 의존성 변경 시 `package-lock.json`을 커밋하세요.
 

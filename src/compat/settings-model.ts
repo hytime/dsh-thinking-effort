@@ -13,6 +13,16 @@
  */
 export type SettingsModel = 'namespace' | 'entry-config'
 
+/**
+ * The Loader entry id this plugin declares in `cordis.patch.yml`. Under the
+ * `entry-config` model it is also the id of the plugin's own settings section,
+ * which is how a caller with no fiber to read a live id from addresses that
+ * section. Under the `namespace` model no section carries it — the plugin
+ * registers `dsh-thinking-effort` instead — so a miss means "not this model"
+ * rather than an error.
+ */
+export const PLUGIN_ENTRY_ID = 'thinking-effort'
+
 function method(value: unknown, name: string): ((...args: unknown[]) => unknown) | undefined {
   if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return undefined
   const candidate = Reflect.get(value, name)
@@ -49,6 +59,19 @@ export function settingsChangeEvents(model: SettingsModel): readonly string[] {
     : ['settings/updated']
 }
 
+/** The `describe()` descriptor of one section, or `undefined` when it is absent or unreadable. */
+function descriptorOf(settings: unknown, namespace: string): Record<string, unknown> | undefined {
+  const describe = method(settings, 'describe')
+  if (describe === undefined) return undefined
+  try {
+    const descriptors = describe.call(settings)
+    if (!Array.isArray(descriptors)) return undefined
+    return record(descriptors.find((candidate) => String(record(candidate)?.ns) === namespace))
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * Read one section's value under either model. The `entry-config` model has no
  * `get`, so the value is projected out of `describe()` — the same resolved
@@ -66,16 +89,18 @@ export function readSettingsSection(settings: unknown, namespace: string): unkno
     }
   }
 
-  const describe = method(settings, 'describe')
-  if (describe === undefined) return undefined
-  try {
-    const descriptors = describe.call(settings)
-    if (!Array.isArray(descriptors)) return undefined
-    const descriptor = descriptors.find((candidate) => String(record(candidate)?.ns) === namespace)
-    return record(descriptor)?.value
-  } catch {
-    return undefined
-  }
+  return descriptorOf(settings, namespace)?.value
+}
+
+/**
+ * Read one section's user-override layer under either model. A descriptor's
+ * `user` layer holds only what the user explicitly wrote, which is the layer
+ * that can express "unset" for a field a schema supplies a default for; the
+ * resolved `value` cannot. A missing section, a section without a user layer,
+ * and a throwing service all read as `undefined`.
+ */
+export function readSettingsSectionUser(settings: unknown, namespace: string): unknown {
+  return descriptorOf(settings, namespace)?.user
 }
 
 /**

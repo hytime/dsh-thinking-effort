@@ -98,6 +98,14 @@ export interface OpenCodeFormatCardProps {
    */
   readonly revision?: number
   /**
+   * The id the running host addresses this plugin's section by — the entry id
+   * under the 0.1.7 entry-config model, the legacy registered namespace
+   * otherwise. The editor resolves it from the same `describe()` this card
+   * re-reads, so the draft and the write always land in the section the
+   * surrounding page is showing. Defaults to the legacy id.
+   */
+  readonly namespace?: string
+  /**
    * Called after a successful write. This card shares its namespace with the
    * model editor's session switch, so the surrounding editor has to re-read the
    * registry too or its next write goes out with the revision this one retired.
@@ -134,12 +142,12 @@ const initialState: CardState = {
   notice: null,
 }
 
-function revisionOf(namespaces: readonly SettingsNamespace[]): number {
-  return namespaces.find((entry) => entry.ns === FORMAT_NAMESPACE)?.revision ?? 0
+function revisionOf(namespaces: readonly SettingsNamespace[], namespace: string): number {
+  return namespaces.find((entry) => entry.ns === namespace)?.revision ?? 0
 }
 
-function userOf(namespaces: readonly SettingsNamespace[]): Record<string, unknown> | undefined {
-  return namespaces.find((entry) => entry.ns === FORMAT_NAMESPACE)?.user
+function userOf(namespaces: readonly SettingsNamespace[], namespace: string): Record<string, unknown> | undefined {
+  return namespaces.find((entry) => entry.ns === namespace)?.user
 }
 
 /**
@@ -182,7 +190,7 @@ function ownRecord(value: unknown, key: string): Record<string, unknown> | undef
 
 const isConflict = (message: string): boolean => /conflict/i.test(message)
 
-export function OpenCodeFormatCard({ settings, palette, t, revision, onApplied }: OpenCodeFormatCardProps): React.ReactElement {
+export function OpenCodeFormatCard({ settings, palette, t, revision, namespace = FORMAT_NAMESPACE, onApplied }: OpenCodeFormatCardProps): React.ReactElement {
   const [state, setState] = React.useState<CardState>(initialState)
   /**
    * The latest state, for the async callbacks below. `apply` re-reads the
@@ -206,7 +214,7 @@ export function OpenCodeFormatCard({ settings, palette, t, revision, onApplied }
    * to the fresh read, so it stays the single reference for "unchanged".
    */
   const applyRead = (current: CardState, value: SettingsDescribeValue): CardState => {
-    const user = userOf(value.namespaces)
+    const user = userOf(value.namespaces, namespace)
     const fresh = draftFromSettings(user)
     let draft = current.draft
     for (const key of FORMAT_KEYS) {
@@ -255,13 +263,13 @@ export function OpenCodeFormatCard({ settings, palette, t, revision, onApplied }
         setState((current) => ({ ...current, busy: false, error: response.error.message }))
         return undefined
       }
-      const stored = draftFromSettings(userOf(response.value.namespaces))
+      const stored = draftFromSettings(userOf(response.value.namespaces, namespace))
       const ops = formatOps(stateRef.current.draft, stored)
       if (ops.length === 0) {
         setState((current) => ({ ...current, busy: false, saved: current.draft, notice: t('formatSaved') }))
         return undefined
       }
-      return settings.mutate(FORMAT_NAMESPACE, ops, revisionOf(response.value.namespaces)).then((written) => {
+      return settings.mutate(namespace, ops, revisionOf(response.value.namespaces, namespace)).then((written) => {
         if (!written.ok) {
           const message = written.error.message
           setState((current) => ({

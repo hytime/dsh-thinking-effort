@@ -8,7 +8,9 @@ import { runInNewContext } from 'node:vm'
 import { settingsBridge } from '../src/client/settings-bridge.js'
 import { inventoryFrom } from '../src/client/model-inventory.js'
 import { opsForModelArrayCompat } from '../src/client/model-ops.js'
-import { editableProviderCompatFields } from '../src/compat/gateway/validation.js'
+import { editableProviderCompatFields, schemaNodeAtPath } from '../src/compat/gateway/validation.js'
+import { PLUGIN_ENTRY_ID } from '../src/compat/settings-model.js'
+import type { SettingsModel } from '../src/compat/settings-model.js'
 import { capabilitiesForVersion } from '../src/compat/version-map.js'
 import {
   identifyTakeoverProviders,
@@ -33,17 +35,47 @@ type PackageManifest = {
   readonly dsh?: { readonly client?: { readonly inject?: readonly string[]; readonly platform?: string; readonly external?: readonly string[] } }
 }
 
+/**
+ * The subset of one `settings/describe` entry-config row this suite reads. The
+ * host's wire view is `SettingsNamespaceView`; only these fields are asserted,
+ * and `user` is the raw layer a path write merges into.
+ *
+ * `schema` stays `unknown` because the host publishes
+ * `Schema.prototype.toJSON()`, whose `{ uid, refs }` envelope has no top-level
+ * `dict` — {@link entryFormFields} resolves it.
+ */
+type EntryConfigNamespaceView = {
+  readonly ns?: string
+  readonly revision?: number
+  readonly schema?: unknown
+  readonly value?: Record<string, unknown>
+  readonly user?: Record<string, unknown>
+}
+
+/**
+ * The field names one published entry-config form declares, sorted.
+ *
+ * `describe` publishes `schema: form.toJSON()`, and that envelope puts the root
+ * node at `refs[String(uid)]`, so `schema.dict` is always empty on the wire and
+ * the shared `schemaNodeAtPath` accessor is the only correct read.
+ */
+function entryFormFields(schema: unknown): string[] {
+  const dict = schemaNodeAtPath(schema, [])?.dict
+  if (typeof dict !== 'object' || dict === null || Array.isArray(dict)) return []
+  return Object.keys(dict).sort()
+}
+
 const root = resolve(import.meta.dirname, '..')
 const integrationEnabled = process.env.DSH_LOADER_INTEGRATION === '1'
 
 function parseCliRoots(raw: string): string[] {
   const values = raw.split(',').map((value) => value.trim())
-  if (values.length !== 4 || values.some((value) => value === '')) {
-    throw new Error('DSH_CLI_ROOTS must contain exactly four non-empty comma-separated roots: rc7, rc2, alpha2, latest')
+  if (values.length !== 5 || values.some((value) => value === '')) {
+    throw new Error('DSH_CLI_ROOTS must contain exactly five non-empty comma-separated roots: rc7, rc2, alpha2, namespace, entry-config')
   }
   const roots = values.map((value) => realpathSync(value))
-  if (new Set(roots).size !== 4) {
-    throw new Error('DSH_CLI_ROOTS must contain four distinct roots')
+  if (new Set(roots).size !== 5) {
+    throw new Error('DSH_CLI_ROOTS must contain five distinct roots')
   }
   return roots
 }
@@ -62,7 +94,24 @@ const expectedOfficialDshVersions = [
   '0.1.1-rc.2',
   '0.1.3-alpha.2',
   '0.1.6-alpha.1',
+  '0.1.7-alpha.1',
 ] as const
+
+/**
+ * Poll `read` until it answers something other than `undefined`, then return
+ * that. The provider-defaults fill is driven by the `settings/document-updated`
+ * event that the write triggering it raises, so no test can observe the result
+ * in the same turn as the write.
+ */
+async function waitForFill<T>(read: () => Promise<T | undefined>, timeoutMs = 20000): Promise<T> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const value = await read()
+    if (value !== undefined) return value
+    if (Date.now() > deadline) throw new Error(`timed out after ${timeoutMs}ms waiting for the provider-defaults fill`)
+    await new Promise<void>((resolveWait) => setTimeout(resolveWait, 250))
+  }
+}
 
 const loaderSeedProvider = {
   api: 'openai-completions',
@@ -83,8 +132,50 @@ const localizedNavigationLabels = {
   plugins: /^(插件|Plugins)$/,
 } as const
 
+/**
+ * The titles this plugin's settings section renders under, one per shipped
+ * locale. The real-browser probe uses them both to decide whether it still has
+ * to expand a navigation group and to report whether the section is on screen.
+ */
+const thinkingEffortSectionTitles = [
+  '模型能力与档位',
+  'Model capabilities and effort',
+  'モデルの能力と推論強度',
+  '모델 기능 및 추론 강도',
+] as const
+
 const cliRoots = integrationEnabled ? parseCliRoots(process.env.DSH_CLI_ROOTS ?? '') : []
 const integrationDescribe = integrationEnabled ? describe : describe.skip
+
+/** One official DSH root with the capability profile its version maps to. */
+type OfficialRoot = {
+  readonly cliRoot: string
+  readonly version: string
+  readonly settingsModel: SettingsModel
+}
+
+function officialRootsOf(roots: readonly string[]): OfficialRoot[] {
+  return roots.map((cliRoot) => {
+    const version = readOfficialDshVersion(cliRoot)
+    const settingsModel = capabilitiesForVersion(version)?.settingsModel
+    if (settingsModel === undefined) {
+      throw new Error(`official DSH root version is not mapped to a settings model: ${cliRoot} (${version})`)
+    }
+    return { cliRoot, version, settingsModel }
+  })
+}
+
+/**
+ * The five roots split by settings model. `namespaceRoots` carry the deep
+ * per-root body (registration, the `dsh-thinking-effort` namespace, legacy
+ * `settings.mutate` argument shapes); `entryConfigRoots` carry the case written
+ * for the rewritten model, where a section is addressed by its Loader entry id
+ * and its form is derived from the entry's own `Config`. Both counts are
+ * asserted in the cases below, so an added root cannot silently join neither.
+ */
+const officialRoots = integrationEnabled ? officialRootsOf(cliRoots) : []
+const namespaceRoots = officialRoots.filter(({ settingsModel }) => settingsModel === 'namespace')
+const entryConfigRoots = officialRoots.filter(({ settingsModel }) => settingsModel === 'entry-config')
 
 function readPackage(): PackageManifest {
   return JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as PackageManifest
@@ -562,7 +653,7 @@ async function probePackagedArtifactHandMountedRuntime(
 }
 
 type BrowserLocator = {
-  click: () => Promise<void>
+  click: (options?: { readonly timeout?: number }) => Promise<void>
   count: () => Promise<number>
   waitFor: (options?: Record<string, unknown>) => Promise<void>
   getByRole: (role: string, options: { name: string | RegExp }) => BrowserLocator
@@ -680,23 +771,70 @@ async function probeOfficialSettingsDom(cliRoot: string, web: RunningWeb): Promi
     }
     await page.getByRole('button', { name: localizedNavigationLabels.settings }).click()
     await page.waitForTimeout(500)
-    await page.getByRole('button', { name: localizedNavigationLabels.plugins }).click()
+    /**
+     * The namespace model nests plugin sections under a "Plugins" group, so the
+     * group has to be expanded before the section appears. The entry-config
+     * model lists every section in its own nav, and the regex then matches the
+     * background toolbar's Plugins button instead — which the settings modal
+     * leaves behind an inert mask, so its click can never land.
+     *
+     * Only that case is tolerated, and it is recognised by the section already
+     * being on screen. Any other failure — a host whose nav the click cannot
+     * reach within the bounded wait — is rethrown, so the probe cannot degrade
+     * into "the group did not open, so I looked at the wrong page".
+     */
+    const pluginsGroup = page.getByRole('button', { name: localizedNavigationLabels.plugins })
+    try {
+      await pluginsGroup.click({ timeout: 10000 })
+    } catch (error) {
+      const currentText = await page.locator('body').innerText()
+      const reachedWithoutGroup = thinkingEffortSectionTitles.some((title) => currentText.includes(title))
+      if (!reachedWithoutGroup) throw error
+      console.log('[probe] settings nav lists the section directly; no Plugins group to expand')
+    }
     await page.waitForTimeout(3000)
     const settingsText = await page.locator('body').innerText()
     return {
       bodyText,
       buttons,
       settingsText,
-      thinkingEffortVisible: [
-        '模型能力与档位',
-        'Model capabilities and effort',
-        'モデルの能力と推論強度',
-        '모델 기능 및 추론 강도',
-      ].some((title) => settingsText.includes(title)),
+      thinkingEffortVisible: thinkingEffortSectionTitles.some((title) => settingsText.includes(title)),
       errors,
     }
   } finally {
     await browser.close()
+  }
+}
+
+/**
+ * Run the real-browser settings probe against a served Web host and turn its
+ * outcome into assertions.
+ *
+ * `DSH_REQUIRE_THINKING_EFFORT_DOM=1` (the publish workflow) makes both a probe
+ * blocked by the environment and a page that does not render the section hard
+ * failures. Without it a blocked probe or a missing section is logged with the
+ * caller's context instead of skipped silently.
+ */
+async function assertSettingsDomProbe(
+  cliRoot: string,
+  web: RunningWeb,
+  logContext: string,
+): Promise<void> {
+  const domProbe = await probeOfficialSettingsDom(cliRoot, web)
+  if (domProbe.blocked !== undefined) {
+    if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
+      throw new Error(`required DSH Web DOM probe was blocked: ${domProbe.blocked}`)
+    }
+    console.log(`[BLOCKED] browser probe: ${domProbe.blocked}`)
+    return
+  }
+  expect(domProbe.settingsText).toMatch(/插件|Plugins/)
+  expect(domProbe.errors).toEqual([])
+  if (!domProbe.thinkingEffortVisible) {
+    if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
+      throw new Error('thinking-effort settings section is absent from the real DSH Web DOM')
+    }
+    console.log(`[BLOCKED] thinking-effort section missing; DOM=${JSON.stringify(domProbe.settingsText)}; ${logContext}`)
   }
 }
 
@@ -1083,7 +1221,8 @@ describe('compatibility documentation and root validation', () => {
       '"rc7:$RC7_ROOT:$RUN_ROOT/homes/rc7"',
       '"rc2:$RC2_ROOT:$RUN_ROOT/homes/rc2"',
       '"alpha:$ALPHA_ROOT:$RUN_ROOT/homes/alpha"',
-      '"latest:$LATEST_ROOT:$RUN_ROOT/homes/latest"',
+      '"namespace:$NAMESPACE_ROOT:$RUN_ROOT/homes/namespace"',
+      '"entry:$ENTRY_ROOT:$RUN_ROOT/homes/entry"',
     ]
     const rootSpecStart = workflow.indexOf('for spec in')
     expect(rootSpecStart).toBeGreaterThanOrEqual(0)
@@ -1093,14 +1232,20 @@ describe('compatibility documentation and root validation', () => {
       expect(position, `publish workflow missing ordered root ${rootSpec}`).toBeGreaterThan(previous)
       previous = position
     }
-    expect(workflow).toContain('DSH_CLI_ROOTS="$RC7_ROOT,$RC2_ROOT,$ALPHA_ROOT,$LATEST_ROOT"')
-    expect(expectedOfficialDshVersions).toEqual(['0.1.0-rc.7', '0.1.1-rc.2', '0.1.3-alpha.2', '0.1.6-alpha.1'])
+    expect(workflow).toContain('DSH_CLI_ROOTS="$RC7_ROOT,$RC2_ROOT,$ALPHA_ROOT,$NAMESPACE_ROOT,$ENTRY_ROOT"')
+    expect(expectedOfficialDshVersions).toEqual(['0.1.0-rc.7', '0.1.1-rc.2', '0.1.3-alpha.2', '0.1.6-alpha.1', '0.1.7-alpha.1'])
   })
 
   it('rejects duplicate normalized DSH CLI roots', () => {
-    const duplicateRoots = `${root},${join(root, '.')},${root},${root}`
+    const duplicateRoots = `${root},${join(root, '.')},${root},${root},${root}`
 
     expect(() => parseCliRoots(duplicateRoots)).toThrow(/distinct|unique/i)
+  })
+
+  it('rejects a root list that does not cover all five official representatives', () => {
+    const fourRoots = `${root},${join(root, '.')},${root},${root}`
+
+    expect(() => parseCliRoots(fourRoots)).toThrow(/exactly five/)
   })
 })
 
@@ -1205,17 +1350,15 @@ describe('loader seed schema contract', () => {
 })
 
 integrationDescribe('official DSH loader composition', () => {
-  it('requires and verifies rc7, rc2, alpha2, and the newest host independently', { timeout: 300000 }, async () => {
-    expect(cliRoots).toHaveLength(4)
+  it('requires and verifies the four namespace-model hosts independently', { timeout: 300000 }, async () => {
+    expect(cliRoots).toHaveLength(5)
     expect(cliRoots.every((cliRoot) => cliRoot === resolve(cliRoot))).toBe(true)
-    expect(new Set(cliRoots).size).toBe(4)
-    const verifiedRoots = cliRoots.map((cliRoot) => ({
-      cliRoot,
-      version: readOfficialDshVersion(cliRoot),
-    }))
-    expect(verifiedRoots.map(({ version }) => version)).toEqual(expectedOfficialDshVersions)
+    expect(new Set(cliRoots).size).toBe(5)
+    expect(officialRoots.map(({ version }) => version)).toEqual(expectedOfficialDshVersions)
+    expect(namespaceRoots).toHaveLength(4)
+    expect(entryConfigRoots).toHaveLength(1)
 
-    for (const { cliRoot, version } of verifiedRoots) {
+    for (const { cliRoot, version } of namespaceRoots) {
       const home = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-loader-'))
       const packDestination = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-pack-'))
       const profile = join(home, 'profiles', 'compat')
@@ -1247,7 +1390,14 @@ integrationDescribe('official DSH loader composition', () => {
     expect(existsSync(clientEntry)).toBe(true)
 
          const hostCode = readFileSync(hostEntry, 'utf8')
-     expect(hostCode).toContain('export { apply, inject, name }')
+     // `Config` joined the entry's exports when the 0.1.7 form started deriving
+     // from it, so the whole named-export list is asserted rather than the three
+     // legacy names alone: a build that stopped exporting `Config` would leave
+     // every entry-config host with no settings form at all, which is the
+     // regression this matrix exists to catch.
+     const hostExports = /export \{ ([^}]+) \}/.exec(hostCode)?.[1]
+       ?.split(',').map((exported) => exported.trim()).sort()
+     expect(hostExports).toEqual(['Config', 'apply', 'inject', 'name'])
 
     const clientCode = readFileSync(clientEntry, 'utf8')
     const registered: Array<{
@@ -1509,26 +1659,13 @@ integrationDescribe('official DSH loader composition', () => {
         })
         // The real-browser DOM probe validates client-side rendering of the
         // settings section. The client bundle is identical across the
-        // representative DSH versions, so launch Playwright once on the newest
-        // representative (0.1.6-alpha.1) and keep the RPC/profile/写入 verification
-        // for every version, which needs no browser.
+        // representative DSH versions, so launch Playwright on the
+        // namespace-model representative (0.1.6-alpha.1) and on the
+        // entry-config representative (0.1.7-alpha.1, in its own case below)
+        // while keeping the RPC/profile/写入 verification for every version,
+        // which needs no browser.
         if (version === '0.1.6-alpha.1') {
-          const domProbe = await probeOfficialSettingsDom(cliRoot, web)
-          if (domProbe.blocked !== undefined) {
-            if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
-              throw new Error(`required DSH Web DOM probe was blocked: ${domProbe.blocked}`)
-            }
-            console.log(`[BLOCKED] browser probe: ${domProbe.blocked}`)
-          } else {
-            expect(domProbe.settingsText).toMatch(/插件|Plugins/)
-            expect(domProbe.errors).toEqual([])
-            if (!domProbe.thinkingEffortVisible) {
-              if (process.env.DSH_REQUIRE_THINKING_EFFORT_DOM === '1') {
-                throw new Error('thinking-effort settings section is absent from the real DSH Web DOM')
-              }
-              console.log(`[BLOCKED] thinking-effort section missing; DOM=${JSON.stringify(domProbe.settingsText)}; bootRows=${JSON.stringify(bootRows)}`)
-            }
-          }
+          await assertSettingsDomProbe(cliRoot, web, `bootRows=${JSON.stringify(bootRows)}`)
         }
       } finally {
         await web.stop()
@@ -1647,6 +1784,284 @@ integrationDescribe('official DSH loader composition', () => {
         rmSync(home, { recursive: true, force: true })
         rmSync(packDestination, { recursive: true, force: true })
       }
+    }
+  })
+
+  /**
+   * The entry-config case. 0.1.7 derives a plugin's settings form from the
+   * Loader entry's own `Config`, so `settings.register` no longer exists; a
+   * plugin that still called it never reached `apply` and published no section
+   * at all — the regression this plan exists to prevent. This case asserts the
+   * two halves a published form needs: the Loader applied the entry (marker),
+   * and `settings/describe` lists the entry id with exactly the fields of the
+   * exported `Config`.
+   *
+   * It also holds the two host behaviours the provider-defaults fill reads
+   * (documented on `readUserLayer` in `src/host/settings.ts`), neither of which
+   * any in-process test can observe:
+   *
+   * 1. `llm-pi-ai`'s `providers` stays volatile. It is the entry's only field,
+   *    and `describe()` lists an entry only when some volatile field makes its
+   *    form live (`volatileForm` returns `undefined` otherwise), so dropping
+   *    that `.volatile()` removes the entry from the service reads entirely and
+   *    the fill goes dead rather than inflating. The check asserts the entry is
+   *    listed *and* that a path under `providers` is accepted, which the host
+   *    refuses for a non-volatile path.
+   * 2. A path write is derived from the raw user layer, not from a resolved
+   *    snapshot. Two writes cover it. The provider-array half writes one
+   *    minimal route and then a second field on that route, and requires the
+   *    user layer to hold exactly what those two writes stated: a
+   *    resolved-derived write would carry the route back materialized
+   *    (`models[].input`, `models[].compat`, `modelOverrides`, `headers`,
+   *    `defaultContextWindow` …). The defaults half writes one minimal path
+   *    into this plugin's own section and requires the user layer to hold
+   *    exactly that path; the resolved value necessarily carries
+   *    `opencodeSession` (with its `format` and `userAgent` defaults),
+   *    `profiles` and `autoBackup`, so a resolved-derived write would pin all
+   *    four into the user's document — exactly the inflation this plan removed.
+   */
+  it('loads on the entry-config host and publishes its settings section', { timeout: 300000 }, async () => {
+    expect(entryConfigRoots).toHaveLength(1)
+    const [entryConfigRoot] = entryConfigRoots
+    if (entryConfigRoot === undefined) throw new Error('DSH_CLI_ROOTS did not contain an entry-config root')
+    const { cliRoot, version } = entryConfigRoot
+    expect(version).toBe('0.1.7-alpha.1')
+
+    const home = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-entry-'))
+    // The Web profile gets its own home, as the namespace loop does: a marker
+    // read from the compat home could have been written by the compat profile
+    // rather than by the Web host this case asserts.
+    const webHome = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-entry-web-'))
+    const packDestination = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-pack-'))
+    try {
+      const tarball = packLocalPackage(packDestination)
+
+      runOfficialDsh(cliRoot, home, ['plugin', '--profile', 'compat', 'add', tarball])
+      const dump = runOfficialDsh(cliRoot, home, ['--profile', 'compat', '--dump-default-config'])
+      expect(dump).toContain(`id: ${PLUGIN_ENTRY_ID}`)
+      expect(dump).toContain("name: '@hytime/dsh-thinking-effort'")
+      expect(dump).not.toContain('name: dsh-thinking-effort')
+
+      runOfficialDsh(cliRoot, webHome, ['plugin', '--profile', 'web', 'add', tarball])
+      const web = await startOfficialWeb(cliRoot, webHome, {
+        args: ['dsh', '--profile', 'web', '--no-open', '--port', '0'],
+      })
+      try {
+        const headers: Record<string, string> = web.cookie === '' ? {} : { cookie: web.cookie }
+        const liveResult = (endpoint: string, args: Record<string, unknown>): Promise<unknown> => (
+          callOfficialRpc(web.url, headers, endpoint, args, true).then((response) => {
+            expect(response.status).toBe(200)
+            return response.body.result
+          })
+        )
+        const readNamespaces = async (): Promise<readonly EntryConfigNamespaceView[]> => {
+          // The RPC result is the service's `{ ok, value }` envelope, exactly as
+          // `settingsBridge` reads it in the namespace loop above.
+          const described = await liveResult('settings/describe', {}) as
+            | { readonly ok?: boolean; readonly value?: { readonly namespaces?: readonly EntryConfigNamespaceView[] } }
+            | undefined
+          expect(described).toMatchObject({ ok: true, value: { namespaces: expect.any(Array) } })
+          return described?.value?.namespaces ?? []
+        }
+
+        // The Host publishes the section; the Web host must also serve the
+        // Client bundle that renders it, or nothing reaches the browser. This
+        // is the half the namespace loop checks for its roots and the half a
+        // 0.1.7 Web host could break on its own (boot-graph entry, plugin asset
+        // route) without the RPC reads noticing.
+        const webInstalled = join(webHome, 'profiles', 'web', 'node_modules', '@hytime', 'dsh-thinking-effort')
+        const clientEntry = join(webInstalled, 'lib', 'client.js')
+        expect(existsSync(clientEntry)).toBe(true)
+        const clientCode = readFileSync(clientEntry, 'utf8')
+        const indexResponse = await fetch(web.url, { headers, signal: AbortSignal.timeout(10000) })
+        expect(indexResponse.status).toBe(200)
+        const indexHtml = await indexResponse.text()
+        const bootRows = extractBootRows(indexHtml)
+        const bundleUrl = extractBundleUrl(indexHtml, '@hytime/dsh-thinking-effort')
+        // 0.1.6 advertises this entry as a root-absolute URL and 0.1.7 as a
+        // page-relative one, so the leading slash is optional here; both are
+        // resolved against the served origin below either way.
+        expect(bundleUrl).toMatch(/(?:^|\/)plugins\/(?:\?\?@hytime\/dsh-thinking-effort\/client\.js&rev=|@hytime\/dsh-thinking-effort\/client\.js\?rev=)/)
+        const bundleResponse = await fetch(new URL(bundleUrl, web.url), {
+          headers,
+          signal: AbortSignal.timeout(10000),
+        })
+        expect(bundleResponse.status).toBe(200)
+        const servedCode = await bundleResponse.text()
+        expect(servedCode).toContain(clientCode)
+        expect(servedCode).toContain("id: '@hytime/dsh-thinking-effort'")
+
+        const namespaces = await readNamespaces()
+
+        // Invariant (a): `providers` is the entry's only volatile field, so the
+        // entry is listed and a path under `providers` is accepted. The host
+        // refuses a non-volatile path with "is not volatile", so the accepted
+        // write below is the causal half of this check.
+        const piAi = namespaces.find(({ ns }) => ns === 'llm-pi-ai')
+        expect(piAi, '0.1.7 must keep the llm-pi-ai providers form published').toBeDefined()
+        // A fresh profile has written nothing, so the resolved form is exactly
+        // the one volatile field. An absent key means the entry no longer
+        // publishes the form the fill reads, and the exact key set catches a
+        // form that started resolving fields the fill never asked for.
+        expect(Object.keys(piAi?.value ?? {})).toEqual(['providers'])
+        expect(entryFormFields(piAi?.schema)).toContain('providers')
+
+        // The published section itself: addressed by the Loader entry id, and
+        // covering exactly the fields the exported `Config` declares.
+        const own = namespaces.find(({ ns }) => ns === PLUGIN_ENTRY_ID)
+        expect(own, `0.1.7 must publish the ${PLUGIN_ENTRY_ID} settings section`).toBeDefined()
+        expect(entryFormFields(own?.schema))
+          .toEqual(['autoBackup', 'opencodeSession', 'profiles', 'subagentEffort'])
+        expect(own?.value).toMatchObject({
+          opencodeSession: expect.any(Object),
+          subagentEffort: expect.any(String),
+          profiles: expect.any(Object),
+          autoBackup: expect.any(Object),
+        })
+        expect(own?.revision).toEqual(expect.any(Number))
+
+        const markerPath = join(webHome, 'thinking-effort-loaded.json')
+        expect(existsSync(markerPath)).toBe(true)
+        const marker = JSON.parse(readFileSync(markerPath, 'utf8')) as { event?: string; name?: string }
+        expect(marker).toMatchObject({ event: 'apply', name: '@hytime/dsh-thinking-effort' })
+
+        const route = 'entry-config-compat'
+        const seeded = {
+          api: 'openai-completions',
+          baseURL: 'http://gateway.test/v1',
+          models: [{ id: 'entry-config-model-a', reasoningEfforts: { off: null, high: 'high' } }],
+        }
+        const seedResult = await liveResult('settings/mutate', {
+          ns: 'llm-pi-ai',
+          ops: [{ op: 'set', path: ['providers', route], value: seeded }],
+          expectedRevision: piAi?.revision,
+        })
+        expect(seedResult).toMatchObject({ ok: true, value: { ns: 'llm-pi-ai' } })
+
+        // Invariant (b), array half. The first minimal write is identical under
+        // either host because no part of the route is resolved yet; it only
+        // proves the write is accepted at all. The second write is the check: a
+        // host that derived its `current` from the resolved snapshot would carry
+        // the first write's route back already materialized (`models[].input`,
+        // `models[].compat`, `modelOverrides`, `headers`, `defaultContextWindow`
+        // …), so the user's document would gain every field the user never
+        // wrote.
+        const afterSeed = await readNamespaces()
+        const seededPiAi = afterSeed.find(({ ns }) => ns === 'llm-pi-ai')
+        const seededUser = seededPiAi?.user?.providers as Record<string, unknown> | undefined
+        expect(seededUser?.[route]).toEqual(seeded)
+
+        // Resolution materializes model fields the user never wrote. If it ever
+        // stopped, the second write below would silently become a no-op check
+        // rather than a regression alarm.
+        const resolvedModels = (seededPiAi?.value?.providers as Record<string, unknown> | undefined)
+          ?.[route] as { models?: readonly Record<string, unknown>[] } | undefined
+        expect(Object.keys(resolvedModels?.models?.[0] ?? {}).length)
+          .toBeGreaterThan(Object.keys(seeded.models[0] ?? {}).length)
+
+        const displayName = 'Entry Config Compliance'
+        const secondWrite = await liveResult('settings/mutate', {
+          ns: 'llm-pi-ai',
+          ops: [{ op: 'set', path: ['providers', route, 'displayName'], value: displayName }],
+          expectedRevision: seededPiAi?.revision,
+        })
+        expect(secondWrite).toMatchObject({ ok: true, value: { ns: 'llm-pi-ai' } })
+        const secondUser = (await readNamespaces())
+          .find(({ ns }) => ns === 'llm-pi-ai')?.user?.providers as Record<string, unknown> | undefined
+        expect(secondUser?.[route]).toEqual({ ...seeded, displayName })
+
+        // Invariant (b), defaults half: a minimal write into this plugin's own
+        // section must leave the user layer holding exactly the written path.
+        const ownBeforeWrite = afterSeed.find(({ ns }) => ns === PLUGIN_ENTRY_ID)
+        expect(ownBeforeWrite?.revision).toEqual(expect.any(Number))
+        const written = await liveResult('settings/mutate', {
+          ns: PLUGIN_ENTRY_ID,
+          ops: [{ op: 'set', path: ['subagentEffort'], value: 'high' }],
+          expectedRevision: ownBeforeWrite?.revision,
+        })
+        expect(written).toMatchObject({ ok: true, value: { ns: PLUGIN_ENTRY_ID } })
+
+        const ownAfterWrite = (await readNamespaces()).find(({ ns }) => ns === PLUGIN_ENTRY_ID)
+        expect(ownAfterWrite?.user).toEqual({ subagentEffort: 'high' })
+        // The resolved value still carries the schema defaults the user never
+        // wrote, which is what makes the assertion above non-vacuous.
+        expect(ownAfterWrite?.value).toMatchObject({
+          opencodeSession: expect.any(Object),
+          subagentEffort: 'high',
+          profiles: expect.any(Object),
+          autoBackup: expect.any(Object),
+        })
+
+        // Invariant (c): the provider-defaults fill writes on this model too.
+        // The route seeded above already declares `reasoningEfforts`, so the fill
+        // is a no-op on it; this route states none, which is the state the fill
+        // exists for. The write it performs is triggered by the change event the
+        // seed raises — a path the plugin can only take from outside that
+        // event's async context (see `fillScope` in `src/host/settings.ts`) — and
+        // its own write raises the event again, so the queued pass is the
+        // self-triggered re-run asserted below.
+        const fillRoute = 'entry-config-fill'
+        // A route the installed catalog does not describe needs its own
+        // `baseURL`, exactly as the seed above carries one.
+        const fillSeed = {
+          api: 'openai-completions',
+          baseURL: 'http://gateway.test/v1',
+          models: [{ id: 'entry-config-fill-model', name: 'Fill Model' }],
+        }
+        const beforeFill = await readNamespaces()
+        const fillSeedResult = await liveResult('settings/mutate', {
+          ns: 'llm-pi-ai',
+          ops: [{ op: 'set', path: ['providers', fillRoute], value: fillSeed }],
+          expectedRevision: beforeFill.find(({ ns }) => ns === 'llm-pi-ai')?.revision,
+        })
+        expect(fillSeedResult).toMatchObject({ ok: true, value: { ns: 'llm-pi-ai' } })
+
+        const fillUser = async (): Promise<Record<string, unknown> | undefined> => {
+          const llm = (await readNamespaces()).find(({ ns }) => ns === 'llm-pi-ai')
+          return (llm?.user?.providers as Record<string, unknown> | undefined)?.[fillRoute] as Record<string, unknown> | undefined
+        }
+
+        // The fill writes the default level set into the user's own layer and
+        // nothing else: the route keeps the fields the user declared, and no
+        // resolved-only field (`input`, `compat`, …) reaches the document. The
+        // route states no `reasoningEfforts`, which is the state the fill exists
+        // for, and `waitForFill` reads the write rather than the read that
+        // preceded it.
+        const filledRoute = await waitForFill(async () => {
+          const route = await fillUser()
+          const models = route?.['models']
+          return Array.isArray(models) && (models[0] as Record<string, unknown> | undefined)?.['reasoningEfforts'] !== undefined
+            ? route
+            : undefined
+        })
+        expect(filledRoute).toEqual({
+          ...fillSeed,
+          models: [{ ...fillSeed.models[0], reasoningEfforts: { off: null, high: 'high', max: 'max' } }],
+        })
+
+        // The self-triggered re-run: the fill's own write raises the event, the
+        // queued pass re-reads and finds nothing to do, so the section settles
+        // rather than being written a second time.
+        const settled = (await readNamespaces()).find(({ ns }) => ns === 'llm-pi-ai')?.revision
+        expect(settled).toEqual(expect.any(Number))
+        await new Promise<void>((resolveWait) => setTimeout(resolveWait, 2500))
+        expect((await readNamespaces()).find(({ ns }) => ns === 'llm-pi-ai')?.revision).toBe(settled)
+        expect(await fillUser()).toEqual(filledRoute)
+
+        // The RPC checks above prove this host *lists* the section; the browser
+        // is what proves the served Client resolves and renders it, which is
+        // the user-visible outcome of the entry-config model. Running the probe
+        // on this root as well as on the namespace representative costs one
+        // more Chromium launch in the opt-in workflow and closes the gap where
+        // 0.1.7 had no client-side coverage at all.
+        await assertSettingsDomProbe(cliRoot, web, `version=${version} bootRows=${JSON.stringify(bootRows)}`)
+      } finally {
+        await web.stop()
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true })
+      rmSync(webHome, { recursive: true, force: true })
+      rmSync(packDestination, { recursive: true, force: true })
     }
   })
 })

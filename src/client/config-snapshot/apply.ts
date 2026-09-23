@@ -1,7 +1,7 @@
 import { planImport } from './plan.js'
 import { autoBackupOps } from './library.js'
 import { snapshotFromNamespaces } from './snapshot.js'
-import { PLUGIN_NAMESPACE } from './types.js'
+import { pluginSectionId } from '../subagent-section.js'
 import type { ApplyOutcome, ApplySettings, ConfigSnapshot, ImportMode, NamespaceOutcome } from './types.js'
 import type { SettingsNamespace } from '../types.js'
 
@@ -12,6 +12,14 @@ export interface ApplyRequest {
   readonly autoBackup: boolean
   /** Apply the snapshot's endpoint / credential / script wiring too. Defaults to false. */
   readonly importWiring?: boolean
+  /**
+   * The id the running host addresses the plugin section by, when the caller
+   * already resolved it. Absent, it is resolved from the fresh `describe()` the
+   * apply takes below, so the production path cannot fall back to the legacy id
+   * on an entry-config host. The auto backup is written to the resolved id and
+   * the plugin half of the plan targets it.
+   */
+  readonly pluginNamespace?: string
   /** Injected for tests; defaults to the real clock. */
   readonly now?: () => Date
   readonly pluginVersion?: string
@@ -46,7 +54,13 @@ export async function applySnapshot(request: ApplyRequest): Promise<ApplyOutcome
   }
 
   const namespaces = fresh.value.namespaces
-  const plan = planImport(snapshot, namespaces, mode, { importWiring: request.importWiring ?? false })
+  // Resolved from the read the plan runs against, so a caller that omits the
+  // option still writes the section the live host publishes.
+  const pluginNamespace = request.pluginNamespace ?? pluginSectionId(namespaces)
+  const plan = planImport(snapshot, namespaces, mode, {
+    importWiring: request.importWiring ?? false,
+    pluginNamespace,
+  })
   if (plan.empty) {
     return { ok: true, skipped: true, outcomes: [], restartRequired: [] }
   }
@@ -59,7 +73,7 @@ export async function applySnapshot(request: ApplyRequest): Promise<ApplyOutcome
   let autoBackupError: string | undefined
   let backedUpNamespace: SettingsNamespace | undefined
   if (request.autoBackup) {
-    const backup = await writeAutoBackup(request, namespaces)
+    const backup = await writeAutoBackup(request, namespaces, pluginNamespace)
     autoBackupError = backup.error
     backedUpNamespace = backup.namespace
   }
@@ -122,15 +136,19 @@ interface AutoBackupWrite {
  * that revision is still the current one, and a second `describe()` would only
  * read the same value back.
  */
-async function writeAutoBackup(request: ApplyRequest, preApply: readonly SettingsNamespace[]): Promise<AutoBackupWrite> {
+async function writeAutoBackup(
+  request: ApplyRequest,
+  preApply: readonly SettingsNamespace[],
+  pluginNamespace: string,
+): Promise<AutoBackupWrite> {
   const { settings, now, pluginVersion } = request
   const backup = snapshotFromNamespaces(preApply, {
     createdAt: (now ?? (() => new Date()))().toISOString(),
     pluginVersion: pluginVersion ?? '',
     sourceProfile: 'unknown',
-  })
+  }, pluginNamespace)
 
-  const revision = revisionOf(preApply, PLUGIN_NAMESPACE)
-  const response = await settings.mutate(PLUGIN_NAMESPACE, autoBackupOps(backup), revision)
+  const revision = revisionOf(preApply, pluginNamespace)
+  const response = await settings.mutate(pluginNamespace, autoBackupOps(backup), revision)
   return response.ok ? { namespace: response.value } : { error: response.error.message }
 }

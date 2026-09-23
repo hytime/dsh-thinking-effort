@@ -25,7 +25,7 @@
 >
 > 发布包的运行入口是 `lib/index.js`（Host）和 `lib/client.js`（Client）。修改 TypeScript 或 locale 源文件后，运行 `npm run build`，再启动 DSH 或打包插件。当前 DSH 没有公开的 semver metadata 契约，因此运行时能力探测是权威来源。只有显式 metadata 或测试输入提供时才使用可选版本；未知合法版本仍按实际能力运行。插件同时支持新版 `remote.settings` 和旧版 `connection.api.settings`。
 >
-> Host 在宿主提供 Settings `installSection` 时用它注册插件自有的 `dsh-thinking-effort` namespace，否则回退到旧版 `register` 路径。插件不在运行时依赖 `@deepseek-ai/dsh-settings`，因此在配置为 `autoInstallPeers: false` 的 DSH profile 中也能干净安装，不会引入第二份 Cordis 运行时。
+> Host 在宿主提供 Settings `installSection` 时用它注册插件自有的 `dsh-thinking-effort` namespace，否则回退到旧版 `register` 路径。在 `0.1.7` 及以后的 entry-config 模型下这两条路径都不存在，设置分区改由导出的 `Config` 提供。插件不在运行时依赖 `@deepseek-ai/dsh-settings`，因此在配置为 `autoInstallPeers: false` 的 DSH profile 中也能干净安装，不会引入第二份 Cordis 运行时。
 
 ## DSH 版本兼容
 
@@ -38,13 +38,16 @@
 从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。上表表示各 DSH 版本最多可用的字段集合；当前网关协议还可能进一步缩小集合。
 
 实际可配置字段需要同时满足三项条件：DSH 版本支持、运行时 schema 暴露，以及当前路由的 `api` 协议支持。不支持的字段不会显示，也不会写入 Settings。15 个字段中，`openai-completions` 支持全部 15 个；`openai-responses`、`azure-openai-responses` 和 `openai-codex-responses` 只支持 `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention`。如果 `api` 缺失或无法识别，最终仍以运行时 schema 和 DSH 校验为准。
+
+DSH `0.1.7` 起改为从 Loader 条目自身的 `Config` schema 派生设置表单（entry-config 模型）；没有导出该 schema 的插件不会出现设置表单。本插件已导出该 schema，因此在 `0.1.7` 及以后，它的设置分区使用 Loader 条目 ID `thinking-effort`；`0.1.0-rc.7` 至 `0.1.6` 仍使用注册的 namespace `dsh-thinking-effort`，客户端会自动解析宿主实际发布的那个 ID。`subagentEffort` 现在存放在本插件自己的分区，且在 `0.1.7` 及以后旧的 `llm-pi-ai` 位置不再是回退读取来源：该分区的 schema 只声明了 `providers`，宿主会拒绝写入其他路径，并从它上报的用户层中丢掉未声明的键。所以升级前存在那里的子 agent 默认值会显示为未设置，需要在插件的设置卡片里重新选择一次。本插件在 `0.1.7` 之前导出的快照仍把该值放在 `llm-pi-ai` 里；导入时插件会把该值迁移到自己的分区——这也正是同一批次里的 providers 能被接受的原因（只要有一个写入路径不是 volatile，宿主就会拒绝整个批次）。`0.1.7` 及以后设置保存在当前 profile 的 `cordis.patch.yml`，而不再是 `~/.dsh/settings.yaml`（`0.1.7` 不再使用该文件）。
+
 ## 为什么需要它？
 
 DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模型通常没有 `reasoningEfforts` 配置。因此，Composer 的模型选择器不会显示「推理等级」，你也无法把网关实际支持的值（例如 `ultra`）映射到 DSH 的标准档位。
 
 这个插件解决的是配置层问题：
 
-- 自动为没有声明档位的第三方模型补上默认选项，安装后即可在 Composer 中看到「推理等级」；
+- 为你自己 profile 声明的、缺少档位的模型补上默认选项，安装后即可在 Composer 中看到「推理等级」；只由组合 base 或 schema 默认值提供的模型不会被补全，跳过的数量会写入宿主日志；
 - 在设置页按模型自定义档位，并把 `high` 映射为网关需要的任意字符串，例如 `ultra`；
 - 为子 agent 设置统一的默认思考强度，同时保留显式指定值的优先级；
 - 子 agent 的自定义线上值会按实际模型的 `reasoningEfforts` 映射回标准档位，找不到映射时不会注入非法档位；
@@ -74,7 +77,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 
 | 功能 | 作用 |
 | --- | --- |
-| 默认档位补齐 | 为缺少配置的模型添加 `off`、`high`、`max`，不覆盖已有自定义值 |
+| 默认档位补齐 | 为用户层中缺少配置的模型添加 `off`、`high`、`max`，不覆盖已有自定义值；只由组合 base 或 schema 默认值提供的模型不补全，并在宿主日志中报出数量 |
 | 模型级编辑 | 在「设置 → 模型能力与档位」中逐模型勾选档位并填写线上值；catalog/modelOverrides 和 `models[]` 模型都可编辑 compat |
 | 网关兼容配置 | 按 provider 全局或单个模型配置 15 个常用标量字段，按角色与推理、格式与输出、流式与工具、存储与缓存分组并默认收起 |
 | OpenCode 会话 Header | 按精确模型启用动态 `x-opencode-session`，默认生成与 DSH 会话绑定的确定性 `ses_` 值（提供 template / expression / script 等模式以应对上游格式变化），不保存固定 Header 值 |
@@ -210,11 +213,11 @@ providers:
 
 ### OpenCode 会话 Header 生成器
 
-模型编辑器提供独立的「OpenCode 会话 Header」开关。它默认关闭，保存在插件自有的 `dsh-thinking-effort` Settings namespace 中，不写入 `llm-pi-ai.compat`。只有确实需要 `x-opencode-session` 的精确 `provider/model` 才应启用；同一路由中的其他模型（包括 GPT 模型）不会继承该设置。拨动开关即立即保存，没有单独的保存按钮；重新打开模型时显示的是已持久化的值。
+模型编辑器提供独立的「OpenCode 会话 Header」开关。它默认关闭，保存在插件自有的设置分区中，不写入 `llm-pi-ai.compat`。只有确实需要 `x-opencode-session` 的精确 `provider/model` 才应启用；同一路由中的其他模型（包括 GPT 模型）不会继承该设置。拨动开关即立即保存，没有单独的保存按钮；重新打开模型时显示的是已持久化的值。
 
 启用后、未配置 `format` 时，Host 会发送符合 `ses_` 规范形态、**由当前 DSH 会话确定性派生**的值：`ses_` + 12 位十六进制（48 位毫秒时间戳，会话内首次使用时铸造一次）+ 14 位 Base62（对归一化的 DSH 会话 ID 取 80 位 SHA-256 摘要）。同一 DSH 会话总是发送同一个值：该值按会话粘性保留，有界缓存淘汰只丢弃缓存值、绝不丢弃首次铸造的铸币，因此被淘汰的会话再次访问时值仍不变；只有 DSH 重启且处于 `firstUse` 模式时才会重新铸造 hex 时间戳（`time: hash` 则完全无状态）。14 位后缀因为是派生而非存储，在 DSH 重启后依然稳定。不同会话（包括每次子 agent 运行）派生不同值。
 
-生成器参数可在设置页的**会话值生成器**卡片中调整，也可在设置文档的 `dsh-thinking-effort.opencodeSession.format` 中手写；两种方式等价。共四档，可应对上游格式变化而无需重建插件：
+生成器参数可在设置页的**会话值生成器**卡片中调整，也可在设置文档中手写：`0.1.7` 及以后是当前 profile 的 `cordis.patch.yml` 中的 `opencodeSession.format` 分区（由 Loader 条目 ID `thinking-effort` 定位）；`0.1.0-rc.7` 至 `0.1.6` 是 `dsh-thinking-effort.opencodeSession.format`，例如 `~/.dsh/settings.yaml`。两种方式等价。共四档，可应对上游格式变化而无需重建插件：
 
 - `ses-derive`（默认）——上面的规范生成器。`time: firstUse` 按会话铸造一次 hex 段；`time: hash` 改为从会话摘要派生，使整个值在任何机器上完全一致。
 - `passthrough`——旧行为：发送原始 DSH 会话 ID。
@@ -228,7 +231,7 @@ Sub2API、CPA 和其他中转服务必须保留并继续把 `x-opencode-session`
 
 ### OpenCode user-agent 覆盖
 
-部分上游还会校验 `user-agent` 头。`llm-pi-ai` 适配器会在每个 provider 请求上强制盖上自己的归因 `user-agent`（`deepseek-harness/…`）并删除 provider 配置的同名头，因此无法通过 DSH 本身修改。本插件在请求离开发送前的最后一层改写它——按 provider/model 生效、默认关闭：
+部分上游还会校验 `user-agent` 头。`llm-pi-ai` 适配器会在每个 provider 请求上强制盖上自己的归因 `user-agent`（`deepseek-harness/…`）并删除 provider 配置的同名头，因此无法通过 DSH 本身修改。本插件在请求离开发送前的最后一层改写它——按 provider/model 生效、默认关闭。下面的 YAML 展示 `0.1.7` 之前版本读取的 namespace 形态：
 
 ```yaml
 dsh-thinking-effort:
@@ -255,7 +258,7 @@ dsh-thinking-effort:
 
 「配置备份与方案」卡片位于语言选择器和「子 agent 默认档位」卡片下方，可以导出当前配置、在本机保存命名方案，并导入先前导出的文件。
 
-1. 点击「导出当前配置」下载 `dsh-config-<时间戳>.json`。文件按原样包含 `llm-pi-ai` 与 `dsh-thinking-effort` 的用户层配置：凭据值不会被导出（provider 只记录保存密钥的环境变量名 `apiKeyEnv`），但这两个用户层里的值都会原样写入，放在 provider `headers` 里的明文 token 就是其中之一。请妥善保管。
+1. 点击「导出当前配置」下载 `dsh-config-<时间戳>.json`。文件按原样包含 `llm-pi-ai` 用户层与本插件自有设置分区的配置（`0.1.0-rc.7` 至 `0.1.6` 的键为 `dsh-thinking-effort`，`0.1.7` 及以后为 Loader 条目 ID `thinking-effort`）：凭据值不会被导出（provider 只记录保存密钥的环境变量名 `apiKeyEnv`），但这些分区里的值都会原样写入，放在 provider `headers` 里的明文 token 就是其中之一。请妥善保管。
 2. 在「方案库」中输入名称后点击「保存当前配置」，即可把当前配置存为命名方案；「导出」写成文件，「删除」移除方案，最多保存 20 份。「应用」切回方案时走的是与导入相同的预览，默认的「合并」会保留方案里没有的 provider，要完全还原需在预览中改选「替换」。
 3. 点击「导入配置」中的「选择文件…」后，「导入预览」会先列出新增 / 覆盖 / 删除的条数，确认之前不会写入任何内容。
 4. 导入默认使用「合并」（保留文件里没有的配置）；「替换」必须显式选择，它会删除文件里没有的 provider。点击「确认导入」会先把当前配置存为「导入前的自动备份」，再写入变更；还原这份备份同样走这个预览。
@@ -275,9 +278,9 @@ dsh-thinking-effort:
 
 ## 工作方式
 
-- **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位；同时读取模型级 OpenCode 会话设置，只在匹配的 `llm/stream` 请求中注入按 `opencodeSession.format` 生成（默认 `ses-derive`）的 `x-opencode-session`，并为 `opencodeSession.userAgent` 命中的模型改写 `user-agent`（否则会被 `llm-pi-ai` 适配器的归因头强制覆盖）。
+- **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位。补齐只写入用户层，因此覆盖的是你自己 profile 声明的模型：由组合 base 或 schema 默认值提供的模型在该层没有可写入的条目，插件不会为其补全，并在宿主日志中说明跳过了多少个。插件同时读取模型级 OpenCode 会话设置，只在匹配的 `llm/stream` 请求中注入按 `opencodeSession.format` 生成（默认 `ses-derive`）的 `x-opencode-session`，并为 `opencodeSession.userAgent` 命中的模型改写 `user-agent`（否则会被 `llm-pi-ai` 适配器的归因头强制覆盖）。
 - **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页；运行时提供 `modelDirectories` 服务时，为可选 Composer `seat` 注册低优先级 `shadow` 实现，并显示宿主已解析的推理档位滑块。模型编辑器把 OpenCode 会话 Header 设置保存在插件自有 namespace，与 `llm-pi-ai.compat` 分开。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
-- **子 agent：** 默认值存储在 `llm-pi-ai` 用户层的 `subagentEffort`；`agent/request` waterfall 只对未显式指定档位的子 agent 请求进行补全。
+- **子 agent：** `0.1.7` 及以后默认值存储在本插件自有设置分区的 `subagentEffort`（`0.1.0-rc.7` 至 `0.1.6` 为 `llm-pi-ai` 用户层）。宿主优先读取插件自有分区，再回退 `llm-pi-ai`；只有 `0.1.7` 之前的版本会真正把值放在后者（entry-config 的 `llm-pi-ai` 分区只声明 `providers`，其用户层不会承载这个键）。`agent/request` waterfall 只对未显式指定档位的子 agent 请求进行补全。
 - **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.14`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
 
 ## 安装验证
@@ -315,7 +318,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 - `off` 和未设置都可能表现为不发送 `reasoning` 参数，是否真正关闭思考取决于第三方网关的协议语义。
 - Composer 滑块只在 Web 运行时提供可选 `modelDirectories` 服务时注册。该服务不可用时，不会注册 `seat`，插件也不会修改 Composer。
 - 宿主逻辑修改需要重启 DSH；Settings、locale 和 Client bundle 修改需要刷新 Web 页面。
-- 「配置备份与方案」的方案库和导入前的自动备份都保存在插件自有的 `dsh-thinking-effort` namespace 中，不会随导出文件迁移。要把命名方案带到另一台机器，需要逐个「导出」再在目标机器上导入。
+- 「配置备份与方案」的方案库和导入前的自动备份都保存在插件自有的设置分区中，不会随导出文件迁移。要把命名方案带到另一台机器，需要逐个「导出」再在目标机器上导入。
 
 ## CI 与发布维护
 
@@ -324,7 +327,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 - 普通 CI workflow 不会发布 npm；发布只由 `publish.yml` 接收匹配的 `v<version>` tag 后执行。
 - 创建发布 tag 前，维护者先更新 `package.json` 版本和各语言 `CHANGELOG`，提交这些变更，再创建匹配的 `v<version>` tag。tag 指向的提交必须位于 `main` 历史中。
 - npm 包必须配置 GitHub Trusted Publisher：仓库为 `hytime/dsh-thinking-effort`，workflow 为 `publish.yml`。发布使用 GitHub OIDC 生成 provenance，不需要 `NPM_TOKEN`。
-- 发布前 workflow 会按 rc7 → rc2 → alpha2 → latest 顺序构建并测试四个官方 DSH 能力代表：`dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）、`dsh-v0.1.3-alpha.2`（`0.1.3-alpha.2`）和 `dsh-v0.1.6-alpha.1`（`0.1.6-alpha.1`）；通过官方 `dsh plugin` 命令安装并执行真实兼容检查，最新代表版本还会运行真实浏览器 DOM 探针。
+- 发布前 workflow 会按 rc7 → rc2 → alpha2 → namespace → entry 顺序构建并测试五个官方 DSH 能力代表：`dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）、`dsh-v0.1.3-alpha.2`（`0.1.3-alpha.2`）、`dsh-v0.1.6-alpha.1`（`0.1.6-alpha.1`）和 `dsh-v0.1.7-alpha.1`（`0.1.7-alpha.1`）；通过官方 `dsh plugin` 命令安装并执行真实兼容检查，`0.1.6-alpha.1`（namespace 模型）和 `0.1.7-alpha.1`（entry-config 模型）两个代表版本都会运行真实浏览器 DOM 探针。
 - workflow 不会自动修改版本或任何 `CHANGELOG`；如果 npm 中已经存在相同版本，发布也会被阻止。
 
 ## 排查

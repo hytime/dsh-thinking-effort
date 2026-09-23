@@ -1,5 +1,6 @@
 import {
-  CONFIG_NAMESPACES,
+  LLM_NAMESPACE,
+  PLUGIN_NAMESPACE,
   RESERVED_PATH_KEYS,
   SNAPSHOT_KIND,
   SNAPSHOT_MAX_BYTES,
@@ -7,6 +8,7 @@ import {
 } from './types.js'
 import type { ConfigSnapshot, ParseResult, ParsedSnapshot, SnapshotSection } from './types.js'
 import { isRecord } from './snapshot.js'
+import { isOpenCodeSessionSectionId } from '../../compat/opencode-session.js'
 
 function byteLength(text: string): number {
   return typeof TextEncoder === 'function' ? new TextEncoder().encode(text).length : text.length
@@ -80,7 +82,12 @@ export function parseSnapshot(input: string): ParseResult<ParsedSnapshot> {
   const sections: Record<string, SnapshotSection> = {}
   for (const [ns, section] of Object.entries(rawSections)) {
     if (!isRecord(section)) return { ok: false, error: { code: 'invalidSection', params: { ns } } }
-    if (!(CONFIG_NAMESPACES as readonly string[]).includes(ns)) {
+    // Both settings models' ids are this plugin's own section: the registered
+    // `dsh-thinking-effort` before 0.1.7, and the Loader entry id under the
+    // entry-config model. Accepting only the legacy id would make a file this
+    // plugin itself exported on 0.1.7 re-import as an ignored namespace, with
+    // its configuration replaced by `{}`.
+    if (ns !== LLM_NAMESPACE && !isOpenCodeSessionSectionId(ns)) {
       ignoredNamespaces.push(ns)
       continue
     }
@@ -92,7 +99,13 @@ export function parseSnapshot(input: string): ParseResult<ParsedSnapshot> {
     sections[ns] = section
   }
 
-  for (const ns of CONFIG_NAMESPACES) sections[ns] ??= {}
+  // Normalise the shape callers read: the model namespace is always present,
+  // and the plugin's own section falls back to the legacy id only when the file
+  // carried neither id — a file from before either model existed, or one whose
+  // plugin half is a reset. Which id the file actually carries is preserved
+  // rather than rewritten, so the model that exported it stays legible.
+  sections[LLM_NAMESPACE] ??= {}
+  if (!Object.keys(sections).some((ns) => isOpenCodeSessionSectionId(ns))) sections[PLUGIN_NAMESPACE] = {}
 
   return {
     ok: true,

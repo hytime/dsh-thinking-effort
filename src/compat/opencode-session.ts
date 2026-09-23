@@ -1,3 +1,5 @@
+import { PLUGIN_ENTRY_ID } from './settings-model.js'
+
 /**
  * The section id under the registered-namespace settings model (rc.7 … 0.1.6).
  * The 0.1.7 entry-config model addresses the section by Loader entry id
@@ -5,6 +7,26 @@
  */
 export const OPENCODE_SESSION_NAMESPACE = 'dsh-thinking-effort'
 export const OPENCODE_SESSION_HEADER = 'x-opencode-session'
+
+/**
+ * The Loader entry id again, re-exported for callers that already read this
+ * module. `settings-model.ts` stays its single definition: the id is both the
+ * `id:` of this plugin's row in `cordis.patch.yml` and, under the 0.1.7
+ * entry-config model, the id of the settings section that row owns.
+ */
+export { PLUGIN_ENTRY_ID }
+
+/**
+ * Whether a settings section id is this plugin's own. Which id that is depends
+ * on the settings model the running host exposes, and the Client cannot ask:
+ * its settings bridge answers `describe`/`mutate` only, so every host looks
+ * like the entry-config model from there. Accepting BOTH ids is what keeps a
+ * legacy host resolving `dsh-thinking-effort` while a 0.1.7 host resolves the
+ * entry id, with no model detection anywhere.
+ */
+export function isOpenCodeSessionSectionId(value: unknown): boolean {
+  return value === OPENCODE_SESSION_NAMESPACE || value === PLUGIN_ENTRY_ID
+}
 
 /**
  * The generator mode list: the Host resolves stored values against it and the

@@ -1,5 +1,7 @@
 import { LLM_NAMESPACE, PLUGIN_NAMESPACE } from './types.js'
-import { deepEqualJson, isRecord, userSectionOf } from './snapshot.js'
+import { deepEqualJson, isRecord, pluginSectionKey, userSectionOf } from './snapshot.js'
+import { isOpenCodeSessionSectionId } from '../../compat/opencode-session.js'
+import { pluginSectionId } from '../subagent-section.js'
 import type { ConfigSnapshot, SnapshotSection, WiringEndpoint, WiringReport } from './types.js'
 import type { SettingsNamespace } from '../types.js'
 
@@ -59,6 +61,10 @@ const EMPTY_ADJUSTED = (value: SnapshotSection): { readonly value: SnapshotSecti
  * file ACTIVELY supplies that differs from this machine. An omission needs no
  * warning (nothing is being redirected) and would otherwise make every
  * self-exported snapshot look suspicious.
+ *
+ * `ns` is the id the *host* addresses this section by, so the plugin branch
+ * also matches the 0.1.7 entry id; the script rule is the plugin section's own
+ * rule, not a property of the legacy namespace name.
  */
 export function adjustIncoming(
   ns: string,
@@ -67,7 +73,7 @@ export function adjustIncoming(
   importWiring: boolean,
 ): { readonly value: SnapshotSection; readonly report: WiringReport } {
   if (ns === LLM_NAMESPACE) return adjustProviders(incoming, current, importWiring)
-  if (ns === PLUGIN_NAMESPACE) return adjustScript(incoming, current, importWiring)
+  if (isOpenCodeSessionSectionId(ns)) return adjustScript(incoming, current, importWiring)
   return EMPTY_ADJUSTED(incoming)
 }
 
@@ -169,8 +175,15 @@ export function wiringReport(
   snapshot: ConfigSnapshot,
   namespaces: readonly SettingsNamespace[],
 ): WiringReport {
-  return mergeWiringReports(
-    [LLM_NAMESPACE, PLUGIN_NAMESPACE].map((ns) =>
-      adjustIncoming(ns, snapshot.sections[ns] ?? {}, userSectionOf(namespaces, ns), false).report),
-  )
+  const pluginId = pluginSectionId(namespaces)
+  // The plugin half is keyed the way `planImport` keys it: a file exported by
+  // the other settings model carries the other id, and reading only this
+  // host's id would report no script for a file that has one. The FILE is read
+  // under that key while this machine's own value still comes from the section
+  // this host publishes.
+  const pluginKey = pluginSectionKey(snapshot.sections, pluginId)
+  return mergeWiringReports([
+    adjustIncoming(LLM_NAMESPACE, snapshot.sections[LLM_NAMESPACE] ?? {}, userSectionOf(namespaces, LLM_NAMESPACE), false).report,
+    adjustIncoming(pluginId, snapshot.sections[pluginKey] ?? {}, userSectionOf(namespaces, pluginId), false).report,
+  ])
 }

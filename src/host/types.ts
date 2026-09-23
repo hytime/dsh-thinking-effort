@@ -30,6 +30,24 @@ export interface SettingsScope {
   readonly watch: (callback: (...args: unknown[]) => unknown) => () => void
 }
 
+/**
+ * One path-addressed settings edit. The shape mirrors the settings service's
+ * own `mutate` op, which exists under both settings models and applies the op
+ * to the section as it stands when the write runs.
+ *
+ * The service also accepts `unset`, which the fill never issues: every fill
+ * adds a level set and none removes a value, and a variant the plugin cannot
+ * produce would leave the path walk of every model — including the older
+ * array-unaware one this plugin must stay safe against — without a compiler
+ * check on a branch it does not exercise. Narrowing here does not affect the
+ * service: an array of `set` ops is assignable to the service's wider union.
+ */
+export interface SettingsPathOp {
+  readonly op: 'set'
+  readonly path: readonly string[]
+  readonly value: unknown
+}
+
 export interface SettingsInjectionContext {
   readonly settings: HostSettings
   readonly effect: (callback: () => void | (() => void), label?: string) => unknown
@@ -46,6 +64,12 @@ export interface HostSettings {
   /** Absent from the `entry-config` model, which exposes values through `describe` only. */
   readonly get?: (namespace: string) => unknown
   readonly update: (namespace: string, value: UnknownRecord) => unknown
+  /**
+   * Path-addressed edit, present under both settings models. Preferred over
+   * `update` for a partial change: a merge carries whole subtrees, so a value
+   * read from the resolved section would pin every schema default it took on.
+   */
+  readonly mutate?: (namespace: string, ops: readonly SettingsPathOp[]) => unknown
   readonly describe?: () => unknown
   readonly installSection?: (
     owner: unknown,

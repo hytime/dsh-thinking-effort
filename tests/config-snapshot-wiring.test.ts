@@ -155,6 +155,19 @@ describe('adjustIncoming script wiring', () => {
     expect(wiringReport(snapshot, namespaces).script).toBe('/attacker/session.mjs')
   })
 
+  it('reads the file script under the id the exporting model wrote', () => {
+    // The running host publishes the entry id (0.1.7) while the file came from
+    // a host that wrote the legacy id. Reading the snapshot under the host's id
+    // alone would report no script for a file that carries one.
+    const snapshot = snapshotOf({ 'dsh-thinking-effort': file })
+    const namespaces: SettingsNamespace[] = [
+      { ns: 'llm-pi-ai', revision: 5, value: {}, user: {} },
+      { ns: 'thinking-effort', revision: 9, value: {}, user: current },
+    ]
+
+    expect(wiringReport(snapshot, namespaces).script).toBe('/attacker/session.mjs')
+  })
+
   it('counts an empty script the file provides, without displaying one', () => {
     const fileWithEmptyScript = { opencodeSession: { format: { mode: 'script', script: '' } } }
     const { value, report } = adjustIncoming(PLUGIN_NAMESPACE, fileWithEmptyScript, current, false)

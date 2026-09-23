@@ -5,6 +5,7 @@ import { installSettingsWatcher } from '../src/host/settings.ts'
 import { resolveSubagentEffort } from '../src/host/subagent.ts'
 import { capabilitiesForVersion, settingsModelForRuntime, settingsModelForVersion } from '../src/compat/version-map.ts'
 import { readSettingsSection, settingsChangeEvents, settingsEntryId, settingsModelOf } from '../src/compat/settings-model.ts'
+import type { SettingsPathOp } from '../src/host/types.ts'
 
 /**
  * The 0.1.7-alpha.1 settings service: forms are derived from each Loader
@@ -169,22 +170,35 @@ describe('0.1.7-alpha.1 entry-config settings model', () => {
   })
 
   it('keeps filling provider defaults without the removed get call', async () => {
+    const mutations: Array<{ ns: string; ops: readonly SettingsPathOp[] }> = []
     const settings = {
       writable: true,
-      describe: () => [{ ns: 'llm-pi-ai', value: { providers: { route: { models: [{ id: 'm' }] } } } }],
-      update: async (ns: string, patch: { providers: Record<string, { models: Array<{ id: string }> }> }) => {
-        settings.updated = { ns, patch }
+      describe: () => [{
+        ns: 'llm-pi-ai',
+        // The resolved value and the user's own layer differ by nothing here,
+        // which is what a section the user wrote in full looks like.
+        value: { providers: { route: { models: [{ id: 'm' }] } } },
+        user: { providers: { route: { models: [{ id: 'm' }] } } },
+      }],
+      // A merge would restate the resolved subtree and pin its defaults, so the
+      // fill must never reach for it.
+      update: async () => { throw new Error('the fill must address paths, not merge a subtree') },
+      mutate: async (ns: string, ops: readonly SettingsPathOp[]) => {
+        mutations.push({ ns, ops })
       },
-      updated: undefined as unknown,
     }
     const { context, scheduled } = createContext(settings)
     installSettingsWatcher(context as never)
     expect(scheduled.length).toBeGreaterThan(0)
     for (const callback of scheduled) await callback()
-    expect(settings.updated).toMatchObject({
+    expect(mutations).toEqual([{
       ns: 'llm-pi-ai',
-      patch: { providers: { route: { models: [{ id: 'm', reasoningEfforts: { off: null, high: 'high', max: 'max' } }] } } },
-    })
+      ops: [{
+        op: 'set',
+        path: ['providers', 'route', 'models'],
+        value: [{ id: 'm', reasoningEfforts: { off: null, high: 'high', max: 'max' } }],
+      }],
+    }])
   })
 
   it('declines to run the filler when the section is unreadable', async () => {

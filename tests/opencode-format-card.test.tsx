@@ -25,6 +25,12 @@ interface HarnessOptions {
   readonly onApplied?: () => void
   /** The `revision` prop the first render carries; defaults to the fixture's value. */
   readonly revision?: number
+  /**
+   * The section id the card is handed. Defaults to the legacy registered
+   * namespace; `'thinking-effort'` models the plugin's own entry section, which
+   * is where 0.1.7 hosts keep these fields.
+   */
+  readonly namespace?: string
 }
 
 /** The stored `opencodeSession.format` section a draft stands for. */
@@ -70,7 +76,8 @@ function applyOps(
 }
 
 function harness(options: HarnessOptions = {}) {
-  const revisions: Record<string, number> = { 'llm-pi-ai': 4, 'dsh-thinking-effort': 8 }
+  const pluginId = options.namespace ?? 'dsh-thinking-effort'
+  const revisions: Record<string, number> = { 'llm-pi-ai': 4, 'dsh-thinking-effort': 8, 'thinking-effort': 8 }
   let storedUser: Record<string, Record<string, unknown>> = options.user ?? {}
   // Set by a test to stand in for a page-mate's write landing between reads.
   let imported: Record<string, Record<string, unknown>> | undefined
@@ -95,7 +102,7 @@ function harness(options: HarnessOptions = {}) {
         writable: options.writable ?? true,
         namespaces: [
           { ns: 'llm-pi-ai', revision: revisions['llm-pi-ai'], value: {}, user: { subagentEffort: 'off' } },
-          { ns: 'dsh-thinking-effort', revision: revisions['dsh-thinking-effort'], value: {}, user: user?.['dsh-thinking-effort'] ?? {} },
+          { ns: pluginId, revision: revisions[pluginId], value: {}, user: user?.[pluginId] ?? {} },
         ],
       },
     })
@@ -105,10 +112,10 @@ function harness(options: HarnessOptions = {}) {
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
-  const revision = options.revision ?? revisions['dsh-thinking-effort']
+  const revision = options.revision ?? revisions[pluginId]
   const render = (next: number): void => {
     act(() => {
-      root.render(<OpenCodeFormatCard settings={settings} palette={iosPalette({ prefersDark: true })} t={text as Translation} revision={next} onApplied={options.onApplied} />)
+      root.render(<OpenCodeFormatCard settings={settings} palette={iosPalette({ prefersDark: true })} t={text as Translation} revision={next} namespace={options.namespace} onApplied={options.onApplied} />)
     })
   }
   render(revision)
@@ -209,6 +216,31 @@ describe('OpenCodeFormatCard', () => {
     expect(ns).toBe('dsh-thinking-effort')
     expect(ops).toEqual([{ op: 'set', path: ['opencodeSession', 'format', 'mode'], value: 'passthrough' }])
     expect(view.describe.mock.calls.length).toBeGreaterThan(before)
+  })
+
+  it('writes the entry section a 0.1.7 host publishes', async () => {
+    // The card is handed the id the editor resolved from its own `describe()`,
+    // so its read and its write land in the entry section rather than in the
+    // legacy namespace that host never publishes.
+    const view = harness({
+      namespace: 'thinking-effort',
+      user: { 'thinking-effort': storedFormat({ ...DEFAULT_FORMAT_DRAFT, mode: 'ses-derive', time: 'firstUse' }) },
+    })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('formatCardTitle')).click())
+    await settle()
+    expect(selectByLabel(view.container, text('formatModeLabel')).value).toBe('ses-derive')
+
+    act(() => setSelect(selectByLabel(view.container, text('formatTimeLabel')), 'hash'))
+    await settle()
+    act(() => button(view.container, text('formatApply')).click())
+    await settle()
+
+    expect(view.mutate).toHaveBeenCalledTimes(1)
+    const [ns, ops] = view.mutate.mock.calls[0]!
+    expect(ns).toBe('thinking-effort')
+    expect(ops).toEqual([{ op: 'set', path: ['opencodeSession', 'format', 'time'], value: 'hash' }])
   })
 
   it('surfaces a describe failure', async () => {

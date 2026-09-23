@@ -47,6 +47,12 @@ interface HarnessOptions {
   applies?: Readonly<Record<string, string>>
   /** Refuse the pre-import backup write, so an applied import has no rollback copy. */
   failAutoBackup?: boolean
+  /**
+   * The id this host addresses the plugin section by. Defaults to the legacy
+   * registered namespace; `'thinking-effort'` models a 0.1.7 entry-config host,
+   * which publishes no `dsh-thinking-effort` section at all.
+   */
+  pluginNamespace?: string
 }
 
 /** The op list `autoBackupOps` builds — what separates the rollback copy from a namespace write. */
@@ -55,11 +61,17 @@ function isAutoBackup(ops: readonly SettingsOp[]): boolean {
 }
 
 function harness(options: HarnessOptions = {}) {
-  // The revisions the host reports: llm-pi-ai 4, plugin namespace 8. A later
-  // describe can answer with a bumped revision, and a stale mutate is then
-  // refused with settings/conflict just like the real provider.
-  const revisions: Record<string, number> = { 'llm-pi-ai': 4, 'dsh-thinking-effort': 8 }
+  // The revisions the host reports: llm-pi-ai 4, and 8 for the one plugin
+  // section this host publishes. Only published ids are registered, so a write
+  // addressed to the other settings model's id is refused the way the real host
+  // refuses an unknown namespace — a harness that accepted it would let a card
+  // that targets the wrong section pass on an "entry host".
+  const pluginId = options.pluginNamespace ?? 'dsh-thinking-effort'
+  const revisions: Record<string, number> = { 'llm-pi-ai': 4, [pluginId]: 8 }
   const mutate = vi.fn(async (ns: string, ops: readonly SettingsOp[], revision: number): Promise<ClientResult<SettingsNamespace>> => {
+    if (!Object.prototype.hasOwnProperty.call(revisions, ns)) {
+      return { ok: false, error: { message: `unknown settings namespace "${ns}"` } }
+    }
     if (options.failAutoBackup === true && isAutoBackup(ops)) {
       return { ok: false, error: { message: 'settings rejected the backup' } }
     }
@@ -88,13 +100,23 @@ function harness(options: HarnessOptions = {}) {
     const bumped = options.revisionByCall?.[call]
     if (bumped !== undefined) Object.assign(revisions, bumped)
     const user = options.userByCall?.[call] ?? options.user
+    const rawLlmUser = user?.['llm-pi-ai'] ?? { subagentEffort: 'off' }
+    // The entry-config host derives one form per Loader entry and projects the
+    // user layer through it, so its `llm-pi-ai` (which declares only
+    // `providers` there) never reports the plugin's own `subagentEffort`. The
+    // harness models that projection: a file built from its `describe` is then
+    // one this host could really export, rather than a mixed shape only a
+    // hand-written file has.
+    const llmUser = pluginId === 'thinking-effort'
+      ? Object.fromEntries(Object.entries(rawLlmUser).filter(([key]) => key === 'providers'))
+      : rawLlmUser
     return Promise.resolve({
       ok: true,
       value: {
         writable: options.writable ?? true,
         namespaces: [
-          { ns: 'llm-pi-ai', revision: revisions['llm-pi-ai'], value: {}, user: user?.['llm-pi-ai'] ?? { subagentEffort: 'off' }, applies: options.applies?.['llm-pi-ai'] },
-          { ns: 'dsh-thinking-effort', revision: revisions['dsh-thinking-effort'], value: {}, user: user?.['dsh-thinking-effort'] ?? {}, applies: options.applies?.['dsh-thinking-effort'] },
+          { ns: 'llm-pi-ai', revision: revisions['llm-pi-ai'], value: {}, user: llmUser, applies: options.applies?.['llm-pi-ai'] },
+          { ns: pluginId, revision: revisions[pluginId], value: {}, user: user?.[pluginId] ?? {}, applies: options.applies?.[pluginId] },
         ],
       },
     })
@@ -199,6 +221,40 @@ describe('ConfigBackupCard', () => {
     expect(view.container.textContent).toContain(text('backupCardTitle'))
     expect(view.container.textContent).toContain(text('backupCollapsedHint', { count: 1 }))
     expect(view.container.textContent).not.toContain(text('backupProfilesTitle'))
+  })
+
+  it('reads the profile library out of the entry section a 0.1.7 host publishes', async () => {
+    // The raw `user` layer is captured from the section the card keys on, so a
+    // card that kept reading the legacy id would report an empty library here
+    // and export the plugin's settings as `{}`.
+    const view = harness({
+      pluginNamespace: 'thinking-effort',
+      user: { 'thinking-effort': { profiles: { work: storedSnapshot({ 'llm-pi-ai': { a: 1 } }) } } },
+    })
+    cleanup = view.unmount
+    await settle()
+
+    expect(view.container.textContent).toContain(text('backupCollapsedHint', { count: 1 }))
+  })
+
+  it('exports and saves the entry section under its own id', async () => {
+    const view = harness({ pluginNamespace: 'thinking-effort' })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+    act(() => button(view.container, text('backupExportCurrent')).click())
+    await settle()
+
+    const [, body] = view.download.mock.calls[0] as [string, string]
+    const parsed = JSON.parse(body) as { sections: Record<string, unknown> }
+    expect(parsed.sections['thinking-effort']).toBeDefined()
+
+    setProfileName(view.container, 'work')
+    act(() => button(view.container, text('backupSaveCurrent')).click())
+    await settle()
+
+    expect(view.mutate.mock.calls.some(([ns]) => ns === 'thinking-effort')).toBe(true)
   })
 
   it('downloads the current configuration as a snapshot file when expanded', async () => {
@@ -743,6 +799,133 @@ describe('ConfigBackupCard', () => {
     expect(view.container.textContent).toContain(text('backupSummary', { added: 0, overwritten: 1, removed: 0 }))
     expect(view.container.textContent).not.toContain(text('backupSummaryLibraryOnly'))
     expect(button(view.container, text('backupConfirmImport')).disabled).toBe(false)
+  })
+})
+
+describe('ConfigBackupCard settings-model round trip', () => {
+  const sessionValue = { providers: { provider: { models: { 'model-a': true } } } }
+  const entrySection = { opencodeSession: sessionValue }
+
+  /**
+   * Export a file from one entry-config host and return its bytes: the real
+   * exporter, not a hand-built snapshot. The file is then fed back through the
+   * card's own `<input type="file">`, so the whole product path under test is
+   * export → file → `parseSnapshot` → plan → apply.
+   */
+  const exportFromEntryHost = async (user: Record<string, Record<string, unknown>>): Promise<string> => {
+    const source = harness({ pluginNamespace: 'thinking-effort', user })
+    await settle()
+    act(() => button(source.container, text('backupCardTitle')).click())
+    await settle()
+    act(() => button(source.container, text('backupExportCurrent')).click())
+    await settle()
+    const [, body] = source.download.mock.calls[0] as [string, string]
+    source.unmount()
+    return body
+  }
+
+  it('imports a file another entry-config host exported and writes the entry section', async () => {
+    const body = await exportFromEntryHost({ 'thinking-effort': entrySection })
+    // What 0.1.7 actually exports: the plugin's settings under the entry id.
+    expect((JSON.parse(body) as { sections: Record<string, unknown> }).sections['thinking-effort']).toEqual(entrySection)
+
+    // A different 0.1.7 host, whose own plugin section is still empty.
+    const target = harness({ pluginNamespace: 'thinking-effort' })
+    cleanup = target.unmount
+    await settle()
+    act(() => button(target.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(target.container, new File([body], 'export.json', { type: 'application/json' }))
+
+    // The file's plugin section is recognized, so the preview counts its write
+    // instead of claiming the file already matches this configuration.
+    expect(target.container.textContent).toContain(text('backupSummary', { added: 1, overwritten: 0, removed: 0 }))
+    expect(button(target.container, text('backupConfirmImport')).disabled).toBe(false)
+
+    act(() => button(target.container, text('backupConfirmImport')).click())
+    await settle()
+
+    // Only the namespace writes, not the rollback copy taken before them.
+    const writes = target.mutate.mock.calls.filter(([, ops]) => !isAutoBackup(ops))
+    expect(writes).toEqual([
+      ['thinking-effort', [{ op: 'set', path: ['opencodeSession'], value: sessionValue }], 9],
+    ])
+    // The legacy id this host does not publish is never addressed.
+    expect(target.mutate.mock.calls.map(([ns]) => ns)).not.toContain('dsh-thinking-effort')
+    expect(target.container.querySelector('[role="alert"]')).toBeNull()
+    expect(target.onApplied).toHaveBeenCalled()
+  })
+
+  it('imports a legacy file into an entry-config host without losing its providers', async () => {
+    // What the plugin exported before 0.1.7: `subagentEffort` beside the
+    // providers inside `llm-pi-ai`, and the plugin's own settings under the
+    // legacy id. The entry-config writer refuses a whole batch when any op path
+    // is not volatile, so without the migration the provider write would be
+    // refused with the key's — and the user would silently lose their providers.
+    const body = JSON.stringify(storedSnapshot({
+      'dsh-thinking-effort': entrySection,
+      'llm-pi-ai': { subagentEffort: 'high', providers: { local: { models: [{ id: 'legacy-model' }] } } },
+    }))
+
+    const target = harness({ pluginNamespace: 'thinking-effort' })
+    cleanup = target.unmount
+    await settle()
+    act(() => button(target.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(target.container, new File([body], 'legacy.json', { type: 'application/json' }))
+
+    act(() => button(target.container, text('backupConfirmImport')).click())
+    await settle()
+
+    const writes = target.mutate.mock.calls.filter(([, ops]) => !isAutoBackup(ops))
+    expect(writes).toEqual([
+      ['thinking-effort', [
+        { op: 'set', path: ['opencodeSession'], value: sessionValue },
+        { op: 'set', path: ['subagentEffort'], value: 'high' },
+      ], 9],
+      ['llm-pi-ai', [
+        { op: 'set', path: ['providers'], value: { local: { models: [{ id: 'legacy-model' }] } } },
+      ], 4],
+    ])
+    expect(target.container.querySelector('[role="alert"]')).toBeNull()
+  })
+
+  it('applies a file an entry-config host exported to a legacy host section', async () => {
+    const body = await exportFromEntryHost({ 'thinking-effort': entrySection })
+
+    const target = harness()
+    cleanup = target.unmount
+    await settle()
+    act(() => button(target.container, text('backupCardTitle')).click())
+    await settle()
+    await chooseFile(target.container, new File([body], 'export.json', { type: 'application/json' }))
+
+    expect(target.container.textContent).toContain(text('backupSummary', { added: 1, overwritten: 0, removed: 0 }))
+
+    act(() => button(target.container, text('backupConfirmImport')).click())
+    await settle()
+
+    const writes = target.mutate.mock.calls.filter(([, ops]) => !isAutoBackup(ops))
+    expect(writes).toEqual([
+      ['dsh-thinking-effort', [{ op: 'set', path: ['opencodeSession'], value: sessionValue }], 9],
+    ])
+  })
+
+  it('previews the auto backup stored in the entry section instead of dereferencing a missing snapshot', async () => {
+    const backup = storedSnapshot({ 'llm-pi-ai': { subagentEffort: 'high' } }, '2026-09-15T08:30:00.000Z')
+    const view = harness({ pluginNamespace: 'thinking-effort', user: { 'thinking-effort': { autoBackup: backup } } })
+    cleanup = view.unmount
+    await settle()
+    act(() => button(view.container, text('backupCardTitle')).click())
+    await settle()
+
+    act(() => button(view.container, text('backupAutoBackupRestore')).click())
+    await settle()
+
+    expect(view.container.textContent).toContain(text('backupSourceAutoBackup'))
+    expect(view.container.textContent).toContain(text('backupPreviewTitle'))
+    expect(view.mutate).not.toHaveBeenCalled()
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
   })
 })
 
