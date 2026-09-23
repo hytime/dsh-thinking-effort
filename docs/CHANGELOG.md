@@ -14,6 +14,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-23
+
 ### 变更 / Changed
 
 - 发布前的兼容矩阵新增 `dsh-v0.1.7-alpha.1`（entry-config 设置模型）作为第五个官方能力代表，0.1.7 根节点上会验证插件确实加载成功、其设置分区被发布，以及宿主的三条行为（`llm-pi-ai` 的 `providers` 仍为 volatile；路径写入仍基于用户原始层；默认档位补齐自己的写入能够落盘）。
