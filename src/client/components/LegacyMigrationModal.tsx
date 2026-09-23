@@ -2,9 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   LEGACY_FAILED_PREFIX,
   legacyCandidatesOf,
-  legacyMigrationOf,
 } from '../../compat/legacy-migration.js'
-import { readLegacyMigration, writeLegacyDecision, type LegacyMigrationRead } from '../legacy-migration.js'
+import {
+  lastResultOf,
+  pendingMigrationOf,
+  readLegacyMigration,
+  writeLegacyDecision,
+  type LegacyMigrationRead,
+} from '../legacy-migration.js'
 import { iosPalette, type Palette } from '../theme.js'
 import type { SettingsApi, Translation } from '../types.js'
 
@@ -68,16 +73,29 @@ export function LegacyMigrationModal({ settings, t, palette = iosPalette() }: Pr
     }
     if (target === undefined) return
 
-    const state = legacyMigrationOf(target.user)
-    const result = typeof state?.lastResult === 'string' ? state.lastResult : ''
+    const result = lastResultOf(target.user)
 
-    if (state?.pending === true && legacyCandidatesOf(target.user).length > 0) {
-      setPhase((previous) => (previous.kind === 'submitting' ? previous : { kind: 'asking', target }))
+    // The FAILURE is checked before `pending`, and that order is load-bearing:
+    // when a write is refused the Host keeps `pending: true` WITH the candidates
+    // intact, precisely so the prompt can show the reason and offer a retry.
+    // Checking `pending` first would hide the reason forever and leave the dialog
+    // stuck in a disabled submitting state.
+    if (result.startsWith(LEGACY_FAILED_PREFIX)) {
+      // `later` is sticky for this page load: a read already in flight when the
+      // user postponed must not reopen the dialog.
+      setPhase((previous) => (previous.kind === 'later'
+        ? previous
+        : { kind: 'failed', target, reason: result.slice(LEGACY_FAILED_PREFIX.length).trim() }))
       return
     }
 
-    if (result.startsWith(LEGACY_FAILED_PREFIX)) {
-      setPhase({ kind: 'failed', target, reason: result.slice(LEGACY_FAILED_PREFIX.length).trim() })
+    if (pendingMigrationOf(target.user) && legacyCandidatesOf(target.user).length > 0) {
+      // Only the two waiting phases may open the prompt. A late read must not
+      // pull the user back after they postponed it, nor interrupt a failure they
+      // are reading.
+      setPhase((previous) => (previous.kind === 'idle' || previous.kind === 'submitting'
+        ? { kind: 'asking', target }
+        : previous))
       return
     }
 
@@ -95,12 +113,21 @@ export function LegacyMigrationModal({ settings, t, palette = iosPalette() }: Pr
       attempts += 1
       if (attempts >= POLL_ATTEMPTS) {
         clearInterval(timer)
+        // A `submitting` phase that never settles — the host accepted the write
+        // but stopped publishing its section, so nothing will ever confirm it —
+        // must not leave every control disabled for the rest of the page load.
+        // It becomes an actionable failure instead.
+        if (scheduled === 'submitting') {
+          setPhase((previous) => (previous.kind === 'submitting'
+            ? { kind: 'failed', target: previous.target, reason: t('legacyMigrationTimedOut') }
+            : previous))
+        }
         return
       }
       void read(scheduled)
     }, POLL_INTERVAL_MS)
     return () => { clearInterval(timer) }
-  }, [phase.kind, read])
+  }, [phase.kind, read, t])
 
   const commit = useCallback(async (
     target: LegacyMigrationRead,
@@ -127,7 +154,10 @@ export function LegacyMigrationModal({ settings, t, palette = iosPalette() }: Pr
   const sourceLabel = (source: string): string => {
     if (source === 'llm-pi-ai') return t('legacyMigrationSourceLive')
     if (source === 'settings.yaml') return t('legacyMigrationSourceDocument')
-    return t('legacyMigrationSourceImported')
+    if (source === 'settings.yaml.imported') return t('legacyMigrationSourceImported')
+    // An unknown source is shown verbatim rather than mislabelled as one of the
+    // three this release knows about.
+    return source
   }
 
   return (

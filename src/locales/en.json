@@ -250,6 +250,7 @@
   "legacyMigrationApplied": "Migrated {count} settings.",
   "legacyMigrationDismissed": "Ignored. You will be asked again if the legacy data changes.",
   "legacyMigrationFailed": "Migration failed: {reason}",
+  "legacyMigrationTimedOut": "The host did not confirm the result in time. Please try again.",
   "legacyMigrationRescan": "Rescan legacy data",
   "legacyMigrationRescanHint": "Manually check the legacy settings documents for items that were not migrated yet.",
   "legacyMigrationNothingPending": "No legacy data is pending migration."

@@ -250,6 +250,7 @@
   "legacyMigrationApplied": "{count} 件の設定を移行しました。",
   "legacyMigrationDismissed": "無視しました。旧データが変わると再び表示されます。",
   "legacyMigrationFailed": "移行に失敗しました：{reason}",
+  "legacyMigrationTimedOut": "ホストが時間内に結果を確認できませんでした。もう一度お試しください。",
   "legacyMigrationRescan": "旧データを再スキャン",
   "legacyMigrationRescanHint": "旧設定ドキュメントに未移行の項目がないか手動で確認します。",
   "legacyMigrationNothingPending": "移行待ちの旧データはありません。"

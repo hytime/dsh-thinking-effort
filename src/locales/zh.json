@@ -250,6 +250,7 @@
   "legacyMigrationApplied": "已迁移 {count} 项设置。",
   "legacyMigrationDismissed": "已忽略，旧数据变化时会再次提示。",
   "legacyMigrationFailed": "迁移失败：{reason}",
+  "legacyMigrationTimedOut": "宿主没有在预期时间内确认结果，请重试。",
   "legacyMigrationRescan": "重新扫描旧数据",
   "legacyMigrationRescanHint": "手动检查旧设置文档中尚未迁移的项。",
   "legacyMigrationNothingPending": "没有待迁移的旧数据。"

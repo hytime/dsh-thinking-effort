@@ -18,19 +18,31 @@ const CANDIDATES = [
   { path: ['opencodeSession', 'providers', 'sub2api', 'models', 'deepseek-flash'], value: true, source: 'settings.yaml.imported' },
 ]
 
-/** A settings bridge holding one section whose user layer carries the control object. */
-function bridge(user: Record<string, unknown>, fail = false) {
+/**
+ * A settings bridge holding one section whose user layer carries the control
+ * object. `refuseMutate` models the CLIENT-side refusal (`ok: false`);
+ * `vanishAfterDecision` models a host that accepts the write and then stops
+ * publishing the section, so nothing can ever confirm it.
+ */
+function bridge(
+  user: Record<string, unknown>,
+  options: { refuseMutate?: boolean; vanishAfterDecision?: boolean } = {},
+) {
   const writes: Array<{ ns: string; ops: readonly SettingsOp[] }> = []
+  let vanished = false
   const settings: SettingsApi = {
     externalLanguages: false,
     compatibilityProfile: 'modern',
     describe: async () => ({
       ok: true as const,
-      value: { namespaces: [{ ns: 'thinking-effort', revision: 0, value: user, user }] },
+      value: {
+        namespaces: vanished ? [] : [{ ns: 'thinking-effort', revision: 0, value: user, user }],
+      },
     }),
     mutate: async (ns, ops) => {
-      if (fail) return { ok: false as const, error: { message: 'refused' } }
+      if (options.refuseMutate === true) return { ok: false as const, error: { message: 'refused' } }
       writes.push({ ns, ops })
+      if (options.vanishAfterDecision === true) vanished = true
       return { ok: true as const, value: { ns, revision: 1, value: user, user } }
     },
   }
@@ -86,6 +98,9 @@ describe('LegacyMigrationModal', () => {
     const button = element.querySelector<HTMLButtonElement>('[data-testid="legacy-apply"]')
     await act(async () => { button?.click() })
     await flush()
+    // Exactly one write: a second one (the candidates, or a value) would mean the
+    // Client is doing the host's job.
+    expect(writes.length).toBe(1)
     expect(writes[0]?.ops).toEqual([{ op: 'set', path: ['legacyMigration', 'decision'], value: 'migrate' }])
   })
 
@@ -97,6 +112,7 @@ describe('LegacyMigrationModal', () => {
       element.querySelector<HTMLButtonElement>('[data-testid="legacy-dismiss"]')?.click()
     })
     await flush()
+    expect(writes.length).toBe(1)
     expect(writes[0]?.ops).toEqual([{ op: 'set', path: ['legacyMigration', 'decision'], value: 'dismiss' }])
   })
 
@@ -113,7 +129,10 @@ describe('LegacyMigrationModal', () => {
   })
 
   it('shows a refusal from the host and stays mounted', async () => {
-    const { settings } = bridge({ legacyMigration: { pending: true, candidates: CANDIDATES } }, true)
+    const { settings } = bridge(
+      { legacyMigration: { pending: true, candidates: CANDIDATES } },
+      { refuseMutate: true },
+    )
     const element = mount(settings)
     await flush()
     await act(async () => {
@@ -122,5 +141,51 @@ describe('LegacyMigrationModal', () => {
     await flush()
     expect(element.textContent).toContain('refused')
     expect(element.querySelector('[data-testid="legacy-apply"]')).not.toBeNull()
+  })
+
+  it("shows the host's own failure and stays actionable instead of sitting busy", async () => {
+    // When a write is refused the HOST keeps `pending: true` with the candidates
+    // intact and records `lastResult: 'failed:<reason>'`, precisely so the prompt
+    // can show the reason and offer a retry. A prompt that tests `pending` first
+    // never reaches that state: the reason stays hidden and every control is
+    // disabled for the rest of the page load.
+    const { settings } = bridge({
+      legacyMigration: {
+        pending: true,
+        candidates: CANDIDATES,
+        lastResult: 'failed: HMR transactions cannot be nested',
+      },
+    })
+    const element = mount(settings)
+    await flush()
+    expect(element.textContent).toContain('HMR transactions cannot be nested')
+    expect(element.querySelector<HTMLButtonElement>('[data-testid="legacy-apply"]')?.disabled).toBe(false)
+  })
+
+  it('becomes actionable when the host never confirms the write', async () => {
+    vi.useFakeTimers()
+    try {
+      const { settings, writes } = bridge(
+        { legacyMigration: { pending: true, candidates: CANDIDATES } },
+        { vanishAfterDecision: true },
+      )
+      const element = mount(settings)
+      await act(async () => { await Promise.resolve() })
+      await act(async () => {
+        element.querySelector<HTMLButtonElement>('[data-testid="legacy-apply"]')?.click()
+      })
+      await act(async () => { await Promise.resolve() })
+      expect(writes.length).toBe(1)
+
+      // The section stops being published, so nothing will ever confirm the
+      // write. The attempt budget is what has to end the wait.
+      await act(async () => { vi.advanceTimersByTime(120_000) })
+      await act(async () => { await Promise.resolve() })
+
+      expect(element.textContent).toContain(text('legacyMigrationTimedOut'))
+      expect(element.querySelector<HTMLButtonElement>('[data-testid="legacy-apply"]')?.disabled).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
