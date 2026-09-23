@@ -35,7 +35,19 @@ const TEXT: LegacyShape = { kind: 'scalar', type: 'string' }
 /** A boolean leaf: a per-model or per-route toggle. */
 const FLAG: LegacyShape = { kind: 'scalar', type: 'boolean' }
 
-/** `{ models: { <model>: <scalar> } }` — a provider's per-model toggles. */
+/**
+ * Keys a path must never contain, whatever a document states.
+ *
+ * A dict node takes its keys from the document, and a parsed `{"__proto__": {...}}`
+ * carries an own enumerable `__proto__`, so without this filter a document could
+ * put `__proto__` (or `constructor`) into a leaf path that later becomes a path
+ * write. The Client's `RESERVED_PATH_KEYS` in `src/client/config-snapshot/types.ts`
+ * holds the same three names; this is a host-side copy because the Host bundle
+ * must not import client code.
+ */
+const RESERVED_PATH_KEYS = ['__proto__', 'constructor', 'prototype'] as const
+
+/** `{ models: { <model>: boolean } }` — a provider's per-model toggles. */
 const MODEL_TOGGLES: LegacyShape = {
   kind: 'object',
   fields: { models: { kind: 'dict', of: FLAG } },
@@ -77,7 +89,10 @@ const OPENCODE_SESSION: LegacyShape = {
 /**
  * The legacy `dsh-thinking-effort` namespace. `profiles` and `autoBackup` are
  * deliberately absent: they hold the user's saved backup library, which the
- * migration does not move.
+ * migration does not move. `legacyMigration` is absent for a different reason —
+ * it is this feature's own control object, not a user setting, so a document
+ * stating one has nothing worth migrating. All three omissions are deliberate;
+ * do not "fix" them by adding the keys.
  */
 export const LEGACY_OWN_SHAPE: LegacyShape = {
   kind: 'object',
@@ -125,7 +140,11 @@ function walk(
   if (object === undefined) return
 
   if (shape.kind === 'dict') {
-    for (const [key, member] of Object.entries(object)) walk(shape.of, member, [...path, key], out)
+    for (const [key, member] of Object.entries(object)) {
+      // A document supplies these keys; a reserved one must never reach a path.
+      if ((RESERVED_PATH_KEYS as readonly string[]).includes(key)) continue
+      walk(shape.of, member, [...path, key], out)
+    }
     return
   }
 
