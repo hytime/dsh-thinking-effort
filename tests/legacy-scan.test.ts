@@ -1,6 +1,5 @@
-import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { LEGACY_MIGRATION_SOURCES, scanLegacyData } from '../src/host/legacy-scan.ts'
+import { LEGACY_MIGRATION_SOURCES, scanLegacyData, signatureOf } from '../src/host/legacy-scan.ts'
 
 /** The real `settings.yaml.imported` shapes, reduced to their plugin-owned parts. */
 const IMPORTED_DOCUMENT = `
@@ -21,13 +20,18 @@ dsh-thinking-effort:
           deepseek-v4-pro: true
 `
 
-/** Only the files a test asks for exist; everything else answers ENOENT. */
-function reader(files: Record<string, string>) {
-  const reads: string[] = []
+/**
+ * Only the files a test asks for exist; everything else answers ENOENT. A path
+ * listed in `unreadable` answers EACCES instead — a rejection that is neither
+ * "missing" nor "malformed", so the scanner's uniform handling of a rejected
+ * read is exercised rather than assumed.
+ */
+function reader(files: Record<string, string>, unreadable: readonly string[] = []) {
   return {
-    reads,
     read: async (path: string): Promise<string> => {
-      reads.push(path)
+      if (unreadable.includes(path)) {
+        throw Object.assign(new Error('EACCES'), { code: 'EACCES' })
+      }
       const content = files[path]
       if (content === undefined) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       return content
@@ -58,6 +62,8 @@ describe('scanLegacyData', () => {
   it('reads the imported document the 0.1.7 rename left behind', async () => {
     const { run } = options({ [IMPORTED]: IMPORTED_DOCUMENT })
     const scan = await run()
+    // `scanLegacyData` sorts by dotted path, so this expectation is in that
+    // order too — the same order `signatureOf` hashes and the prompt renders.
     expect(scan.candidates).toEqual([
       { path: ['opencodeSession', 'providers', 'opencode-go', 'models', 'deepseek-v4-pro'], value: true, source: LEGACY_MIGRATION_SOURCES.imported },
       { path: ['opencodeSession', 'providers', 'sub2api', 'models', 'deepseek-flash'], value: true, source: LEGACY_MIGRATION_SOURCES.imported },
@@ -117,15 +123,50 @@ describe('scanLegacyData', () => {
     expect((await run()).candidates).toEqual([])
   })
 
-  it('is order-independent: the signature ignores document key order', async () => {
+  it('is order-independent: the signature covers the same set in any order', async () => {
+    const { run } = options({ [IMPORTED]: IMPORTED_DOCUMENT })
+    const scan = await run()
+    // Reversing the input must not move the signature. Asserting on
+    // `scan.candidates` alone would pass whether or not `signatureOf` sorts,
+    // because the scanner hands them back already sorted — the property has to
+    // be exercised through an order the scanner did not choose.
+    expect(signatureOf([...scan.candidates].reverse())).toBe(scan.signature)
+    expect(signatureOf(scan.candidates)).toBe(scan.signature)
+  })
+
+  it('moves the signature when a state value changes, and not only when the set does', async () => {
+    const { run } = options({ [IMPORTED]: IMPORTED_DOCUMENT })
+    const scan = await run()
+    expect(scan.candidates.length).toBeGreaterThan(0)
+    const tampered = scan.candidates.map((candidate, index) => (
+      index === 0 ? { ...candidate, value: !candidate.value } : candidate
+    ))
+    expect(signatureOf(tampered)).not.toBe(scan.signature)
+  })
+
+  it('changes the signature when the document states something different', async () => {
     const a = 'dsh-thinking-effort:\n  subagentEffort: high\n'
     const b = 'dsh-thinking-effort:\n  opencodeSession:\n    format:\n      mode: template\n  subagentEffort: high\n'
     const first = await options({ [IMPORTED]: a }).run()
     const second = await options({ [IMPORTED]: b }).run()
-    const expectedA = createHash('sha256')
-      .update(JSON.stringify([...first.candidates].sort((x, y) => x.path.join('.').localeCompare(y.path.join('.')))))
-      .digest('hex')
-    expect(first.signature).toBe(expectedA)
     expect(second.signature).not.toBe(first.signature)
+    expect(second.candidates.length).toBeGreaterThan(first.candidates.length)
+  })
+
+  it('treats an unreadable document as a source that contributes nothing', async () => {
+    const filesystem = reader({ [DOCUMENT]: 'dsh-thinking-effort:\n  subagentEffort: high\n' }, [IMPORTED])
+    const scan = await scanLegacyData({
+      home: HOME, read: filesystem.read, ownUser: {}, llmPiAiUser: {},
+    })
+    expect(scan.candidates).toEqual([
+      { path: ['subagentEffort'], value: 'high', source: LEGACY_MIGRATION_SOURCES.document },
+    ])
+  })
+
+  it('names the sources it reports as provenance', async () => {
+    const { run } = options({ [IMPORTED]: IMPORTED_DOCUMENT })
+    const { candidates } = await run()
+    expect(new Set(candidates.map((candidate) => candidate.source)))
+      .toEqual(new Set([LEGACY_MIGRATION_SOURCES.imported]))
   })
 })
