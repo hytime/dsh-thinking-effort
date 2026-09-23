@@ -237,5 +237,21 @@
   "backupParseSections": "配置文件缺少 sections",
   "backupParseSection": "配置文件中的 {ns} 段格式不正确",
   "backupParseReserved": "配置包含不安全的字段名「{key}」",
-  "backupParseTooLarge": "文件过大，上限 {maxBytes} 字节"
+  "backupParseTooLarge": "文件过大，上限 {maxBytes} 字节",
+  "legacyMigrationTitle": "发现旧版本设置数据",
+  "legacyMigrationBody": "DSH 0.1.7 更换了设置存储方式，以下 {count} 项旧设置未能自动导入。是否把它们写入新设置？",
+  "legacyMigrationFieldEffort": "子 agent 默认思考强度",
+  "legacyMigrationSourceLive": "旧 llm-pi-ai 设置",
+  "legacyMigrationSourceDocument": "settings.yaml",
+  "legacyMigrationSourceImported": "settings.yaml.imported",
+  "legacyMigrationApply": "迁移",
+  "legacyMigrationDismiss": "不再询问",
+  "legacyMigrationLater": "稍后",
+  "legacyMigrationApplied": "旧设置已迁移。",
+  "legacyMigrationDismissed": "已忽略，旧数据变化时会再次提示。",
+  "legacyMigrationFailed": "迁移失败：{reason}",
+  "legacyMigrationTimedOut": "宿主没有在预期时间内确认结果，请重试。",
+  "legacyMigrationRescan": "重新扫描旧数据",
+  "legacyMigrationRescanHint": "手动检查旧设置文档中尚未迁移的项。",
+  "legacyMigrationNothingPending": "没有待迁移的旧数据。"
 }

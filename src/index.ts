@@ -1,6 +1,7 @@
 import { mark } from './host/marker.js'
 import { installSettingsWatcher } from './host/settings.js'
 import { installOpenCodeSession } from './host/opencode-session.js'
+import { installLegacyMigration } from './host/legacy-watcher.js'
 import { handleAgentRequest } from './host/subagent.js'
 import type { HostContext } from './host/types.js'
 
@@ -17,6 +18,7 @@ export function apply(ctx: HostContext): void {
   mark('apply')
   installSettingsWatcher(ctx)
   installOpenCodeSession(ctx)
+  installLegacyMigration(ctx)
   ctx.on('agent/request', (...args: unknown[]) => {
     const payload = args[0]
     const next = args[1] as () => Promise<unknown>

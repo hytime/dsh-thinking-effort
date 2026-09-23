@@ -234,6 +234,14 @@ When a file does try to change wiring, the preview says how many entries were sk
 
 Restoring a rollback copy or a saved profile follows the same rule. If you previously imported wiring with the opt-in and need to restore an old endpoint, re-check the box in that preview.
 
+### Legacy settings data
+
+On the releases before `0.1.7` this plugin wrote `subagentEffort` into the `llm-pi-ai` section of the DSH settings document. DSH `0.1.7` renames that document to `settings.yaml.imported` and imports it exactly once; for this plugin's section the import is refused with only a warning, so the old value survives only in the renamed file. It sits next to the DSH home: `$DSH_HOME/settings.yaml.imported` (`~/.dsh/settings.yaml.imported` by default). On `0.1.7`+ live settings are no longer stored there but in the active profile's `cordis.patch.yml`.
+
+On startup the plugin scans `settings.yaml.imported`, a not-yet-renamed `settings.yaml`, and the live `llm-pi-ai` user layer. When it finds values this plugin owns that your settings section does not already declare, it asks in a dialog above the settings page. **Migrate** writes them into this plugin's settings section; the migration only fills values you have not set and never overwrites one, and it saves the settings that stand right now into the **Backup and profiles** rollback slot (`autoBackup`, `sourceProfile: migration`) in the same write batch. **Don't ask again** suppresses that exact offer, so it returns only when the legacy data changes — a machine whose document changes later is asked again.
+
+To look for legacy items on demand, open the settings page and use **Rescan legacy data** in the **Backup and profiles** card; that is the manual entry point after **Don't ask again**. It reports "no legacy data is pending migration" when the documents hold nothing this plugin has not already declared.
+
 ## 1. Official installation
 
 Install the latest version:

@@ -29,8 +29,16 @@ export const CONFIG_NAMESPACES = [PLUGIN_NAMESPACE, LLM_NAMESPACE] as const
 /** Path segments a settings path op may never address. */
 export const RESERVED_PATH_KEYS = ['__proto__', 'constructor', 'prototype'] as const
 
-/** Plugin-owned keys that must never ride inside their own snapshot. */
-export const PLUGIN_SNAPSHOT_EXCLUDED_KEYS = ['profiles', 'autoBackup'] as const
+/**
+ * Plugin-owned keys that must never ride inside their own snapshot.
+ *
+ * `legacyMigration` is the migration feature's control object — a decision the
+ * Host consumes and clears. A file that carried one with `decision: 'migrate'`
+ * still in it would make the importing host migrate without a click, skipping
+ * the consent the flow promises, so it is excluded here exactly as it is from
+ * the Host's own rollback copy.
+ */
+export const PLUGIN_SNAPSHOT_EXCLUDED_KEYS = ['profiles', 'autoBackup', 'legacyMigration'] as const
 
 export interface SnapshotSection {
   readonly [key: string]: unknown

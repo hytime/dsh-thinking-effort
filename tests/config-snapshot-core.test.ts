@@ -34,9 +34,13 @@ describe('userSectionOf', () => {
 })
 
 describe('pluginSectionOf', () => {
-  it('excludes the profile library and the auto backup', () => {
-    expect(pluginSectionOf({ opencodeSession: { providers: {} }, profiles: { work: {} }, autoBackup: {} }))
-      .toEqual({ opencodeSession: { providers: {} } })
+  it('excludes the profile library, the auto backup and the migration control object', () => {
+    expect(pluginSectionOf({
+      opencodeSession: { providers: {} },
+      profiles: { work: {} },
+      autoBackup: {},
+      legacyMigration: { pending: true, candidates: [], decision: 'migrate' },
+    })).toEqual({ opencodeSession: { providers: {} } })
   })
 
   it('keeps unknown plugin keys so a future field still rides the snapshot', () => {
@@ -64,6 +68,18 @@ describe('snapshotFromNamespaces', () => {
   it('records an empty object for a namespace the user never edited', () => {
     const snapshot = snapshotFromNamespaces([llm()], { createdAt: 'x', pluginVersion: '0.2.4', sourceProfile: 'unknown' })
     expect(snapshot.sections['llm-pi-ai']).toEqual({})
+    expect(snapshot.sections['dsh-thinking-effort']).toEqual({})
+  })
+
+  // An export, a named profile and the rollback copy are all built here, so one
+  // file carrying this object would hand the importing host a `decision:
+  // 'migrate'` and make it migrate with no click — the consent the flow promises
+  // is exactly what the control object must not survive.
+  it('never carries the migration control object into a snapshot', () => {
+    const snapshot = snapshotFromNamespaces([
+      llm(),
+      plugin({ legacyMigration: { pending: true, candidates: [{ path: ['subagentEffort'], value: 'off', source: 'settings.yaml.imported' }], decision: 'migrate' } }),
+    ], { createdAt: 'x', pluginVersion: '0.2.4', sourceProfile: 'modern' })
     expect(snapshot.sections['dsh-thinking-effort']).toEqual({})
   })
 })

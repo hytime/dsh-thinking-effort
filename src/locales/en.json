@@ -237,5 +237,21 @@
   "backupParseSections": "The file is missing its sections",
   "backupParseSection": "The {ns} section of the file is malformed",
   "backupParseReserved": "The file contains an unsafe field name \"{key}\"",
-  "backupParseTooLarge": "The file is too large; the limit is {maxBytes} bytes"
+  "backupParseTooLarge": "The file is too large; the limit is {maxBytes} bytes",
+  "legacyMigrationTitle": "Legacy settings data found",
+  "legacyMigrationBody": "DSH 0.1.7 changed how settings are stored, so these {count} legacy settings could not be imported automatically. Write them into the new settings?",
+  "legacyMigrationFieldEffort": "Subagent default thinking effort",
+  "legacyMigrationSourceLive": "legacy llm-pi-ai settings",
+  "legacyMigrationSourceDocument": "settings.yaml",
+  "legacyMigrationSourceImported": "settings.yaml.imported",
+  "legacyMigrationApply": "Migrate",
+  "legacyMigrationDismiss": "Don't ask again",
+  "legacyMigrationLater": "Later",
+  "legacyMigrationApplied": "Legacy settings migrated.",
+  "legacyMigrationDismissed": "Ignored. You will be asked again if the legacy data changes.",
+  "legacyMigrationFailed": "Migration failed: {reason}",
+  "legacyMigrationTimedOut": "The host did not confirm the result in time. Please try again.",
+  "legacyMigrationRescan": "Rescan legacy data",
+  "legacyMigrationRescanHint": "Manually check the legacy settings documents for items that were not migrated yet.",
+  "legacyMigrationNothingPending": "No legacy data is pending migration."
 }

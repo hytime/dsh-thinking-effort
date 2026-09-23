@@ -295,6 +295,17 @@ const openCodeSessionFormatDefaults = {
 
 const openCodeSessionUserAgentDefaults = { value: '', providers: {} }
 
+const legacyMigrationDefaults = {
+  pending: false,
+  candidates: [],
+  signature: '',
+  dismissedSignature: '',
+  decision: '',
+  lastResult: '',
+  scannedAt: '',
+  decidedAt: '',
+}
+
 describe('real Settings-backed OpenCode registration', () => {
   it('rejects non-boolean model values through the real Settings schema', async () => {
     const host = await bootRealOpenCodeHost()
@@ -308,6 +319,7 @@ describe('real Settings-backed OpenCode registration', () => {
       expect(host.ctx.settings.describe().find((entry) => entry.ns === OPENCODE_SESSION_NAMESPACE)?.value).toEqual({
         opencodeSession: { providers: {}, format: openCodeSessionFormatDefaults, userAgent: openCodeSessionUserAgentDefaults },
         subagentEffort: '',
+        legacyMigration: legacyMigrationDefaults,
         profiles: {},
         autoBackup: snapshotDefaults,
       })
@@ -342,6 +354,7 @@ describe('real Settings-backed OpenCode registration', () => {
           userAgent: openCodeSessionUserAgentDefaults,
         },
         subagentEffort: '',
+        legacyMigration: legacyMigrationDefaults,
         profiles: {},
         autoBackup: snapshotDefaults,
       })

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ConfigBackupCard } from '../src/client/components/ConfigBackupCard.js'
 import { AUTO_BACKUP_PATH } from '../src/client/config-snapshot/library.js'
 import { SNAPSHOT_KIND, SNAPSHOT_VERSION } from '../src/client/config-snapshot/types.js'
+import { LEGACY_RESULT_NOTHING_PENDING } from '../src/compat/legacy-migration.js'
 import { zh } from '../src/client/locales.js'
 import { iosPalette } from '../src/client/theme.js'
 import type { ClientResult, SettingsApi, SettingsDescribeValue, SettingsNamespace, SettingsOp, Translation } from '../src/client/types.js'
@@ -43,6 +44,8 @@ interface HarnessOptions {
   enforceRevisions?: boolean
   /** Namespaces whose write is refused with a plain rejection, the way a rejected provider profile is. */
   failOn?: readonly string[]
+  /** Message for a mutate that throws instead of answering with a refusal. */
+  mutateThrow?: string
   /** `applies` flags the host reports per namespace, so a write can require a restart. */
   applies?: Readonly<Record<string, string>>
   /** Refuse the pre-import backup write, so an applied import has no rollback copy. */
@@ -69,6 +72,7 @@ function harness(options: HarnessOptions = {}) {
   const pluginId = options.pluginNamespace ?? 'dsh-thinking-effort'
   const revisions: Record<string, number> = { 'llm-pi-ai': 4, [pluginId]: 8 }
   const mutate = vi.fn(async (ns: string, ops: readonly SettingsOp[], revision: number): Promise<ClientResult<SettingsNamespace>> => {
+    if (options.mutateThrow !== undefined) throw new Error(options.mutateThrow)
     if (!Object.prototype.hasOwnProperty.call(revisions, ns)) {
       return { ok: false, error: { message: `unknown settings namespace "${ns}"` } }
     }
@@ -134,6 +138,15 @@ function harness(options: HarnessOptions = {}) {
 
   return {
     container,
+    /**
+     * The mounted card's container, with the mount-time read settled. Waiting is
+     * part of it because every action in this card derives from that read: a
+     * click before it lands would address a section the card does not have yet.
+     */
+    render: async (): Promise<HTMLElement> => { await settle(); return container },
+    /** Every write the card issued, in order, with the revision it guarded on. */
+    writes: (): readonly { readonly ns: string; readonly ops: readonly SettingsOp[]; readonly revision: number }[] =>
+      mutate.mock.calls.map(([ns, ops, revision]) => ({ ns, ops, revision })),
     describe,
     mutate,
     download,
@@ -1154,5 +1167,140 @@ describe('ConfigBackupCard wiring isolation', () => {
     await settle()
 
     expect(view.container.textContent).toContain(text('backupWiringWarning', { detail: '/tmp/host-module.js' }))
+  })
+})
+
+// A DSH line without a `shell.overlay` slot never renders the startup prompt,
+// so the settings card is the only place a manual scan can be reached — and it
+// must be reachable with the card still collapsed, which is its mount state.
+describe('ConfigBackupCard legacy rescan', () => {
+  it('offers a manual legacy rescan and writes decision=scan', async () => {
+    const test = harness({
+      pluginNamespace: 'thinking-effort',
+      user: { 'thinking-effort': { legacyMigration: { pending: false, candidates: [] } } },
+    })
+    const element = await test.render()
+    const rescan = element.querySelector<HTMLButtonElement>('[data-testid="legacy-rescan"]')
+    expect(rescan).not.toBeNull()
+    await act(async () => { rescan?.click() })
+    await settle()
+    expect(test.writes().at(-1)?.ops).toEqual([
+      { op: 'set', path: ['legacyMigration', 'decision'], value: 'scan' },
+    ])
+    // Exactly one write, aimed at the section the card read (not the legacy id a
+    // 0.1.7 host does not publish) and guarded with that section's revision:
+    // either mistake is refused by the host, leaving the button a no-op.
+    expect(test.writes()).toHaveLength(1)
+    expect(test.writes().at(-1)).toMatchObject({ ns: 'thinking-effort', revision: 8 })
+  })
+
+  // The Host clears `candidates` when it records a successful apply, so this is
+  // the state that message is read from. What the case pins is which branch is
+  // chosen: "applied" must not fall through to the nothing-pending sentence.
+  it('reports the last migration result when one exists', async () => {
+    const test = harness({
+      pluginNamespace: 'thinking-effort',
+      user: { 'thinking-effort': { legacyMigration: { pending: false, candidates: [], lastResult: 'applied' } } },
+    })
+    const element = await test.render()
+    // The message carries no count: the Host empties `candidates` as it records
+    // `applied`, so a rendered number would always be 0.
+    expect(element.textContent).toContain(text('legacyMigrationApplied'))
+    expect(element.textContent).not.toContain(text('legacyMigrationNothingPending'))
+  })
+
+  // A refused write keeps `pending` and the candidates so the prompt can offer a
+  // retry, which makes it exactly the state where "nothing is pending" is false.
+  // The reason has to be the thing on screen.
+  it('shows the failure reason instead of claiming nothing is pending', async () => {
+    const test = harness({
+      pluginNamespace: 'thinking-effort',
+      user: {
+        'thinking-effort': {
+          legacyMigration: {
+            pending: true,
+            candidates: [{ path: ['subagentEffort'], value: 'high', source: 'settings.yaml' }],
+            lastResult: 'failed: settings rejected the write',
+          },
+        },
+      },
+    })
+    const element = await test.render()
+    expect(element.textContent).toContain(text('legacyMigrationFailed', { reason: 'settings rejected the write' }))
+    expect(element.textContent).not.toContain(text('legacyMigrationNothingPending'))
+  })
+
+  // The migration never runs where the Host does not publish the plugin's own
+  // Loader entry section: `installLegacyMigration` returns before subscribing
+  // anywhere else, so on those hosts the button would write a `decision` nobody
+  // will ever consume or clear into the user's settings document.
+  it('withholds the rescan on a host that never runs the migration', async () => {
+    const test = harness({
+      user: { 'dsh-thinking-effort': { legacyMigration: { pending: false, candidates: [] } } },
+    })
+    const element = await test.render()
+    expect(element.querySelector('[data-testid="legacy-rescan"]')).toBeNull()
+    expect(element.textContent).not.toContain(text('legacyMigrationRescanHint'))
+  })
+
+  // What the Host records for a rescan it completed with nothing left to offer:
+  // the one situation the manual entry point exists to explain.
+  it('reports a completed rescan that found nothing left to migrate', async () => {
+    const test = harness({
+      pluginNamespace: 'thinking-effort',
+      user: {
+        'thinking-effort': {
+          legacyMigration: { pending: false, candidates: [], lastResult: LEGACY_RESULT_NOTHING_PENDING },
+        },
+      },
+    })
+    const element = await test.render()
+    expect(element.textContent).toContain(text('legacyMigrationNothingPending'))
+  })
+
+  // A refused write leaves the button looking like a no-op unless the reason is
+  // reported, which is what every other write in this card does.
+  it('reports a refused rescan write', async () => {
+    const test = harness({
+      pluginNamespace: 'thinking-effort',
+      failOn: ['thinking-effort'],
+      user: { 'thinking-effort': { legacyMigration: { pending: false, candidates: [] } } },
+    })
+    const element = await test.render()
+    await act(async () => { element.querySelector<HTMLButtonElement>('[data-testid="legacy-rescan"]')?.click() })
+    await settle()
+    expect(element.textContent).toContain(text('legacyMigrationFailed', { reason: 'settings rejected thinking-effort' }))
+  })
+
+  it('reports a rescan write that throws instead of answering', async () => {
+    const test = harness({
+      pluginNamespace: 'thinking-effort',
+      mutateThrow: 'settings transport failed',
+      user: { 'thinking-effort': { legacyMigration: { pending: false, candidates: [] } } },
+    })
+    const element = await test.render()
+    await act(async () => { element.querySelector<HTMLButtonElement>('[data-testid="legacy-rescan"]')?.click() })
+    await settle()
+    expect(element.textContent).toContain(text('legacyMigrationFailed', { reason: 'settings transport failed' }))
+  })
+
+  // The startup prompt writes this same section, so the revision the card read
+  // at mount can already be stale when the button is pressed. Guarding the write
+  // with that revision would have the Host refuse it as a conflict; the revision
+  // has to be read at click time.
+  it('guards the rescan with a revision read at click time', async () => {
+    const test = harness({
+      pluginNamespace: 'thinking-effort',
+      revisionByCall: [{}, { 'thinking-effort': 9 }],
+      user: { 'thinking-effort': { legacyMigration: { pending: false, candidates: [] } } },
+    })
+    const element = await test.render()
+    await act(async () => { element.querySelector<HTMLButtonElement>('[data-testid="legacy-rescan"]')?.click() })
+    await settle()
+    expect(test.writes().at(-1)).toMatchObject({
+      ns: 'thinking-effort',
+      revision: 9,
+      ops: [{ op: 'set', path: ['legacyMigration', 'decision'], value: 'scan' }],
+    })
   })
 })

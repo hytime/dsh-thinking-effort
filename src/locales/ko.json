@@ -237,5 +237,21 @@
   "backupParseSections": "설정 파일에 sections 가 없습니다",
   "backupParseSection": "설정 파일의 {ns} 섹션 형식이 올바르지 않습니다",
   "backupParseReserved": "설정에 안전하지 않은 필드 이름 \"{key}\" 이(가) 있습니다",
-  "backupParseTooLarge": "파일이 너무 큽니다 (최대 {maxBytes} 바이트)"
+  "backupParseTooLarge": "파일이 너무 큽니다 (최대 {maxBytes} 바이트)",
+  "legacyMigrationTitle": "이전 버전 설정 데이터를 발견했습니다",
+  "legacyMigrationBody": "DSH 0.1.7에서 설정 저장 방식이 바뀌어 다음 {count}개 항목을 자동으로 가져오지 못했습니다. 새 설정에 기록할까요?",
+  "legacyMigrationFieldEffort": "서브에이전트 기본 사고 강도",
+  "legacyMigrationSourceLive": "이전 llm-pi-ai 설정",
+  "legacyMigrationSourceDocument": "settings.yaml",
+  "legacyMigrationSourceImported": "settings.yaml.imported",
+  "legacyMigrationApply": "마이그레이션",
+  "legacyMigrationDismiss": "다시 묻지 않기",
+  "legacyMigrationLater": "나중에",
+  "legacyMigrationApplied": "이전 설정을 마이그레이션했습니다.",
+  "legacyMigrationDismissed": "무시했습니다. 이전 데이터가 바뀌면 다시 알려드립니다.",
+  "legacyMigrationFailed": "마이그레이션 실패: {reason}",
+  "legacyMigrationTimedOut": "호스트가 제때 결과를 확인하지 못했습니다. 다시 시도해 주세요.",
+  "legacyMigrationRescan": "이전 데이터 다시 검사",
+  "legacyMigrationRescanHint": "이전 설정 문서에서 아직 마이그레이션되지 않은 항목을 직접 확인합니다.",
+  "legacyMigrationNothingPending": "마이그레이션할 이전 데이터가 없습니다."
 }

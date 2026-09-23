@@ -1,5 +1,6 @@
 import z from '@deepseek-ai/schemastery'
 import type { OpenCodeSessionSettings } from '../compat/opencode-session.js'
+import type { LegacyMigrationState } from '../compat/legacy-migration.js'
 
 /**
  * One stored configuration snapshot. Fields carry defaults so a section
@@ -77,6 +78,46 @@ const openCodeSession = z.object({
 }).default({ ...OPENCODE_SESSION_DEFAULTS })
 
 /**
+ * One legacy leaf offered for migration. Declared here because the entry-config
+ * model derives the plugin's settings form from this schema, and a field the
+ * schema does not declare is neither publishable nor writable — the host would
+ * refuse a write to it for the whole batch.
+ */
+const legacyCandidate = z.object({
+  path: z.array(z.string()).default([]),
+  // Leaf scalars only: `legacy-shape.ts` never emits a subtree, and schemastery
+  // has no `z.null()`, so the union does not need one.
+  value: z.union([z.string(), z.boolean(), z.number()]).default(''),
+  source: z.string().default(''),
+})
+
+/**
+ * The migration control object. The Host owns every field; the Client writes
+ * only `decision`.
+ */
+const legacyMigration = z.object({
+  pending: z.boolean().default(false),
+  candidates: z.array(legacyCandidate).default([]),
+  signature: z.string().default(''),
+  dismissedSignature: z.string().default(''),
+  /** `''` | `'migrate'` | `'dismiss'` | `'scan'`. */
+  decision: z.string().default(''),
+  /** `''` | `'applied'` | `'dismissed'` | `'failed:<reason>'`. */
+  lastResult: z.string().default(''),
+  scannedAt: z.string().default(''),
+  decidedAt: z.string().default(''),
+}).default({
+  pending: false,
+  candidates: [],
+  signature: '',
+  dismissedSignature: '',
+  decision: '',
+  lastResult: '',
+  scannedAt: '',
+  decidedAt: '',
+})
+
+/**
  * One stored configuration snapshot, as it appears in the settings document.
  * Every field is optional because a hand-written section may omit any of them
  * and the schema supplies the defaults on resolution.
@@ -99,6 +140,8 @@ export interface PluginSettings extends OpenCodeSessionSettings {
    * the stored value is a wire spelling, not necessarily a level key.
    */
   readonly subagentEffort?: string
+  /** The host-managed legacy-data migration control object. */
+  readonly legacyMigration?: LegacyMigrationState
   readonly profiles?: Readonly<Record<string, PluginStoredSnapshot>>
   readonly autoBackup?: PluginStoredSnapshot
 }
@@ -115,6 +158,7 @@ export interface PluginSettings extends OpenCodeSessionSettings {
 const PLUGIN_SETTINGS_FIELDS = {
   opencodeSession: openCodeSession,
   subagentEffort: z.string().default(''),
+  legacyMigration,
   profiles: z.dict(configSnapshot).default({}),
   autoBackup: configSnapshot,
 }
@@ -130,6 +174,16 @@ const PLUGIN_SETTINGS_FIELDS = {
 const PLUGIN_SETTINGS_DEFAULTS = {
   opencodeSession: { ...OPENCODE_SESSION_DEFAULTS },
   subagentEffort: '',
+  legacyMigration: {
+    pending: false,
+    candidates: [],
+    signature: '',
+    dismissedSignature: '',
+    decision: '',
+    lastResult: '',
+    scannedAt: '',
+    decidedAt: '',
+  },
   profiles: {},
   autoBackup: {
     kind: 'dsh-thinking-effort/config-snapshot',
