@@ -1,6 +1,12 @@
 import React from 'react'
 import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
-import { LEGACY_FAILED_PREFIX, legacyMigrationOf } from '../../compat/legacy-migration.js'
+import {
+  LEGACY_FAILED_PREFIX,
+  LEGACY_RESULT_APPLIED,
+  LEGACY_RESULT_DISMISSED,
+  LEGACY_RESULT_NOTHING_PENDING,
+  legacyMigrationOf,
+} from '../../compat/legacy-migration.js'
 import { downloadJson as browserDownloadJson, type DownloadJson } from '../browser-download.js'
 import { applySnapshot } from '../config-snapshot/apply.js'
 import {
@@ -13,7 +19,7 @@ import {
 import { parseSnapshot, serializeSnapshot } from '../config-snapshot/parse.js'
 import { planImport } from '../config-snapshot/plan.js'
 import { isSnapshotLibraryKey, pluginSectionKey, snapshotFileName, snapshotFromNamespaces } from '../config-snapshot/snapshot.js'
-import { pluginSection, pluginSectionId } from '../subagent-section.js'
+import { isPluginEntrySection, pluginSection, pluginSectionId } from '../subagent-section.js'
 import {
   MAX_PROFILES,
   MAX_PROFILE_NAME,
@@ -272,9 +278,9 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   }
 
   /**
-   * The manual entry point into the legacy-data migration. The startup prompt
-   * renders into the shell's overlay slot, which DSH lines before 0.1.7 do not
-   * publish, so on those hosts this card is the only way to ask for a scan.
+   * The manual entry point into the legacy-data migration: how a user who chose
+   * "Don't ask again", or who postponed the startup prompt, asks for a scan
+   * without restarting.
    *
    * The write is the one decision the prompt makes, and `scan` rather than
    * `migrate`: the host answers it by scanning again even after a previous
@@ -294,19 +300,58 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
    * opposite of what the section holds; the reason is what has to be read.
    */
   const legacyFailed = legacyResult.startsWith(LEGACY_FAILED_PREFIX)
+  /**
+   * The result sentence, or `null` when the section publishes no result.
+   *
+   * The mapping is explicit rather than a catch-all: an unrecognized value — a
+   * hand-edited section, or a result a later Host adds — is reported as nothing
+   * rather than mislabelled as "nothing pending". A completed rescan that found
+   * nothing is the Host's own `nothing-pending`, which is the one sentence this
+   * manual entry point exists to show.
+   */
+  const legacyResultMessage = ((): string | null => {
+    if (legacyResult === '') return null
+    if (legacyFailed) return t('legacyMigrationFailed', { reason: legacyResult.slice(LEGACY_FAILED_PREFIX.length).trim() })
+    if (legacyResult === LEGACY_RESULT_APPLIED) return t('legacyMigrationApplied')
+    if (legacyResult === LEGACY_RESULT_DISMISSED) return t('legacyMigrationDismissed')
+    if (legacyResult === LEGACY_RESULT_NOTHING_PENDING) return t('legacyMigrationNothingPending')
+    return null
+  })()
   const [legacyBusy, setLegacyBusy] = React.useState(false)
+  /**
+   * Whether this host publishes the plugin's own Loader entry section, which is
+   * the only one `installLegacyMigration` subscribes to. On a host that does
+   * not, the button would write a `decision` nobody will ever consume or clear
+   * into the user's settings document, so the whole block is withheld.
+   */
+  const legacyRescanAvailable = isPluginEntrySection(ownSection)
 
   const rescanLegacyData = async (): Promise<void> => {
-    if (ownSection === undefined) return
+    if (!legacyRescanAvailable) return
+    // The revision is described again instead of reusing the mount-time one: the
+    // startup prompt is a separate surface writing this same section, so a
+    // decision made in the modal may already have bumped it, and the stale
+    // revision would be refused as a conflict.
+    const fresh = await freshSnapshot()
+    if (fresh === undefined) return
     setLegacyBusy(true)
     try {
-      await settings.mutate(ownSection.ns, [
+      const response = await settings.mutate(pluginId(), [
         { op: 'set', path: ['legacyMigration', 'decision'], value: 'scan' },
-      ], typeof ownSection.revision === 'number' ? ownSection.revision : 0)
-      await refreshNamespaces()
+      ], fresh.revision)
+      if (!response.ok) {
+        fail(t('legacyMigrationFailed', { reason: response.error.message }))
+        return
+      }
+    } catch (error: unknown) {
+      fail(t('legacyMigrationFailed', { reason: error instanceof Error ? error.message : String(error) }))
+      return
     } finally {
       setLegacyBusy(false)
     }
+    // The Host answers the decision on the write's own event; re-read so the
+    // section on screen is the one it just wrote.
+    load()
   }
 
   const openPreview = (snapshot: ConfigSnapshot, label: string, ignored: readonly string[] = []): void => {
@@ -560,26 +605,20 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
         </div>
       </div>}
     </div> : null}
-    <div style={{ marginTop: '12px', paddingTop: '12px', paddingLeft: '8px', paddingRight: '8px', borderTop: `1px solid ${palette.divider}` }}>
+    {legacyRescanAvailable ? <div style={{ marginTop: '12px', paddingTop: '12px', paddingLeft: '8px', paddingRight: '8px', borderTop: `1px solid ${palette.divider}` }}>
       <div style={{ fontSize: '13px', fontWeight: 600 }}>{t('legacyMigrationRescan')}</div>
       <div style={{ fontSize: '12px', color: palette.secondary, margin: '4px 0 8px' }}>
         {t('legacyMigrationRescanHint')}
       </div>
-      {legacyResult !== '' ? (
+      {legacyResultMessage === null ? null : (
         <div style={{ fontSize: '12px', color: palette.secondary, marginBottom: '8px' }}>
           {/* No count: the Host clears `candidates` in the same write that records
               `applied`, so any count read here would always be 0. Making the
               number real needs a Host-side field for it, which the Client cannot
               supply. */}
-          {legacyFailed
-            ? t('legacyMigrationFailed', { reason: legacyResult.slice(LEGACY_FAILED_PREFIX.length).trim() })
-            : legacyResult === 'applied'
-              ? t('legacyMigrationApplied')
-              : legacyResult === 'dismissed'
-                ? t('legacyMigrationDismissed')
-                : t('legacyMigrationNothingPending')}
+          {legacyResultMessage}
         </div>
-      ) : null}
+      )}
       <button
         type="button"
         data-testid="legacy-rescan"
@@ -588,6 +627,6 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
       >
         {t('legacyMigrationRescan')}
       </button>
-    </div>
+    </div> : null}
   </div>
 }

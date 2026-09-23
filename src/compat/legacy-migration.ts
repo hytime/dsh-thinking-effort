@@ -20,6 +20,13 @@ export type LegacyDecision = (typeof LEGACY_DECISIONS)[number]
 export const LEGACY_RESULT_APPLIED = 'applied'
 /** `lastResult` after the user chose not to be asked again. */
 export const LEGACY_RESULT_DISMISSED = 'dismissed'
+/**
+ * `lastResult` after a rescan the user asked for that found nothing left to
+ * migrate. The Client renders its "nothing pending" message from this value;
+ * without it a completed scan recorded an empty string, which reads as "no
+ * result yet" and left that message unreachable.
+ */
+export const LEGACY_RESULT_NOTHING_PENDING = 'nothing-pending'
 /** Prefix of `lastResult` when the write was refused; the reason follows. */
 export const LEGACY_FAILED_PREFIX = 'failed:'
 

@@ -1,7 +1,14 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { homedir, tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { LEGACY_RESULT_APPLIED, LEGACY_RESULT_DISMISSED } from '../src/compat/legacy-migration.ts'
-import { installLegacyMigration } from '../src/host/legacy-watcher.ts'
+import {
+  LEGACY_RESULT_APPLIED,
+  LEGACY_RESULT_DISMISSED,
+  LEGACY_RESULT_NOTHING_PENDING,
+} from '../src/compat/legacy-migration.ts'
+import { defaultFiles, installLegacyMigration } from '../src/host/legacy-watcher.ts'
 import type { SettingsPathOp } from '../src/host/types.ts'
 
 const NS = 'thinking-effort'
@@ -12,7 +19,7 @@ const DOCUMENT = 'dsh-thinking-effort:\n  subagentEffort: off\n'
 type Listeners = Record<string, Array<(...args: unknown[]) => unknown>>
 
 /** One in-memory settings document plus the events a write raises. */
-function harness(options: { entryConfig?: boolean; failMutate?: boolean; modelTransaction?: boolean } = {}) {
+function harness(options: { entryConfig?: boolean; failMutate?: boolean; modelTransaction?: boolean; profileContext?: unknown } = {}) {
   const listeners: Listeners = {}
   const mutations: Array<{ ns: string; ops: readonly SettingsPathOp[] }> = []
   /**
@@ -87,6 +94,7 @@ function harness(options: { entryConfig?: boolean; failMutate?: boolean; modelTr
   const context = {
     settings,
     fiber: { entry: { options: { id: NS } } },
+    ...(options.profileContext === undefined ? {} : { profileContext: options.profileContext }),
     timeout: (callback: () => void) => { scheduled.push(callback); return () => {} },
     on: (event: string, callback: (...args: unknown[]) => unknown) => {
       listeners[event] = [...(listeners[event] ?? []), callback]
@@ -219,6 +227,10 @@ describe('installLegacyMigration', () => {
     expect(test.user()?.decision).toBe('')
     expect(test.user()?.pending).toBe(false)
     expect(test.user()?.candidates).toEqual([])
+    // The empty answer is recorded, not merely cleared: the card renders its
+    // "nothing pending" line from this, and an empty string reads there as "no
+    // result yet", which is why the manual entry point used to say nothing.
+    expect(test.user()?.lastResult).toBe(LEGACY_RESULT_NOTHING_PENDING)
   })
 
   it('retires a stale offer when the values were set by hand', async () => {
@@ -231,6 +243,9 @@ describe('installLegacyMigration', () => {
     await test.settle()
     expect(test.user()?.pending).toBe(false)
     expect(test.user()?.candidates).toEqual([])
+    // Only a scan the user asked for records an answer; closing a stale offer
+    // the user never acted on must not put a result line on the card.
+    expect(test.user()?.lastResult).toBe('')
   })
 
   it('ignores client-supplied candidates and writes only what it scanned itself', async () => {
@@ -309,10 +324,98 @@ describe('installLegacyMigration', () => {
     test.fire('settings/document-updated', NS, 2)
     await test.settle()
     expect(test.user()?.pending).toBe(false)
+    expect(test.user()?.lastResult).toBe(LEGACY_RESULT_DISMISSED)
 
     test.document().legacyMigration = { ...(test.user() ?? {}), decision: 'scan' }
     test.fire('settings/document-updated', NS, 3)
     await test.settle()
     expect(test.user()?.pending).toBe(true)
+    // A scan that found something is answered by the fresh offer, so the stale
+    // dismissal result must not survive next to it.
+    expect(test.user()?.lastResult).toBe('')
+  })
+})
+
+describe('legacy home resolution', () => {
+  /**
+   * Run with `DSH_HOME` pinned to one value (or unset), restoring whatever the
+   * ambient environment held. The fallback chain is the only thing under test,
+   * so the ambient value must not decide the outcome.
+   */
+  const withDshHome = async (value: string | undefined, run: () => void | Promise<void>): Promise<void> => {
+    const previous = process.env.DSH_HOME
+    if (value === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = value
+    try {
+      await run()
+    } finally {
+      if (previous === undefined) delete process.env.DSH_HOME
+      else process.env.DSH_HOME = previous
+    }
+  }
+
+  const defaultHome = (): string => join(homedir(), '.dsh')
+
+  // `profileContext.home` is the launcher's own answer: the harness resolves it
+  // through `resolveDshHome()`, so it is the directory the user's settings
+  // actually live in and it outranks any environment override.
+  it('prefers the launcher profile home over DSH_HOME', async () => {
+    await withDshHome('/env/home', () => {
+      expect(defaultFiles({ profileContext: { home: '/profile/home' } }).home).toBe('/profile/home')
+      // A service exposed the cordis way (a lookup that answers undefined for an
+      // absent service) must resolve to the same home as the property form.
+      const lookup = { get: (name: string) => (name === 'profileContext' ? { home: '/looked/up' } : undefined) }
+      expect(defaultFiles(lookup).home).toBe('/looked/up')
+    })
+  })
+
+  it('falls back to a non-empty DSH_HOME when no profile home is exposed', async () => {
+    await withDshHome('/env/home', () => {
+      expect(defaultFiles({}).home).toBe('/env/home')
+      // An unreadable profile home — a service without one, a blank one, or a
+      // lookup that throws — is not a source at all.
+      expect(defaultFiles({ profileContext: {} }).home).toBe('/env/home')
+      expect(defaultFiles({ profileContext: { home: '   ' } }).home).toBe('/env/home')
+      expect(defaultFiles({ get: () => { throw new Error('no such service') } }).home).toBe('/env/home')
+      expect(defaultFiles(undefined).home).toBe('/env/home')
+    })
+  })
+
+  it('treats a whitespace-only DSH_HOME as unset, the way resolveDshHome does', async () => {
+    await withDshHome('   ', () => {
+      expect(defaultFiles({}).home).toBe(defaultHome())
+    })
+  })
+
+  it('falls back to ~/.dsh when neither source is available', async () => {
+    await withDshHome(undefined, () => {
+      expect(defaultFiles({}).home).toBe(defaultHome())
+      expect(defaultFiles({ profileContext: { home: '' } }).home).toBe(defaultHome())
+    })
+  })
+
+  // The resolved home is what the scanner actually reads. Both homes hold a
+  // document and they disagree, so which value is offered is the evidence for
+  // which one was read — and the profile home is the one that must win, because
+  // that is where the launcher keeps the settings the user is migrating.
+  it('scans the launcher profile home, not the environment override', async () => {
+    const profileHome = mkdtempSync(join(tmpdir(), 'dsh-legacy-profile-'))
+    const envHome = mkdtempSync(join(tmpdir(), 'dsh-legacy-env-'))
+    try {
+      writeFileSync(join(profileHome, 'settings.yaml.imported'), 'dsh-thinking-effort:\n  subagentEffort: off\n')
+      writeFileSync(join(envHome, 'settings.yaml.imported'), 'dsh-thinking-effort:\n  subagentEffort: max\n')
+      await withDshHome(envHome, async () => {
+        const test = harness({ entryConfig: true, profileContext: { home: profileHome } })
+        installLegacyMigration(test.context as never)
+        await test.settle()
+        expect(test.user()?.pending).toBe(true)
+        expect(test.user()?.candidates).toEqual([
+          expect.objectContaining({ path: ['subagentEffort'], value: 'off' }),
+        ])
+      })
+    } finally {
+      rmSync(profileHome, { recursive: true, force: true })
+      rmSync(envHome, { recursive: true, force: true })
+    }
   })
 })

@@ -1,8 +1,11 @@
 import { AsyncResource } from 'node:async_hooks'
 import { readFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import {
   LEGACY_FAILED_PREFIX,
   LEGACY_RESULT_DISMISSED,
+  LEGACY_RESULT_NOTHING_PENDING,
   legacyDecisionOf,
   legacyMigrationOf,
   type LegacyCandidate,
@@ -33,8 +36,67 @@ function log(...args: unknown[]): void {
   console.log(LOG_PREFIX, ...args)
 }
 
-function defaultFiles(): LegacyMigrationFiles {
-  const home = process.env.DSH_HOME || process.cwd()
+function recordOf(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined
+}
+
+/**
+ * The launcher's `profileContext.home` — the DSH home this process actually
+ * runs against — when this host exposes one.
+ *
+ * `profileContext` is NOT part of this plugin's declared `HostContext`: it is a
+ * launcher-owned service, present on the releases this migration targets and
+ * absent from older lines. Both reads are therefore defensive. `get` is tried
+ * first because it is the one access that answers `undefined` for a service
+ * nobody provided — a bare `ctx.profileContext` on a context that cannot
+ * resolve it THROWS (cordis resolves service properties through `inject`), and
+ * a sandboxed host façade denies property access to every service the plugin
+ * did not declare. The property form is the fallback for a context object
+ * without `get`, such as the test doubles that inject a home directly.
+ */
+function profileHome(ctx: unknown): string | undefined {
+  const context = recordOf(ctx)
+  if (context === undefined) return undefined
+  let service: unknown
+  const lookup = context.get
+  if (typeof lookup === 'function') {
+    try {
+      service = lookup.call(ctx, 'profileContext')
+    } catch {
+      service = undefined
+    }
+  }
+  if (service === undefined) {
+    try {
+      service = context.profileContext
+    } catch {
+      service = undefined
+    }
+  }
+  const home = recordOf(service)?.home
+  return typeof home === 'string' && home.trim().length > 0 ? home : undefined
+}
+
+/**
+ * The documents a scan reads and the home they sit under.
+ *
+ * The home is resolved the way the harness resolves it — `profileContext.home`
+ * (which the launcher derives from `resolveDshHome()`), then a non-empty
+ * `$DSH_HOME`, then `~/.dsh` — so the scanner reads the SAME directory the
+ * user's settings actually live in. `process.cwd()` is deliberately not a
+ * candidate: the harness never runs from the home, so a scan that fell back to
+ * it found nothing and the whole feature did nothing, silently.
+ *
+ * @param ctx - the plugin context, read for the launcher's profile home.
+ * @returns the resolved home and the document reader.
+ */
+export function defaultFiles(ctx: unknown): LegacyMigrationFiles {
+  const configured = process.env.DSH_HOME
+  const home = profileHome(ctx)
+    ?? (typeof configured === 'string' && configured.trim().length > 0 ? configured.trim() : undefined)
+    ?? join(homedir(), '.dsh')
   return { home, read: (path: string) => readFile(path, 'utf8') }
 }
 
@@ -50,7 +112,7 @@ function defaultFiles(): LegacyMigrationFiles {
  * @param ctx - the plugin context.
  * @param files - overrides for the documents; tests inject a fake reader.
  */
-export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationFiles = defaultFiles()): void {
+export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationFiles = defaultFiles(ctx)): void {
   const settings = ctx.settings
   if (settings === undefined) return
   if (settingsModelForRuntime({ settings }) !== 'entry-config') return
@@ -146,13 +208,23 @@ export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationF
       log('legacy migration: offered', result.candidates.length, 'value(s)')
     }
 
-    /** Close the offer out with nothing migrated. */
-    const settleEmpty = async (result: LegacyScan): Promise<void> => {
+    /**
+     * Close the offer out with nothing migrated.
+     *
+     * `lastResult` is recorded only when the pass ran because the user asked for
+     * a scan: a completed scan is a fact the card has to report, while the other
+     * callers are reconciling an offer that was already declined or already
+     * applied and must not put a result line on screen for a scan nobody asked
+     * for. An omitted result clears any earlier one, which is what a fresh offer
+     * needs.
+     */
+    const settleEmpty = async (result: LegacyScan, lastResult?: string): Promise<void> => {
       await publish({
         pending: false,
         candidates: [],
         signature: result.signature,
         scannedAt: new Date().toISOString(),
+        lastResult,
       })
     }
 
@@ -229,9 +301,12 @@ export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationF
       if (decision === 'scan') {
         // A forced rescan always answers, including "there is nothing left": the
         // `decision` field has to be cleared or it would re-arm on every later
-        // event for the rest of the session.
+        // event for the rest of the session. The empty answer is recorded as an
+        // explicit result so the card has something to report — an empty string
+        // reads there as "no result yet" and hides the message the manual entry
+        // point exists to show.
         if (fresh.candidates.length > 0) await arm(fresh)
-        else await settleEmpty(fresh)
+        else await settleEmpty(fresh, LEGACY_RESULT_NOTHING_PENDING)
         return
       }
 

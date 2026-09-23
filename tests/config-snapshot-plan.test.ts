@@ -406,6 +406,27 @@ describe('planImport excluded plugin keys', () => {
     expect(plan.summary).toEqual({ added: 0, overwritten: 0, removed: 0 })
   })
 
+  // The migration's control object is a decision the Host consumes and clears.
+  // A file that carried one with `decision: 'migrate'` would make the importing
+  // Host migrate with no click — the consent the flow promises is exactly what
+  // must not ride a snapshot, in either import mode.
+  it('never imports the migration control object, whatever decision it carries', () => {
+    const file = snapshotOf({
+      'dsh-thinking-effort': {
+        legacyMigration: { pending: true, candidates: [], decision: 'migrate' },
+        opencodeSession: { a: 2 },
+      },
+    })
+    const live = current({ 'dsh-thinking-effort': { opencodeSession: { a: 1 } } })
+
+    expect(planImport(file, live, 'merge').namespaces).toEqual([
+      { ns: 'dsh-thinking-effort', ops: [{ op: 'set', path: ['opencodeSession'], value: { a: 2 } }] },
+    ])
+    expect(planImport(file, live, 'replace').namespaces).toEqual([
+      { ns: 'dsh-thinking-effort', ops: [{ op: 'set', path: ['opencodeSession'], value: { a: 2 } }] },
+    ])
+  })
+
   it('excludes those names only inside the plugin namespace', () => {
     const plan = planImport(
       snapshotOf({ 'llm-pi-ai': { profiles: { from: 'file' } } }),
