@@ -1817,8 +1817,9 @@ integrationDescribe('official DSH loader composition', () => {
    *    into this plugin's own section and requires the user layer to hold
    *    exactly that path; the resolved value necessarily carries
    *    `opencodeSession` (with its `format` and `userAgent` defaults),
-   *    `profiles` and `autoBackup`, so a resolved-derived write would pin all
-   *    four into the user's document — exactly the inflation this plan removed.
+   *    `profiles`, `autoBackup` and `legacyMigration`, so a resolved-derived
+   *    write would pin all five into the user's document — exactly the inflation
+   *    this plan removed.
    */
   it('loads on the entry-config host and publishes its settings section', { timeout: 300000 }, async () => {
     expect(entryConfigRoots).toHaveLength(1)
@@ -1911,7 +1912,7 @@ integrationDescribe('official DSH loader composition', () => {
         const own = namespaces.find(({ ns }) => ns === PLUGIN_ENTRY_ID)
         expect(own, `0.1.7 must publish the ${PLUGIN_ENTRY_ID} settings section`).toBeDefined()
         expect(entryFormFields(own?.schema))
-          .toEqual(['autoBackup', 'opencodeSession', 'profiles', 'subagentEffort'])
+          .toEqual(['autoBackup', 'legacyMigration', 'opencodeSession', 'profiles', 'subagentEffort'])
         expect(own?.value).toMatchObject({
           opencodeSession: expect.any(Object),
           subagentEffort: expect.any(String),
