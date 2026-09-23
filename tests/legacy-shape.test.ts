@@ -30,21 +30,43 @@ function collectLeaves(shape: LegacyShape, prefix: readonly string[] = []): Arra
 const PUBLISHED_SETTINGS_SCHEMA = PLUGIN_SETTINGS_SCHEMA.toJSON()
 
 describe('legacy shape walker', () => {
-  it('emits the plugin schema leaves an old own-section states', () => {
+  it('emits exactly the declared leaves when the document states every one of them', () => {
+    // The fixture states a value for EVERY leaf the shape declares, and the
+    // expectation is the complete list. A partial fixture would let a whole
+    // branch of the walker stop emitting without any case failing: the string
+    // leaves under `format` and under `userAgent.providers.<p>.value` are the
+    // ones with no other coverage, so they are spelled out here.
     const section = {
       subagentEffort: 'off',
       opencodeSession: {
         providers: { sub2api: { models: { 'deepseek-flash': true } } },
-        format: { mode: 'template', template: 'ses_{hex12}' },
-        userAgent: { value: 'ua/1', providers: { p: { enabled: true, models: { m: false } } } },
+        format: {
+          mode: 'template',
+          time: 'firstUse',
+          template: 'ses_{hex12}',
+          expression: '',
+          script: '/usr/local/lib/ses.js',
+          validate: '^ses_',
+          onInvalid: 'warn',
+        },
+        userAgent: { value: 'ua/1', providers: { p: { enabled: true, value: 'per-route', models: { m: false } } } },
       },
     }
-    expect(leavesOf(LEGACY_OWN_SHAPE, section).sort((a, b) => a.path.join('.').localeCompare(b.path.join('.')))).toEqual([
+    const emitted = leavesOf(LEGACY_OWN_SHAPE, section)
+      .sort((left, right) => left.path.join('.').localeCompare(right.path.join('.')))
+    expect(emitted.length).toBe(13)
+    expect(emitted).toEqual([
+      { path: ['opencodeSession', 'format', 'expression'], value: '' },
       { path: ['opencodeSession', 'format', 'mode'], value: 'template' },
+      { path: ['opencodeSession', 'format', 'onInvalid'], value: 'warn' },
+      { path: ['opencodeSession', 'format', 'script'], value: '/usr/local/lib/ses.js' },
       { path: ['opencodeSession', 'format', 'template'], value: 'ses_{hex12}' },
+      { path: ['opencodeSession', 'format', 'time'], value: 'firstUse' },
+      { path: ['opencodeSession', 'format', 'validate'], value: '^ses_' },
       { path: ['opencodeSession', 'providers', 'sub2api', 'models', 'deepseek-flash'], value: true },
       { path: ['opencodeSession', 'userAgent', 'providers', 'p', 'enabled'], value: true },
       { path: ['opencodeSession', 'userAgent', 'providers', 'p', 'models', 'm'], value: false },
+      { path: ['opencodeSession', 'userAgent', 'providers', 'p', 'value'], value: 'per-route' },
       { path: ['opencodeSession', 'userAgent', 'value'], value: 'ua/1' },
       { path: ['subagentEffort'], value: 'off' },
     ])
