@@ -208,6 +208,10 @@ Export and import reuse the existing Settings channel, so the card works with bo
 
 When importing a snapshot, only capability configuration is migrated by default. A provider's `baseURL`, `apiKeyEnv`, and `headers`, along with `opencodeSession.format.script`, are local deployment wiring and take effect only when you explicitly select **Also import endpoints and credentials (advanced)** in the preview.
 
+### Legacy settings migration
+
+DSH `0.1.7` renames `settings.yaml` and imports it exactly once, and plugin releases before this one failed to load on that version, so a thinking level or a model toggle you configured earlier can survive only inside `settings.yaml.imported`. On startup the plugin scans that document, a not-yet-renamed `settings.yaml`, and the live `llm-pi-ai` user layer. When it finds values this plugin owns that your own settings section does not already declare, it asks in a dialog above the settings page: **Migrate** writes them into this plugin's settings section, **Later** postpones the question for this page load, and **Don't ask again** records that exact offer, which returns only if the legacy data later changes. Nothing is written before you choose **Migrate**, and the migration only fills in values you have not set, so it never overwrites one. The settings that stand right now are saved into the **Backup and profiles** rollback slot (`autoBackup`, marked `sourceProfile: migration`) in the same write batch as the migrated values. To look for legacy items on demand, use **Rescan legacy data** in the **Backup and profiles** card.
+
 ### Settings page layout
 
 The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and gateway compatibility controls in its settings area. `models[]` saves use one complete array set rather than an array-index path operation.

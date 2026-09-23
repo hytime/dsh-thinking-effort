@@ -1,5 +1,5 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
@@ -19,6 +19,12 @@ import {
   takeoverProvidersOf,
 } from '../src/compat/gateway/takeover.js'
 import { opsForProviderCompat } from '../src/compat/gateway/ops.js'
+import {
+  LEGACY_RESULT_APPLIED,
+  isLegacyMigrationPending,
+  legacyCandidatesOf,
+  legacyMigrationOf,
+} from '../src/compat/legacy-migration.js'
 import {
   digestTail62 as digestTail62ForLoaderProbe,
   normalizeSessionId as normalizeSessionIdForLoaderProbe,
@@ -101,14 +107,19 @@ const expectedOfficialDshVersions = [
  * Poll `read` until it answers something other than `undefined`, then return
  * that. The provider-defaults fill is driven by the `settings/document-updated`
  * event that the write triggering it raises, so no test can observe the result
- * in the same turn as the write.
+ * in the same turn as the write. `label` names what a timeout was waiting for;
+ * a caller that polls something else passes its own.
  */
-async function waitForFill<T>(read: () => Promise<T | undefined>, timeoutMs = 20000): Promise<T> {
+async function waitForFill<T>(
+  read: () => Promise<T | undefined>,
+  timeoutMs = 20000,
+  label = 'the provider-defaults fill',
+): Promise<T> {
   const deadline = Date.now() + timeoutMs
   for (;;) {
     const value = await read()
     if (value !== undefined) return value
-    if (Date.now() > deadline) throw new Error(`timed out after ${timeoutMs}ms waiting for the provider-defaults fill`)
+    if (Date.now() > deadline) throw new Error(`timed out after ${timeoutMs}ms waiting for ${label}`)
     await new Promise<void>((resolveWait) => setTimeout(resolveWait, 250))
   }
 }
@@ -2061,6 +2072,132 @@ integrationDescribe('official DSH loader composition', () => {
       }
     } finally {
       rmSync(home, { recursive: true, force: true })
+      rmSync(webHome, { recursive: true, force: true })
+      rmSync(packDestination, { recursive: true, force: true })
+    }
+  })
+
+  /**
+   * The legacy-data migration, on the same entry-config host the case above
+   * boots.
+   *
+   * A separate case rather than an appended block, because the migration writes
+   * its control object into this plugin's own user layer the moment it has
+   * something to offer, and the case above pins that layer to exactly the one
+   * path a write stated. This case stages the stranded document itself and runs
+   * on its own home, so that invariant is neither weakened nor re-derived; the
+   * startup mechanism (`startOfficialWeb`, `callOfficialRpc`, `waitForFill`) is
+   * the shared one.
+   */
+  it('offers the stranded legacy values and writes them on migrate', { timeout: 300000 }, async () => {
+    expect(entryConfigRoots).toHaveLength(1)
+    const [entryConfigRoot] = entryConfigRoots
+    if (entryConfigRoot === undefined) throw new Error('DSH_CLI_ROOTS did not contain an entry-config root')
+    const { cliRoot, version } = entryConfigRoot
+    expect(version).toBe('0.1.7-alpha.1')
+
+    const webHome = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-legacy-web-'))
+    const packDestination = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-pack-'))
+    try {
+      const tarball = packLocalPackage(packDestination)
+      runOfficialDsh(cliRoot, webHome, ['plugin', '--profile', 'web', 'add', tarball])
+
+      // The document 0.1.7 strands: it renames `settings.yaml` once and older
+      // plugin releases never load on this version, so a user's thinking level
+      // and model toggles survive only in the renamed file. Written after the
+      // install and before the host starts, so the plugin's first scan — which
+      // runs at apply time, long before any test can write here — sees it; the
+      // install's own CLI boot is not the thing that reads it.
+      writeFileSync(join(webHome, 'settings.yaml.imported'), [
+        'llm-pi-ai:',
+        '  subagentEffort: off',
+        'dsh-thinking-effort:',
+        '  opencodeSession:',
+        '    providers:',
+        '      sub2api:',
+        '        models:',
+        '          deepseek-flash: true',
+        '',
+      ].join('\n'))
+
+      const web = await startOfficialWeb(cliRoot, webHome, {
+        args: ['dsh', '--profile', 'web', '--no-open', '--port', '0'],
+      })
+      try {
+        const headers: Record<string, string> = web.cookie === '' ? {} : { cookie: web.cookie }
+        const liveResult = (endpoint: string, args: Record<string, unknown>): Promise<unknown> => (
+          callOfficialRpc(web.url, headers, endpoint, args, true).then((response) => {
+            expect(response.status).toBe(200)
+            return response.body.result
+          })
+        )
+        const readSection = async (): Promise<EntryConfigNamespaceView | undefined> => {
+          const described = await liveResult('settings/describe', {}) as
+            | { readonly ok?: boolean; readonly value?: { readonly namespaces?: readonly EntryConfigNamespaceView[] } }
+            | undefined
+          expect(described).toMatchObject({ ok: true, value: { namespaces: expect.any(Array) } })
+          return described?.value?.namespaces?.find(({ ns }) => ns === PLUGIN_ENTRY_ID)
+        }
+
+        // Semantics 1 and 2: the startup scan read the stranded document, so the
+        // section offers its values. `isLegacyMigrationPending` is the Client's
+        // own read, so what this waits for is exactly the offer the prompt would
+        // render; the `opencodeSession` path exists in no other source, which is
+        // what makes it evidence that `settings.yaml.imported` was read.
+        const offered = await waitForFill(async () => {
+          const row = await readSection()
+          return isLegacyMigrationPending(row?.user) ? row : undefined
+        }, 60000, 'the legacy migration offer')
+        expect(legacyMigrationOf(offered?.user)?.pending).toBe(true)
+        const candidates = legacyCandidatesOf(offered?.user)
+        expect(candidates).toContainEqual(expect.objectContaining({ path: ['subagentEffort'], value: 'off' }))
+        expect(candidates).toContainEqual(expect.objectContaining({
+          path: ['opencodeSession', 'providers', 'sub2api', 'models', 'deepseek-flash'],
+          value: true,
+        }))
+
+        // Semantics 3, first half: the exact write the Client's prompt makes,
+        // against the revision the offer was read at.
+        const decision = await liveResult('settings/mutate', {
+          ns: PLUGIN_ENTRY_ID,
+          ops: [{ op: 'set', path: ['legacyMigration', 'decision'], value: 'migrate' }],
+          expectedRevision: offered?.revision,
+        })
+        expect(decision).toMatchObject({ ok: true, value: { ns: PLUGIN_ENTRY_ID } })
+
+        const applied = await waitForFill(async () => {
+          const row = await readSection()
+          const state = legacyMigrationOf(row?.user)
+          return state?.pending === false && state.lastResult === LEGACY_RESULT_APPLIED ? row : undefined
+        }, 60000, 'the legacy migration to land')
+
+        // The values are readable in both layers: the raw one proves the Host
+        // wrote the paths, and the resolved one is what the settings page shows.
+        const leafAt = (root: unknown, path: readonly string[]): unknown => {
+          let node: unknown = root
+          for (const key of path) {
+            if (typeof node !== 'object' || node === null || Array.isArray(node)) return undefined
+            node = (node as Record<string, unknown>)[key]
+          }
+          return node
+        }
+        const sessionLeaf = ['opencodeSession', 'providers', 'sub2api', 'models', 'deepseek-flash']
+        expect(leafAt(applied?.user, ['subagentEffort'])).toBe('off')
+        expect(leafAt(applied?.user, sessionLeaf)).toBe(true)
+        expect(leafAt(applied?.value, ['subagentEffort'])).toBe('off')
+        expect(leafAt(applied?.value, sessionLeaf)).toBe(true)
+
+        // The offer is closed, and the rollback snapshot rode the same batch as
+        // the values, so no state exists with a snapshot but no migration.
+        expect(isLegacyMigrationPending(applied?.user)).toBe(false)
+        expect(legacyMigrationOf(applied?.user)?.pending).toBe(false)
+        expect(legacyMigrationOf(applied?.user)?.lastResult).toBe(LEGACY_RESULT_APPLIED)
+        expect(legacyMigrationOf(applied?.user)?.decision).toBe('')
+        expect(leafAt(applied?.user, ['autoBackup'])).toMatchObject({ sourceProfile: 'migration' })
+      } finally {
+        await web.stop()
+      }
+    } finally {
       rmSync(webHome, { recursive: true, force: true })
       rmSync(packDestination, { recursive: true, force: true })
     }
