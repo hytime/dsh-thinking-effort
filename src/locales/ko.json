@@ -135,6 +135,7 @@
   "seatSliderLabel": "추론 강도",
   "seatReasoningLabel": "추론 수준",
   "seatModelLabel": "모델",
+  "providerAccount": "DeepSeek 계정",
   "seatSearchModels": "모델 검색",
   "seatNoModelResults": "일치하는 모델이 없습니다",
   "seatErrorAction": "모델 작업에 실패했습니다: {message}",

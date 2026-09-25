@@ -20,6 +20,13 @@ export interface ModelEditorProps {
   readonly onOneMillionChange: (enabled: boolean) => void
   readonly onInputChange: (modality: 'text' | 'image', enabled: boolean) => void
   readonly onSave: () => void
+  /**
+   * Why this model cannot be saved, or `null`/absent when it can. The Save
+   * button is disabled on the same condition and the reason is rendered beside
+   * it, so a refused save is explained where the user clicked rather than only
+   * in the page-top banner.
+   */
+  readonly blockedReason?: string | null
   readonly onRestoreReasoning: () => void
   readonly onRestoreCapability: () => void
   readonly compatView?: ModelGatewayCompatView
@@ -33,7 +40,7 @@ export interface ModelEditorProps {
   readonly onOpenCodeSessionChange?: (enabled: boolean) => void
 }
 
-export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy, palette, t, onLevelChange, onContextChange, onOneMillionChange, onInputChange, onSave, onRestoreReasoning, onRestoreCapability, compatView, onCompatChange, onSaveCompat, compatDirty, compatExpanded, onToggleCompatExpanded, openCodeSession, openCodeSessionAvailable = false, onOpenCodeSessionChange }: ModelEditorProps): React.ReactElement {
+export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy, palette, t, onLevelChange, onContextChange, onOneMillionChange, onInputChange, onSave, blockedReason, onRestoreReasoning, onRestoreCapability, compatView, onCompatChange, onSaveCompat, compatDirty, compatExpanded, onToggleCompatExpanded, openCodeSession, openCodeSessionAvailable = false, onOpenCodeSessionChange }: ModelEditorProps): React.ReactElement {
   const levelLabel = (level: typeof ALL_LEVELS[number]): string => t(LEVEL_LABEL_KEYS[level])
   const anyCompatDirty = compatDirty !== undefined && GATEWAY_COMPAT_FIELD_KEYS.some((key) => compatDirty[key] === true)
   const modelCompatControls = compatView !== undefined
@@ -79,9 +86,16 @@ export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy
       })}
     </div>
     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px', paddingTop: '6px', borderTop: `1px solid ${palette.divider}` }}>
-      <ActionButton text={dirty ? t('saveChanges') : t('saved')} onClick={onSave} disabled={busy || !dirty} tone="primary" palette={palette} icon="check" label={dirty ? t('saveModelChanges') : t('noPendingChanges')} />
+      <ActionButton text={dirty ? t('saveChanges') : t('saved')} onClick={onSave} disabled={busy || !dirty || blockedReason != null} tone="primary" palette={palette} icon="check" label={dirty ? t('saveModelChanges') : t('noPendingChanges')} />
       <ActionButton text={t('restoreReasoning')} onClick={onRestoreReasoning} disabled={busy} tone="secondary" palette={palette} icon="restore" />
       <ActionButton text={t('restoreCapability')} onClick={onRestoreCapability} disabled={busy} tone="danger" palette={palette} icon="restore" />
     </div>
+    {/* The reason sits under the row it blocks, so the user does not have to
+        find the page-top banner to learn why Save is unavailable. It appears
+        only once the model has pending changes: an untouched model that is
+        already unsavable would otherwise wear a permanent warning the user
+        never asked about. It is a polite live region rather than a second
+        `role="alert"`, so a refusal is not announced twice. */}
+    {dirty && blockedReason != null ? <div aria-live="polite" data-scope="model-save-blocked" style={{ marginTop: '6px', padding: '6px 8px', border: `1px solid ${palette.dangerBorder}`, borderRadius: '6px', color: palette.danger, backgroundColor: palette.dangerBg, fontSize: '12px', lineHeight: '18px' }}>{blockedReason}</div> : null}
   </div>
 }

@@ -255,3 +255,50 @@ describe('build artifacts', () => {
     expect(host).toHaveProperty('apply')
   })
 })
+
+describe('composer seat surface material', () => {
+  /**
+   * The seat's panel and model menu are surfaces of their own, so they must be
+   * opaque. `--dsw-specific-menu` is the core's 58%-translucent menu material
+   * and is only ever painted together with `--dsw-menu-backdrop-filter`; using
+   * it bare left the page text behind the panel readable through it (issue
+   * #14). This asserts on the built artifact because the token choice is a
+   * build-time substitution, and a future edit that reintroduced the
+   * translucent fill would otherwise only show up in a running browser.
+   *
+   * The CSS-Modules hash is build-dependent, and lightningcss hashes are not
+   * purely alphanumeric — the released 0.3.3 bundle contains `._3_LLuW_panel`,
+   * where the hash itself starts with an underscore. The class is therefore
+   * matched as `.<hash>_<local>` with a character class that admits `_` and
+   * `-`, so the assertion does not depend on which environment produced the
+   * hash.
+   */
+  it('paints the panel and menu with an opaque surface token, not the menu fill', () => {
+    const bundle = readArtifact('lib/client.js')
+    const ruleFor = (local: string): string => {
+      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}\\{[^}]*\\}`).exec(bundle)
+      expect(match, `${local} rule missing from the bundle`).not.toBeNull()
+      return match![0]
+    }
+
+    // Guard the matcher itself: lightningcss produced `._3_LLuW_panel` in the
+    // released 0.3.3 bundle, so a hash beginning with `_` must match. Without
+    // this, a matcher that only accepted alphanumerics would pass here on a
+    // build whose hash happens to be alphanumeric and fail in CI.
+    expect(new RegExp('\\.[A-Za-z0-9_-]+_panel\\{[^}]*\\}').test('._3_LLuW_panel{background:var(--te-panel-surface)}')).toBe(true)
+
+    const panel = ruleFor('panel')
+    const menu = ruleFor('modelMenu')
+    for (const [local, rule] of [['panel', panel], ['modelMenu', menu]] as const) {
+      expect(rule, `${local} must paint an opaque surface`).toContain('background:var(--te-panel-surface)')
+      expect(rule, `${local} must not use the translucent menu fill`).not.toContain('--dsw-specific-menu')
+    }
+    // The surface is defined once on the root (so every descendant inherits a
+    // defined, opaque value) and re-bound to the next layer up by the menu.
+    expect(ruleFor('root')).toContain('--te-panel-surface:var(--dsw-alias-bg-layer-1)')
+    expect(menu).toContain('--te-panel-surface:var(--dsw-alias-bg-layer-2)')
+    // Nothing in this stylesheet may paint the translucent menu material: a
+    // bare `--dsw-specific-menu` is exactly the defect this guards.
+    expect(bundle).not.toMatch(/_root\{[^}]*--dsw-specific-menu/)
+  })
+})

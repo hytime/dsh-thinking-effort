@@ -9,7 +9,7 @@ import { emptyTakeoverRuntimeResolution } from './takeover-runtime.js'
 import { openCodeSessionOp, openCodeSessionStateFor, isOpenCodeSessionNamespace } from './model-header-ops.js'
 import { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from './model-ops.js'
 import { isPluginEntrySection, pluginSection, subagentEffortTarget } from './subagent-section.js'
-import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, validateContextWindow, validateLevels } from './validation.js'
+import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, modelSaveBlockedReason, validateContextWindow, validateLevels } from './validation.js'
 import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, OpenCodeSessionState, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
 import type { Palette } from './theme.js'
 import type { TakeoverRuntimeStore } from './takeover-runtime.js'
@@ -24,6 +24,26 @@ import { renderGatewayCompatControls } from './components/GatewayCompatControls.
 const PLUGIN_VERSION = packageJson.version
 
 type DirtyFields = { levels?: boolean; context?: boolean; input?: boolean }
+
+/**
+ * Whether a refused write was refused because the section moved since this
+ * panel read it.
+ *
+ * The code is the stable discriminator and is what a modern Remote reports
+ * (`settings/conflict`). The legacy in-process bridge surfaces the Host's
+ * `SettingsConflictError` instead, whose only stable marker is the message
+ * text, so both are accepted. A rejected promise is matched the same way as an
+ * `{ok: false}` result because the legacy transport throws where the modern one
+ * returns a refusal.
+ */
+function isSettingsConflict(error: unknown): boolean {
+  if (error === null || typeof error !== 'object') return false
+  const code = (error as { code?: unknown }).code
+  if (code === 'settings/conflict' || code === 'SETTINGS_CONFLICT') return true
+  const message = (error as { message?: unknown }).message
+  return typeof message === 'string' && /changed since it was read/i.test(message)
+}
+
 interface RunOpsRequest {
   readonly ns: string
   readonly revision: number
@@ -347,6 +367,22 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     })
   }, [takeoverResolution])
 
+  /**
+   * Re-read one section's current revision, so a write refused as stale can be
+   * retried against the document as it now stands.
+   *
+   * `undefined` means the section could not be re-read; the caller then reports
+   * the original conflict rather than writing without a revision, because a
+   * write that cannot establish the current state has no business bypassing the
+   * check that exists to protect it.
+   */
+  const latestRevision = (target: string): Promise<number | undefined> =>
+    settings.describe().then((response) => {
+      if (!response.ok) return undefined
+      const found = response.value.namespaces.find((entry) => entry.ns === target)
+      return found === undefined ? undefined : revisionOf(found)
+    }).catch(() => undefined)
+
   const runOps = ({ ns, revision, ops, successMessage, onSuccess, openCodeSessionSavedKey, entrySectionWrite }: RunOpsRequest): void => {
     // The OpenCode-specific copy belongs to the header toggle, whose section id
     // happens to equal the entry id under the 0.1.7 model. A failed subagent
@@ -357,29 +393,75 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       ? t('opencodeSessionSaveFailed', { message })
       : t('writeError', { message })
     setState((current) => ({ ...current, busy: true, error: null, notice: null }))
-    settings.mutate(ns, ops, revision).then((response) => {
-      if (!response.ok) {
-        setState((current) => ({ ...current, busy: false, error: writeError(response.error.message) }))
-        return
-      }
-      if (!response.value || typeof response.value !== 'object') {
+
+    const succeed = (value: SettingsNamespace): void => {
+      if (!value || typeof value !== 'object') {
         setState((current) => ({ ...current, busy: false, error: t('saveMissingNamespace') }))
         return
       }
       const savedKey = openCodeSessionSavedKey
-      if (ns !== NS && entrySectionWrite !== true && (savedKey === undefined || !isOpenCodeSessionNamespace(response.value))) {
+      if (ns !== NS && entrySectionWrite !== true && (savedKey === undefined || !isOpenCodeSessionNamespace(value))) {
         setState((current) => ({ ...current, busy: false, error: t('saveMissingNamespace') }))
         return
       }
       onSuccess?.()
       setState((current) => {
-        if (ns === NS) return applyNamespaceView(current, response.value, successMessage, current.pluginSection)
+        if (ns === NS) return applyNamespaceView(current, value, successMessage, current.pluginSection)
         // Every other accepted write targets the plugin's own section, so its
         // response refreshes the OpenCode view and the subagent view together.
-        if (entrySectionWrite === true) return applyPluginSectionView(current, response.value, successMessage)
-        return applyPluginSectionView(current, response.value, successMessage, savedKey)
+        if (entrySectionWrite === true) return applyPluginSectionView(current, value, successMessage)
+        return applyPluginSectionView(current, value, successMessage, savedKey)
       })
-    }).catch((error: unknown) => {
+    }
+
+    // A refusal and a thrown transport error are kept apart because the two
+    // transports report differently: the modern Remote answers `ok: false`
+    // while the legacy bridge rejects, and only the refusal carries a message
+    // the caller is expected to render verbatim.
+    type Outcome = { readonly ok: true; readonly value: SettingsNamespace }
+      | { readonly ok: false; readonly message: string; readonly conflict: boolean; readonly threw: boolean }
+    const writeOnce = async (expectedRevision: number): Promise<Outcome> => {
+      try {
+        const response = await settings.mutate(ns, ops, expectedRevision)
+        return response.ok
+          ? { ok: true, value: response.value }
+          : { ok: false, message: response.error.message, conflict: isSettingsConflict(response.error), threw: false }
+      } catch (error: unknown) {
+        return {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+          conflict: isSettingsConflict(error),
+          threw: true,
+        }
+      }
+    }
+
+    const run = async (): Promise<void> => {
+      let outcome = await writeOnce(revision)
+      // The panel holds the revision it read at mount, so any write to the same
+      // section meanwhile — another window, the Host's own default-levels fill,
+      // a model switch — fences every later save forever. Re-read the revision
+      // and retry ONCE: the ops are path-addressed and are applied to the
+      // section as it stands, so a concurrent edit to a different path survives
+      // the retry. A second conflict is reported instead of retried, so a
+      // persistently losing writer cannot spin.
+      if (!outcome.ok && outcome.conflict) {
+        const fresh = await latestRevision(ns)
+        if (fresh !== undefined && fresh !== revision) outcome = await writeOnce(fresh)
+      }
+      if (outcome.ok) { succeed(outcome.value); return }
+      const message = outcome.message
+      setState((current) => ({
+        ...current,
+        busy: false,
+        error: outcome.threw && message.length === 0 ? t('writeFailed') : writeError(message),
+      }))
+    }
+    // `succeed` renders the accepted response and is not expected to throw, but
+    // it used to run inside the transport's `.catch`, so a throw there surfaced
+    // as a reported write failure. Keeping that net means an unexpected error
+    // leaves the button usable and visible instead of only reaching the console.
+    run().catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       setState((current) => ({ ...current, busy: false, error: message.length > 0 ? writeError(message) : t('writeFailed') }))
     })
@@ -388,14 +470,14 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   const applyModel = (item: InventoryItem): void => {
     const key = keyOf(item)
     const levels = buildLevels(state.drafts[key] ?? {})
-    const levelError = validateLevels(levels, t)
-    if (levelError) { setState((current) => ({ ...current, error: levelError })); return }
     const contextDraft = state.contextDrafts[key] ?? contextDraftFrom(item)
-    const context = contextDraft.touched ? validateContextWindow(contextDraft, t) : { value: undefined }
-    if (context.error) { const error = context.error; setState((current) => ({ ...current, error })); return }
     const inputDraft = state.inputDrafts[key] ?? inputDraftFrom(item)
+    // One shared predicate decides both this refusal and the Save button's
+    // disabled state, so the two can never disagree about what is savable.
+    const blocked = modelSaveBlockedReason(levels, contextDraft, inputDraft, t)
+    if (blocked !== null) { setState((current) => ({ ...current, error: blocked })); return }
+    const context = contextDraft.touched ? validateContextWindow(contextDraft, t) : { value: undefined }
     const input = inputDraft.touched ? buildInput(inputDraft, t) : { value: undefined }
-    if (input.error) { const error = input.error; setState((current) => ({ ...current, error })); return }
     const update: ModelUpdate = { item, levels, contextWindow: context.value, contextWindowTouched: contextDraft.touched, input: input.value, inputTouched: inputDraft.touched }
     runOps({
       ns: NS,
@@ -639,7 +721,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       <div style={{ position: 'relative', marginBottom: '7px' }}><span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: palette.secondary, pointerEvents: 'none' }}><Icon name="search" size={15} /></span><input type="text" value={state.query} placeholder={t('searchPlaceholder')} onChange={(event) => { const value = event.currentTarget.value; setState((current) => ({ ...current, query: value })) }} style={{ boxSizing: 'border-box', width: '100%', height: '30px', padding: '0 10px 0 30px', border: `1px solid ${palette.border}`, borderRadius: '8px', fontSize: '13px', backgroundColor: palette.field, color: palette.text, outline: 'none', boxShadow: palette.shadow }} /></div>
       {state.loading ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{t('loading')}</div> : visible.length === 0 ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{state.inventory.length === 0 ? t('noModels') : t('noMatches')}</div> :
          routes.map((route) => { const providerModels = visible.filter((item) => item.route === route); const providerOpen = query !== '' || state.expandedProviders[route] === true; return <div key={route} style={{ marginBottom: '6px' }}><div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '8px', minHeight: '32px', padding: '4px 6px', marginBottom: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.raised }}><span style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}><span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', minWidth: '22px', border: `1px solid ${palette.border}`, borderRadius: '7px', color: palette.secondary, backgroundColor: palette.group }}><Icon name="layers" size={14} /></span><span style={{ display: 'grid', gap: '1px', minWidth: 0 }}><span style={{ color: palette.text, fontSize: '12px', fontWeight: 700, overflowWrap: 'anywhere' }}>{route}</span><span style={{ color: palette.accent, fontSize: '10px', lineHeight: '11px', fontWeight: 700 }}>{t('vendor')}</span></span></span><span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: palette.secondary, whiteSpace: 'nowrap' }}><span>{t('modelCount', { count: providerModels.length })}</span>{query !== '' ? <span>{t('searchResults')}</span> : <ActionButton text="" onClick={() => toggleProvider(route)} palette={palette} tone="ghost" icon={providerOpen ? 'chevronUp' : 'chevronDown'} label={providerOpen ? t('collapseProvider') : t('expandProvider')} />}</span></div>{providerOpen && state.providerDrafts[route] ? <>
-          {renderGatewayCompatControls({ view: state.providerDrafts[route], onChange: (next) => patchProviderCompat(route, next), disabled: state.busy, expanded: state.providerCompatExpanded[route] === true, onToggleExpanded: () => toggleProviderCompatExpanded(route), availableCount: availableCompatFieldCount(state.providerDrafts[route]) }, { palette, t })}{state.providerDirty[route] ? <ActionButton text={t('saveGatewayCompat')} onClick={() => applyProviderCompat(route)} disabled={state.busy} tone="primary" palette={palette} icon="check" /> : null}</> : null}{providerOpen ? providerModels.map((item) => { const key = keyOf(item); const dirty = state.dirty[key] ?? {}; const compatAvailable = state.modelCompatViews[key] !== undefined; const openCodeSessionEditable = state.openCodeSessionAvailable && item.modelSourceConflict !== true; return <ModelRow key={`${key}-${item.inOverrides ? 'override' : item.index}`} item={item} open={state.expanded[key] === true} draft={state.drafts[key]} contextDraft={state.contextDrafts[key] ?? contextDraftFrom(item)} inputDraft={state.inputDrafts[key] ?? inputDraftFrom(item)} dirty={dirty.levels === true || dirty.context === true || dirty.input === true} busy={state.busy} palette={palette} t={t} onToggle={() => toggleExpand(item)} onLevelChange={(level, patch) => patchDraft(item, level, patch)} onContextChange={(value) => patchContextValue(item, value)} onOneMillionChange={(enabled) => setOneMillion(item, enabled)} onInputChange={(modality, enabled) => patchInputCapability(item, modality, enabled)} onSave={() => applyModel(item)} onRestoreReasoning={() => restoreReasoningDefaults(item)} onRestoreCapability={() => restoreProviderDefaults(item)}
+          {renderGatewayCompatControls({ view: state.providerDrafts[route], onChange: (next) => patchProviderCompat(route, next), disabled: state.busy, expanded: state.providerCompatExpanded[route] === true, onToggleExpanded: () => toggleProviderCompatExpanded(route), availableCount: availableCompatFieldCount(state.providerDrafts[route]) }, { palette, t })}{state.providerDirty[route] ? <ActionButton text={t('saveGatewayCompat')} onClick={() => applyProviderCompat(route)} disabled={state.busy} tone="primary" palette={palette} icon="check" /> : null}</> : null}{providerOpen ? providerModels.map((item) => { const key = keyOf(item); const dirty = state.dirty[key] ?? {}; const compatAvailable = state.modelCompatViews[key] !== undefined; const openCodeSessionEditable = state.openCodeSessionAvailable && item.modelSourceConflict !== true; return <ModelRow key={`${key}-${item.inOverrides ? 'override' : item.index}`} item={item} open={state.expanded[key] === true} draft={state.drafts[key]} contextDraft={state.contextDrafts[key] ?? contextDraftFrom(item)} inputDraft={state.inputDrafts[key] ?? inputDraftFrom(item)} dirty={dirty.levels === true || dirty.context === true || dirty.input === true} busy={state.busy} palette={palette} t={t} onToggle={() => toggleExpand(item)} onLevelChange={(level, patch) => patchDraft(item, level, patch)} onContextChange={(value) => patchContextValue(item, value)} onOneMillionChange={(enabled) => setOneMillion(item, enabled)} onInputChange={(modality, enabled) => patchInputCapability(item, modality, enabled)} onSave={() => applyModel(item)} blockedReason={modelSaveBlockedReason(buildLevels(state.drafts[key] ?? {}), state.contextDrafts[key] ?? contextDraftFrom(item), state.inputDrafts[key] ?? inputDraftFrom(item), t)} onRestoreReasoning={() => restoreReasoningDefaults(item)} onRestoreCapability={() => restoreProviderDefaults(item)}
                          compatView={compatAvailable ? state.modelCompatDrafts[key] : undefined}
                           compatExpanded={state.modelCompatExpanded[key] === true}
                           onToggleCompatExpanded={compatAvailable ? () => toggleModelCompatExpanded(key) : undefined}

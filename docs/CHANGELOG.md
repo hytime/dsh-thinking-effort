@@ -14,6 +14,20 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 修复 / Fixed
+
+- 修复设置页保存被过期 revision 永久卡死（issue #16）：面板挂载时读一次 revision 并在每次成功写入后更新，外部写入（切换默认模型、宿主的默认档位补齐、另一个窗口）不会同步，因此面板打开后只要别处写过一次，之后每次「保存更改」都会被 `dsh-settings` 以版本冲突拒绝，且面板不会重新读取，用户侧表现为「设置再也保存不了」。现在写入被判定为冲突时会重新读取该分区的当前 revision 并重试一次；路径写入按写入时刻的文档状态应用，所以并发修改的其他字段不会在重试中丢失。第二次仍冲突则如实报错，避免持续争抢时无限重试。
+- Fix settings saves being fenced forever by a stale revision (issue #16): the panel read the revision once at mount and updated it only after its own successful writes, so an external write (a default-model switch, the Host's own default-levels fill, another window) was never observed. Once anything else had written, every later Save was refused by `dsh-settings` as a version conflict and the panel never re-read, which the user experienced as "settings can no longer be saved". A write refused as a conflict now re-reads that section's current revision and retries once; the path-addressed ops apply to the document as it stands, so a concurrent edit to another field survives the retry. A second conflict is reported as-is rather than retried again, so a persistently losing writer cannot spin.
+
+- 修复思考档位只勾 `off` 时「保存更改」点击后毫无反馈（issue #15）：该配置被 `validateLevels()` 拒绝（宿主侧同样拒绝只声明 `off` 的模型），但拒绝只把错误横幅渲染在页面标题下方，即整页最顶部，用户在下方模型卡片处操作时完全看不到，且按钮状态不变、不转圈、不发请求，只能判定为「按钮失灵」。现在保存按钮在校验不通过时直接禁用，并把原因（如「至少需要一个思考档位」）就近显示在按钮下方；写入路径与按钮可见性共用同一个校验函数，两者不会对「能否保存」给出不同答案。
+- Fix the Save button appearing dead when a model's thinking levels are reduced to `off` only (issue #15): that configuration is refused by `validateLevels()` (the Host likewise rejects a model declaring only `off`), but the refusal rendered its banner below the page title — the very top of the page — so a user working in a model card below never saw it, while the button neither changed state nor showed progress nor sent a request. The Save button is now disabled on exactly that validation failure and the reason ("Select at least one reasoning effort") is shown beside it. The write path and the button's affordance read one shared predicate, so they cannot disagree about what is savable.
+
+- 修复中文界面下模型菜单把供应商分组标题显示成英文（issue #17）：分组标题此前直接渲染供应商注册的 `displayName`，而 `deepseek-account` 注册的是英文 `DeepSeek Account`，等于插件替 DSH 做了英文本地化。现在按 provider id 映射本地化名称（zh `DeepSeek 账号`、en `DeepSeek Account`、ja `DeepSeek アカウント`、ko `DeepSeek 계정`），与 DSH 自带模型菜单的规则一致；其他供应商（含用户自建的网关）继续使用其注册名，不被替换。
+- Fix the model menu showing an English provider heading in a Chinese UI (issue #17): the heading rendered the provider's registered `displayName`, and `deepseek-account` registers the English `DeepSeek Account`, so the plugin effectively localized the name into English. The signed-in account route is now mapped by provider id (zh `DeepSeek 账号`, en `DeepSeek Account`, ja `DeepSeek アカウント`, ko `DeepSeek 계정`), matching DSH's own model menu. Every other provider — including a user-declared gateway — keeps its registered name.
+
+- 修复模型座位面板与模型菜单半透明、下层文字直接透出（issue #14）：两者此前使用 `--dsw-specific-menu`，而该令牌是 DSH 核心的 58% 半透明菜单材质，核心只把它与 `--dsw-menu-backdrop-filter` 一起使用，单独使用等于没有底衬，面板后面的档位文字会 1:1 透上来。现在改用不透明且随主题切换的表面令牌 `--dsw-alias-bg-layer-1`（面板）与 `--dsw-alias-bg-layer-2`（浮在其上的菜单）；这两个令牌在全部受支持的 DSH 版本（0.1.0-rc.7 起）都声明在 `body` 上，因此不依赖任何模糊效果或核心内部属性。
+- Fix the composer seat's panel and model menu being translucent with the page text readable through them (issue #14): both painted `--dsw-specific-menu`, which is DSH core's 58%-translucent menu material and is only ever used together with `--dsw-menu-backdrop-filter`. Painted bare it provides no backing, so the effort labels behind the panel showed through it one-to-one. They now use the opaque, theme-aware surface tokens `--dsw-alias-bg-layer-1` (panel) and `--dsw-alias-bg-layer-2` (the menu floating over it). Both tokens are declared on `body` by every supported DSH release (0.1.0-rc.7 and later), so the fix depends on neither a blur effect nor a core-internal attribute.
+
 ## [0.3.3] - 2026-09-23
 
 ### 修复 / Fixed

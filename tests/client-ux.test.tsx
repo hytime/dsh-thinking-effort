@@ -1453,6 +1453,112 @@ describe('SectionEditor user behavior', () => {
     view.unmount()
   })
 
+  it('re-reads the revision and retries once after a stale-revision conflict', async () => {
+    // The panel read revision 2 at mount; an unrelated writer moved the section
+    // to 3 before Save. Without the retry every later save is fenced forever.
+    let hostRevision = 2
+    const sent: number[] = []
+    const view = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [namespace({ revision: hostRevision })] } }),
+      mutate: async (_ns, _ops, revision) => {
+        sent.push(revision as number)
+        if (revision !== hostRevision) {
+          return { ok: false as const, error: { message: `settings namespace "llm-pi-ai" changed since it was read (expected revision ${revision}, now ${hostRevision})` } }
+        }
+        hostRevision += 1
+        return { ok: true as const, value: namespace({ revision: hostRevision }) }
+      },
+    })
+    await settle()
+    openFirstModel(view.container)
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    hostRevision = 3
+
+    act(() => button(view.container, text('saveModelChanges')).click())
+    await settle()
+
+    expect(sent).toEqual([2, 3])
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
+    expect(view.container.textContent).toContain(text('modelSettingsSaved'))
+    expect(view.container.querySelector('[title="' + text('unsaved') + '"]')).toBeNull()
+    view.unmount()
+  })
+
+  it('reports a second conflict instead of retrying forever', async () => {
+    const sent: number[] = []
+    // Mount reads 2. The first refused write also moves the host to 9, so the
+    // retry is fenced too and must be reported rather than retried again.
+    let hostRevision = 2
+    const view = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [namespace({ revision: hostRevision })] } }),
+      mutate: async (_ns, _ops, revision) => {
+        sent.push(revision as number)
+        hostRevision = 9
+        return { ok: false as const, error: { message: `settings namespace "llm-pi-ai" changed since it was read (expected revision ${revision}, now 9)` } }
+      },
+    })
+    await settle()
+    openFirstModel(view.container)
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    act(() => button(view.container, text('saveModelChanges')).click())
+    await settle()
+
+    // Exactly one retry: the first write, then one against the freshly read revision.
+    expect(sent).toEqual([2, 9])
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain('changed since it was read')
+    expect(view.container.querySelector('[title="' + text('unsaved') + '"]')).not.toBeNull()
+    view.unmount()
+  })
+
+  it('does not retry when the re-read revision did not move', async () => {
+    const sent: number[] = []
+    const view = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [namespace({ revision: 2 })] } }),
+      mutate: async (_ns, _ops, revision) => {
+        sent.push(revision as number)
+        return { ok: false as const, error: { message: 'settings namespace "llm-pi-ai" changed since it was read (expected revision 2, now 2)' } }
+      },
+    })
+    await settle()
+    openFirstModel(view.container)
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    act(() => button(view.container, text('saveModelChanges')).click())
+    await settle()
+
+    expect(sent).toEqual([2])
+    expect(view.container.querySelector('[role="alert"]')).not.toBeNull()
+    view.unmount()
+  })
+
+  it('retries a conflict thrown by the legacy settings transport', async () => {
+    let hostRevision = 2
+    const sent: number[] = []
+    const view = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [namespace({ revision: hostRevision })] } }),
+      mutate: (async (_ns: string, _ops: readonly SettingsOp[], revision: number) => {
+        sent.push(revision)
+        if (revision !== hostRevision) {
+          const error = new Error(`settings namespace "llm-pi-ai" changed since it was read (expected revision ${revision}, now ${hostRevision})`)
+          Object.assign(error, { code: 'SETTINGS_CONFLICT' })
+          throw error
+        }
+        hostRevision += 1
+        return { ok: true as const, value: namespace({ revision: hostRevision }) }
+      }) as SettingsApi['mutate'],
+    })
+    await settle()
+    openFirstModel(view.container)
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    hostRevision = 5
+
+    act(() => button(view.container, text('saveModelChanges')).click())
+    await settle()
+
+    expect(sent).toEqual([2, 5])
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
+    view.unmount()
+  })
+
   it('saves a new model override scalar field via the model group expansion', async () => {
     const modelNamespace = namespace({
       value: {
@@ -2022,6 +2128,65 @@ describe('SectionEditor user behavior', () => {
     expect(view.container.querySelector('[role="alert"]')?.textContent).toContain('conflict')
     expect(view.container.querySelector('input[placeholder="' + text('wirePlaceholder') + '"]')).not.toBeNull()
     expect(view.container.querySelector('[title="' + text('unsaved') + '"]')).not.toBeNull()
+    view.unmount()
+  })
+
+  it('explains an off-only refusal beside the Save button instead of only at page top', async () => {
+    const view = renderEditor()
+    await settle()
+    openFirstModel(view.container)
+    // Turn one thinking level on and back off, leaving only `off` selected.
+    const minimal = button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`)
+    act(() => minimal.click())
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    await settle()
+
+    // The reason is rendered in the model card, next to the button it blocks.
+    const inline = view.container.querySelector('[data-scope="model-save-blocked"]')
+    expect(inline?.textContent).toContain(text('atLeastThinking'))
+    const save = button(view.container, text('saveChanges'))
+    expect(save.disabled).toBe(true)
+    // The disabled button cannot dispatch the write at all.
+    act(() => save.click())
+    await settle()
+    expect(view.mutate).not.toHaveBeenCalled()
+    view.unmount()
+  })
+
+  it('disables Save and names the level when a selected level has no wire value', async () => {
+    const view = renderEditor()
+    await settle()
+    openFirstModel(view.container)
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    const wire = view.container.querySelector('input[placeholder="' + text('wirePlaceholder') + '"]') as HTMLInputElement
+    act(() => setValue(wire, ''))
+    await settle()
+
+    const inline = view.container.querySelector('[data-scope="model-save-blocked"]')
+    expect(inline?.textContent).toContain(text('levelNeedsValue', { level: text('levelMinimal') }))
+    expect(button(view.container, text('saveChanges')).disabled).toBe(true)
+    view.unmount()
+  })
+
+  it('keeps Save enabled and unannotated for a valid configuration', async () => {
+    const view = renderEditor()
+    await settle()
+    openFirstModel(view.container)
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    await settle()
+
+    expect(view.container.querySelector('[data-scope="model-save-blocked"]')).toBeNull()
+    expect(button(view.container, text('saveChanges')).disabled).toBe(false)
+    view.unmount()
+  })
+
+  it('does not annotate an untouched model that is already unsavable', async () => {
+    // The fixture stores `{ off: null }`, which the Host refuses to save. A user
+    // who has changed nothing must not be shown a warning about it.
+    const view = renderEditor()
+    await settle()
+    openFirstModel(view.container)
+    expect(view.container.querySelector('[data-scope="model-save-blocked"]')).toBeNull()
     view.unmount()
   })
 

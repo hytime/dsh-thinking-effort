@@ -16,6 +16,7 @@ const dictionary: Record<string, string> = {
   seatReasoningLabel: '推理等级',
   seatModelLabel: '模型',
   seatErrorAction: '模型操作失败：{message}',
+  providerAccount: 'DeepSeek 账号',
 }
 
 const t = (key: string, params?: Record<string, unknown>): string => {
@@ -330,6 +331,58 @@ describe('thinking slider composer seat', () => {
     act(() => { setRangeValue(container.querySelector('[data-seat-input]') as HTMLInputElement, '2') })
     act(() => { directory.set(state({ status: 'error', error: 'selection rejected' })) })
     expect(container.textContent).toContain('模型操作失败：selection rejected')
+
+    dispose(root, container)
+  })
+})
+
+describe('provider group labels', () => {
+  /** Open the reasoning panel and expand the model menu. */
+  function openModelMenu(container: HTMLDivElement): void {
+    openPanel(container)
+    const row = container.querySelector('[data-seat-model-row] button') as HTMLButtonElement
+    expect(row).not.toBeNull()
+    act(() => { row.click() })
+    expect(container.querySelector('[data-seat-model-menu]')).not.toBeNull()
+  }
+
+  const accountState = () => state({
+    current: { provider: 'deepseek-account', model: 'deepseek-v4-flash' },
+    groups: [{
+      id: 'deepseek-account',
+      name: 'DeepSeek Account',
+      models: [{ id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', reasoning }],
+    }],
+  })
+
+  it('localizes the signed-in account route in the menu and the native select', () => {
+    const { container, root } = renderSeat({ directory: createSnapshotStore(accountState()), select: vi.fn().mockResolvedValue(true), t })
+
+    openModelMenu(container)
+    // The registered displayName is English; the heading must not be.
+    const toggle = container.querySelector('[data-seat-model-menu] button') as HTMLButtonElement
+    expect(toggle.textContent).toContain('DeepSeek 账号')
+    expect(toggle.textContent).not.toContain('DeepSeek Account')
+
+    const optgroup = container.querySelector('[data-seat-model-select] optgroup') as HTMLOptGroupElement
+    expect(optgroup.label).toBe('DeepSeek 账号')
+
+    dispose(root, container)
+  })
+
+  it('keeps every other provider group at its registered name', () => {
+    const { container, root } = renderSeat({
+      directory: createSnapshotStore(state({
+        groups: [{ id: 'my-gateway', name: 'My Gateway', models: [{ id: 'm', name: 'M', reasoning }] }],
+      })),
+      select: vi.fn().mockResolvedValue(true),
+      t,
+    })
+
+    openModelMenu(container)
+    const toggle = container.querySelector('[data-seat-model-menu] button') as HTMLButtonElement
+    expect(toggle.textContent).toContain('My Gateway')
+    expect((container.querySelector('[data-seat-model-select] optgroup') as HTMLOptGroupElement).label).toBe('My Gateway')
 
     dispose(root, container)
   })
