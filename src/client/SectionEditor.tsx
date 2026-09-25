@@ -24,6 +24,26 @@ import { renderGatewayCompatControls } from './components/GatewayCompatControls.
 const PLUGIN_VERSION = packageJson.version
 
 type DirtyFields = { levels?: boolean; context?: boolean; input?: boolean }
+
+/**
+ * Whether a refused write was refused because the section moved since this
+ * panel read it.
+ *
+ * The code is the stable discriminator and is what a modern Remote reports
+ * (`settings/conflict`). The legacy in-process bridge surfaces the Host's
+ * `SettingsConflictError` instead, whose only stable marker is the message
+ * text, so both are accepted. A rejected promise is matched the same way as an
+ * `{ok: false}` result because the legacy transport throws where the modern one
+ * returns a refusal.
+ */
+function isSettingsConflict(error: unknown): boolean {
+  if (error === null || typeof error !== 'object') return false
+  const code = (error as { code?: unknown }).code
+  if (code === 'settings/conflict' || code === 'SETTINGS_CONFLICT') return true
+  const message = (error as { message?: unknown }).message
+  return typeof message === 'string' && /changed since it was read/i.test(message)
+}
+
 interface RunOpsRequest {
   readonly ns: string
   readonly revision: number
@@ -347,6 +367,22 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     })
   }, [takeoverResolution])
 
+  /**
+   * Re-read one section's current revision, so a write refused as stale can be
+   * retried against the document as it now stands.
+   *
+   * `undefined` means the section could not be re-read; the caller then reports
+   * the original conflict rather than writing without a revision, because a
+   * write that cannot establish the current state has no business bypassing the
+   * check that exists to protect it.
+   */
+  const latestRevision = (target: string): Promise<number | undefined> =>
+    settings.describe().then((response) => {
+      if (!response.ok) return undefined
+      const found = response.value.namespaces.find((entry) => entry.ns === target)
+      return found === undefined ? undefined : revisionOf(found)
+    }).catch(() => undefined)
+
   const runOps = ({ ns, revision, ops, successMessage, onSuccess, openCodeSessionSavedKey, entrySectionWrite }: RunOpsRequest): void => {
     // The OpenCode-specific copy belongs to the header toggle, whose section id
     // happens to equal the entry id under the 0.1.7 model. A failed subagent
@@ -357,29 +393,75 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       ? t('opencodeSessionSaveFailed', { message })
       : t('writeError', { message })
     setState((current) => ({ ...current, busy: true, error: null, notice: null }))
-    settings.mutate(ns, ops, revision).then((response) => {
-      if (!response.ok) {
-        setState((current) => ({ ...current, busy: false, error: writeError(response.error.message) }))
-        return
-      }
-      if (!response.value || typeof response.value !== 'object') {
+
+    const succeed = (value: SettingsNamespace): void => {
+      if (!value || typeof value !== 'object') {
         setState((current) => ({ ...current, busy: false, error: t('saveMissingNamespace') }))
         return
       }
       const savedKey = openCodeSessionSavedKey
-      if (ns !== NS && entrySectionWrite !== true && (savedKey === undefined || !isOpenCodeSessionNamespace(response.value))) {
+      if (ns !== NS && entrySectionWrite !== true && (savedKey === undefined || !isOpenCodeSessionNamespace(value))) {
         setState((current) => ({ ...current, busy: false, error: t('saveMissingNamespace') }))
         return
       }
       onSuccess?.()
       setState((current) => {
-        if (ns === NS) return applyNamespaceView(current, response.value, successMessage, current.pluginSection)
+        if (ns === NS) return applyNamespaceView(current, value, successMessage, current.pluginSection)
         // Every other accepted write targets the plugin's own section, so its
         // response refreshes the OpenCode view and the subagent view together.
-        if (entrySectionWrite === true) return applyPluginSectionView(current, response.value, successMessage)
-        return applyPluginSectionView(current, response.value, successMessage, savedKey)
+        if (entrySectionWrite === true) return applyPluginSectionView(current, value, successMessage)
+        return applyPluginSectionView(current, value, successMessage, savedKey)
       })
-    }).catch((error: unknown) => {
+    }
+
+    // A refusal and a thrown transport error are kept apart because the two
+    // transports report differently: the modern Remote answers `ok: false`
+    // while the legacy bridge rejects, and only the refusal carries a message
+    // the caller is expected to render verbatim.
+    type Outcome = { readonly ok: true; readonly value: SettingsNamespace }
+      | { readonly ok: false; readonly message: string; readonly conflict: boolean; readonly threw: boolean }
+    const writeOnce = async (expectedRevision: number): Promise<Outcome> => {
+      try {
+        const response = await settings.mutate(ns, ops, expectedRevision)
+        return response.ok
+          ? { ok: true, value: response.value }
+          : { ok: false, message: response.error.message, conflict: isSettingsConflict(response.error), threw: false }
+      } catch (error: unknown) {
+        return {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+          conflict: isSettingsConflict(error),
+          threw: true,
+        }
+      }
+    }
+
+    const run = async (): Promise<void> => {
+      let outcome = await writeOnce(revision)
+      // The panel holds the revision it read at mount, so any write to the same
+      // section meanwhile — another window, the Host's own default-levels fill,
+      // a model switch — fences every later save forever. Re-read the revision
+      // and retry ONCE: the ops are path-addressed and are applied to the
+      // section as it stands, so a concurrent edit to a different path survives
+      // the retry. A second conflict is reported instead of retried, so a
+      // persistently losing writer cannot spin.
+      if (!outcome.ok && outcome.conflict) {
+        const fresh = await latestRevision(ns)
+        if (fresh !== undefined && fresh !== revision) outcome = await writeOnce(fresh)
+      }
+      if (outcome.ok) { succeed(outcome.value); return }
+      const message = outcome.message
+      setState((current) => ({
+        ...current,
+        busy: false,
+        error: outcome.threw && message.length === 0 ? t('writeFailed') : writeError(message),
+      }))
+    }
+    // `succeed` renders the accepted response and is not expected to throw, but
+    // it used to run inside the transport's `.catch`, so a throw there surfaced
+    // as a reported write failure. Keeping that net means an unexpected error
+    // leaves the button usable and visible instead of only reaching the console.
+    run().catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       setState((current) => ({ ...current, busy: false, error: message.length > 0 ? writeError(message) : t('writeFailed') }))
     })

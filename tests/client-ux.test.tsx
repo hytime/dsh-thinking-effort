@@ -1453,6 +1453,112 @@ describe('SectionEditor user behavior', () => {
     view.unmount()
   })
 
+  it('re-reads the revision and retries once after a stale-revision conflict', async () => {
+    // The panel read revision 2 at mount; an unrelated writer moved the section
+    // to 3 before Save. Without the retry every later save is fenced forever.
+    let hostRevision = 2
+    const sent: number[] = []
+    const view = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [namespace({ revision: hostRevision })] } }),
+      mutate: async (_ns, _ops, revision) => {
+        sent.push(revision as number)
+        if (revision !== hostRevision) {
+          return { ok: false as const, error: { message: `settings namespace "llm-pi-ai" changed since it was read (expected revision ${revision}, now ${hostRevision})` } }
+        }
+        hostRevision += 1
+        return { ok: true as const, value: namespace({ revision: hostRevision }) }
+      },
+    })
+    await settle()
+    openFirstModel(view.container)
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    hostRevision = 3
+
+    act(() => button(view.container, text('saveModelChanges')).click())
+    await settle()
+
+    expect(sent).toEqual([2, 3])
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
+    expect(view.container.textContent).toContain(text('modelSettingsSaved'))
+    expect(view.container.querySelector('[title="' + text('unsaved') + '"]')).toBeNull()
+    view.unmount()
+  })
+
+  it('reports a second conflict instead of retrying forever', async () => {
+    const sent: number[] = []
+    // Mount reads 2. The first refused write also moves the host to 9, so the
+    // retry is fenced too and must be reported rather than retried again.
+    let hostRevision = 2
+    const view = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [namespace({ revision: hostRevision })] } }),
+      mutate: async (_ns, _ops, revision) => {
+        sent.push(revision as number)
+        hostRevision = 9
+        return { ok: false as const, error: { message: `settings namespace "llm-pi-ai" changed since it was read (expected revision ${revision}, now 9)` } }
+      },
+    })
+    await settle()
+    openFirstModel(view.container)
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    act(() => button(view.container, text('saveModelChanges')).click())
+    await settle()
+
+    // Exactly one retry: the first write, then one against the freshly read revision.
+    expect(sent).toEqual([2, 9])
+    expect(view.container.querySelector('[role="alert"]')?.textContent).toContain('changed since it was read')
+    expect(view.container.querySelector('[title="' + text('unsaved') + '"]')).not.toBeNull()
+    view.unmount()
+  })
+
+  it('does not retry when the re-read revision did not move', async () => {
+    const sent: number[] = []
+    const view = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [namespace({ revision: 2 })] } }),
+      mutate: async (_ns, _ops, revision) => {
+        sent.push(revision as number)
+        return { ok: false as const, error: { message: 'settings namespace "llm-pi-ai" changed since it was read (expected revision 2, now 2)' } }
+      },
+    })
+    await settle()
+    openFirstModel(view.container)
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    act(() => button(view.container, text('saveModelChanges')).click())
+    await settle()
+
+    expect(sent).toEqual([2])
+    expect(view.container.querySelector('[role="alert"]')).not.toBeNull()
+    view.unmount()
+  })
+
+  it('retries a conflict thrown by the legacy settings transport', async () => {
+    let hostRevision = 2
+    const sent: number[] = []
+    const view = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [namespace({ revision: hostRevision })] } }),
+      mutate: (async (_ns: string, _ops: readonly SettingsOp[], revision: number) => {
+        sent.push(revision)
+        if (revision !== hostRevision) {
+          const error = new Error(`settings namespace "llm-pi-ai" changed since it was read (expected revision ${revision}, now ${hostRevision})`)
+          Object.assign(error, { code: 'SETTINGS_CONFLICT' })
+          throw error
+        }
+        hostRevision += 1
+        return { ok: true as const, value: namespace({ revision: hostRevision }) }
+      }) as SettingsApi['mutate'],
+    })
+    await settle()
+    openFirstModel(view.container)
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    hostRevision = 5
+
+    act(() => button(view.container, text('saveModelChanges')).click())
+    await settle()
+
+    expect(sent).toEqual([2, 5])
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
+    view.unmount()
+  })
+
   it('saves a new model override scalar field via the model group expansion', async () => {
     const modelNamespace = namespace({
       value: {
