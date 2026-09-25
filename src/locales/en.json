@@ -135,6 +135,7 @@
   "seatSliderLabel": "Reasoning effort",
   "seatReasoningLabel": "Reasoning level",
   "seatModelLabel": "Model",
+  "providerAccount": "DeepSeek Account",
   "seatSearchModels": "Search models",
   "seatNoModelResults": "No matching models",
   "seatErrorAction": "Model operation failed: {message}",

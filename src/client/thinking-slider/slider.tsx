@@ -86,6 +86,20 @@ interface ModelChoice {
   readonly model: ModelCatalogModel
 }
 
+/**
+ * The label to show for one provider group.
+ *
+ * The catalog's `name` is the provider's registered `displayName`, which is
+ * English for every built-in route (`DeepSeek Account`), so rendering it
+ * verbatim leaves a Chinese UI showing an English heading. DSH's own model menu
+ * localizes the signed-in account route by id, and this mirrors that rule so
+ * both menus read the same. Every other route keeps its registered name, which
+ * is the user's own text for a hand-declared gateway and must not be replaced.
+ */
+function providerGroupLabel(group: ModelProviderGroup, t: Translation): string {
+  return group.id === 'deepseek-account' ? t('providerAccount') : group.name
+}
+
 /** Resolve the current selection back to its catalog model entry. */
 function currentModelOf(state: ModelDirectoryState): ModelCatalogModel | undefined {
   if (state.current === null) return undefined
@@ -272,7 +286,7 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
       createElement('option', { value: '', disabled: true }, t('seatNoModel')),
       ...state.groups.map((group, groupIndex) => createElement(
         'optgroup',
-        { label: group.name, key: group.id },
+        { label: providerGroupLabel(group, t), key: group.id },
         ...group.models.map((option, modelIndex) => createElement(
           'option',
           { value: `choice:${groupIndex}:${modelIndex}`, key: option.id },
@@ -308,7 +322,7 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
               'aria-expanded': expanded,
               onClick: () => { setExpandedModelGroup(value => value === group.id ? null : group.id) },
             },
-            createElement('span', { className: css.modelGroupLabel }, group.name),
+            createElement('span', { className: css.modelGroupLabel }, providerGroupLabel(group, t)),
             createElement('span', { className: expanded ? `${css.modelGroupChevron} ${css.modelGroupChevronOpen}` : css.modelGroupChevron, 'aria-hidden': true }),
             ),
             expanded

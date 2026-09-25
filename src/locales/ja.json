@@ -135,6 +135,7 @@
   "seatSliderLabel": "推論強度",
   "seatReasoningLabel": "推論レベル",
   "seatModelLabel": "モデル",
+  "providerAccount": "DeepSeek アカウント",
   "seatSearchModels": "モデルを検索",
   "seatNoModelResults": "一致するモデルがありません",
   "seatErrorAction": "モデル操作に失敗しました：{message}",
