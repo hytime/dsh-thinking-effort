@@ -70,4 +70,36 @@ export function validateLevels(levels: ReasoningEfforts, translate: Translation)
   return hasThinking ? null : translate('atLeastThinking')
 }
 
+/**
+ * Why one model's editor cannot be saved, or `null` when it can.
+ *
+ * The write path and the Save button's affordance must agree on this: the
+ * button is disabled on exactly the condition the write would refuse, so the
+ * refusal is visible where the user is looking instead of only in the
+ * page-top banner. Both read this one function rather than restating the
+ * order of the checks, which is also the order the errors are reported in.
+ *
+ * Only a TOUCHED context or input draft is validated, matching the write path:
+ * an untouched field means "leave the stored value alone", so its placeholder
+ * value is not a refusal.
+ */
+export function modelSaveBlockedReason(
+  levels: ReasoningEfforts,
+  contextDraft: ContextDraft | undefined,
+  inputDraft: InputDraft | undefined,
+  translate: Translation,
+): string | null {
+  const levelError = validateLevels(levels, translate)
+  if (levelError !== null) return levelError
+  if (contextDraft?.touched === true) {
+    const context = validateContextWindow(contextDraft, translate)
+    if (context.error !== undefined) return context.error
+  }
+  if (inputDraft?.touched === true) {
+    const input = buildInput(inputDraft, translate)
+    if (input.error !== undefined) return input.error
+  }
+  return null
+}
+
 export { ALL_LEVELS, CONTEXT_1M, CONTEXT_MAX, CONTEXT_MIN }

@@ -2131,6 +2131,65 @@ describe('SectionEditor user behavior', () => {
     view.unmount()
   })
 
+  it('explains an off-only refusal beside the Save button instead of only at page top', async () => {
+    const view = renderEditor()
+    await settle()
+    openFirstModel(view.container)
+    // Turn one thinking level on and back off, leaving only `off` selected.
+    const minimal = button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`)
+    act(() => minimal.click())
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    await settle()
+
+    // The reason is rendered in the model card, next to the button it blocks.
+    const inline = view.container.querySelector('[data-scope="model-save-blocked"]')
+    expect(inline?.textContent).toContain(text('atLeastThinking'))
+    const save = button(view.container, text('saveChanges'))
+    expect(save.disabled).toBe(true)
+    // The disabled button cannot dispatch the write at all.
+    act(() => save.click())
+    await settle()
+    expect(view.mutate).not.toHaveBeenCalled()
+    view.unmount()
+  })
+
+  it('disables Save and names the level when a selected level has no wire value', async () => {
+    const view = renderEditor()
+    await settle()
+    openFirstModel(view.container)
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    const wire = view.container.querySelector('input[placeholder="' + text('wirePlaceholder') + '"]') as HTMLInputElement
+    act(() => setValue(wire, ''))
+    await settle()
+
+    const inline = view.container.querySelector('[data-scope="model-save-blocked"]')
+    expect(inline?.textContent).toContain(text('levelNeedsValue', { level: text('levelMinimal') }))
+    expect(button(view.container, text('saveChanges')).disabled).toBe(true)
+    view.unmount()
+  })
+
+  it('keeps Save enabled and unannotated for a valid configuration', async () => {
+    const view = renderEditor()
+    await settle()
+    openFirstModel(view.container)
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    await settle()
+
+    expect(view.container.querySelector('[data-scope="model-save-blocked"]')).toBeNull()
+    expect(button(view.container, text('saveChanges')).disabled).toBe(false)
+    view.unmount()
+  })
+
+  it('does not annotate an untouched model that is already unsavable', async () => {
+    // The fixture stores `{ off: null }`, which the Host refuses to save. A user
+    // who has changed nothing must not be shown a warning about it.
+    const view = renderEditor()
+    await settle()
+    openFirstModel(view.container)
+    expect(view.container.querySelector('[data-scope="model-save-blocked"]')).toBeNull()
+    view.unmount()
+  })
+
   it('applies presets, restores defaults, preserves drafts across collapse, and filters locales', async () => {
     const view = renderEditor({ locales: ['zh', 'en'] })
     await settle()
