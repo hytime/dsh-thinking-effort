@@ -61,6 +61,12 @@ export interface ModelDirectoryState {
   readonly failures: readonly ModelCatalogFailure[]
   readonly status: ModelDirectoryStatus
   readonly error: string | null
+  /**
+   * The selection the host has accepted but not yet confirmed, present on the
+   * official directory store. Optional because the plugin also runs against
+   * directory builds that predate it, and absent there is not an error.
+   */
+  readonly pending?: ModelSelection | null
 }
 
 /** Read face of the shared per-session directory store (uSES-compatible). */
@@ -155,7 +161,10 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
     models: group.models.filter((option) => normalizedModelQuery.length === 0
       || `${option.name} ${option.id}`.toLocaleLowerCase().includes(normalizedModelQuery)),
   })).filter(({ models }) => models.length > 0)
-  const effectiveEffort = current?.reasoningEffort ?? reasoning?.defaultEffort
+  // `pending` is the selection the host has already accepted, so it is the
+  // honest position of a drag in progress; `current` only catches up once the
+  // host answers. A directory without it falls through to `current`.
+  const effectiveEffort = (state.pending ?? current)?.reasoningEffort ?? reasoning?.defaultEffort
   const effortIndex = efforts.findIndex(({ id }) => id === effectiveEffort)
   const rangeValue = effortIndex < 0 ? 0 : effortIndex
   const rangeEffort = efforts[rangeValue]
@@ -167,6 +176,14 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
     : rangeEffort?.name ?? t('seatNoEfforts')
   const hasDirectoryError = state.status === 'error' && state.error !== null
   const busy = locked || state.status === 'selecting' || select === undefined
+  /**
+   * The range is a continuous control, so an in-flight selection must not
+   * disable it. The official directory sets `selecting` synchronously at the
+   * top of its async `select()`, before the first await, so `busy` would cut
+   * every drag after its first step. The directory is built for this: each
+   * `select()` takes a generation and only the newest answer is applied.
+   */
+  const rangeBusy = locked || select === undefined
   const rangeProgress = !followingModelDefault && efforts.length > 1 && effortIndex >= 0
     ? `${(effortIndex / (efforts.length - 1)) * 100}%`
     : '0%'
@@ -381,7 +398,7 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
             max: efforts.length - 1,
             step: 1,
             value: rangeValue,
-            disabled: busy,
+            disabled: rangeBusy,
             'aria-label': t('seatSliderLabel'),
             'aria-valuetext': currentEffortLabel,
             onChange: onRangeChange,
