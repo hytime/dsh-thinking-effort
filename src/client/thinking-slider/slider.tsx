@@ -187,9 +187,9 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
   // The panel is 336px wide (or `100vw - 32px` on narrow screens) and is
   // anchored to the trigger, so the CSS can bound its width but not its
   // starting position. On phones the chip sits near the screen edge and the
-  // panel overflows whichever side it opens toward. Clamp it into the
-  // viewport on open, and recompute while it is open if the page scrolls or
-  // the window resizes.
+  // panel overflows the viewport. Keep the original right-aligned anchor
+  // whenever it fits; only clamp the panel into the viewport when it would
+  // overflow. Recompute while open if the page scrolls or the window resizes.
   useEffect(() => {
     if (!open) return
     const compute = (): void => {
@@ -198,10 +198,12 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
       const rect = root.getBoundingClientRect()
       const panelWidth = Math.min(336, window.innerWidth - 32)
       const margin = 16
-      let left = 0
-      if (rect.left < margin) left = margin - rect.left
-      else if (rect.left + panelWidth > window.innerWidth - margin) left = window.innerWidth - margin - panelWidth - rect.left
-      setPanelLeft(left)
+      // Original anchor: the panel's right edge aligns with the trigger's
+      // right edge.
+      const originalLeft = rect.width - panelWidth
+      const viewportLeft = rect.left + originalLeft
+      const clamped = Math.min(Math.max(viewportLeft, margin), window.innerWidth - panelWidth - margin)
+      setPanelLeft(clamped - rect.left)
     }
     compute()
     window.addEventListener('resize', compute)
