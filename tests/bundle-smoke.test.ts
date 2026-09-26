@@ -335,4 +335,71 @@ describe('composer seat affordances', () => {
     expect(before('chevron')).toContain('transform:rotate(45deg)translateY(-2px)')
     expect(before('chevronOpen')).toContain('transform:rotate(225deg)translateY(-2px)')
   })
+
+  /**
+   * A native range keeps the thumb's whole box inside the track, so its centre
+   * travels only [half a thumb, width - half a thumb] — a full thumb shorter
+   * than the track. The track, the fill and the scale are inset by half a thumb
+   * so their ends sit where the centre actually reaches.
+   *
+   * Pixel-measured in a real browser at 320px: before, the centre read
+   * -3.5 / 97.5 / 197.5 / 298.5 against pips at 0 / 106.66 / 213.33 / 320; after,
+   * 9 / 109.5 / 209.5 / 310 against pips at 9 / 109.66 / 210.33 / 311. A
+   * negative margin cannot fix this — it shifts both ends at once — so the
+   * assertion below is that the inset exists and the margin does not.
+   */
+  it('insets the track so its ends meet the thumb centre travel', () => {
+    const bundle = readArtifact('lib/client.js')
+    const ruleFor = (local: string): string => {
+      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}\\{[^}]*\\}`).exec(bundle)
+      expect(match, `${local} rule missing from the bundle`).not.toBeNull()
+      return match![0]
+    }
+    const thumbFor = (pseudo: string): string => {
+      const match = new RegExp(`\\.[A-Za-z0-9_-]+_range::${pseudo}\\{[^}]*\\}`).exec(bundle)
+      expect(match, `${pseudo} rule missing from the bundle`).not.toBeNull()
+      return match![0]
+    }
+
+    // Half of the 18px thumb Chromium actually renders (range thumbs are
+    // border-box, so the 3px borders are inside that width).
+    expect(ruleFor('root')).toContain('--te-thumb-inset:9px')
+
+    const track = ruleFor('rangeTrack')
+    expect(track).toContain('left:var(--te-thumb-inset)')
+    expect(track).toContain('right:var(--te-thumb-inset)')
+    expect(track).not.toContain('left:0;')
+
+    // The labels are absolutely positioned, so they resolve against the
+    // padding box and need the same inset to stay under the pips.
+    expect(ruleFor('scale')).toContain('padding:0 var(--te-thumb-inset)')
+
+    expect(thumbFor('-webkit-slider-thumb')).not.toContain('margin-left')
+    expect(thumbFor('-moz-range-thumb')).not.toContain('margin-left')
+  })
+
+  /**
+   * The panel reads the host's content type scale, so it tracks the Settings
+   * font-size preference the way the composer and the chat do. The fallbacks
+   * reproduce the previous fixed 13px/20px exactly, so nothing moves at the
+   * default 14px body.
+   */
+  it('takes the panel type scale from the host content scale', () => {
+    const bundle = readArtifact('lib/client.js')
+    const ruleFor = (local: string): string => {
+      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}\\{[^}]*\\}`).exec(bundle)
+      expect(match, `${local} rule missing from the bundle`).not.toBeNull()
+      return match![0]
+    }
+
+    const root = ruleFor('root')
+    expect(root).toContain('font-size:var(--dsh-content-font-size-secondary,13px)')
+    expect(root).toContain('line-height:calc(20px + var(--dsh-content-font-delta-secondary,0px))')
+    // A fixed size here is what made the panel ignore the preference.
+    expect(root).not.toMatch(/font-size:13px/)
+    expect(root).not.toMatch(/line-height:20px/)
+    // The label row is absolutely positioned, so it has to be told how tall it
+    // is, and that height has to grow with the same scale.
+    expect(ruleFor('scale')).toContain('height:calc(20px + var(--dsh-content-font-delta-secondary,0px))')
+  })
 })

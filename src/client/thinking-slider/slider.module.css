@@ -3,8 +3,6 @@
   display: flex;
   min-width: 0;
   color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  line-height: 20px;
   /* This seat's own opaque surface, one layer for the panel and one for the
      menu floating over it. Declared here rather than on each consumer so every
      descendant — including slider pseudo-elements — inherits a defined value
@@ -15,6 +13,21 @@
      translucent material the core only ever paints together with
      `--dsw-menu-backdrop-filter`, which this surface has no backing for. */
   --te-panel-surface: var(--dsw-alias-bg-layer-1);
+  /* A native range keeps the thumb's whole box inside the track, so its centre
+     can only travel between half a thumb at each end. Measured in a browser,
+     that is [9px, width - 9px] for an 18px thumb. Rather than translate the
+     thumb out of that range with a negative margin — which shifts both ends at
+     once and cannot fix a travel that is a full thumb too short — the track,
+     the fill and the scale are inset by half a thumb so their ends land where
+     the thumb's centre actually reaches. */
+  --te-thumb-inset: 9px;
+  /* The panel reads the host's content type scale instead of a fixed size, so
+     it moves with the Settings font-size preference the way the composer and
+     the chat do. The fallbacks reproduce today's rendering exactly:
+     `--dsh-content-font-size-secondary` is 13px and
+     `--dsh-content-font-delta-secondary` is 0 at the default 14px body. */
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
 }
 
 .panel {
@@ -67,8 +80,8 @@
 .rangeTrack {
   position: absolute;
   top: 13px;
-  right: 0;
-  left: 0;
+  right: var(--te-thumb-inset);
+  left: var(--te-thumb-inset);
   height: 4px;
   border-radius: 999px;
   background: var(--dsw-alias-border-l2);
@@ -203,11 +216,15 @@
 
 /* The labels are pinned to the same fractions as the range pips rather than
    divided evenly, so each one sits under its own pip. Even division put the
-   first and last labels half a step inside the two end pips. */
+   first and last labels half a step inside the two end pips. The inset matches
+   the track's, and the height tracks the type scale so a larger body size does
+   not clip them. The ticks are absolutely positioned, so they resolve against
+   this padding box. */
 .scale {
   position: relative;
-  height: 20px;
+  height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
   min-width: 0;
+  padding: 0 var(--te-thumb-inset);
 }
 
 .tick {
