@@ -1453,6 +1453,111 @@ describe('SectionEditor user behavior', () => {
     view.unmount()
   })
 
+  it('does not drop a model another writer added while the panel was open', async () => {
+    // The Host's own default-levels fill adds a model between this panel's read
+    // and its Save. The retry must rebuild the models array from the fresh
+    // inventory; replaying the stale one would succeed while deleting model-c.
+    const modelsOf = (revision: number, extra: readonly Record<string, unknown>[] = []): SettingsNamespace => namespace({
+      revision,
+      value: { providers: { provider: { models: [
+        { id: 'model-a', name: 'Model A', reasoningEfforts: { off: null, high: 'high' }, input: ['text'], contextWindow: 8192 },
+        ...extra,
+      ] } } },
+    })
+    let host = modelsOf(2)
+    const container = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [host] } }),
+      mutate: async (_ns, ops, revision) => {
+        if (revision !== host.revision) {
+          return { ok: false as const, error: { message: `settings namespace "llm-pi-ai" changed since it was read (expected revision ${revision}, now ${host.revision})` } }
+        }
+        const models = (ops[0] as { value: readonly Record<string, unknown>[] }).value
+        host = modelsOf(host.revision + 1, models.slice(1))
+        return { ok: true as const, value: host }
+      },
+    })
+    await settle()
+    openFirstModel(container.container)
+    act(() => button(container.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    // Concurrent write: a new model appears.
+    host = modelsOf(3, [{ id: 'model-c', name: 'Model C', reasoningEfforts: { off: null, high: 'high' }, input: ['text'], contextWindow: 128000 }])
+
+    act(() => button(container.container, text('saveModelChanges')).click())
+    await settle()
+
+    const ids = ((host.value as { providers: { provider: { models: readonly { id: string }[] } } }).providers.provider.models).map((model) => model.id)
+    expect(ids).toContain('model-c')
+    expect(container.container.querySelector('[role="alert"]')).toBeNull()
+    container.unmount()
+  })
+
+  it('does not revert a concurrent edit to a sibling model', async () => {
+    const modelsOf = (levelsB: Record<string, unknown>, revision: number): SettingsNamespace => namespace({
+      revision,
+      value: { providers: { provider: { models: [
+        { id: 'model-a', name: 'Model A', reasoningEfforts: { off: null, high: 'high' }, input: ['text'], contextWindow: 8192 },
+        { id: 'model-b', name: 'Model B', reasoningEfforts: levelsB, input: ['text'], contextWindow: 4096 },
+      ] } } },
+    })
+    let host = modelsOf({ off: null, high: 'high' }, 2)
+    const container = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [host] } }),
+      mutate: async (_ns, ops, revision) => {
+        if (revision !== host.revision) {
+          return { ok: false as const, error: { message: `settings namespace "llm-pi-ai" changed since it was read (expected revision ${revision}, now ${host.revision})` } }
+        }
+        const models = (ops[0] as { value: readonly Record<string, unknown>[] }).value
+        host = namespace({ revision: host.revision + 1, value: { providers: { provider: { models: models as unknown[] } } } })
+        return { ok: true as const, value: host }
+      },
+    })
+    await settle()
+    act(() => button(container.container, text('expandProvider')).click())
+    const openButtons = [...container.container.querySelectorAll<HTMLButtonElement>(`button[aria-label="${text('openModelSettings')}"]`)]
+    act(() => openButtons[0]!.click())
+    act(() => button(container.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    // Concurrent write: model-b gains `max`.
+    host = modelsOf({ off: null, high: 'high', max: 'max' }, 3)
+
+    act(() => button(container.container, text('saveModelChanges')).click())
+    await settle()
+
+    const committed = (host.value as { providers: { provider: { models: readonly { id: string; reasoningEfforts: unknown }[] } } }).providers.provider.models
+    expect(committed.find((model) => model.id === 'model-b')?.reasoningEfforts).toEqual({ off: null, high: 'high', max: 'max' })
+    container.unmount()
+  })
+
+  it('reports the conflict rather than writing when the retry cannot rebuild any ops', async () => {
+    // The only model this write targets is gone by the time the retry reads the
+    // section, so there is nothing to rebuild: report instead of claiming a save.
+    let host = namespace({ revision: 2, value: { providers: { provider: { models: [
+      { id: 'model-a', name: 'Model A', reasoningEfforts: { off: null, high: 'high' }, input: ['text'], contextWindow: 8192 },
+    ] } } } })
+    const sent: number[] = []
+    const container = renderEditor({
+      describe: async () => ({ ok: true, value: { namespaces: [host] } }),
+      mutate: async (_ns, _ops, revision) => {
+        sent.push(revision as number)
+        if (sent.length === 1) {
+          // Move the section AND delete the model, then refuse as stale.
+          host = namespace({ revision: 3, value: { providers: { provider: { models: [] } } } })
+          return { ok: false as const, error: { message: 'settings namespace "llm-pi-ai" changed since it was read (expected revision 2, now 3)' } }
+        }
+        return { ok: true as const, value: host }
+      },
+    })
+    await settle()
+    openFirstModel(container.container)
+    act(() => button(container.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    act(() => button(container.container, text('saveModelChanges')).click())
+    await settle()
+
+    // Only the first attempt ran; the retry had no ops and reported instead.
+    expect(sent).toEqual([2])
+    expect(container.container.querySelector('[role="alert"]')?.textContent).toContain('changed since it was read')
+    container.unmount()
+  })
+
   it('re-reads the revision and retries once after a stale-revision conflict', async () => {
     // The panel read revision 2 at mount; an unrelated writer moved the section
     // to 3 before Save. Without the retry every later save is fenced forever.
