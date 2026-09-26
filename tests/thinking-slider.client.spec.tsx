@@ -432,3 +432,74 @@ describe('scale and model row affordances', () => {
     dispose(root, container)
   })
 })
+
+describe('continuous range dragging', () => {
+  /**
+   * The official ModelDirectory sets `status = 'selecting'` synchronously at
+   * the top of its async `select()`, before the first await. A seat that reads
+   * that status as "busy" therefore disables the native range on the very first
+   * input event, and the browser stops reporting the rest of the drag — one
+   * step per press. The service itself is built for this: every `select()`
+   * takes a generation and only the newest response is applied.
+   */
+  it('stays draggable while a selection is still in flight', () => {
+    const select = vi.fn(() => new Promise<boolean>(() => {}))
+    const directory = createSnapshotStore(state())
+    const { container, root } = renderSeat({ directory, select, t })
+
+    openPanel(container)
+    const range = container.querySelector('[data-seat-input]') as HTMLInputElement
+    act(() => { setRangeValue(range, '2') })
+
+    // What the host-side store does the instant select() is entered.
+    act(() => { directory.set(state({ status: 'selecting', pending: { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'max' } })) })
+
+    expect(range.disabled).toBe(false)
+    // The second step of the same drag has to reach the host as well.
+    act(() => { setRangeValue(range, '0') })
+    expect(select).toHaveBeenCalledTimes(2)
+    expect(select).toHaveBeenLastCalledWith({ provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'off' })
+
+    dispose(root, container)
+  })
+
+  it('reads the position from the pending selection until the host confirms it', () => {
+    const select = vi.fn(() => new Promise<boolean>(() => {}))
+    const directory = createSnapshotStore(state())
+    const { container, root } = renderSeat({ directory, select, t })
+
+    openPanel(container)
+    const range = container.querySelector('[data-seat-input]') as HTMLInputElement
+    act(() => { setRangeValue(range, '2') })
+    act(() => { directory.set(state({ status: 'selecting', pending: { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'max' } })) })
+
+    // `current` has not moved yet; without the pending value the controlled
+    // range would snap back to the host's old answer mid-drag.
+    expect((directory.getSnapshot().current as { reasoningEffort?: string }).reasoningEffort).toBeUndefined()
+    expect(range.value).toBe('2')
+    expect(container.querySelector('[data-seat-active]')?.textContent).toBe('Max')
+    expect(range.getAttribute('aria-valuetext')).toBe('Max')
+
+    // Once the host confirms, the confirmed value stands on its own.
+    act(() => { directory.set(state({ current: { provider: 'deepseek-official', model: 'deepseek-v4-flash', reasoningEffort: 'max' } })) })
+    expect(range.value).toBe('2')
+
+    dispose(root, container)
+  })
+
+  it('falls back to the host value when a directory exposes no pending selection', () => {
+    const directory = createSnapshotStore(state())
+    const { container, root } = renderSeat({ directory, select: vi.fn().mockResolvedValue(true), t })
+
+    openPanel(container)
+    const range = container.querySelector('[data-seat-input]') as HTMLInputElement
+    expect(range.value).toBe('1')
+    act(() => { setRangeValue(range, '2') })
+
+    // Older directory builds carry no `pending`; the seat must still read the
+    // confirmed value rather than a local guess.
+    expect(directory.getSnapshot().pending).toBeUndefined()
+
+    dispose(root, container)
+  })
+})
