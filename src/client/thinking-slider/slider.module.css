@@ -28,6 +28,9 @@
   /* The menu's own padding. The stuck provider heading offsets by this so it
      covers the padding instead of stopping below it. */
   --te-menu-pad: 4px;
+  /* The panel's padding. The model menu is inset by the same amount, so the two
+     surfaces stay flush with the panel's content edges when either moves. */
+  --te-panel-pad: 12px;
   /* The panel reads the host's content type scale instead of a fixed size, so
      it moves with the Settings font-size preference the way the composer and
      the chat do. The fallbacks reproduce today's rendering exactly:
@@ -49,7 +52,7 @@
   max-width: calc(100vw - 32px);
   gap: 10px;
   /* The official composer surface pads by 12px. */
-  padding: 12px;
+  padding: var(--te-panel-pad);
   border: 0;
   /* The official MenuSurface rounds every floating surface to
      `--dsw-radius-lg`; 8px was a number that was never checked against a
@@ -437,9 +440,13 @@
 
 .modelMenu {
   position: absolute;
-  right: 16px;
+  /* Inset by the panel's own padding. An absolute child resolves these against
+     the panel's padding box — its border box, since the panel has no border —
+     so matching the padding is what keeps the menu flush with the content
+     edges rather than floating a few pixels in. */
+  right: var(--te-panel-pad);
   bottom: 58px;
-  left: 16px;
+  left: var(--te-panel-pad);
   z-index: 2;
   /* The official menu caps at min(360px, 100vh - 96px). That ceiling assumes a
      `position: fixed` menu portalled to the body; this one is absolutely
@@ -507,8 +514,13 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  min-height: 26px;
-  padding: calc(6px + var(--te-menu-pad)) 8px 6px;
+  /* The official group title runs `4px 7px 2px`, which is a 22px row. The
+     leading pad carries the menu's own padding on top of that, because the
+     heading is pulled up by exactly that much when it sticks — without it the
+     text lands 4px from the menu's rounded edge while stuck. That makes the
+     row 26px, still under the 34px option, and it needs no `min-height`: the
+     label is one line by construction (`nowrap` plus an ellipsis). */
+  padding: calc(4px + var(--te-menu-pad)) 7px 2px;
   border: 0;
   border-radius: var(--dsw-radius-md);
   /* Painted, not transparent, so the options scrolling underneath do not show

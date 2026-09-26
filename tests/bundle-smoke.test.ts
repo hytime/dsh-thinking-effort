@@ -45,6 +45,41 @@ function readPackageVersion(): string {
   return packageJson.version
 }
 
+/**
+ * Read one CSS Modules rule out of the built client bundle by its local class
+ * name, whatever hash the bundler gave it.
+ *
+ * The seat's styling is only observable there: the source names classes
+ * `scale`/`tick`/`modelMenu`, and the bundle has already resolved them. jsdom
+ * performs no layout, so a rule cannot be *measured* from a test — but pinning
+ * its shape still earns its place, because every assertion below guards a
+ * defect that was actually reproduced in a browser first, and each one states
+ * the measurement it rests on. What it does not do is survive a re-minified
+ * property order or a renamed rule without a real regression behind it.
+ */
+function cssRule(bundle: string, local: string): string {
+  const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}\\{[^}]*\\}`).exec(bundle)
+  expect(match, `${local} rule missing from the bundle`).not.toBeNull()
+  return match![0]
+}
+
+/**
+ * The same, for a pseudo-element rule. lightningcss folds `::before` down to a
+ * single colon, while the vendor ones keep both — so the two are read through
+ * separate helpers rather than through one flag.
+ */
+function cssBefore(bundle: string, local: string): string {
+  const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}:before\\{[^}]*\\}`).exec(bundle)
+  expect(match, `${local}:before rule missing from the bundle`).not.toBeNull()
+  return match![0]
+}
+
+function cssVendorPseudo(bundle: string, local: string, pseudo: string): string {
+  const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}::${pseudo}\\{[^}]*\\}`).exec(bundle)
+  expect(match, `${local}::${pseudo} rule missing from the bundle`).not.toBeNull()
+  return match![0]
+}
+
 function loadDescriptor(source: string): Descriptor {
   let descriptor: Descriptor | undefined
   vm.runInNewContext(source, {
@@ -275,11 +310,6 @@ describe('composer seat surface material', () => {
    */
   it('paints the panel and menu with an opaque surface token, not the menu fill', () => {
     const bundle = readArtifact('lib/client.js')
-    const ruleFor = (local: string): string => {
-      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}\\{[^}]*\\}`).exec(bundle)
-      expect(match, `${local} rule missing from the bundle`).not.toBeNull()
-      return match![0]
-    }
 
     // Guard the matcher itself: lightningcss produced `._3_LLuW_panel` in the
     // released 0.3.3 bundle, so a hash beginning with `_` must match. Without
@@ -287,15 +317,15 @@ describe('composer seat surface material', () => {
     // build whose hash happens to be alphanumeric and fail in CI.
     expect(new RegExp('\\.[A-Za-z0-9_-]+_panel\\{[^}]*\\}').test('._3_LLuW_panel{background:var(--te-panel-surface)}')).toBe(true)
 
-    const panel = ruleFor('panel')
-    const menu = ruleFor('modelMenu')
+    const panel = cssRule(bundle, 'panel')
+    const menu = cssRule(bundle, 'modelMenu')
     for (const [local, rule] of [['panel', panel], ['modelMenu', menu]] as const) {
       expect(rule, `${local} must paint an opaque surface`).toContain('background:var(--te-panel-surface)')
       expect(rule, `${local} must not use the translucent menu fill`).not.toContain('--dsw-specific-menu')
     }
     // The surface is defined once on the root (so every descendant inherits a
     // defined, opaque value) and re-bound to the next layer up by the menu.
-    expect(ruleFor('root')).toContain('--te-panel-surface:var(--dsw-alias-bg-layer-1)')
+    expect(cssRule(bundle, 'root')).toContain('--te-panel-surface:var(--dsw-alias-bg-layer-1)')
     expect(menu).toContain('--te-panel-surface:var(--dsw-alias-bg-layer-2)')
     // Nothing in this stylesheet may paint the translucent menu material: a
     // bare `--dsw-specific-menu` is exactly the defect this guards.
@@ -312,17 +342,12 @@ describe('composer seat affordances', () => {
    */
   it('centers the scale labels on the pips and flips the open chevron', () => {
     const bundle = readArtifact('lib/client.js')
-    const ruleFor = (local: string): string => {
-      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}\\{[^}]*\\}`).exec(bundle)
-      expect(match, `${local} rule missing from the bundle`).not.toBeNull()
-      return match![0]
-    }
 
     // An evenly divided flex label sat half a step inside each end pip.
     // lightningcss folds translateX into the two-value translate shorthand.
-    expect(ruleFor('tick')).toContain('transform:translate(-50%)')
-    expect(ruleFor('tick')).not.toContain('flex:')
-    expect(ruleFor('scale')).toContain('position:relative')
+    expect(cssRule(bundle, 'tick')).toContain('transform:translate(-50%)')
+    expect(cssRule(bundle, 'tick')).not.toContain('flex:')
+    expect(cssRule(bundle, 'scale')).toContain('position:relative')
 
     // A pip only sits half a thumb (9px) in from the panel's content edge, and
     // "Max" is about 12px half its width, so centring the end labels there ran
@@ -349,24 +374,19 @@ describe('composer seat affordances', () => {
     // 45deg points down-right, 225deg is the same arrow turned back up. The
     // model row's arrow is a ::before on a bordered box, and lightningcss
     // emits it as a single-colon `:before` with the function list minified.
-    const before = (local: string): string => {
-      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}:before\\{[^}]*\\}`).exec(bundle)
-      expect(match, `${local}:before rule missing from the bundle`).not.toBeNull()
-      return match![0]
-    }
-    expect(before('chevron')).toContain('transform:rotate(45deg)translateY(-2px)')
-    expect(before('chevronOpen')).toContain('transform:rotate(225deg)translateY(-2px)')
+    expect(cssBefore(bundle, 'chevron')).toContain('transform:rotate(45deg)translateY(-2px)')
+    expect(cssBefore(bundle, 'chevronOpen')).toContain('transform:rotate(225deg)translateY(-2px)')
 
     // The group heading draws its own L out of borders rather than a ::before,
     // so it is a separate rule — and its two states translate opposite ways.
     // The glyph is asymmetric, so rotating it 180deg puts its point on the
     // other side of the box centre; translating both the same way would push
     // the two states 2.9px further apart rather than aligning them.
-    expect(ruleFor('modelGroupChevron')).toContain('transform:rotate(45deg)translateY(-2px)')
-    expect(ruleFor('modelGroupChevronOpen')).toContain('transform:rotate(225deg)translateY(2px)')
+    expect(cssRule(bundle, 'modelGroupChevron')).toContain('transform:rotate(45deg)translateY(-2px)')
+    expect(cssRule(bundle, 'modelGroupChevronOpen')).toContain('transform:rotate(225deg)translateY(2px)')
     // Held at its own width so a long label cannot squeeze the glyph.
     // lightningcss normalises `flex: 0 0 auto` to the equivalent `flex: none`.
-    expect(ruleFor('modelGroupChevron')).toContain('flex:none')
+    expect(cssRule(bundle, 'modelGroupChevron')).toContain('flex:none')
   })
 
   /**
@@ -383,22 +403,12 @@ describe('composer seat affordances', () => {
    */
   it('insets the track so its ends meet the thumb centre travel', () => {
     const bundle = readArtifact('lib/client.js')
-    const ruleFor = (local: string): string => {
-      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}\\{[^}]*\\}`).exec(bundle)
-      expect(match, `${local} rule missing from the bundle`).not.toBeNull()
-      return match![0]
-    }
-    const thumbFor = (pseudo: string): string => {
-      const match = new RegExp(`\\.[A-Za-z0-9_-]+_range::${pseudo}\\{[^}]*\\}`).exec(bundle)
-      expect(match, `${pseudo} rule missing from the bundle`).not.toBeNull()
-      return match![0]
-    }
 
     // Half of the 18px thumb Chromium actually renders (range thumbs are
     // border-box, so the 3px borders are inside that width).
-    expect(ruleFor('root')).toContain('--te-thumb-inset:9px')
+    expect(cssRule(bundle, 'root')).toContain('--te-thumb-inset:9px')
 
-    const track = ruleFor('rangeTrack')
+    const track = cssRule(bundle, 'rangeTrack')
     expect(track).toContain('left:var(--te-thumb-inset)')
     expect(track).toContain('right:var(--te-thumb-inset)')
     expect(track).not.toContain('left:0;')
@@ -409,11 +419,11 @@ describe('composer seat affordances', () => {
     // the two rows would run on different fractions (312px against the track's
     // 294px, measured, leaving every label 2-3px off its pip). Only a margin
     // shrinks the box the percentages are taken against.
-    expect(ruleFor('scale')).toContain('margin:0 var(--te-thumb-inset)')
-    expect(ruleFor('scale')).not.toContain('padding:0 var(--te-thumb-inset)')
+    expect(cssRule(bundle, 'scale')).toContain('margin:0 var(--te-thumb-inset)')
+    expect(cssRule(bundle, 'scale')).not.toContain('padding:0 var(--te-thumb-inset)')
 
-    expect(thumbFor('-webkit-slider-thumb')).not.toContain('margin-left')
-    expect(thumbFor('-moz-range-thumb')).not.toContain('margin-left')
+    expect(cssVendorPseudo(bundle, 'range', '-webkit-slider-thumb')).not.toContain('margin-left')
+    expect(cssVendorPseudo(bundle, 'range', '-moz-range-thumb')).not.toContain('margin-left')
   })
 
   /**
@@ -424,14 +434,9 @@ describe('composer seat affordances', () => {
    */
   it('rounds both floating surfaces with the host radius token', () => {
     const bundle = readArtifact('lib/client.js')
-    const ruleFor = (local: string): string => {
-      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}\\{[^}]*\\}`).exec(bundle)
-      expect(match, `${local} rule missing from the bundle`).not.toBeNull()
-      return match![0]
-    }
 
     for (const local of ['panel', 'modelMenu'] as const) {
-      const rule = ruleFor(local)
+      const rule = cssRule(bundle, local)
       expect(rule, `${local} must use the host radius token`).toContain('border-radius:var(--dsw-radius-lg)')
       expect(rule, `${local} must not hardcode a radius`).not.toMatch(/border-radius:\d/)
     }
@@ -445,28 +450,28 @@ describe('composer seat affordances', () => {
    */
   it('sticks the provider heading and gives the menu the host scrollbar', () => {
     const bundle = readArtifact('lib/client.js')
-    const ruleFor = (local: string): string => {
-      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}\\{[^}]*\\}`).exec(bundle)
-      expect(match, `${local} rule missing from the bundle`).not.toBeNull()
-      return match![0]
-    }
 
-    const menu = ruleFor('modelMenu')
+    const menu = cssRule(bundle, 'modelMenu')
     expect(menu).toContain('--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2)')
     expect(menu).toContain('--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2)')
     // A classic scrollbar takes layout width, so expanding a provider used to
     // narrow the content box and shift every row's chevron left.
     expect(menu).toContain('scrollbar-gutter:stable')
 
-    const heading = ruleFor('modelGroupToggle')
+    const heading = cssRule(bundle, 'modelGroupToggle')
     expect(heading).toContain('position:sticky')
     // `top: 0` pins to the scrollport, which is the menu's padding box, so the
     // menu's own top padding stayed uncovered and the options scrolled through
-    // it. The heading offsets by that padding and takes the height back.
+    // it. The heading offsets by that padding, and its leading pad carries the
+    // same amount on top of the official 4px so the text still clears the
+    // menu's rounded edge once it is stuck there.
     expect(heading).toContain('top:calc(-1 * var(--te-menu-pad))')
-    expect(heading).toContain('padding:calc(6px + var(--te-menu-pad)) 8px 6px')
-    expect(ruleFor('modelMenu')).toContain('padding:var(--te-menu-pad)')
-    expect(ruleFor('root')).toContain('--te-menu-pad:4px')
+    expect(heading).toContain('padding:calc(4px + var(--te-menu-pad)) 7px 2px')
+    // The label is one line by construction, so the row is sized by its padding
+    // alone (26px, measured) and carries no min-height of its own.
+    expect(heading).not.toContain('min-height')
+    expect(cssRule(bundle, 'modelMenu')).toContain('padding:var(--te-menu-pad)')
+    expect(cssRule(bundle, 'root')).toContain('--te-menu-pad:4px')
     // Opaque fill, otherwise the scrolled options read through the heading.
     expect(heading).toContain('background:var(--te-panel-surface)')
     expect(heading).not.toContain('background:transparent')
@@ -503,23 +508,26 @@ describe('composer seat affordances', () => {
    */
   it('matches the host menu metrics that do not fight this seat layout', () => {
     const bundle = readArtifact('lib/client.js')
-    const ruleFor = (local: string): string => {
-      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}\\{[^}]*\\}`).exec(bundle)
-      expect(match, `${local} rule missing from the bundle`).not.toBeNull()
-      return match![0]
-    }
 
-    expect(ruleFor('panel')).toContain('padding:12px')
+    const panel = cssRule(bundle, 'panel')
+    expect(panel).toContain('padding:var(--te-panel-pad)')
+    // The menu is an absolute child, so its own insets resolve against the
+    // panel's padding box — its border box, since the panel has no border.
+    // Reading the same token is what keeps the two surfaces flush with the
+    // content edges instead of the menu floating a few pixels in.
+    const menu = cssRule(bundle, 'modelMenu')
+    expect(menu).toContain('left:var(--te-panel-pad)')
+    expect(menu).toContain('right:var(--te-panel-pad)')
+    expect(cssRule(bundle, 'root')).toContain('--te-panel-pad:12px')
 
-    const heading = ruleFor('modelGroupToggle')
+    const heading = cssRule(bundle, 'modelGroupToggle')
     expect(heading).toContain('font-weight:500')
 
-    const option = ruleFor('modelOption')
+    const option = cssRule(bundle, 'modelOption')
     expect(option).toContain('box-sizing:border-box')
     expect(option).toContain('align-items:center')
     expect(option).toContain('padding:0 8px')
 
-    const menu = ruleFor('modelMenu')
     expect(menu).toContain('min-width:min(240px,100%)')
     expect(menu).toContain('max-width:min(420px,100%)')
     // The viewport half of the host's cap is kept, the 360px half is not.
@@ -534,13 +542,8 @@ describe('composer seat affordances', () => {
    */
   it('takes the panel type scale from the host content scale', () => {
     const bundle = readArtifact('lib/client.js')
-    const ruleFor = (local: string): string => {
-      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}\\{[^}]*\\}`).exec(bundle)
-      expect(match, `${local} rule missing from the bundle`).not.toBeNull()
-      return match![0]
-    }
 
-    const root = ruleFor('root')
+    const root = cssRule(bundle, 'root')
     expect(root).toContain('font-size:var(--dsh-content-font-size-secondary,13px)')
     expect(root).toContain('line-height:calc(20px + var(--dsh-content-font-delta-secondary,0px))')
     // A fixed size here is what made the panel ignore the preference.
@@ -548,6 +551,6 @@ describe('composer seat affordances', () => {
     expect(root).not.toMatch(/line-height:20px/)
     // The label row is absolutely positioned, so it has to be told how tall it
     // is, and that height has to grow with the same scale.
-    expect(ruleFor('scale')).toContain('height:calc(20px + var(--dsh-content-font-delta-secondary,0px))')
+    expect(cssRule(bundle, 'scale')).toContain('height:calc(20px + var(--dsh-content-font-delta-secondary,0px))')
   })
 })
