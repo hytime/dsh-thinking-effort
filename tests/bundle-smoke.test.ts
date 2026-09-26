@@ -324,6 +324,28 @@ describe('composer seat affordances', () => {
     expect(ruleFor('tick')).not.toContain('flex:')
     expect(ruleFor('scale')).toContain('position:relative')
 
+    // A pip only sits half a thumb (9px) in from the panel's content edge, and
+    // "Max" is about 12px half its width, so centring the end labels there ran
+    // them 3.2px past the content box — and no layout-side change helps: the
+    // panel's padding cancels out of that comparison, and the label would have
+    // to drop to 9.6px to fit. Each end label is instead anchored by the edge
+    // that faces outward, and set on the outer edge of its own pip rather than
+    // the pip's centre. `:not()` keeps a single-label scale from being anchored
+    // sideways at all.
+    const firstTick = new RegExp(`\\.[A-Za-z0-9_-]+_tick:first-child:not\\(:last-child\\)\\{[^}]*\\}`).exec(bundle)
+    const lastTick = new RegExp(`\\.[A-Za-z0-9_-]+_tick:last-child:not\\(:first-child\\)\\{[^}]*\\}`).exec(bundle)
+    expect(firstTick, 'end-label anchor rule missing from the bundle').not.toBeNull()
+    expect(lastTick, 'end-label anchor rule missing from the bundle').not.toBeNull()
+    expect(firstTick![0]).toContain('text-align:left')
+    expect(lastTick![0]).toContain('text-align:right')
+    // A `calc()` argument stops lightningcss folding these into `translate`.
+    expect(firstTick![0]).toContain('transform:translateX(calc(-1 * var(--te-pip-half)))')
+    expect(lastTick![0]).toContain('transform:translateX(calc(-100% + var(--te-pip-half)))')
+    // The offset is half a pip, and the pip is 14px: the 2:1 ratio is what makes
+    // a label read as belonging to a dot rather than to a point.
+    expect(cssRule(bundle, 'root')).toContain('--te-pip-half:7px')
+    expect(cssRule(bundle, 'rangePip')).toContain('width:14px')
+
     // 45deg points down-right, 225deg is the same arrow turned back up. The
     // model row's arrow is a ::before on a bordered box, and lightningcss
     // emits it as a single-colon `:before` with the function list minified.
@@ -381,9 +403,14 @@ describe('composer seat affordances', () => {
     expect(track).toContain('right:var(--te-thumb-inset)')
     expect(track).not.toContain('left:0;')
 
-    // The labels are absolutely positioned, so they resolve against the
-    // padding box and need the same inset to stay under the pips.
-    expect(ruleFor('scale')).toContain('padding:0 var(--te-thumb-inset)')
+    // The labels are absolutely positioned, so they resolve their `left: N%`
+    // against the containing block's padding box — which, with no border, is
+    // this element's border box. A padding here would not move them at all and
+    // the two rows would run on different fractions (312px against the track's
+    // 294px, measured, leaving every label 2-3px off its pip). Only a margin
+    // shrinks the box the percentages are taken against.
+    expect(ruleFor('scale')).toContain('margin:0 var(--te-thumb-inset)')
+    expect(ruleFor('scale')).not.toContain('padding:0 var(--te-thumb-inset)')
 
     expect(thumbFor('-webkit-slider-thumb')).not.toContain('margin-left')
     expect(thumbFor('-moz-range-thumb')).not.toContain('margin-left')

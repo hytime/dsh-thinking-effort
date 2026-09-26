@@ -21,6 +21,10 @@
      the fill and the scale are inset by half a thumb so their ends land where
      the thumb's centre actually reaches. */
   --te-thumb-inset: 9px;
+  /* Half a range pip, which is how far the end labels sit out from their pips'
+     centres. Keep this at half of `.rangePip`'s width: the 2:1 ratio is what
+     makes a label read as belonging to a dot. */
+  --te-pip-half: 7px;
   /* The menu's own padding. The stuck provider heading offsets by this so it
      covers the padding instead of stopping below it. */
   --te-menu-pad: 4px;
@@ -223,15 +227,23 @@
 
 /* The labels are pinned to the same fractions as the range pips rather than
    divided evenly, so each one sits under its own pip. Even division put the
-   first and last labels half a step inside the two end pips. The inset matches
-   the track's, and the height tracks the type scale so a larger body size does
-   not clip them. The ticks are absolutely positioned, so they resolve against
-   this padding box. */
+   first and last labels half a step inside the two end pips.
+
+   The inset has to be a `margin`, not a `padding`: an absolutely positioned
+   child resolves `left: N%` against the containing block's padding box, which
+   is this element's border box — padding on it does not move the children at
+   all. With a padding the labels ran on a 312px fraction while the pips ran on
+   the track's 294px, leaving every label 2-3px off its own pip (measured).
+   A margin shrinks the box itself, so both rows read the same 294px.
+
+   The height tracks the type scale so a larger body size does not clip the
+   labels, which are absolutely positioned and so have to be told how tall
+   they are. */
 .scale {
   position: relative;
   height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
   min-width: 0;
-  padding: 0 var(--te-thumb-inset);
+  margin: 0 var(--te-thumb-inset);
 }
 
 .tick {
@@ -245,6 +257,36 @@
   text-overflow: ellipsis;
   transform: translateX(-50%);
   white-space: nowrap;
+}
+
+/*
+ * The end labels cannot be centred on the end pips. A pip only sits half a
+ * thumb in from the panel's content edge — a 9px inset, which is the thumb's
+ * own hard limit — and "Max" is about 12px half its width, so centring it
+ * there runs 3.2px past the content box. Nothing on the layout side rescues
+ * that: the panel's own padding cancels out of the comparison (measured — 12,
+ * 20 and 28px all leave the same 3.18px over), and the label would have to
+ * drop to 9.6px, below the smallest step DSH defines, to fit at all.
+ *
+ * So each end label is anchored by the edge that faces outward, and that edge
+ * is set on the *outer edge of its own pip* rather than the pip's centre: "Off"
+ * starts where the first pip starts, "Max" ends where the last pip ends, and
+ * the text grows inward from there. Half a pip out from the centre is the
+ * tightest placement that still reads as "this label belongs to this dot" —
+ * 2px clear of the content edge and 14px clear of the panel border, measured.
+ * The two middle labels are untouched and stay exactly on their pips.
+ *
+ * `:not()` keeps a single-effort scale, where the one label is both first and
+ * last, from being anchored sideways at all — it stays centred.
+ */
+.tick:first-child:not(:last-child) {
+  text-align: left;
+  transform: translateX(calc(-1 * var(--te-pip-half)));
+}
+
+.tick:last-child:not(:first-child) {
+  text-align: right;
+  transform: translateX(calc(-100% + var(--te-pip-half)));
 }
 
 .activeTick {
@@ -433,18 +475,22 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* The official composer editor (dsh-client-ui-conversation) frames its input the
+   same way: a half-pixel `--dsw-alias-border-l4` border, `--dsw-radius-sm`, and
+   on focus a `--dsw-alias-state-business-primary` border with no outline. The
+   type stays inherited rather than being restated, which both matches the
+   default rendering (the panel's own scale is 13px on 20px, the official
+   `--dsw-font-xs-13`) and keeps the box moving with the Settings font size. */
 .modelSearch {
   width: 100%;
   height: 32px;
   margin-bottom: 4px;
   padding: 0 8px;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: var(--dsw-radius-md);
+  border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
-  font-family: inherit;
-  font-size: 14px;
-  line-height: 22px;
+  font: inherit;
   outline: none;
 }
 
