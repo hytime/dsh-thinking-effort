@@ -132,6 +132,7 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
     () => directory.getSnapshot(),
   )
   const [open, setOpen] = useState(false)
+  const [panelLeft, setPanelLeft] = useState(0)
   const [modelOpen, setModelOpen] = useState(false)
   const [modelQuery, setModelQuery] = useState('')
   const [expandedModelGroup, setExpandedModelGroup] = useState<string | null>(null)
@@ -181,6 +182,36 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
     }
     document.addEventListener('mousedown', closeOutside)
     return () => { document.removeEventListener('mousedown', closeOutside) }
+  }, [open])
+
+  // The panel is 336px wide (or `100vw - 32px` on narrow screens) and is
+  // anchored to the trigger, so the CSS can bound its width but not its
+  // starting position. On phones the chip sits near the screen edge and the
+  // panel overflows the viewport. Keep the original right-aligned anchor
+  // whenever it fits; only clamp the panel into the viewport when it would
+  // overflow. Recompute while open if the page scrolls or the window resizes.
+  useEffect(() => {
+    if (!open) return
+    const compute = (): void => {
+      const root = rootRef.current
+      if (root === null) return
+      const rect = root.getBoundingClientRect()
+      const panelWidth = Math.min(336, window.innerWidth - 32)
+      const margin = 16
+      // Original anchor: the panel's right edge aligns with the trigger's
+      // right edge.
+      const originalLeft = rect.width - panelWidth
+      const viewportLeft = rect.left + originalLeft
+      const clamped = Math.min(Math.max(viewportLeft, margin), window.innerWidth - panelWidth - margin)
+      setPanelLeft(clamped - rect.left)
+    }
+    compute()
+    window.addEventListener('resize', compute)
+    window.addEventListener('scroll', compute, true)
+    return () => {
+      window.removeEventListener('resize', compute)
+      window.removeEventListener('scroll', compute, true)
+    }
   }, [open])
 
   useEffect(() => {
@@ -415,7 +446,7 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
   const panel = open
     ? createElement(
       'div',
-      { className: css.panel, 'data-seat-panel': 'true' },
+      { className: css.panel, 'data-seat-panel': 'true', style: { left: `${panelLeft}px` } },
       createElement(
         'div',
         { className: css.reasoning, 'data-seat-reasoning': 'true' },
