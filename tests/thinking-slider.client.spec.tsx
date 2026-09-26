@@ -387,3 +387,48 @@ describe('provider group labels', () => {
     dispose(root, container)
   })
 })
+
+describe('scale and model row affordances', () => {
+  it('places every tick label on the same fraction as its pip', () => {
+    const { container, root } = renderSeat({ directory: createSnapshotStore(state()), t })
+
+    openPanel(container)
+    const ticks = [...container.querySelectorAll('[data-seat-scale] > span')]
+    const pips = [...container.querySelectorAll('[data-seat-range] span span')]
+    expect(ticks).toHaveLength(reasoning.efforts.length)
+    expect(pips).toHaveLength(reasoning.efforts.length)
+    // The labels used to be divided evenly, which put the first and last half
+    // a step inside the end pips. Both rows now read the same fractions.
+    expect(ticks.map(tick => (tick as HTMLElement).style.left))
+      .toEqual(pips.map(pip => (pip as HTMLElement).style.left))
+    expect((ticks[0] as HTMLElement).style.left).toBe('0%')
+    expect((ticks[ticks.length - 1] as HTMLElement).style.left).toBe('100%')
+
+    dispose(root, container)
+  })
+
+  it('turns the model row chevron over while the model menu is open', () => {
+    const { container, root } = renderSeat({
+      directory: createSnapshotStore(state()),
+      select: vi.fn().mockResolvedValue(true),
+      t,
+    })
+
+    openPanel(container)
+    const chevron = container.querySelector('[data-seat-model-chevron]') as HTMLElement
+    const collapsed = chevron.className
+    const row = container.querySelector('[data-seat-model-row] button') as HTMLButtonElement
+
+    act(() => { row.click() })
+    expect(container.querySelector('[data-seat-model-menu]')).not.toBeNull()
+    expect(chevron.className).not.toBe(collapsed)
+    // The open state is an extra class on top of the collapsed one, not a swap.
+    expect(collapsed.split(' ').filter(name => chevron.className.split(' ').includes(name))).toEqual(collapsed.split(' '))
+
+    act(() => { row.click() })
+    expect(container.querySelector('[data-seat-model-menu]')).toBeNull()
+    expect(chevron.className).toBe(collapsed)
+
+    dispose(root, container)
+  })
+})

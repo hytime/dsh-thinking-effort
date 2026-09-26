@@ -3,18 +3,22 @@
   display: flex;
   min-width: 0;
   color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  line-height: 20px;
-  /* This seat's own opaque surface, one layer for the panel and one for the
-     menu floating over it. Declared here rather than on each consumer so every
-     descendant — including slider pseudo-elements — inherits a defined value
-     and cannot fall back to a transparent background (issue #14). The tokens
-     are the theme's opaque, theme-aware layers, present on `body` in every
-     supported DSH release (0.1.0-rc.7 and later); the core's
-     `--dsw-specific-menu` is deliberately NOT used, because it is a 58%
-     translucent material the core only ever paints together with
-     `--dsw-menu-backdrop-filter`, which this surface has no backing for. */
+
   --te-panel-surface: var(--dsw-alias-bg-layer-1);
+    /* A native range keeps the thumb whole box inside the track, so its centre
+     travels only [half a thumb, width - half a thumb] — the thumb fixes the
+     inset at both ends, and --te-pip-half is half a 14px pip, which is how
+     far the end labels sit out from their pips centres. */
+  --te-thumb-inset: 9px;
+
+  --te-pip-half: 7px;
+
+  --te-menu-pad: 4px;
+
+  --te-panel-pad: 12px;
+
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
 }
 
 .panel {
@@ -28,9 +32,11 @@
   width: min(336px, calc(100vw - 32px));
   max-width: calc(100vw - 32px);
   gap: 10px;
-  padding: 16px;
+
+  padding: var(--te-panel-pad);
   border: 0;
-  border-radius: 8px;
+
+  border-radius: var(--dsw-radius-lg);
   background: var(--te-panel-surface);
   color: var(--dsw-alias-label-primary);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
@@ -67,8 +73,8 @@
 .rangeTrack {
   position: absolute;
   top: 13px;
-  right: 0;
-  left: 0;
+  right: var(--te-thumb-inset);
+  left: var(--te-thumb-inset);
   height: 4px;
   border-radius: 999px;
   background: var(--dsw-alias-border-l2);
@@ -201,21 +207,44 @@
 }
 
 
+/* The labels take their fractions from the same track the pips do, so .scale is
+   inset by the track inset — as a margin, not a padding: an absolutely
+   positioned child resolves left: N% against the padding box, so padding here
+   would not move it at all. */
 .scale {
-  display: flex;
-  align-items: center;
+  position: relative;
+  height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
   min-width: 0;
-  gap: 4px;
+  margin: 0 var(--te-thumb-inset);
 }
 
 .tick {
-  flex: 1 1 0;
+  position: absolute;
+  top: 0;
+  max-width: 50%;
   min-width: 0;
   overflow: hidden;
   color: var(--dsw-alias-label-secondary);
   text-align: center;
   text-overflow: ellipsis;
+  transform: translateX(-50%);
   white-space: nowrap;
+}
+
+/* The end labels are anchored by their outward edge to the outer edge of their
+    own pip rather than centred on it: a pip only sits 9px in from the content
+    edge and "Max" is 12.2px half its width, so centring overruns by 3.2px. The
+    panel padding cancels out of that comparison, and the label would have to
+    drop to 9.6px to fit — below the smallest step the host defines. The :not()
+    keeps a single-label scale centred. */
+.tick:first-child:not(:last-child) {
+  text-align: left;
+  transform: translateX(calc(-1 * var(--te-pip-half)));
+}
+
+.tick:last-child:not(:first-child) {
+  text-align: right;
+  transform: translateX(calc(-100% + var(--te-pip-half)));
 }
 
 .activeTick {
@@ -366,39 +395,48 @@
 
 .modelMenu {
   position: absolute;
-  right: 16px;
+
+  right: var(--te-panel-pad);
   bottom: 58px;
-  left: 16px;
+  left: var(--te-panel-pad);
   z-index: 2;
-  max-height: 220px;
+
+  max-height: min(220px, 100vh - 96px);
+
   overflow: auto;
-  padding: 4px;
+
+  scrollbar-gutter: stable;
+  padding: var(--te-menu-pad);
   border: 0;
-  border-radius: 6px;
-  /* The menu floats over the panel, so it takes the next surface layer up to
-     stay distinguishable from it. */
+
+  border-radius: var(--dsw-radius-lg);
+
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+
   --te-panel-surface: var(--dsw-alias-bg-layer-2);
   background: var(--te-panel-surface);
   box-shadow: var(--dsw-elevation-prominent);
   color: var(--dsw-alias-label-primary);
 }
 
+
 .modelSearch {
   width: 100%;
   height: 32px;
   margin-bottom: 4px;
   padding: 0 8px;
-  border: 0.5px solid var(--dsw-alias-border-l2);
-  border-radius: 4px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-sm);
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
   font: inherit;
   outline: none;
 }
 
+
 .modelSearch:focus {
-  border-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
-  box-shadow: 0 0 0 2px var(--dsw-alias-interactive-bg-hover-accent);
+  border-color: var(--dsw-alias-state-business-primary);
 }
 
 .modelGroupToggle {
@@ -406,36 +444,53 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  min-height: 30px;
-  padding: 3px 8px;
+
+  padding: calc(4px + var(--te-menu-pad)) 7px 2px;
   border: 0;
-  border-radius: 4px;
-  background: transparent;
+  border-radius: var(--dsw-radius-md);
+
+  background: var(--te-panel-surface);
   color: var(--dsw-alias-label-tertiary);
-  font: inherit;
-  font-size: 12px;
+  font-family: inherit;
+  font-size: 11px;
+
+  font-weight: 500;
+  line-height: 16px;
   text-align: left;
   cursor: pointer;
+    /* top: 0 would pin to the scrollport, which is the menu padding box, so the
+     padding itself stayed uncovered and rows scrolled through it. The leading
+     pad carries that offset so the text still clears the menu edge. */
+  position: sticky;
+  top: calc(-1 * var(--te-menu-pad));
+  z-index: 1;
 }
 
 .modelGroupToggle:hover,
 .modelGroupToggle:focus-visible {
-  background: var(--dsw-alias-interactive-bg-hover);
+    /* #ffffff14 in the dark theme — 8% white, fully translucent. The background
+     shorthand would replace the fill outright and turn the stuck heading
+     see-through, so the token is layered on top of it instead. */
+  background-color: var(--te-panel-surface);
+  background-image: linear-gradient(var(--dsw-alias-interactive-bg-hover), var(--dsw-alias-interactive-bg-hover));
   outline: 0;
 }
 
 .modelGroupChevron {
   width: 7px;
   height: 7px;
+
+  flex: 0 0 auto;
   margin-left: 8px;
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
+
   transform: rotate(45deg) translateY(-2px);
   transition: transform 140ms ease;
 }
 
 .modelGroupChevronOpen {
-  transform: rotate(225deg) translateY(-2px);
+  transform: rotate(225deg) translateY(2px);
 }
 
 .modelNoResults {
@@ -445,15 +500,19 @@
 }
 
 .modelOption {
-  display: block;
+
+  display: flex;
+  align-items: center;
   width: 100%;
-  min-height: 32px;
-  padding: 5px 8px;
+  min-height: 34px;
+  padding: 0 8px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--dsw-radius-md);
   background: transparent;
   color: var(--dsw-alias-label-primary);
-  font: inherit;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
   text-align: left;
   cursor: pointer;
 }
@@ -486,6 +545,12 @@
   border-bottom: 1px solid currentColor;
   content: '';
   transform: rotate(45deg) translateY(-2px);
+  transition: transform 140ms ease;
+}
+
+
+.chevronOpen::before {
+  transform: rotate(225deg) translateY(-2px);
 }
 
 .chip {
@@ -515,12 +580,8 @@
   white-space: nowrap;
 }
 
-.modelRow:focus-within {
-  outline: 2px solid var(--dsw-alias-brand-primary-new-colorprimary-new-color);
-  outline-offset: 2px;
-}
 
-.modelRow:focus-visible,
+.modelRow:has(.modelRowButton:focus-visible),
 .chip:focus-visible,
 .followDefault:focus-visible {
   outline: 2px solid var(--dsw-alias-brand-primary);
