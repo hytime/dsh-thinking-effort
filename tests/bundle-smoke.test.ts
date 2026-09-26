@@ -384,7 +384,9 @@ describe('composer seat affordances', () => {
     // the two states 2.9px further apart rather than aligning them.
     expect(cssRule(bundle, 'modelGroupChevron')).toContain('transform:rotate(45deg)translateY(-2px)')
     expect(cssRule(bundle, 'modelGroupChevronOpen')).toContain('transform:rotate(225deg)translateY(2px)')
-    // Held at its own width so a long label cannot squeeze the glyph.
+    // Held at its own width. The label beside it ellipsises, but the row still
+    // absorbs the difference and the glyph is what gives without this floor —
+    // measured, an ellipsised label left the 8.5px box at 7.05px.
     // lightningcss normalises `flex: 0 0 auto` to the equivalent `flex: none`.
     expect(cssRule(bundle, 'modelGroupChevron')).toContain('flex:none')
   })
@@ -524,12 +526,17 @@ describe('composer seat affordances', () => {
     expect(heading).toContain('font-weight:500')
 
     const option = cssRule(bundle, 'modelOption')
-    expect(option).toContain('box-sizing:border-box')
     expect(option).toContain('align-items:center')
     expect(option).toContain('padding:0 8px')
+    // No `box-sizing` needed: a button is border-box in the UA sheet already,
+    // and with horizontal padding only it makes no difference to the 34px row.
+    expect(option).not.toContain('box-sizing')
 
-    expect(menu).toContain('min-width:min(240px,100%)')
-    expect(menu).toContain('max-width:min(420px,100%)')
+    // No width bounds, unlike the host's menu: the insets above already fix the
+    // width at the panel's content width, the panel never exceeds 336px, and
+    // the host's `100vw` floor would have to be restated as `100%` to mean
+    // anything here — at which point it can only restate the insets.
+    expect(menu).not.toMatch(/[^-](min|max)-width:/)
     // The viewport half of the host's cap is kept, the 360px half is not.
     expect(menu).toContain('max-height:min(220px,100vh - 96px)')
   })
