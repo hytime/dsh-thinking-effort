@@ -269,7 +269,11 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
       },
       createElement('span', { className: css.modelLabel }, t('seatModelLabel')),
       createElement('span', { className: css.modelName, title: modelLabel }, modelLabel),
-      createElement('span', { className: css.chevron, 'aria-hidden': true }),
+      createElement('span', {
+        className: modelOpen ? `${css.chevron} ${css.chevronOpen}` : css.chevron,
+        'data-seat-model-chevron': 'true',
+        'aria-hidden': true,
+      }),
     ),
     createElement(
       'select',
@@ -392,6 +396,8 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
               className: !followingModelDefault && index === effortIndex ? `${css.tick} ${css.activeTick}` : css.tick,
               ...!followingModelDefault && index === effortIndex ? { 'data-seat-active': 'true' } : {},
               key: effort.id,
+              // Same fraction the pips use, so a label sits under its own pip.
+              style: { left: `${(index / Math.max(efforts.length - 1, 1)) * 100}%` },
             },
             effort.name,
           )),

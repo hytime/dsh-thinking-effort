@@ -302,3 +302,37 @@ describe('composer seat surface material', () => {
     expect(bundle).not.toMatch(/_root\{[^}]*--dsw-specific-menu/)
   })
 })
+
+describe('composer seat affordances', () => {
+  /**
+   * The scale labels are absolutely positioned by the same fractions the pips
+   * use, and the model row's chevron has an open state that turns it over. Both
+   * are pure CSS consequences of class names the component toggles, so they are
+   * asserted on the built artifact where the class hash is already resolved.
+   */
+  it('centers the scale labels on the pips and flips the open chevron', () => {
+    const bundle = readArtifact('lib/client.js')
+    const ruleFor = (local: string): string => {
+      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}\\{[^}]*\\}`).exec(bundle)
+      expect(match, `${local} rule missing from the bundle`).not.toBeNull()
+      return match![0]
+    }
+
+    // An evenly divided flex label sat half a step inside each end pip.
+    // lightningcss folds translateX into the two-value translate shorthand.
+    expect(ruleFor('tick')).toContain('transform:translate(-50%)')
+    expect(ruleFor('tick')).not.toContain('flex:')
+    expect(ruleFor('scale')).toContain('position:relative')
+
+    // 45deg points down-right, 225deg is the same arrow turned back up. The
+    // arrow is a ::before, and lightningcss emits it as a single-colon
+    // `:before` with the transform function list already minified together.
+    const before = (local: string): string => {
+      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}:before\\{[^}]*\\}`).exec(bundle)
+      expect(match, `${local}:before rule missing from the bundle`).not.toBeNull()
+      return match![0]
+    }
+    expect(before('chevron')).toContain('transform:rotate(45deg)translateY(-2px)')
+    expect(before('chevronOpen')).toContain('transform:rotate(225deg)translateY(-2px)')
+  })
+})

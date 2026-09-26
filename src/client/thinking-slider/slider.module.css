@@ -201,20 +201,25 @@
 }
 
 
+/* The labels are pinned to the same fractions as the range pips rather than
+   divided evenly, so each one sits under its own pip. Even division put the
+   first and last labels half a step inside the two end pips. */
 .scale {
-  display: flex;
-  align-items: center;
+  position: relative;
+  height: 20px;
   min-width: 0;
-  gap: 4px;
 }
 
 .tick {
-  flex: 1 1 0;
+  position: absolute;
+  top: 0;
+  max-width: 50%;
   min-width: 0;
   overflow: hidden;
   color: var(--dsw-alias-label-secondary);
   text-align: center;
   text-overflow: ellipsis;
+  transform: translateX(-50%);
   white-space: nowrap;
 }
 
@@ -494,6 +499,13 @@
   border-bottom: 1px solid currentColor;
   content: '';
   transform: rotate(45deg) translateY(-2px);
+  transition: transform 140ms ease;
+}
+
+/* The model row's chevron opens the second-level menu, so it points back up
+   while that menu is open, the way the provider group headings do. */
+.chevronOpen::before {
+  transform: rotate(225deg) translateY(-2px);
 }
 
 .chip {
@@ -523,12 +535,11 @@
   white-space: nowrap;
 }
 
-.modelRow:focus-within {
-  outline: 2px solid var(--dsw-alias-brand-primary-new-colorprimary-new-color);
-  outline-offset: 2px;
-}
-
-.modelRow:focus-visible,
+/* `:focus-within` also fires on a mouse press, which drew a full frame around
+   the row and made the menu trigger read as a text input. The focus frame is
+   for keyboard navigation, so it is scoped to the row's own button and to
+   `:focus-visible`; `.modelRow` is a div and never matches on its own. */
+.modelRow:has(.modelRowButton:focus-visible),
 .chip:focus-visible,
 .followDefault:focus-visible {
   outline: 2px solid var(--dsw-alias-brand-primary);
