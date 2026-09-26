@@ -48,6 +48,25 @@ interface RunOpsRequest {
   readonly ns: string
   readonly revision: number
   readonly ops: readonly SettingsOp[]
+  /**
+   * Rebuild the ops against a freshly read section, for the conflict retry.
+   *
+   * Supplying this is a claim that the write is safe to replay once another
+   * writer has moved the section, and what makes that true differs by op shape:
+   *
+   * - A LEAF op — `['providers', route, 'compat', field]`, an `opencodeSession`
+   *   model flag, `subagentEffort` — sets exactly one path, so it lands on
+   *   whatever the document now holds. `() => ops` is correct.
+   * - A CONTAINER op carries a whole `models` array or `modelOverrides` dict
+   *   rebuilt from THIS panel's inventory. Replaying it unchanged would write
+   *   that stale container over the document and drop a concurrent edit to a
+   *   sibling model, or a model another writer added. These callers MUST
+   *   rebuild from `fresh`.
+   *
+   * Omitting it makes a conflict report instead of retry, which is the safe
+   * default: an unproven replay is worse than a visible refusal.
+   */
+  readonly rebuildOps?: (fresh: SettingsNamespace) => readonly SettingsOp[]
   readonly successMessage: string
   readonly onSuccess?: () => void
   readonly openCodeSessionSavedKey?: string
@@ -167,6 +186,33 @@ export async function saveOpenCodeSession(
 }
 
 function keyOf(item: InventoryItem): string { return modelCompatKey(item.route, item.model) }
+
+/**
+ * Re-point model updates at the same models in a freshly read inventory.
+ *
+ * The model-level ops carry a whole `models` array (or `modelOverrides` dict)
+ * rebuilt from this panel's inventory. Replaying that container unchanged after
+ * a conflict would write the stale copy over the document and silently drop
+ * whatever another writer did meanwhile — an edit to a sibling model, or a
+ * model the Host's own default-levels fill had just added. Rebuilding from the
+ * fresh inventory is what makes the retry additive instead of destructive.
+ *
+ * An update whose model is gone is dropped rather than resurrected: there is
+ * nothing left to write to, and re-adding it would undo the deletion.
+ */
+function rebaseItem(fresh: readonly InventoryItem[], item: InventoryItem): InventoryItem | undefined {
+  return fresh.find((candidate) => candidate.route === item.route
+    && candidate.model === item.model
+    && candidate.inOverrides === item.inOverrides)
+}
+
+/** Re-point model updates at the same models in a freshly read inventory. */
+function rebaseUpdates(fresh: readonly InventoryItem[], updates: readonly ModelUpdate[]): ModelUpdate[] {
+  return updates.flatMap((update) => {
+    const item = rebaseItem(fresh, update.item)
+    return item === undefined ? [] : [{ ...update, item }]
+  })
+}
 function revisionOf(namespace: SettingsNamespace): number { return typeof namespace.revision === 'number' ? namespace.revision : 0 }
 function availableCompatFieldCount(view: ProviderGatewayCompatView | ModelGatewayCompatView): number {
   const values = view as unknown as Record<string, unknown>
@@ -368,22 +414,21 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   }, [takeoverResolution])
 
   /**
-   * Re-read one section's current revision, so a write refused as stale can be
-   * retried against the document as it now stands.
+   * Re-read one section as the document now stands, so a write refused as stale
+   * can be retried against it.
    *
    * `undefined` means the section could not be re-read; the caller then reports
    * the original conflict rather than writing without a revision, because a
    * write that cannot establish the current state has no business bypassing the
    * check that exists to protect it.
    */
-  const latestRevision = (target: string): Promise<number | undefined> =>
+  const latestSection = (target: string): Promise<SettingsNamespace | undefined> =>
     settings.describe().then((response) => {
       if (!response.ok) return undefined
-      const found = response.value.namespaces.find((entry) => entry.ns === target)
-      return found === undefined ? undefined : revisionOf(found)
+      return response.value.namespaces.find((entry) => entry.ns === target)
     }).catch(() => undefined)
 
-  const runOps = ({ ns, revision, ops, successMessage, onSuccess, openCodeSessionSavedKey, entrySectionWrite }: RunOpsRequest): void => {
+  const runOps = ({ ns, revision, ops, rebuildOps, successMessage, onSuccess, openCodeSessionSavedKey, entrySectionWrite }: RunOpsRequest): void => {
     // The OpenCode-specific copy belongs to the header toggle, whose section id
     // happens to equal the entry id under the 0.1.7 model. A failed subagent
     // save targets that same section (`entrySectionWrite`), so the discriminator
@@ -420,9 +465,9 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     // the caller is expected to render verbatim.
     type Outcome = { readonly ok: true; readonly value: SettingsNamespace }
       | { readonly ok: false; readonly message: string; readonly conflict: boolean; readonly threw: boolean }
-    const writeOnce = async (expectedRevision: number): Promise<Outcome> => {
+    const writeOnce = async (writeOps: readonly SettingsOp[], expectedRevision: number): Promise<Outcome> => {
       try {
-        const response = await settings.mutate(ns, ops, expectedRevision)
+        const response = await settings.mutate(ns, writeOps, expectedRevision)
         return response.ok
           ? { ok: true, value: response.value }
           : { ok: false, message: response.error.message, conflict: isSettingsConflict(response.error), threw: false }
@@ -437,17 +482,29 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     }
 
     const run = async (): Promise<void> => {
-      let outcome = await writeOnce(revision)
+      let outcome = await writeOnce(ops, revision)
       // The panel holds the revision it read at mount, so any write to the same
       // section meanwhile — another window, the Host's own default-levels fill,
-      // a model switch — fences every later save forever. Re-read the revision
-      // and retry ONCE: the ops are path-addressed and are applied to the
-      // section as it stands, so a concurrent edit to a different path survives
-      // the retry. A second conflict is reported instead of retried, so a
-      // persistently losing writer cannot spin.
-      if (!outcome.ok && outcome.conflict) {
-        const fresh = await latestRevision(ns)
-        if (fresh !== undefined && fresh !== revision) outcome = await writeOnce(fresh)
+      // a model switch — fences every later save forever. Re-read the section
+      // and retry ONCE against it.
+      //
+      // The retry only runs for a caller that supplied `rebuildOps`, and for a
+      // container-shaped write that callback rebuilds the array from the FRESH
+      // inventory: replaying the panel's stale array would succeed while
+      // silently discarding the very concurrent change that caused the
+      // conflict. A second conflict is reported rather than retried again, so a
+      // persistently losing writer cannot spin, and a rebuild that yields no
+      // ops (every target model is gone) reports the original conflict instead
+      // of claiming success.
+      if (!outcome.ok && outcome.conflict && rebuildOps !== undefined) {
+        const fresh = await latestSection(ns)
+        if (fresh !== undefined) {
+          const freshRevision = revisionOf(fresh)
+          if (freshRevision !== revision) {
+            const rebuilt = rebuildOps(fresh)
+            if (rebuilt.length > 0) outcome = await writeOnce(rebuilt, freshRevision)
+          }
+        }
       }
       if (outcome.ok) { succeed(outcome.value); return }
       const message = outcome.message
@@ -483,6 +540,12 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       ns: NS,
       revision: state.revision,
       ops: setOps(state.inventory, [update]),
+      // Whole-array write: rebuild from the fresh inventory so a concurrent
+      // sibling edit or added model survives the retry.
+      rebuildOps: (fresh) => {
+        const inventory = inventoryFrom(fresh)
+        return setOps(inventory, rebaseUpdates(inventory, [update]))
+      },
       successMessage: t('modelSettingsSaved'),
       onSuccess: () => {
         setState((current) => ({ ...current, dirty: removeDirtyFields(current.dirty, key, ['levels', 'context', 'input']) }))
@@ -504,6 +567,16 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     const ops = item.inOverrides
       ? opsForModelCompat(item, update, editability)
       : opsForModelArrayCompat(state.inventory, item, update, editability)
+    // An override writes leaf compat paths; a `models[]` entry rewrites the
+    // whole array, so only that branch has to be rebuilt from fresh data.
+    const rebuildOps = (fresh: SettingsNamespace): readonly SettingsOp[] => {
+      if (!item.inOverrides) {
+        const inventory = inventoryFrom(fresh)
+        const rebased = rebaseItem(inventory, item)
+        return rebased === undefined ? [] : opsForModelArrayCompat(inventory, rebased, update, editableProviderCompatFields(settings.compatibilityProfile, fresh.schema))
+      }
+      return opsForModelCompat(item, update, editableProviderCompatFields(settings.compatibilityProfile, fresh.schema))
+    }
     if (ops.length === 0) {
       setState((currentState) => ({ ...currentState, modelCompatDirty: removeDirtyFields(currentState.modelCompatDirty, key, GATEWAY_COMPAT_FIELD_KEYS) }))
       return
@@ -512,6 +585,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       ns: NS,
       revision: state.revision,
       ops,
+      rebuildOps,
       successMessage: t('modelGatewayCompatSaved'),
       onSuccess: () => {
         setState((currentState) => ({ ...currentState, modelCompatDirty: removeDirtyFields(currentState.modelCompatDirty, key, GATEWAY_COMPAT_FIELD_KEYS) }))
@@ -554,6 +628,9 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       ns: namespace.ns,
       revision: namespace.revision,
       ops: [operation],
+      // Leaf write: the path addresses one model's flag, so replaying it lands
+      // on whatever the document now holds.
+      rebuildOps: () => [operation],
       successMessage: t('opencodeSessionSaved'),
       openCodeSessionSavedKey: key,
     })
@@ -570,6 +647,10 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       ns: NS,
       revision: state.revision,
       ops: setOps(state.inventory, [{ item, levels: DEFAULT_LEVELS }]),
+      rebuildOps: (fresh) => {
+        const inventory = inventoryFrom(fresh)
+        return setOps(inventory, rebaseUpdates(inventory, [{ item, levels: DEFAULT_LEVELS }]))
+      },
       successMessage: t('restoreReasoning'),
       onSuccess: () => {
         setState((current) => ({ ...current, drafts: current.drafts[key] ? { ...current.drafts, [key]: draftFrom(DEFAULT_LEVELS) } : current.drafts, dirty: removeDirtyFields(current.dirty, key, ['levels']) }))
@@ -582,6 +663,11 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       ns: NS,
       revision: state.revision,
       ops: setOps(state.inventory, [{ item, contextWindow: undefined, contextWindowTouched: true, input: undefined, inputTouched: true }]),
+      rebuildOps: (fresh) => {
+        const inventory = inventoryFrom(fresh)
+        const updates: ModelUpdate[] = [{ item, contextWindow: undefined, contextWindowTouched: true, input: undefined, inputTouched: true }]
+        return setOps(inventory, rebaseUpdates(inventory, updates))
+      },
       successMessage: t('restoreCapability'),
       onSuccess: () => closeModelEditor(item),
     })
@@ -592,6 +678,13 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       ns: NS,
       revision: state.revision,
       ops: setOps(state.inventory, state.inventory.map((item): ModelUpdate => ({ item, levels }))),
+      // Rebuilt from the fresh inventory, so a model another writer added keeps
+      // its own settings instead of being dropped with the stale array.
+      rebuildOps: (fresh) => {
+        const inventory = inventoryFrom(fresh)
+        const updates = inventory.map((item): ModelUpdate => ({ item, levels }))
+        return setOps(inventory, updates)
+      },
       successMessage: t('settingsUpdated'),
       onSuccess: () => {
         setState((current) => {
@@ -613,6 +706,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       ns: target.ns,
       revision: target.revision,
       ops,
+      rebuildOps: () => ops,
       successMessage: t('subagentSaved'),
       entrySectionWrite: target.ownSection,
     })
@@ -643,6 +737,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       ns: NS,
       revision: state.revision,
       ops,
+      rebuildOps: () => ops,
       successMessage: t('gatewayCompatSaved'),
       onSuccess: () => {
         setState((currentState) => clearProviderDirty(currentState))
