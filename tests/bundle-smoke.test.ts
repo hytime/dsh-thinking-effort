@@ -325,8 +325,8 @@ describe('composer seat affordances', () => {
     expect(ruleFor('scale')).toContain('position:relative')
 
     // 45deg points down-right, 225deg is the same arrow turned back up. The
-    // arrow is a ::before, and lightningcss emits it as a single-colon
-    // `:before` with the transform function list already minified together.
+    // model row's arrow is a ::before on a bordered box, and lightningcss
+    // emits it as a single-colon `:before` with the function list minified.
     const before = (local: string): string => {
       const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}:before\\{[^}]*\\}`).exec(bundle)
       expect(match, `${local}:before rule missing from the bundle`).not.toBeNull()
@@ -334,6 +334,17 @@ describe('composer seat affordances', () => {
     }
     expect(before('chevron')).toContain('transform:rotate(45deg)translateY(-2px)')
     expect(before('chevronOpen')).toContain('transform:rotate(225deg)translateY(-2px)')
+
+    // The group heading draws its own L out of borders rather than a ::before,
+    // so it is a separate rule — and its two states translate opposite ways.
+    // The glyph is asymmetric, so rotating it 180deg puts its point on the
+    // other side of the box centre; translating both the same way would push
+    // the two states 2.9px further apart rather than aligning them.
+    expect(ruleFor('modelGroupChevron')).toContain('transform:rotate(45deg)translateY(-2px)')
+    expect(ruleFor('modelGroupChevronOpen')).toContain('transform:rotate(225deg)translateY(2px)')
+    // Held at its own width so a long label cannot squeeze the glyph.
+    // lightningcss normalises `flex: 0 0 auto` to the equivalent `flex: none`.
+    expect(ruleFor('modelGroupChevron')).toContain('flex:none')
   })
 
   /**
@@ -376,6 +387,116 @@ describe('composer seat affordances', () => {
 
     expect(thumbFor('-webkit-slider-thumb')).not.toContain('margin-left')
     expect(thumbFor('-moz-range-thumb')).not.toContain('margin-left')
+  })
+
+  /**
+   * The official MenuSurface rounds every floating surface to
+   * `--dsw-radius-lg` (16px), and the scale is xs 4 / sm 8 / md 12 / lg 16 /
+   * xl 20 / panel 28. The seat carried a hardcoded 8px on the panel and 6px on
+   * the model menu, and 6px is not a value in the scale at all.
+   */
+  it('rounds both floating surfaces with the host radius token', () => {
+    const bundle = readArtifact('lib/client.js')
+    const ruleFor = (local: string): string => {
+      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}\\{[^}]*\\}`).exec(bundle)
+      expect(match, `${local} rule missing from the bundle`).not.toBeNull()
+      return match![0]
+    }
+
+    for (const local of ['panel', 'modelMenu'] as const) {
+      const rule = ruleFor(local)
+      expect(rule, `${local} must use the host radius token`).toContain('border-radius:var(--dsw-radius-lg)')
+      expect(rule, `${local} must not hardcode a radius`).not.toMatch(/border-radius:\d/)
+    }
+  })
+
+  /**
+   * The official model menu paints its group title with the surface fill, sets
+   * the menu's scrollbar tokens, and keeps the title stuck while the list
+   * scrolls. A transparent sticky heading would let the options underneath
+   * show through it.
+   */
+  it('sticks the provider heading and gives the menu the host scrollbar', () => {
+    const bundle = readArtifact('lib/client.js')
+    const ruleFor = (local: string): string => {
+      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}\\{[^}]*\\}`).exec(bundle)
+      expect(match, `${local} rule missing from the bundle`).not.toBeNull()
+      return match![0]
+    }
+
+    const menu = ruleFor('modelMenu')
+    expect(menu).toContain('--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2)')
+    expect(menu).toContain('--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2)')
+    // A classic scrollbar takes layout width, so expanding a provider used to
+    // narrow the content box and shift every row's chevron left.
+    expect(menu).toContain('scrollbar-gutter:stable')
+
+    const heading = ruleFor('modelGroupToggle')
+    expect(heading).toContain('position:sticky')
+    // `top: 0` pins to the scrollport, which is the menu's padding box, so the
+    // menu's own top padding stayed uncovered and the options scrolled through
+    // it. The heading offsets by that padding and takes the height back.
+    expect(heading).toContain('top:calc(-1 * var(--te-menu-pad))')
+    expect(heading).toContain('padding:calc(6px + var(--te-menu-pad)) 8px 6px')
+    expect(ruleFor('modelMenu')).toContain('padding:var(--te-menu-pad)')
+    expect(ruleFor('root')).toContain('--te-menu-pad:4px')
+    // Opaque fill, otherwise the scrolled options read through the heading.
+    expect(heading).toContain('background:var(--te-panel-surface)')
+    expect(heading).not.toContain('background:transparent')
+    // The official group title runs 11px on 16px.
+    expect(heading).toContain('line-height:16px')
+  })
+
+  /**
+   * `--dsw-alias-interactive-bg-hover` is `#ffffff14` in the dark theme — 8%
+   * white, fully translucent. Assigning it to the `background` shorthand
+   * replaced the stuck heading's opaque fill outright, so hovering it made the
+   * heading see-through and the options underneath showed over it. The token
+   * has to be layered on top of the fill instead.
+   */
+  it('keeps the stuck heading opaque on hover', () => {
+    const bundle = readArtifact('lib/client.js')
+    const match = /modelGroupToggle:hover[^{]*\{[^}]*\}/.exec(bundle)
+    expect(match, 'the hover rule missing from the bundle').not.toBeNull()
+    const rule = match![0]
+
+    expect(rule).toContain('background-color:var(--te-panel-surface)')
+    expect(rule).toContain('background-image:linear-gradient(var(--dsw-alias-interactive-bg-hover)')
+    // The shorthand would drop the opaque background-color again.
+    expect(rule).not.toMatch(/(^|;)\s*background:\s*var\(--dsw-alias-interactive-bg-hover\)/)
+  })
+
+  /**
+   * The remaining drift from the host's own model menu: the panel pads by
+   * 12px like the official composer surface, the heading runs at weight 500,
+   * the option is a border-box flex row centred by height rather than pushed
+   * down by padding, and the menu carries width bounds. Its height keeps this
+   * seat's own 220px: the host's min(360px, …) assumes a fixed menu portalled
+   * to the body, while this one grows up from inside the panel.
+   */
+  it('matches the host menu metrics that do not fight this seat layout', () => {
+    const bundle = readArtifact('lib/client.js')
+    const ruleFor = (local: string): string => {
+      const match = new RegExp(`\\.[A-Za-z0-9_-]+_${local}\\{[^}]*\\}`).exec(bundle)
+      expect(match, `${local} rule missing from the bundle`).not.toBeNull()
+      return match![0]
+    }
+
+    expect(ruleFor('panel')).toContain('padding:12px')
+
+    const heading = ruleFor('modelGroupToggle')
+    expect(heading).toContain('font-weight:500')
+
+    const option = ruleFor('modelOption')
+    expect(option).toContain('box-sizing:border-box')
+    expect(option).toContain('align-items:center')
+    expect(option).toContain('padding:0 8px')
+
+    const menu = ruleFor('modelMenu')
+    expect(menu).toContain('min-width:min(240px,100%)')
+    expect(menu).toContain('max-width:min(420px,100%)')
+    // The viewport half of the host's cap is kept, the 360px half is not.
+    expect(menu).toContain('max-height:min(220px,100vh - 96px)')
   })
 
   /**

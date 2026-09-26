@@ -21,6 +21,9 @@
      the fill and the scale are inset by half a thumb so their ends land where
      the thumb's centre actually reaches. */
   --te-thumb-inset: 9px;
+  /* The menu's own padding. The stuck provider heading offsets by this so it
+     covers the padding instead of stopping below it. */
+  --te-menu-pad: 4px;
   /* The panel reads the host's content type scale instead of a fixed size, so
      it moves with the Settings font-size preference the way the composer and
      the chat do. The fallbacks reproduce today's rendering exactly:
@@ -41,9 +44,13 @@
   width: min(336px, calc(100vw - 32px));
   max-width: calc(100vw - 32px);
   gap: 10px;
-  padding: 16px;
+  /* The official composer surface pads by 12px. */
+  padding: 12px;
   border: 0;
-  border-radius: 8px;
+  /* The official MenuSurface rounds every floating surface to
+     `--dsw-radius-lg`; 8px was a number that was never checked against a
+     token. */
+  border-radius: var(--dsw-radius-lg);
   background: var(--te-panel-surface);
   color: var(--dsw-alias-label-primary);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
@@ -392,11 +399,32 @@
   bottom: 58px;
   left: 16px;
   z-index: 2;
-  max-height: 220px;
+  /* The official menu caps at min(360px, 100vh - 96px). That ceiling assumes a
+     `position: fixed` menu portalled to the body; this one is absolutely
+     positioned inside the panel and grows upwards from `bottom`, so 360px
+     would overshoot the panel by more than a third of its height. The
+     viewport half of the host's rule is kept, the 360px half is not. */
+  max-height: min(220px, 100vh - 96px);
+  /* Likewise the host's min-width/max-width: the numbers are the same but they
+     are capped by the containing block, because this menu is laid out inside
+     the panel rather than on the body. */
+  min-width: min(240px, 100%);
+  max-width: min(420px, 100%);
   overflow: auto;
-  padding: 4px;
+  /* `overflow: auto` gives the scrollbar layout width on Windows, so expanding a
+     provider grew the list, the scrollbar appeared, and the whole content box
+     narrowed — pushing every row's trailing chevron left. Reserving the gutter
+     keeps the content width fixed whether or not the list overflows. */
+  scrollbar-gutter: stable;
+  padding: var(--te-menu-pad);
   border: 0;
-  border-radius: 6px;
+  /* Same token as the panel: one radius for both floating surfaces. 6px was
+     not a value in the scale at all. */
+  border-radius: var(--dsw-radius-lg);
+  /* The official model menu sets these so its scrollbar reads as part of the
+     menu rather than the page's default. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
   /* The menu floats over the panel, so it takes the next surface layer up to
      stay distinguishable from it. */
   --te-panel-surface: var(--dsw-alias-bg-layer-2);
@@ -434,36 +462,66 @@
   justify-content: space-between;
   width: 100%;
   min-height: 26px;
-  padding: 6px 8px;
+  padding: calc(6px + var(--te-menu-pad)) 8px 6px;
   border: 0;
   border-radius: var(--dsw-radius-md);
-  background: transparent;
+  /* Painted, not transparent, so the options scrolling underneath do not show
+     through the stuck heading — the official group title does the same with
+     --dsw-specific-menu. In this seat the menu's own surface token is the
+     matching fill. */
+  background: var(--te-panel-surface);
   color: var(--dsw-alias-label-tertiary);
   font-family: inherit;
   font-size: 11px;
-  line-height: 15px;
+  /* The official group heading runs at weight 500. */
+  font-weight: 500;
+  line-height: 16px;
   text-align: left;
   cursor: pointer;
+  /* Sticks while the list scrolls, so the provider name stays readable.
+     `top: 0` would pin it to the scrollport, which is the menu's padding box —
+     that leaves the menu's own top padding uncovered and the options scrolling
+     underneath showed through it. Pulling it back by that padding lands the
+     heading on the menu's outer edge; the extra top padding restores the row's
+     height so the text does not sit higher than its neighbours. */
+  position: sticky;
+  top: calc(-1 * var(--te-menu-pad));
+  z-index: 1;
 }
 
 .modelGroupToggle:hover,
 .modelGroupToggle:focus-visible {
-  background: var(--dsw-alias-interactive-bg-hover);
+  /* `--dsw-alias-interactive-bg-hover` is #ffffff14 in the dark theme — 8%
+     white, fully translucent. Assigning it to `background` replaced the
+     heading's opaque fill, so while stuck it turned see-through and the
+     options scrolled underneath appeared over it. Layer the same token on top
+     of the fill instead of substituting for it. */
+  background-color: var(--te-panel-surface);
+  background-image: linear-gradient(var(--dsw-alias-interactive-bg-hover), var(--dsw-alias-interactive-bg-hover));
   outline: 0;
 }
 
 .modelGroupChevron {
   width: 7px;
   height: 7px;
+  /* Held at its own width: as a shrinkable flex item next to an ellipsised
+     label it could be squeezed, which would move the glyph. */
+  flex: 0 0 auto;
   margin-left: 8px;
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
+  /* The glyph is an L — a right border and a bottom border meeting at the
+     lower-right — so the two borders are not symmetric. Rotated 45deg the
+     point sits ~1.45px below the box centre; rotated 225deg it sits the same
+     distance above it. Translating both by the same amount therefore pushes
+     the two states 2.9px further apart instead of aligning them, so the open
+     state translates the other way. */
   transform: rotate(45deg) translateY(-2px);
   transition: transform 140ms ease;
 }
 
 .modelGroupChevronOpen {
-  transform: rotate(225deg) translateY(-2px);
+  transform: rotate(225deg) translateY(2px);
 }
 
 .modelNoResults {
@@ -473,10 +531,14 @@
 }
 
 .modelOption {
-  display: block;
+  /* The official cell is a border-box flex row centred by height; the padding
+     this seat used pushed the text to the top instead. */
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
   width: 100%;
   min-height: 34px;
-  padding: 6px 8px;
+  padding: 0 8px;
   border: 0;
   border-radius: var(--dsw-radius-md);
   background: transparent;
