@@ -14,6 +14,10 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-09-27
+
+### 修复 / Fixed
+
 - 修复推理等级滑块一次只能拖动一格：官方模型目录的 `select()` 是 `async` 函数，在第一个 `await` 之前就同步把状态置为 `selecting`，面板把这个状态计入「忙」并禁用了原生 range，浏览器随即停止上报本次拖动的后续输入。服务本身是为连续选择设计的——每次 `select()` 取一个 generation，只有最新一次响应会生效，失败与成功两条路径都会清空 `pending`——所以禁用一个连续控件属于 UI 层的语义错配。现在只有面板被锁定或根本没有 `select` 时才会禁用滑块，离散控件（模型行与选项）保留原有的忙态。滑块是受控输入，因此位置改读目录 store 的 `pending`：那是 `select()` 同步写入的、宿主已接受但尚未确认的选择，在早于该字段的目录上回落到 `current`；只做前一步会让滑块在拖动中途弹回宿主的旧值。面板只读 `pending` 而从不写入它，仍是宿主 store 的一个视图。
 - Fix the reasoning range allowing only one step per drag: the official model directory's `select()` is an `async` function, so it sets the status to `selecting` synchronously at the top, before the first `await`, and the seat counted that as busy and disabled the native range — at which point the browser stops reporting the rest of the drag. The service is built for continuous selection: every `select()` takes a generation, only the newest response is applied, and both the success and the failure path clear `pending`. Disabling a continuous control was therefore a UI-layer mismatch. The range is now disabled only when the seat is locked or has no `select` at all, while the discrete controls — the model row and its options — keep their busy state. The range is a controlled input, so its position now reads the directory store's `pending` selection: written synchronously by `select()`, holding what the Host has accepted but not yet confirmed, and falling back to `current` on directories that predate the field. Without that second half the thumb snaps back to the Host's stale answer mid-drag. The seat only reads `pending`, never writes it, and stays a view of the Host's store.
 
