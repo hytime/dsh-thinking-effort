@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:
 
 permissions:
@@ -59,3 +59,45 @@ jobs:
 
       - name: Check diff whitespace
         run: git diff --check
+
+  pr-policy:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    # Advisory by design: the step reports findings as annotations and exits 0,
+    # and this keeps an incidental failure (a fetch hiccup on a fork) from
+    # reading as a blocked pull request. Tighten with scripts/pr-policy.mjs
+    # --strict once branch protection is in place.
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.19.0
+          cache: npm
+
+      - name: Collect pull request diff and description
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags origin "$BASE_REF"
+          git diff "origin/$BASE_REF...HEAD" > "$RUNNER_TEMP/pr.diff"
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
+
+      - name: Evaluate pull request policy
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -Eeuo pipefail
+          node scripts/pr-policy.mjs \
+            --base "$BASE_REF" \
+            --diff-file "$RUNNER_TEMP/pr.diff" \
+            --body-file "$RUNNER_TEMP/pr-body.md"
