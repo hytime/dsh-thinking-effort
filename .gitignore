@@ -18,3 +18,18 @@ pnpm-lock.yaml
 docs/68d52d9f-5742-4164-9685-6b9e7f5a86e9.png
 docs/94d15cfd-3ff0-4695-ac9f-c10cb578b500.png
 .superpowers/
+
+# Pre-migration copies of this machine's own settings. They carry apiKey and
+# Token fields, so an unignored `git add -A` would publish credentials.
+.migration-backup/
+
+# macOS Finder metadata, written into any directory the Finder visits.
+.DS_Store
+
+# Stray machine-local tool config the repository does not use: the official
+# toolchain is npm (`package-lock.json`) and nothing here references pnpm or
+# lefthook. Both files are unfinished leftovers — the root pnpm-workspace.yaml
+# still carries pnpm's `set this to true or false` placeholder, and
+# lefthook.yml is lefthook's commented-out example template.
+/pnpm-workspace.yaml
+/lefthook.yml
