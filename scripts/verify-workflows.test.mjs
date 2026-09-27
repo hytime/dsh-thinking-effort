@@ -136,7 +136,11 @@ function assertWorkflowStructure(workflow) {
     Object.hasOwn(workflow.on, 'workflow_dispatch'),
     'workflow must declare workflow_dispatch trigger',
   );
-  assert.deepEqual(workflow.on.push.branches, ['main'], 'workflow must push only from main');
+  assert.deepEqual(
+    workflow.on.push.branches,
+    ['main', 'dev'],
+    'workflow must push from main and the dev integration branch',
+  );
 
   const quality = workflow.jobs?.quality;
   assert.ok(quality && typeof quality === 'object', 'CI workflow must define jobs.quality');
@@ -201,11 +205,58 @@ function assertWorkflowStructure(workflow) {
   );
 }
 
+/**
+ * Assert the advisory pull-request policy job: it must only run on pull
+ * requests, must stay advisory, and must actually invoke the policy engine.
+ * @param {object} workflow Parsed CI workflow.
+ */
+function assertPrPolicyJob(workflow) {
+  const job = workflow.jobs?.['pr-policy'];
+  assert.ok(job && typeof job === 'object', 'CI workflow must define jobs.pr-policy');
+  assert.equal(
+    job.if,
+    "${{ github.event_name == 'pull_request' }}",
+    'pr-policy must run only for pull requests',
+  );
+  assert.equal(
+    job['continue-on-error'],
+    true,
+    'pr-policy must stay advisory until branch protection requires it',
+  );
+  assert.equal(job.permissions?.contents, 'read', 'pr-policy contents permission must be read');
+  assert.notEqual(
+    job.permissions?.['id-token'],
+    'write',
+    'pr-policy must not grant id-token write',
+  );
+  assert.ok(Array.isArray(job.steps), 'pr-policy job must define steps');
+  assert.ok(
+    job.steps.some((step) => step.uses === 'actions/checkout@v4'),
+    'pr-policy job must use actions/checkout@v4',
+  );
+
+  const runCommands = job.steps.filter((step) => Object.hasOwn(step, 'run')).map((step) => step.run);
+  assert.ok(
+    runCommands.some((command) => command.includes('node scripts/pr-policy.mjs')),
+    'pr-policy job must invoke scripts/pr-policy.mjs',
+  );
+  assert.equal(
+    runCommands.some((command) => /--strict\b/.test(command)),
+    false,
+    'pr-policy must not run in strict mode while it is advisory',
+  );
+  assert.equal(
+    runCommands.some((command) => /\bexit\s+1\b/.test(command)),
+    false,
+    'pr-policy must not fail the check while it is advisory',
+  );
+}
+
 test('CI workflow declares the required triggers and Node matrix', async () => {
   const workflow = await readWorkflow();
 
   assert.deepEqual(Object.keys(workflow.on).sort(), ['pull_request', 'push', 'workflow_dispatch']);
-  assert.deepEqual(workflow.on.push.branches, ['main']);
+  assert.deepEqual(workflow.on.push.branches, ['main', 'dev']);
   assert.deepEqual(workflow.jobs.quality.strategy.matrix['node-version'], ['22.19.0', '24.x']);
 });
 
@@ -241,6 +292,10 @@ test('CI workflow has the complete expected structure', async () => {
   assertWorkflowStructure(await readWorkflow());
 });
 
+test('CI workflow keeps the pull request policy advisory and wired to the engine', async () => {
+  assertPrPolicyJob(await readWorkflow());
+});
+
 const malformedWorkflowCases = [
   {
     name: 'pull_request trigger',
@@ -252,7 +307,7 @@ const malformedWorkflowCases = [
     mutate: (workflow) => {
       workflow.on.push.branches = ['develop'];
     },
-    message: 'workflow must push only from main',
+    message: 'workflow must push from main and the dev integration branch',
   },
   {
     name: 'push trigger',
@@ -372,6 +427,34 @@ const malformedWorkflowCases = [
     },
     message: 'workflow must not publish npm',
   },
+  {
+    name: 'pr-policy job',
+    mutate: (workflow) => delete workflow.jobs['pr-policy'],
+    message: 'CI workflow must define jobs\\.pr-policy',
+  },
+  {
+    name: 'pr-policy trigger',
+    mutate: (workflow) => {
+      workflow.jobs['pr-policy'].if = "${{ github.event_name == 'push' }}";
+    },
+    message: 'pr-policy must run only for pull requests',
+  },
+  {
+    name: 'pr-policy advisory posture',
+    mutate: (workflow) => {
+      workflow.jobs['pr-policy']['continue-on-error'] = false;
+    },
+    message: 'pr-policy must stay advisory',
+  },
+  {
+    name: 'pr-policy strict mode',
+    mutate: (workflow) => {
+      const steps = workflow.jobs['pr-policy'].steps;
+      const target = steps.find((step) => step.run?.includes('scripts/pr-policy.mjs'));
+      target.run = `${target.run} --strict`;
+    },
+    message: 'pr-policy must not run in strict mode',
+  },
 ];
 
 test('each malformed workflow fixture fails at its broken structural constraint', async () => {
@@ -380,7 +463,14 @@ test('each malformed workflow fixture fails at its broken structural constraint'
   for (const { name, mutate, message } of malformedWorkflowCases) {
     const fixture = structuredClone(validWorkflow);
     mutate(fixture);
-    assert.throws(() => assertWorkflowStructure(fixture), new RegExp(message), name);
+    assert.throws(
+      () => {
+        assertWorkflowStructure(fixture);
+        assertPrPolicyJob(fixture);
+      },
+      new RegExp(message),
+      name,
+    );
   }
 });
 
