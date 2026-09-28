@@ -9,14 +9,24 @@ function providerPath(provider: string, field: string): string[] {
   return ['providers', provider, 'compat', field]
 }
 
-function fieldValue(spec: GatewayCompatFieldSpec, value: unknown): boolean | string | undefined {
+function fieldValue(spec: GatewayCompatFieldSpec, value: unknown): boolean | string | number | undefined {
   if (value === 'auto') return undefined
   if (spec.kind === 'boolean') {
     if (value === 'supported') return true
     if (value === 'unsupported') return false
     return undefined
   }
-  if (typeof value === 'string' && (spec.enumValues as readonly string[]).some((entry) => entry === value)) return value
+  if (spec.kind === 'enum') {
+    if (typeof value === 'string' && (spec.enumValues as readonly string[]).some((entry) => entry === value)) return value
+    return undefined
+  }
+  // `number`: the UI carries the field as a string, so parse it and require a
+  // finite integer — DSH declares `z.number().step(1)`, and a fractional or
+  // non-numeric string would be rejected by that schema.
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed) && Number.isInteger(parsed)) return parsed
+  }
   return undefined
 }
 

@@ -1,7 +1,7 @@
 import type { GatewayCompatSource } from './types.js'
 import { isUnknownRecord } from '../../shared/guards.js'
 
-export type GatewayCompatFieldKind = 'boolean' | 'enum'
+export type GatewayCompatFieldKind = 'boolean' | 'enum' | 'number'
 export type GatewayCompatGroupId = 'role' | 'format' | 'stream' | 'cache'
 
 /**
@@ -57,6 +57,11 @@ export type GatewayCompatFieldSpec =
       readonly enumValues: readonly string[]
       readonly enumOptions?: readonly GatewayCompatFieldOption[]
     })
+  | (GatewayCompatFieldBase & {
+      readonly kind: 'number'
+      /** `<input>` step; DSH declares this field as `z.number().step(1)`. */
+      readonly step: number
+    })
 
 export const SUPPORTED_THINKING_FORMATS = [
   'openai', 'openrouter', 'deepseek', 'together', 'baseten', 'zai', 'qwen',
@@ -82,6 +87,10 @@ function enumField<const V extends readonly string[]>(
   return { key, kind: 'enum' as const, group, labelKey: key, protocols, enumValues, enumOptions }
 }
 
+function numberField(key: string, group: GatewayCompatGroupId, protocols: readonly GatewayProtocol[], step: number) {
+  return { key, kind: 'number' as const, group, labelKey: key, protocols, step }
+}
+
 export const GATEWAY_COMPAT_FIELDS = {
   supportsDeveloperRole: booleanField('supportsDeveloperRole', 'role', COMPLETIONS_AND_RESPONSES),
   supportsReasoningEffort: booleanField('supportsReasoningEffort', 'role', COMPLETIONS),
@@ -96,6 +105,7 @@ export const GATEWAY_COMPAT_FIELDS = {
     { value: 'max_tokens', labelKey: 'maxTokensFieldStandard' },
     { value: 'max_completion_tokens', labelKey: 'maxTokensFieldCompletion' },
   ]),
+  vllmPriority: numberField('vllmPriority', 'format', COMPLETIONS, 1),
   supportsMaxOutputTokens: booleanField('supportsMaxOutputTokens', 'format', RESPONSES),
   requiresThinkingAsText: booleanField('requiresThinkingAsText', 'format', COMPLETIONS),
   requiresReasoningContentOnAssistantMessages: booleanField('requiresReasoningContentOnAssistantMessages', 'format', COMPLETIONS),
@@ -169,7 +179,7 @@ export const ALPHA1_PLUS_COMPAT_FIELDS = [
  */
 export const ALPHA3_PLUS_COMPAT_FIELDS = [
   ...ALPHA1_PLUS_COMPAT_FIELDS,
-  'thinkingTokenBudgetField', 'supportsMaxOutputTokens',
+  'thinkingTokenBudgetField', 'vllmPriority', 'supportsMaxOutputTokens',
 ] as const satisfies readonly GatewayCompatFieldKey[]
 
 export type GatewayCompatSelection = 'auto' | string
@@ -177,15 +187,18 @@ export type GatewayCompatSelection = 'auto' | string
 type FieldSpecOf<K extends GatewayCompatFieldKey> = (typeof GATEWAY_COMPAT_FIELDS)[K]
 type BooleanFieldKey = { [K in GatewayCompatFieldKey]: FieldSpecOf<K> extends { kind: 'boolean' } ? K : never }[GatewayCompatFieldKey]
 type EnumFieldKey = { [K in GatewayCompatFieldKey]: FieldSpecOf<K> extends { kind: 'enum'; enumValues: readonly string[] } ? K : never }[GatewayCompatFieldKey]
+type NumberFieldKey = { [K in GatewayCompatFieldKey]: FieldSpecOf<K> extends { kind: 'number' } ? K : never }[GatewayCompatFieldKey]
 type EnumValuesOf<K extends EnumFieldKey> = FieldSpecOf<K> extends { readonly enumValues: infer V extends readonly string[] } ? V[number] : never
 
 export type GatewayCompatValue<K extends GatewayCompatFieldKey> =
   K extends BooleanFieldKey ? boolean
+  : K extends NumberFieldKey ? number
   : K extends EnumFieldKey ? EnumValuesOf<K>
   : unknown
 
 export type GatewayCompatSelectionFor<K extends GatewayCompatFieldKey> =
   K extends BooleanFieldKey ? 'auto' | 'supported' | 'unsupported'
+  : K extends NumberFieldKey ? 'auto' | string
   : K extends EnumFieldKey ? 'auto' | EnumValuesOf<K>
   : 'auto'
 

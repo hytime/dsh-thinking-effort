@@ -47,7 +47,8 @@ version-map はゲートウェイ capability を次のように判定します�
 | --- | --- | --- |
 | `0.1.0-rc.7` | 非対応 | 非対応 |
 | `0.1.0-rc.8` から `<0.1.2-alpha.1` | schema が公開する場合は対応。ただし `supportsFinishReason` と `supportsThinkingTokenBudget` はありません | オプション |
-| `0.1.2-alpha.1` 以降の対応範囲 | schema が公開する場合は 15 フィールドに対応 | オプション |
+| `0.1.2-alpha.1` から `<0.1.3-alpha.2` | schema が公開する場合は 15 フィールドに対応。`thinkingTokenBudgetField`、`vllmPriority`、`supportsMaxOutputTokens` はまだ提供されません | オプション |
+| `0.1.3-alpha.2` 以降の対応範囲 | schema が公開する場合は 18 フィールドすべてに対応 | オプション |
 
 DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行時 schema の公開内容に従います。
 実行時 schema が公開しないフィールドは UI に表示されません。オプションの transport が未インストールまたは無効の場合、takeover は適用されません。
@@ -189,19 +190,19 @@ Host またはプラグインパッケージを変更した後は DSH を再起�
 
 Settings の provider グローバル領域では、その provider 配下のすべてのモデルの `compat` 既定値を編集します。モデルを 1 つ展開すると単一モデル領域が開きます。4 グループは既定で折りたたまれています。
 
-| グループ | boolean フィールド（`Auto` / 対応 / 非対応） | enum フィールド（`Auto` / 具体的な値） |
-| --- | --- | --- |
-| ロールと推論 | `supportsDeveloperRole`、`supportsReasoningEffort`、`supportsThinkingTokenBudget` | — |
-| 形式と出力 | `requiresThinkingAsText`、`requiresReasoningContentOnAssistantMessages` | `thinkingFormat`：`openai`、`openrouter`、`deepseek`、`together`、`baseten`、`zai`、`qwen`、`chat-template`、`qwen-chat-template`、`string-thinking`、`ant-ling`；`maxTokensField`：`max_tokens`、`max_completion_tokens` |
-| ストリーミングとツール | `supportsUsageInStreaming`、`supportsFinishReason`、`requiresToolResultName`、`requiresAssistantAfterToolResult`、`supportsStrictMode` | — |
-| 保存とキャッシュ | `supportsStore`、`supportsLongCacheRetention` | `cacheControlFormat`：`anthropic` |
+| グループ | boolean フィールド（`Auto` / 対応 / 非対応） | enum フィールド（`Auto` / 具体的な値） | number フィールド（`Auto` / 整数） |
+| --- | --- | --- | --- |
+| ロールと推論 | `supportsDeveloperRole`、`supportsReasoningEffort`、`supportsThinkingTokenBudget` | `thinkingTokenBudgetField`：`thinking_token_budget`、`thinking_budget`、`thinking_budget_tokens` | — |
+| 形式と出力 | `requiresThinkingAsText`、`requiresReasoningContentOnAssistantMessages`、`supportsMaxOutputTokens` | `thinkingFormat`：`openai`、`openrouter`、`deepseek`、`together`、`baseten`、`zai`、`qwen`、`chat-template`、`qwen-chat-template`、`string-thinking`、`ant-ling`；`maxTokensField`：`max_tokens`、`max_completion_tokens` | `vllmPriority` |
+| ストリーミングとツール | `supportsUsageInStreaming`、`supportsFinishReason`、`requiresToolResultName`、`requiresAssistantAfterToolResult`、`supportsStrictMode` | — | — |
+| 保存とキャッシュ | `supportsStore`、`supportsLongCacheRetention` | `cacheControlFormat`：`anthropic` | — |
 
 プロトコルの対応範囲は、DSH バージョンと実行時 schema による上限に加わる制限です。
 
-| ルートの `api` | このプラグインの 15 個のスカラーから設定できるフィールド |
+| ルートの `api` | このプラグインの 18 個のスカラーから設定できるフィールド |
 | --- | --- |
-| `openai-completions` | 15 フィールドすべて |
-| `openai-responses`、`azure-openai-responses`、`openai-codex-responses` | `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention` |
+| `openai-completions` | `supportsMaxOutputTokens` 以外のすべてのフィールド |
+| `openai-responses`、`azure-openai-responses`、`openai-codex-responses` | `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention`、`supportsMaxOutputTokens` |
 | `anthropic-messages` | `supportsLongCacheRetention` |
 | `bedrock-converse-stream` | `supportsStrictMode` |
 

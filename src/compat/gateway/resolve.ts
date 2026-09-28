@@ -1,6 +1,6 @@
 import { capabilitiesForVersion } from '../version-map.js'
 import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS } from './fields.js'
-import type { GatewayCompatFieldKey } from './fields.js'
+import type { GatewayCompatFieldKey, GatewayCompatFieldKind } from './fields.js'
 import {
   resolveTakeoverProviders,
   takeoverGatewayCompatInputs,
@@ -63,6 +63,10 @@ function readCompat(value: unknown): GatewayCompat {
         if (typeof fieldValue === 'string' && (spec.enumValues as readonly string[]).some((entry) => entry === fieldValue)) {
           output[spec.key] = fieldValue
         }
+      } else if (typeof fieldValue === 'number' && Number.isFinite(fieldValue)) {
+        // `number` fields are numeric in the document (`vllmPriority` is
+        // `z.number().step(1)` in DSH), so a string here is not a usable value.
+        output[spec.key] = fieldValue
       }
     }
   }
@@ -123,9 +127,11 @@ export function resolveTakeoverGatewayCompat(input: {
   })
 }
 
-function selectionFor(modelCompatValue: unknown, kind: 'boolean' | 'enum'): string {
+function selectionFor(modelCompatValue: unknown, kind: GatewayCompatFieldKind): string {
   if (modelCompatValue === undefined) return 'auto'
   if (kind === 'boolean') return modelCompatValue ? 'supported' : 'unsupported'
+  // `enum` and `number` both carry their value as a string in the UI; the write
+  // path parses a numeric string back into a number.
   return String(modelCompatValue)
 }
 

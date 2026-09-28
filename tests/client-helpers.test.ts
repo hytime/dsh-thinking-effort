@@ -56,6 +56,7 @@ const realGatewaySchema = {
        requiresReasoningContentOnAssistantMessages: 0,
        supportsThinkingTokenBudget: 0,
        thinkingTokenBudgetField: 1,
+       vllmPriority: 7,
        supportsMaxOutputTokens: 0,
        supportsStrictMode: 0,
        supportsLongCacheRetention: 0,
@@ -67,6 +68,7 @@ const realGatewaySchema = {
     '4': { type: 'dict', meta: { default: {} }, inner: 3, sKey: 5 },
     '5': { type: 'string', meta: {} },
     '6': { type: 'object', meta: { default: {} }, dict: { providers: 4 } },
+    '7': { type: 'number', meta: {} },
   },
 } as const
 
@@ -478,6 +480,30 @@ describe('model inventory and operations', () => {
     expect(opsForProviderCompat('local', { thinkingFormat: 'auto' }, editable)).toEqual([
       { op: 'unset', path: ['providers', 'local', 'compat', 'thinkingFormat'] },
     ])
+  })
+
+  it('writes a number new field as a parsed number and auto as unset', () => {
+    const editable = editableProviderCompatFields('modern', realGatewaySchema)
+    expect(opsForProviderCompat('local', { vllmPriority: '3' }, editable)).toEqual([
+      { op: 'set', path: ['providers', 'local', 'compat', 'vllmPriority'], value: 3 },
+    ])
+    expect(opsForProviderCompat('local', { vllmPriority: 'auto' }, editable)).toEqual([
+      { op: 'unset', path: ['providers', 'local', 'compat', 'vllmPriority'] },
+    ])
+    // A fractional string is not an integer DSH's `z.number().step(1)` accepts.
+    expect(opsForProviderCompat('local', { vllmPriority: '1.5' }, editable)).toEqual([])
+  })
+
+  it('writes a models[] number field as a parsed number and keeps siblings', () => {
+    const target = item({ model: 'model-b', index: 1, raw: { id: 'model-b', compat: { keep: 'yes' } } })
+    const other = item({ model: 'model-a', index: 0, raw: { id: 'model-a', custom: 'keep-a' } })
+    const editable: GatewayCompatEditability = { vllmPriority: true, editableFields: ['vllmPriority'] }
+
+    expect(opsForModelArrayCompat([other, target], target, { vllmPriority: '5' }, editable)).toEqual([{
+      op: 'set',
+      path: ['providers', 'provider', 'models'],
+      value: [other.raw, { id: 'model-b', compat: { keep: 'yes', vllmPriority: 5 } }],
+    }])
   })
 
   it('does not replace unrelated provider compat fields', () => {

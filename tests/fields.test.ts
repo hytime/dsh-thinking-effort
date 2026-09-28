@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { ALPHA1_PLUS_COMPAT_FIELDS, ALPHA3_PLUS_COMPAT_FIELDS, GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, GATEWAY_COMPAT_GROUPS, RC8_COMPAT_FIELDS, SUPPORTED_THINKING_FORMATS, fieldsForApi } from '../src/compat/gateway/fields.js'
+import { resolveGatewayCompat, resolveModelGatewayCompat } from '../src/compat/gateway/resolve.js'
+import { opsForProviderCompat } from '../src/compat/gateway/ops.js'
+import type { GatewayCompatEditability } from '../src/compat/gateway/types.js'
 import { LOCALE_DATA } from '../src/client/locales.js'
 
 describe('gateway compat field registry', () => {
@@ -95,6 +98,61 @@ describe('gateway compat field registry', () => {
   it('exposes the two legacy fields and the new scalar ones in the declared groups', () => {
     for (const key of ['supportsDeveloperRole', 'maxTokensField', 'supportsStore', 'thinkingFormat', 'supportsThinkingTokenBudget'] as const) {
       expect(GATEWAY_COMPAT_FIELD_KEYS).toContain(key)
+    }
+  })
+})
+
+describe('numeric gateway compat fields', () => {
+  const editable: GatewayCompatEditability = { vllmPriority: true, editableFields: ['vllmPriority'] }
+
+  it('registers vllmPriority as a numeric field on completions only', () => {
+    expect(GATEWAY_COMPAT_FIELDS.vllmPriority.kind).toBe('number')
+    expect(GATEWAY_COMPAT_FIELDS.vllmPriority.protocols).toEqual(['openai-completions'])
+    expect(fieldsForApi('openai-completions')).toContain('vllmPriority')
+    expect(fieldsForApi('openai-responses')).not.toContain('vllmPriority')
+  })
+
+  it('declares the integer step DSH enforces, and only offers it from 0.1.3-alpha.2', () => {
+    // DSH declares `vllmPriority` as `z.number().step(1)`, so the input step and
+    // the write path must both be integer-based. The field arrived with the same
+    // prerelease as `thinkingTokenBudgetField`/`supportsMaxOutputTokens`.
+    const spec = GATEWAY_COMPAT_FIELDS.vllmPriority
+    expect(spec.kind === 'number' ? spec.step : undefined).toBe(1)
+    expect(ALPHA3_PLUS_COMPAT_FIELDS).toContain('vllmPriority')
+    expect(ALPHA1_PLUS_COMPAT_FIELDS).not.toContain('vllmPriority')
+    expect(RC8_COMPAT_FIELDS).not.toContain('vllmPriority')
+  })
+
+  it('keeps a finite numeric compat value from the layer chain', () => {
+    expect(resolveGatewayCompat({ provider: 'local', modelCompat: { vllmPriority: 3 } }).vllmPriority)
+      .toEqual({ value: 3, source: 'model' })
+    // A non-number in the document is not a usable selection: DSH's own schema
+    // would reject the mutate, so the reader drops it rather than echoing it.
+    expect(resolveGatewayCompat({ provider: 'local', providerCompat: { vllmPriority: '3' } }).vllmPriority)
+      .toEqual({ value: undefined, source: 'unknown' })
+    expect(resolveGatewayCompat({ provider: 'local', providerCompat: { vllmPriority: Number.NaN } }).vllmPriority)
+      .toEqual({ value: undefined, source: 'unknown' })
+  })
+
+  it('renders a numeric selection as its string form, and an absent one as auto', () => {
+    expect(resolveModelGatewayCompat({ provider: 'local', model: 'model-a', modelCompat: { vllmPriority: 3 } }).vllmPriority).toBe('3')
+    expect(resolveModelGatewayCompat({ provider: 'local', model: 'model-a' }).vllmPriority).toBe('auto')
+  })
+
+  it('round-trips a numeric string into a number set op and auto into an unset op', () => {
+    expect(opsForProviderCompat('local', { vllmPriority: '3' }, editable)).toEqual([
+      { op: 'set', path: ['providers', 'local', 'compat', 'vllmPriority'], value: 3 },
+    ])
+    expect(opsForProviderCompat('local', { vllmPriority: 'auto' }, editable)).toEqual([
+      { op: 'unset', path: ['providers', 'local', 'compat', 'vllmPriority'] },
+    ])
+  })
+
+  it('refuses a fractional or non-numeric selection for a number field', () => {
+    // `step(1)` is a step, not a bound: DSH declares no min/max for this field,
+    // so only integrality is enforced here.
+    for (const value of ['abc', '1.5', '', '  ', 'Infinity', 'NaN']) {
+      expect(opsForProviderCompat('local', { vllmPriority: value }, editable), value).toEqual([])
     }
   })
 })

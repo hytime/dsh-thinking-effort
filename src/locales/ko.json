@@ -115,6 +115,7 @@
   "gatewayCompatUnsupported": "지원 안 함",
   "maxTokensFieldStandard": "max_tokens",
   "maxTokensFieldCompletion": "max_completion_tokens",
+  "vllmPriority": "vLLM 우선순위",
   "thinkingTokenBudgetFieldTokenBudget": "thinking_token_budget",
   "thinkingTokenBudgetFieldBudget": "thinking_budget",
   "thinkingTokenBudgetFieldBudgetTokens": "thinking_budget_tokens",

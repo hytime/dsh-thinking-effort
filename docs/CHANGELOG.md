@@ -14,6 +14,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 新增 / Added
+
+- DSH `0.1.3-alpha.2` 新增三个网关兼容字段：`thinkingTokenBudgetField`（completions）、数值型 `vllmPriority`（completions）和 `supportsMaxOutputTokens`（Responses）。插件现在会像其它 compat 字段一样暴露并写入它们，因此 0.1.3-alpha.2 及更高版本可配置的标量字段由 15 个增加到 18 个。由于 `supportsMaxOutputTokens` 只在 Responses 协议下提供，`openai-completions` 不再提供全部字段：它支持除该字段以外的 17 个。
+- DSH `0.1.3-alpha.2` added three gateway compat fields: `thinkingTokenBudgetField` (completions), the numeric `vllmPriority` (completions), and `supportsMaxOutputTokens` (Responses). The plugin now surfaces and writes them like every other compat field, which takes the configurable scalar fields from 15 to 18 on `0.1.3-alpha.2` and later. Because `supportsMaxOutputTokens` is offered only on the Responses protocols, `openai-completions` no longer offers every field: it supports the 17 others.
+
 ### 文档 / Documentation
 
 - 修正 Composer 座位优先级的描述：`conversation.input.model` 是单占位槽，胜者按优先级**升序**取第一个，因此 `priority: -10` 是**有意压过**官方模型选择器，而非「让位」给后者。原注释与 README 的表述方向相反，代码行为一直正确，本次只改文字以免后人按错误注释改动优先级。

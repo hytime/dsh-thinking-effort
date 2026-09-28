@@ -10,6 +10,10 @@
 
 ## [Unreleased]
 
+### 追加
+
+- DSH `0.1.3-alpha.2` は 3 つのゲートウェイ互換フィールド——`thinkingTokenBudgetField`（completions）、数値型の `vllmPriority`（completions）、`supportsMaxOutputTokens`（Responses）——を追加しました。プラグインは他の compat フィールドと同様にこれらを公開して書き込むようになり、`0.1.3-alpha.2` 以降で設定できるスカラーフィールドは 15 個から 18 個になりました。`supportsMaxOutputTokens` は Responses プロトコルでのみ提供されるため、`openai-completions` はすべてのフィールドを提供しなくなりました（それ以外の 17 個に対応します）。
+
 ### ドキュメント
 
 - Composer 座席の優先度の記述を修正しました。`conversation.input.model` は単一スロットで、勝者は優先度の**昇順**で最初のエントリです。したがって `priority: -10` は公式のモデルセレクターを**意図的に上書きする**ものであり、譲るものではありません。従来のコメントと README は逆の方向を述べており、動作は常に正しかったため、誤ったコメントに従って優先度が変更されないよう文言だけを修正しました。
