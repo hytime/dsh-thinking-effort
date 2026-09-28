@@ -20,12 +20,12 @@
 | 原语 | 唯一定义处 | 反例 |
 |---|---|---|
 | `isUnknownRecord` | `src/shared/guards.ts` | 任何 `typeof <任意参数名> === 'object' && <同一参数名> !== null && !Array.isArray(<同一参数名>)` 的重新实现 |
-| `isSettingsConflict` | `src/shared/conflict.ts` | 各自的 `/conflict/i` 或 `code === 'settings/conflict'` 判定 |
+| `isSettingsConflict` | `src/shared/conflict.ts` | 各自的 `code === 'settings/conflict'` 比较，或 `/conflict/i.test(message)` / `/changed since it was read/i.test(message)` 正则判定 |
 
 **强制状态：**
 
 - `isUnknownRecord` — **已强制**。`guard-duplication` 规则用反向引用（`\1`）绑定参数名，因此 `nested` / `compatSource` / `entry` 等任意参数名下的同形表达式都会被 `npm test` 拦下；`RULES` 覆盖的复现处当前为 0。已知边界：该规则只匹配**单行**表达式。
-- `isSettingsConflict` — **尚未强制**。`RULES` 里目前**没有** conflict 规则，因此上面这一行今天只是一个目标，不会让测试变红。三处复现仍在：`src/client/SectionEditor.tsx:39-45`、`src/client/config-snapshot/apply.ts:29-30`、`src/client/components/OpenCodeFormatCard.tsx:191`。它们的迁移属于 **Task 4**；Task 4 合并这些调用点后，才需要在 `RULES` 中新增 conflict 规则（并配一个"会失败"的用例），届时本行才转为"已强制"。
+- `isSettingsConflict` — **已强制**。`conflict-duplication` 规则匹配两种**可执行**的复现形状，二者都在 `src/shared/conflict.ts` 之外被拦下：① 与冲突 code 的比较（`code === 'settings/conflict'` / `!== 'SETTINGS_CONFLICT'`，左右操作数顺序都算）；② 加上 `.test(` 调用的冲突消息正则（`/conflict/i`、`/changed since it was read/i`，即 Task 4 合并掉的另一半）。`RULES` 覆盖的复现处当前为 0；三处旧实现（`SectionEditor.tsx`、`config-snapshot/apply.ts`、`OpenCodeFormatCard.tsx`）已改为导入。已知边界：规则按**单行**匹配，所以跨行表达式、把字面量藏进 `includes(...)` / `switch` case / enum，以及 `new RegExp('conflict')` 都不会被拦；未被调用的裸 `/conflict/i` 也不算——规则覆盖的是三处调用点实际用过的比较与「已调用正则」两种形状。注释或 JSDoc 里提到 `settings/conflict` 属文档，不判违规。扫描范围与 `guard-duplication` 相同：只走 `src/**/*.ts{,x}`，`tests/` 与 `scripts/` 不在内（`src/shared/conflict.ts` 已加入 `OWNERS` 白名单）。
 
 例外：`src/compat/model-source.ts` 的 `isPlainObject` 语义不同（额外排除类实例），允许保留，但必须在注释中说明差异。
 

@@ -19,10 +19,19 @@
  */
 import { createElement } from 'react'
 import { LOCALE_NS } from '../constants.js'
-import { asModelDirectories, modelDirectoryCompatibility, type ModelDirectoriesSeam } from '../../compat/model-directory.js'
+import { asModelDirectories, hasSessionRemote, modelDirectoryCompatibility, type ModelDirectoriesSeam } from '../../compat/model-directory.js'
 import type { ClientContext, ClientLocale, ClientSlots, Translation } from '../types.js'
 import { Slider } from './slider.js'
 import type { ModelDirectoryState, ModelSelection } from './slider.js'
+
+/**
+ * Re-exported for callers that reach the session-remote probe through this
+ * seat's module. The implementation lives in `src/compat/model-directory.ts`:
+ * this seat and the directory compatibility planner must agree on the probe,
+ * because it decides whether `remote.session` is listed in a Cordis `inject` —
+ * the difference between registering the seat and silently parking its fiber.
+ */
+export { hasSessionRemote }
 
 export { Slider } from './slider.js'
 export type {
@@ -63,20 +72,6 @@ function seatFace(
     load: () => { void instance.load().catch(() => {}) },
     select: (selection) => instance.select(selection).then(() => true, () => false),
   }
-}
-
-/**
- * Whether the runtime session remote face is the modern `remote.session`
- * service (DSH 0.1.2-alpha.1+/npm alpha.2+). Detected by shape probe through
- * the inject-free `context.get` read face; older versions (`0.1.0-rc.7` /
- * `0.1.0-rc.8`) carry no such service and must NOT list it in `inject`.
- * @param context - client root context.
- */
-export function hasSessionRemote(context: ClientContext): boolean {
-  const remote = context.get('remote.session')
-  if (remote === null || typeof remote !== 'object') return false
-  const face = remote as { modelCatalog?: unknown }
-  return typeof face.modelCatalog === 'function'
 }
 
 /**

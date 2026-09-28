@@ -12,7 +12,7 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 /** Files allowed to state a shared literal; everything else must import it. */
-const OWNERS = new Set(['src/shared/guards.ts', 'src/shared/constants.ts'])
+const OWNERS = new Set(['src/shared/guards.ts', 'src/shared/constants.ts', 'src/shared/conflict.ts'])
 
 const RULES = [
   {
@@ -25,6 +25,35 @@ const RULES = [
     // through it. Whitespace is loose for the same reason — the rule is about
     // the shape of the expression, not the source's exact spacing.
     pattern: /typeof\s+(\w+)\s*===\s*'object'\s*&&\s*\1\s*!==\s*null\s*&&\s*!Array\.isArray\(\1\)/,
+  },
+  {
+    rule: 'conflict-duplication',
+    // `isSettingsConflict`'s former spellings, none of which may reappear
+    // outside `src/shared/conflict.ts`. ONE rule entry with TWO alternatives,
+    // because they catch different mistranslations: a single entry keeps the
+    // "one violation per offending line" contract of `findViolations` — split
+    // into two entries, a line matching both was reported twice.
+    //
+    // 1. A comparison against the transport's conflict CODE. Anchored on a
+    //    comparison operator so a comment or JSDoc sentence naming
+    //    `settings/conflict` (the prose form this rule's own documentation
+    //    uses) is not a violation — only an executable restatement is. Both
+    //    operand orders are accepted, since `'settings/conflict' === code` is
+    //    the same test as `code === 'settings/conflict'`.
+    // 2. An APPLIED conflict MESSAGE regex — one of the two halves
+    //    (`/conflict/i`, `/changed since it was read/i`) followed by `.test(`.
+    //    The `.test(` is required, not cosmetic: it is what separates a
+    //    predicate from a comment that quotes the old pattern, and both
+    //    historical sites wrote `regex.test(message)`.
+    //
+    // Known boundaries: like every rule here it runs per LINE, so only a
+    // single-line expression matches. A conflict test split across lines, one
+    // that hides the literal inside a helper (`includes('settings/conflict')`,
+    // a `switch` case label, an enum member), or a message regex built from
+    // `new RegExp('conflict')` is NOT caught; neither is a bare `/conflict/i`
+    // that is never applied. The rule covers the comparison and
+    // applied-regex shapes the three unified call sites actually used.
+    pattern: /(?:['"](?:settings\/conflict|SETTINGS_CONFLICT)['"]\s*[!=]==?|[!=]==?\s*['"](?:settings\/conflict|SETTINGS_CONFLICT)['"]|(?:\/conflict\/[a-z]*|\/changed since it was read\/[a-z]*)\.test\s*\()/i,
   },
   {
     rule: 'snapshot-kind',

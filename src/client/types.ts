@@ -82,6 +82,35 @@ export interface SettingsNamespace {
   readonly applies?: string
 }
 
+/**
+ * What {@link revisionOf} reads off a section: only the id is required, so a
+ * caller may hand over a full `SettingsNamespace` or a partial read.
+ */
+export interface RevisionedSection {
+  readonly ns: string
+  /** A non-numeric or absent revision reads as 0. */
+  readonly revision?: unknown
+}
+
+/**
+ * The revision fence one settings section stands at.
+ *
+ * Two call shapes grew independently — a single section (`SectionEditor`) and a
+ * namespace list plus id (the snapshot cards) — but both are one lookup, so
+ * they share this implementation. An absent or malformed revision reads as 0,
+ * which is the value every existing caller already treated as "no fence yet";
+ * the callers that must fail closed instead of writing without a fence check
+ * the read's shape before they get here.
+ */
+export function revisionOf(section: RevisionedSection): number
+export function revisionOf(sections: readonly RevisionedSection[], ns: string): number
+export function revisionOf(input: RevisionedSection | readonly RevisionedSection[], ns?: string): number {
+  const section = Array.isArray(input)
+    ? (input as readonly RevisionedSection[]).find((candidate) => candidate.ns === ns)
+    : input as RevisionedSection
+  return typeof section?.revision === 'number' ? section.revision : 0
+}
+
 export interface OpenCodeSessionState {
   readonly namespace: SettingsNamespace | null
   readonly views: Record<string, boolean>

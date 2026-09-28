@@ -32,6 +32,9 @@ import type { GatewayCompatEditability, GatewayCompatFieldKey, GatewayCompatFiel
 import { capabilitiesForVersion } from '../src/compat/version-map.js'
 import { GATEWAY_COMPAT_FIELD_KEYS, ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS, fieldsForApi } from '../src/compat/gateway/fields.js'
 import type { InventoryItem, ModelGatewayCompatUpdate, Translation } from '../src/client/types.js'
+import { revisionOf } from '../src/client/types.js'
+import { hasSessionRemote } from '../src/compat/model-directory.js'
+import { isSettingsConflict } from '../src/shared/conflict.js'
 import type { TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
 
 const translate: Translation = (key, params) => `${key}${params?.level ? `:${params.level}` : ''}`
@@ -1646,5 +1649,27 @@ describe('locales and theme', () => {
   it('computes the existing light and dark palettes', () => {
     expect(iosPalette({ backgroundColor: 'rgb(28, 28, 30)', prefersDark: false }).canvas).toBe('#1C1C1E')
     expect(iosPalette({ backgroundColor: 'rgb(242, 242, 247)', prefersDark: false }).canvas).toBe('#F2F2F7')
+  })
+})
+
+describe('shared conflict and revision helpers', () => {
+  it('recognises every conflict spelling through one predicate', () => {
+    expect(isSettingsConflict({ code: 'settings/conflict' })).toBe(true)
+    expect(isSettingsConflict({ code: 'SETTINGS_CONFLICT' })).toBe(true)
+    expect(isSettingsConflict({ message: 'changed since it was read' })).toBe(true)
+    expect(isSettingsConflict({ message: 'config conflict' })).toBe(true)
+    expect(isSettingsConflict({ message: 'not volatile' })).toBe(false)
+  })
+
+  it('reads a revision from a section or a section list', () => {
+    expect(revisionOf({ ns: 'a', revision: 7 })).toBe(7)
+    expect(revisionOf({ ns: 'a' })).toBe(0)
+    expect(revisionOf([{ ns: 'a', revision: 1 }, { ns: 'b', revision: 4 }], 'b')).toBe(4)
+    expect(revisionOf([{ ns: 'a', revision: 1 }], 'missing')).toBe(0)
+  })
+
+  it('probes the session remote through the compat module', () => {
+    expect(hasSessionRemote({ get: () => ({ modelCatalog: () => undefined }) } as never)).toBe(true)
+    expect(hasSessionRemote({ get: () => ({}) } as never)).toBe(false)
   })
 })

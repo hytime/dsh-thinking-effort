@@ -32,6 +32,7 @@ import {
 } from '../config-snapshot/types.js'
 import { ActionButton, Icon } from './Controls.js'
 import type { Palette } from '../theme.js'
+import { revisionOf } from '../types.js'
 import type { SettingsApi, SettingsDescribeValue, SettingsNamespace, Translation } from '../types.js'
 
 const PLUGIN_VERSION = packageJson.version
@@ -154,7 +155,6 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
 
   React.useEffect(() => { load() }, [])
 
-  const revisionOf = (namespaces: readonly SettingsNamespace[], ns: string): number => namespaces.find((entry) => entry.ns === ns)?.revision ?? 0
   /**
    * The id this host addresses the plugin section by, resolved from the read
    * the caller is working with and falling back to the legacy registered

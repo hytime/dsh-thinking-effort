@@ -54,6 +54,49 @@ describe('convention guard', () => {
     expect(findViolations([{ path: 'src/shared/guards.ts', source: sample }])).toEqual([])
   })
 
+  it('flags a re-implemented conflict predicate outside the shared module', () => {
+    // All three shapes Task 4 removed: a local code comparison (apply.ts), a
+    // message regex (OpenCodeFormatCard.tsx), and the legacy wording
+    // (SectionEditor.tsx). Each is one line, which is the rule's documented
+    // boundary.
+    const sample = [
+      "  return error.code === 'settings/conflict'",
+      "  return code !== 'SETTINGS_CONFLICT'",
+      'const isConflict = (message: string): boolean => /conflict/i.test(message)',
+      'return typeof message === \'string\' && /changed since it was read/i.test(message)',
+    ].join('\n')
+    const found = findViolations([{ path: 'src/client/somewhere.ts', source: sample }])
+    expect(found.map((violation) => violation.rule)).toEqual([
+      'conflict-duplication',
+      'conflict-duplication',
+      'conflict-duplication',
+      'conflict-duplication',
+    ])
+    expect(found.map((violation) => violation.line)).toEqual([1, 2, 3, 4])
+  })
+
+  it('allows the shared module to state the conflict predicate', () => {
+    const sample = [
+      'export function isSettingsConflict(error: unknown): boolean {',
+      "  if (code === 'settings/conflict' || code === 'SETTINGS_CONFLICT') return true",
+      '  return /changed since it was read/i.test(message) || /conflict/i.test(message)',
+      '}',
+    ].join('\n')
+    expect(findViolations([{ path: 'src/shared/conflict.ts', source: sample }])).toEqual([])
+  })
+
+  it('does not fire on prose that merely names the conflict code', () => {
+    // The rule is about an executable restatement. A comment or JSDoc sentence
+    // citing `settings/conflict` is documentation, not a second predicate, and
+    // treating it as a violation would push authors to stop naming the code.
+    const sample = [
+      '/** The Remote classifies a stale revision as `settings/conflict`; older transports only carry the message. */',
+      ' * `/conflict/i` was the previous local test.',
+      '// see SETTINGS_CONFLICT above',
+    ].join('\n')
+    expect(findViolations([{ path: 'src/client/somewhere.ts', source: sample }])).toEqual([])
+  })
+
   it('flags each duplicated identifier literal outside the shared module', () => {
     const found = findViolations([{
       path: 'src/host/foo.ts',

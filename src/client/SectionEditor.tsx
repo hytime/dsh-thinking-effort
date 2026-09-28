@@ -10,6 +10,8 @@ import { openCodeSessionOp, openCodeSessionStateFor, isOpenCodeSessionNamespace 
 import { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from './model-ops.js'
 import { isPluginEntrySection, pluginSection, subagentEffortTarget } from './subagent-section.js'
 import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, modelSaveBlockedReason, validateContextWindow, validateLevels } from './validation.js'
+import { revisionOf } from './types.js'
+import { isSettingsConflict } from '../shared/conflict.js'
 import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, OpenCodeSessionState, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
 import type { Palette } from './theme.js'
 import type { TakeoverRuntimeStore } from './takeover-runtime.js'
@@ -24,25 +26,6 @@ import { renderGatewayCompatControls } from './components/GatewayCompatControls.
 const PLUGIN_VERSION = packageJson.version
 
 type DirtyFields = { levels?: boolean; context?: boolean; input?: boolean }
-
-/**
- * Whether a refused write was refused because the section moved since this
- * panel read it.
- *
- * The code is the stable discriminator and is what a modern Remote reports
- * (`settings/conflict`). The legacy in-process bridge surfaces the Host's
- * `SettingsConflictError` instead, whose only stable marker is the message
- * text, so both are accepted. A rejected promise is matched the same way as an
- * `{ok: false}` result because the legacy transport throws where the modern one
- * returns a refusal.
- */
-function isSettingsConflict(error: unknown): boolean {
-  if (error === null || typeof error !== 'object') return false
-  const code = (error as { code?: unknown }).code
-  if (code === 'settings/conflict' || code === 'SETTINGS_CONFLICT') return true
-  const message = (error as { message?: unknown }).message
-  return typeof message === 'string' && /changed since it was read/i.test(message)
-}
 
 interface RunOpsRequest {
   readonly ns: string
@@ -213,7 +196,6 @@ function rebaseUpdates(fresh: readonly InventoryItem[], updates: readonly ModelU
     return item === undefined ? [] : [{ ...update, item }]
   })
 }
-function revisionOf(namespace: SettingsNamespace): number { return typeof namespace.revision === 'number' ? namespace.revision : 0 }
 function availableCompatFieldCount(view: ProviderGatewayCompatView | ModelGatewayCompatView): number {
   const values = view as unknown as Record<string, unknown>
   return GATEWAY_COMPAT_FIELD_KEYS.filter((key) => key !== 'supportsDeveloperRole' && key !== 'maxTokensField' && values[`${key}Available`] === true).length

@@ -15,6 +15,8 @@ import {
 import type { FormatDraft, FormatField, FormatFieldError } from '../opencode-format-validation.js'
 import type { OpenCodeSessionFormatMode, OpenCodeSessionInvalidPolicy } from '../../compat/opencode-session.js'
 import type { Palette } from '../theme.js'
+import { revisionOf } from '../types.js'
+import { isSettingsConflict } from '../../shared/conflict.js'
 import type { SettingsApi, SettingsDescribeValue, SettingsNamespace, Translation } from '../types.js'
 
 /**
@@ -143,10 +145,6 @@ const initialState: CardState = {
   notice: null,
 }
 
-function revisionOf(namespaces: readonly SettingsNamespace[], namespace: string): number {
-  return namespaces.find((entry) => entry.ns === namespace)?.revision ?? 0
-}
-
 function userOf(namespaces: readonly SettingsNamespace[], namespace: string): Record<string, unknown> | undefined {
   return namespaces.find((entry) => entry.ns === namespace)?.user
 }
@@ -186,8 +184,6 @@ function ownRecord(value: unknown, key: string): Record<string, unknown> | undef
   const nested = object[key]
   return isUnknownRecord(nested) ? nested : undefined
 }
-
-const isConflict = (message: string): boolean => /conflict/i.test(message)
 
 export function OpenCodeFormatCard({ settings, palette, t, revision, namespace = FORMAT_NAMESPACE, onApplied }: OpenCodeFormatCardProps): React.ReactElement {
   const [state, setState] = React.useState<CardState>(initialState)
@@ -274,7 +270,7 @@ export function OpenCodeFormatCard({ settings, palette, t, revision, namespace =
           setState((current) => ({
             ...current,
             busy: false,
-            error: isConflict(message) ? t('formatConflict') : t('formatSaveFailed', { message }),
+            error: isSettingsConflict(written.error) ? t('formatConflict') : t('formatSaveFailed', { message }),
           }))
           return undefined
         }
