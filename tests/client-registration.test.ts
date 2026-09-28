@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { apply, inject, name } from '../src/client/index.js'
 import { LOCALE_NS } from '../src/client/constants.js'
+import { PLUGIN_ENTRY_ID } from '../src/shared/constants.js'
 import { observeTakeoverSettings, resolveTakeoverDescription } from '../src/client/takeover-runtime.js'
 import { providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
 import { resolveTakeoverGatewayCompat, resolveTakeoverProviders, takeoverGatewayCompatInputs } from '../src/compat/gateway/resolve.js'
@@ -59,6 +60,10 @@ function createHarness(mode: 'modern' | 'legacy') {
   const sessionRemote = mode === 'modern' ? { modelCatalog: vi.fn().mockResolvedValue({ ok: true }) } : undefined
   const remote = {}
   const sessions = {}
+  // `ctx.configForms` is optional and belongs to a DIFFERENT client entry, so it
+  // may only exist after this plugin's `apply`. Mutable on purpose: a test can
+  // present it late, exactly as the host does.
+  let configForms: unknown
   const context = {
     get: vi.fn((key: string) => key === 'remote.settings'
       ? mode === 'modern' ? remoteSettings : undefined
@@ -70,7 +75,9 @@ function createHarness(mode: 'modern' | 'legacy') {
             ? remote
             : key === 'sessions'
               ? sessions
-              : ({ slots, connection, locale }[key as 'slots' | 'connection' | 'locale'])),
+              : key === 'configForms'
+                ? configForms
+                : ({ slots, connection, locale }[key as 'slots' | 'connection' | 'locale'])),
     plugin: vi.fn((plugin: { inject?: readonly string[]; apply: (scope: ClientContext) => void }) => {
       const allPresent = (plugin.inject ?? []).every((name) => context.get(name) !== undefined)
       if (!allPresent) return () => undefined
@@ -93,6 +100,10 @@ function createHarness(mode: 'modern' | 'legacy') {
   return {
     context, slots, locale, listeners, registrations, disposed, addLanguage, register,
     remoteSettings, legacySettings, sessionRemote, modelDirectories, directory,
+    // Present (or replace) the optional `configForms` service, mimicking a
+    // late-activating sibling client entry. The event a real host emits for that
+    // activation is this plugin's `internal/service` notification.
+    provideConfigForms: (service: unknown) => { configForms = service },
     // Cordis tears effects down in reverse registration order.
     disposeAllEffects: () => { for (const disposer of effectDisposers.reverse()) disposer() },
   }
@@ -741,6 +752,38 @@ describe('client registration', () => {
     expect(render).toEqual(expect.any(Function))
     const element = (render as () => { props?: Record<string, unknown> })()
     expect(element.props).toEqual(expect.objectContaining({ settings: expect.any(Object), locale: expect.any(Object), t: expect.any(Function) }))
+  })
+
+  it('delivers a late configForms service to the already-mounted editor', () => {
+    const harness = createHarness('modern')
+    // `ctx.configForms` (DSH 0.1.7+) belongs to `@deepseek-ai/dsh-client-ui-settings`,
+    // whose client entry is created CONCURRENTLY with this one, so it can activate
+    // after `apply` has already registered the slot. Mount therefore sees no
+    // service, and the bridge keeps a LIVE view that re-reads the context.
+    apply(harness.context)
+
+    const render = harness.registrations[0]?.render
+    const element = (render as () => { props?: { settings?: { formFor?: (entryId: string) => unknown } } })()
+    const settings = element.props?.settings
+    expect(settings).toBeDefined()
+    const registrationsBefore = harness.registrations.length
+    expect(registrationsBefore).toBe(3)
+    // No service yet: the live view resolves to nothing instead of `formFor`
+    // being absent, which is what lets the lookup below start working.
+    expect(settings?.formFor?.(PLUGIN_ENTRY_ID)).toBeUndefined()
+
+    const form = { getSnapshot: () => ({ status: 'ready', revision: 3, writable: true }) }
+    harness.provideConfigForms({ get: (entryId: string) => (entryId === PLUGIN_ENTRY_ID ? form : undefined) })
+    for (const listener of harness.listeners) listener('configForms')
+
+    // The SAME bridge object must now answer with the form: `configFormsView`
+    // re-reads `context.get('configForms')` per lookup, and the `mounted` latch
+    // must not have frozen the registered slot onto a pre-service bridge. Both
+    // halves fail together when the 4th argument at the mount call is dropped.
+    expect(settings?.formFor?.(PLUGIN_ENTRY_ID)).toBe(form)
+    // The late activation re-ran `mountFromRemote`, but the latch still holds:
+    // no duplicate settings.section / shell.overlay registration.
+    expect(harness.registrations).toHaveLength(registrationsBefore)
   })
 
   it('keeps legacy fallback active and does not replace the first successful mount', async () => {
