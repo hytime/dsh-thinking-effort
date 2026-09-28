@@ -11,6 +11,7 @@ import {
   type LegacyMigrationRead,
 } from '../legacy-migration.js'
 import { iosPalette, type Palette } from '../theme.js'
+import { LLM_PI_AI_NS } from '../../shared/constants.js'
 import { ActionButton } from './Controls.js'
 import type { SettingsApi, Translation } from '../types.js'
 
@@ -157,7 +158,7 @@ export function LegacyMigrationModal({ settings, t, palette = iosPalette() }: Pr
   const candidates = legacyCandidatesOf(target.user)
   const busy = phase.kind === 'submitting'
   const sourceLabel = (source: string): string => {
-    if (source === 'llm-pi-ai') return t('legacyMigrationSourceLive')
+    if (source === LLM_PI_AI_NS) return t('legacyMigrationSourceLive')
     if (source === 'settings.yaml') return t('legacyMigrationSourceDocument')
     if (source === 'settings.yaml.imported') return t('legacyMigrationSourceImported')
     // An unknown source is shown verbatim rather than mislabelled as one of the

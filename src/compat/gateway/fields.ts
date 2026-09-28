@@ -1,4 +1,5 @@
 import type { GatewayCompatSource } from './types.js'
+import { isUnknownRecord } from '../../shared/guards.js'
 
 export type GatewayCompatFieldKind = 'boolean' | 'enum'
 export type GatewayCompatGroupId = 'role' | 'format' | 'stream' | 'cache'
@@ -122,9 +123,7 @@ export function fieldsForApi(api: unknown): readonly GatewayCompatFieldKey[] {
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+  return isUnknownRecord(value) ? value : undefined
 }
 
 /**
@@ -169,10 +168,6 @@ export type SelectionNamed = { [K in GatewayCompatFieldKey]: GatewayCompatSelect
 export type SourceNamed = { [K in GatewayCompatFieldKey as `${K & string}Source`]: GatewayCompatSource }
 export type AvailableNamed = { [K in GatewayCompatFieldKey as `${K & string}Available`]: boolean }
 export type ResolvedNamed = { [K in GatewayCompatFieldKey as `${K & string}Resolved`]: unknown }
-
-export function fieldSpec(key: GatewayCompatFieldKey): GatewayCompatFieldSpec {
-  return GATEWAY_COMPAT_FIELDS[key]
-}
 
 export function fieldsInGroup(group: GatewayCompatGroupId): readonly GatewayCompatFieldSpec[] {
   return GATEWAY_COMPAT_FIELD_KEYS.map((key) => GATEWAY_COMPAT_FIELDS[key]).filter((spec) => spec.group === group)

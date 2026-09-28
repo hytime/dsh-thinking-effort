@@ -1,0 +1,91 @@
+/**
+ * The repository's memory guard. `docs/CONVENTIONS.md` states where each
+ * shared primitive lives; this script makes a violation fail the suite instead
+ * of relying on the next author to remember.
+ *
+ * Exported as a pure function so `tests/conventions.test.ts` can prove the
+ * rules still fire on a deliberately wrong sample — a guard that silently
+ * stopped matching would be worse than no guard.
+ */
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
+
+/** Files allowed to state a shared literal; everything else must import it. */
+const OWNERS = new Set(['src/shared/guards.ts', 'src/shared/constants.ts'])
+
+const RULES = [
+  {
+    rule: 'guard-duplication',
+    // The exact body of `isUnknownRecord`, which no other module may restate.
+    pattern: /typeof value === 'object' && value !== null && !Array\.isArray\(value\)/,
+  },
+  {
+    rule: 'snapshot-kind',
+    // Ordered BEFORE `identifier-literal`: the snapshot kind embeds the plugin
+    // namespace, so a bare identifier rule would not match it (the quotes are
+    // not adjacent) and the line would slip through.
+    pattern: /['"]dsh-thinking-effort\/config-snapshot['"]/,
+  },
+  {
+    rule: 'identifier-literal',
+    pattern: /['"](?:llm-pi-ai|dsh-thinking-effort|thinking-effort)['"]/,
+  },
+  {
+    rule: 'log-prefix',
+    pattern: /['"]\[@hytime\/dsh-thinking-effort\]['"]/,
+  },
+  {
+    rule: 'level-table',
+    pattern: /['"]off['"]\s*,\s*['"]minimal['"]\s*,\s*['"]low['"]\s*,\s*['"]medium['"]\s*,\s*['"]high['"]\s*,\s*['"]xhigh['"]\s*,\s*['"]max['"]/,
+  },
+]
+
+/**
+ * Report every line that restates a shared primitive.
+ * @param files - `{ path, source }` entries, `path` relative to the repo root.
+ * @returns one violation per offending line, with its rule, path, and 1-based line.
+ */
+export function findViolations(files) {
+  const violations = []
+  for (const { path, source } of files) {
+    if (OWNERS.has(path)) continue
+    // `src/client/index.ts`'s SLOT_ID is a UI slot id, not a settings section id.
+    if (path === 'src/client/index.ts') continue
+    source.split('\n').forEach((line, index) => {
+      for (const { rule, pattern } of RULES) {
+        if (pattern.test(line)) violations.push({ rule, path, line: index + 1, text: line.trim() })
+      }
+    })
+  }
+  return violations
+}
+
+const root = resolve(import.meta.dirname, '..')
+
+function collect(dir) {
+  return readdirSync(dir).flatMap((name) => {
+    const full = resolve(dir, name)
+    if (statSync(full).isDirectory()) return collect(full)
+    return /\.tsx?$/.test(name) ? [full] : []
+  })
+}
+
+// Main-module detection follows `scripts/pr-policy.mjs:310`: comparing
+// `process.argv[1]` to `import.meta.filename` misreports on a symlinked path.
+if (process.argv[1] !== undefined && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  const files = collect(resolve(root, 'src')).map((full) => ({
+    path: full.slice(root.length + 1),
+    source: readFileSync(full, 'utf8'),
+  }))
+  const violations = findViolations(files)
+  if (violations.length > 0) {
+    for (const violation of violations) {
+      console.error(`${violation.path}:${violation.line} [${violation.rule}] ${violation.text}`)
+    }
+    throw new Error(
+      `conventions: ${violations.length} duplicated primitive(s). Import from src/shared/ instead; see docs/CONVENTIONS.md`,
+    )
+  }
+  console.log('conventions OK: shared primitives have a single source')
+}

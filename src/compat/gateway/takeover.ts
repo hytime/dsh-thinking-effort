@@ -8,9 +8,9 @@ import type { DshVersionCapabilities } from '../version-map.js'
 import { editableProviderCompatFields } from './validation.js'
 import { hasModelSourceConflict } from '../model-source.js'
 import { GATEWAY_COMPAT_FIELD_KEYS } from './fields.js'
+import { isUnknownRecord as isRecord } from '../../shared/guards.js'
 
 export const TAKEOVER_NAMESPACE = 'llm-openai-completions'
-export const PI_AI_NAMESPACE = 'llm-pi-ai'
 
 export interface PiAiModelRow {
   readonly id?: unknown
@@ -78,10 +78,6 @@ export interface TakeoverGatewayCompatInputs {
 }
 
 const OFFICIAL_HOST_RE = /(?:^|\.)(?:deepseek\.com|openai\.com|openrouter\.ai|anthropic\.com|googleapis\.com|ai\.google\.dev|mistral\.ai|x\.ai)$/i
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
 
 function isEffortsTable(value: unknown): boolean {
   return isRecord(value)

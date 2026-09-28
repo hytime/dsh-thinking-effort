@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:release": "node --test scripts/verify-release.test.mjs scripts/verify-workflows.test.mjs",
     "test:policy": "node --test scripts/pr-policy.test.mjs",
+    "test:conventions": "node scripts/check-conventions.mjs",
     "test:watch": "vitest",
     "prepublishOnly": "npm run build"
   },

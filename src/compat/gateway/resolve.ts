@@ -6,6 +6,7 @@ import {
   takeoverGatewayCompatInputs,
 } from './takeover.js'
 import type { PiAiSection, TakeoverSection } from './takeover.js'
+import { isUnknownRecord } from '../../shared/guards.js'
 import type {
   GatewayCompat,
   GatewayCompatEditability,
@@ -37,9 +38,7 @@ export type {
 } from './takeover.js'
 
 function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+  return isUnknownRecord(value) ? value : undefined
 }
 
 function compatRecord(value: unknown): Record<string, unknown> | undefined {
@@ -183,13 +182,6 @@ export function resolveProviderGatewayCompat(
   }
   out.source = providerSource(resolution)
   return out as unknown as ProviderGatewayCompatView
-}
-
-export const resolveProviderCompat = resolveProviderGatewayCompat
-export const resolveGatewayCompatibility = resolveGatewayCompat
-
-export function gatewayCompatFieldNames(): readonly GatewayCompatFieldKey[] {
-  return GATEWAY_COMPAT_FIELD_KEYS
 }
 
 export type { MaxTokensField }

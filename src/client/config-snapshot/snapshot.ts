@@ -8,11 +8,13 @@ import {
 import type { ConfigSnapshot, SnapshotMeta, SnapshotSection } from './types.js'
 import { isOpenCodeSessionSectionId, PLUGIN_ENTRY_ID } from '../../compat/opencode-session.js'
 import { pluginSectionId } from '../subagent-section.js'
+import { isUnknownRecord } from '../../shared/guards.js'
 import type { SettingsNamespace } from '../types.js'
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
+// Re-exported under this module's own name: four snapshot siblings import it
+// from here, so the shared predicate is bound locally rather than re-exported
+// with `export … from`, which would create no local name for them to use.
+export const isRecord = isUnknownRecord
 
 /**
  * The namespace's RAW user layer — the override layer as the settings document

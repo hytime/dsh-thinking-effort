@@ -4,11 +4,10 @@ import { resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../comp
 import { editableProviderCompatFields } from '../compat/gateway/validation.js'
 import { fieldsForApi, GATEWAY_COMPAT_FIELD_KEYS } from '../compat/gateway/fields.js'
 import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '../compat/model-source.js'
+import { isUnknownRecord } from '../shared/guards.js'
 
 function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+  return isUnknownRecord(value) ? value : undefined
 }
 
 function ownedData(value: unknown): unknown {
@@ -141,8 +140,6 @@ export function modelGatewayCompatViewFrom(
   return resolved
 }
 
-export const modelCompatViewFrom = modelGatewayCompatViewFrom
-
 export function modelCompatKey(route: string, model: string): string {
   return JSON.stringify([route, model])
 }
@@ -158,8 +155,6 @@ export function modelGatewayCompatViewsFrom(
     return [[modelCompatKey(item.route, item.model), modelGatewayCompatViewFrom(namespace, item, compatibilityProfile, takeoverRuntime)] as const]
   }))
 }
-
-export const modelCompatViewsFrom = modelGatewayCompatViewsFrom
 
 function takeoverCompatFor(runtime: TakeoverRuntimeResolution | undefined, provider: string): TakeoverRuntimeResolution['compat'][number] | undefined {
   if (runtime === undefined || !runtime.providers.includes(provider)) return undefined
@@ -193,8 +188,6 @@ export function providerGatewayCompatViewFrom(
   return out as unknown as ProviderGatewayCompatView
 }
 
-export const providerCompatViewFrom = providerGatewayCompatViewFrom
-
 export function providerGatewayCompatViewsFrom(
   namespace: SettingsNamespace | unknown,
   compatibilityProfile: CompatibilityProfile = 'unknown',
@@ -206,8 +199,6 @@ export function providerGatewayCompatViewsFrom(
   if (!providers) return {}
   return Object.fromEntries(Object.keys(providers).map((provider) => [provider, providerGatewayCompatViewFrom(namespace, provider, compatibilityProfile, takeoverRuntime)]))
 }
-
-export const providerCompatViewsFrom = providerGatewayCompatViewsFrom
 
 export function inventoryFrom(namespace: unknown): InventoryItem[] {
   const descriptor = record(namespace)

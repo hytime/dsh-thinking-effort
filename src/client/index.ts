@@ -12,6 +12,7 @@ export const name = '@hytime/dsh-thinking-effort'
 export const inject = ['slots', 'connection', 'locale'] as const
 
 const SLOT_NAME = 'settings.section'
+// A UI Slot id, unrelated to the settings section id (`PLUGIN_ENTRY_ID`).
 const SLOT_ID = 'thinking-effort'
 const SLOT_ORDER = 12
 const OVERLAY_NAME = 'shell.overlay'

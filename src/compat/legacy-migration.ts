@@ -12,6 +12,8 @@
  * and the schema supplies the defaults on resolution.
  */
 
+import { isUnknownRecord } from '../shared/guards.js'
+
 /** The decisions the Client may write into `decision`; the Host acts on each. */
 export const LEGACY_DECISIONS = ['migrate', 'dismiss', 'scan'] as const
 export type LegacyDecision = (typeof LEGACY_DECISIONS)[number]
@@ -67,9 +69,7 @@ export interface LegacyMigrationState {
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+  return isUnknownRecord(value) ? value : undefined
 }
 
 /** The `legacyMigration` object of one published section's `user` layer. */

@@ -3,6 +3,7 @@ import { hostCapabilities } from '../compat/capabilities.js'
 import { readSettingsSection, readSettingsSectionUser, settingsChangeEvents } from '../compat/settings-model.js'
 import { settingsModelForRuntime } from '../compat/version-map.js'
 import { mark } from './marker.js'
+import { LLM_PI_AI_NS, LOG_PREFIX } from '../shared/constants.js'
 import {
   HostContext,
   HostSettings,
@@ -11,9 +12,8 @@ import {
   isUnknownRecord,
 } from './types.js'
 
-export const SETTINGS_NAMESPACE = 'llm-pi-ai'
+export const SETTINGS_NAMESPACE = LLM_PI_AI_NS
 export const DEFAULT_LEVELS = { off: null, high: 'high', max: 'max' } as const
-const LOG_PREFIX = '[@hytime/dsh-thinking-effort]'
 
 /**
  * Most fill passes one trigger may run before it stops re-running itself.

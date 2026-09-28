@@ -1,13 +1,11 @@
 /**
- * The intended single source of every cross-module identifier. Both bundles are
- * meant to import this module, so it may not reach a `node:` built-in.
+ * The single source of every cross-module identifier. Both bundles import this
+ * module, so it may not reach a `node:` built-in.
  *
- * `scripts/check-conventions.mjs` is the intended enforcement: delivered by
- * Task 2, it will fail the suite when any of these literals reappears
- * elsewhere under `src/`, which is what will stop the drift that produced four
- * spellings of `llm-pi-ai` and two of the level table. Until it lands these
- * literals are only centralized here, not enforced, so the drift is still
- * present at those call sites.
+ * `scripts/check-conventions.mjs` enforces the table in `docs/CONVENTIONS.md`:
+ * it fails the suite when any of these literals reappears elsewhere under
+ * `src/`, which is what stops the drift that produced four spellings of
+ * `llm-pi-ai` and two of the level table.
  *
  * `src/client/index.ts`'s `SLOT_ID` is deliberately NOT here: it is a UI slot
  * id, not a settings section id.

@@ -11,6 +11,8 @@ import {
 } from '../compat/settings-model.js'
 import { OpenCodeSessionFormatter, resolveFormatConfig } from './opencode-session-format.js'
 import { PLUGIN_SETTINGS_SCHEMA } from './plugin-settings.js'
+import { LOG_PREFIX } from '../shared/constants.js'
+import { isUnknownRecord } from '../shared/guards.js'
 import type {
   HostContext,
   SettingsInjectionContext,
@@ -18,8 +20,6 @@ import type {
 } from './types.js'
 
 export { PLUGIN_SETTINGS_SCHEMA as OPENCODE_SESSION_SETTINGS_SCHEMA } from './plugin-settings.js'
-
-const LOG_PREFIX = '[@hytime/dsh-thinking-effort]'
 
 type OpenCodeSessionRequest = {
   readonly provider: string
@@ -36,7 +36,7 @@ type FetchInit = Parameters<typeof fetch>[1]
 type FetchFunction = (input: FetchInput, init?: FetchInit) => ReturnType<typeof fetch>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return isUnknownRecord(value)
 }
 
 function ownRecord(value: unknown, key: string): Record<string, unknown> | undefined {

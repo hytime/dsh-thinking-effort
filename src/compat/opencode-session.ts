@@ -1,11 +1,18 @@
 import { PLUGIN_ENTRY_ID } from './settings-model.js'
+import {
+  FORMAT_INVALID_POLICIES as SHARED_FORMAT_INVALID_POLICIES,
+  FORMAT_MODES as SHARED_FORMAT_MODES,
+  FORMAT_TIMES as SHARED_FORMAT_TIMES,
+  PLUGIN_NS,
+} from '../shared/constants.js'
+import { isUnknownRecord } from '../shared/guards.js'
 
 /**
  * The section id under the registered-namespace settings model (rc.7 … 0.1.6).
  * The 0.1.7 entry-config model addresses the section by Loader entry id
  * instead, which `settingsEntryId` reads from the live fiber.
  */
-export const OPENCODE_SESSION_NAMESPACE = 'dsh-thinking-effort'
+export const OPENCODE_SESSION_NAMESPACE = PLUGIN_NS
 export const OPENCODE_SESSION_HEADER = 'x-opencode-session'
 
 /**
@@ -29,16 +36,15 @@ export function isOpenCodeSessionSectionId(value: unknown): boolean {
 }
 
 /**
- * The generator mode list: the Host resolves stored values against it and the
- * Client renders the mode select in this order, so both sides read one copy.
- * Kept in this module because the Client bundle imports it and must not pull a
- * `node:` built-in in.
+ * The generator mode list, re-exported so the existing Host and Client callers
+ * keep this import path. `src/shared/constants.ts` is the single definition;
+ * it is reachable from the Client bundle because it pulls no `node:` built-in.
  */
-export const FORMAT_MODES = ['ses-derive', 'passthrough', 'template', 'expression', 'script'] as const
+export const FORMAT_MODES = SHARED_FORMAT_MODES
 /** The timestamp-source list; same single-copy rule as `FORMAT_MODES`. */
-export const FORMAT_TIMES = ['firstUse', 'hash'] as const
+export const FORMAT_TIMES = SHARED_FORMAT_TIMES
 /** The on-invalid policy list; same single-copy rule as `FORMAT_MODES`. */
-export const FORMAT_INVALID_POLICIES = ['warn', 'drop', 'send'] as const
+export const FORMAT_INVALID_POLICIES = SHARED_FORMAT_INVALID_POLICIES
 
 export type OpenCodeSessionFormatMode = (typeof FORMAT_MODES)[number]
 export type OpenCodeSessionTimeSource = (typeof FORMAT_TIMES)[number]
@@ -86,9 +92,7 @@ export interface OpenCodeSessionSettings {
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+  return isUnknownRecord(value) ? value : undefined
 }
 
 function ownRecord(value: unknown, key: string): Record<string, unknown> | undefined {

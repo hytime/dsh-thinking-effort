@@ -1,6 +1,7 @@
 import z from '@deepseek-ai/schemastery'
 import type { OpenCodeSessionSettings } from '../compat/opencode-session.js'
 import type { LegacyMigrationState } from '../compat/legacy-migration.js'
+import { SNAPSHOT_KIND } from '../shared/constants.js'
 
 /**
  * One stored configuration snapshot. Fields carry defaults so a section
@@ -8,7 +9,7 @@ import type { LegacyMigrationState } from '../compat/legacy-migration.js'
  * "never written", because the defaults materialize this object either way.
  */
 const configSnapshot = z.object({
-  kind: z.string().default('dsh-thinking-effort/config-snapshot'),
+  kind: z.string().default(SNAPSHOT_KIND),
   version: z.number().default(1),
   createdAt: z.string().default(''),
   pluginVersion: z.string().default(''),
@@ -186,7 +187,7 @@ const PLUGIN_SETTINGS_DEFAULTS = {
   },
   profiles: {},
   autoBackup: {
-    kind: 'dsh-thinking-effort/config-snapshot',
+    kind: SNAPSHOT_KIND,
     version: 1,
     createdAt: '',
     pluginVersion: '',

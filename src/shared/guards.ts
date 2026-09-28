@@ -1,8 +1,9 @@
 /**
- * The shared plain-object guard. `src/host/types.ts` re-exports it today so
- * existing host callers keep their import path; Task 3 will migrate the 16
- * `record()`/`isRecord()` helpers declared across `src/` onto it, which is what
- * will make it the one guard both bundles import.
+ * The shared plain-object guard. Every `record()`/`isRecord()` helper across
+ * `src/` delegates here, so both bundles import this one implementation;
+ * `src/host/types.ts` re-exports it so existing host callers keep their import
+ * path. `scripts/check-conventions.mjs` fails the suite if the body below is
+ * restated anywhere else.
  *
  * A plain data object is anything non-null, non-array, and `typeof 'object'`,
  * which deliberately admits class instances: every call site treats the value
