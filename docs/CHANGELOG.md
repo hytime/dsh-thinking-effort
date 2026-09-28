@@ -14,6 +14,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-09-29
+
 ### 新增 / Added
 
 - DSH `0.1.3-alpha.2` 新增三个网关兼容字段：`thinkingTokenBudgetField`（completions）、数值型 `vllmPriority`（completions）和 `supportsMaxOutputTokens`（Responses）。插件现在会像其它 compat 字段一样暴露并写入它们，因此 0.1.3-alpha.2 及更高版本可配置的标量字段由 15 个增加到 18 个。由于 `supportsMaxOutputTokens` 只在 Responses 协议下提供，`openai-completions` 不再提供全部字段：它支持除该字段以外的 17 个。

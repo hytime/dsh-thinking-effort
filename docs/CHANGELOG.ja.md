@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-09-29
+
 ### 追加
 
 - DSH `0.1.3-alpha.2` は 3 つのゲートウェイ互換フィールド——`thinkingTokenBudgetField`（completions）、数値型の `vllmPriority`（completions）、`supportsMaxOutputTokens`（Responses）——を追加しました。プラグインは他の compat フィールドと同様にこれらを公開して書き込むようになり、`0.1.3-alpha.2` 以降で設定できるスカラーフィールドは 15 個から 18 個になりました。`supportsMaxOutputTokens` は Responses プロトコルでのみ提供されるため、`openai-completions` はすべてのフィールドを提供しなくなりました（それ以外の 17 個に対応します）。

@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-09-29
+
 ### 추가
 
 - DSH `0.1.3-alpha.2`는 세 가지 게이트웨이 호환 필드——`thinkingTokenBudgetField`(completions), 숫자형 `vllmPriority`(completions), `supportsMaxOutputTokens`(Responses)——를 추가했습니다. 플러그인은 다른 compat 필드와 마찬가지로 이를 노출하고 기록하므로, `0.1.3-alpha.2` 이상에서 설정할 수 있는 스칼라 필드가 15개에서 18개로 늘었습니다. `supportsMaxOutputTokens`는 Responses 프로토콜에서만 제공되므로 `openai-completions`는 더 이상 모든 필드를 제공하지 않습니다(해당 필드를 제외한 17개를 제공합니다).
