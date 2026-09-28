@@ -35,16 +35,24 @@ const RULES = [
     // into two entries, a line matching both was reported twice.
     //
     // 1. A comparison against the transport's conflict CODE. Anchored on a
-    //    comparison operator so a comment or JSDoc sentence naming
-    //    `settings/conflict` (the prose form this rule's own documentation
-    //    uses) is not a violation — only an executable restatement is. Both
-    //    operand orders are accepted, since `'settings/conflict' === code` is
-    //    the same test as `code === 'settings/conflict'`.
+    //    comparison operator, so a line that only NAMES the code
+    //    (`settings/conflict` / `SETTINGS_CONFLICT`, the prose form this rule's
+    //    own documentation uses) is not a violation. Both operand orders are
+    //    accepted, since `'settings/conflict' === code` is the same test as
+    //    `code === 'settings/conflict'`.
     // 2. An APPLIED conflict MESSAGE regex — one of the two halves
     //    (`/conflict/i`, `/changed since it was read/i`) followed by `.test(`.
-    //    The `.test(` is required, not cosmetic: it is what separates a
-    //    predicate from a comment that quotes the old pattern, and both
-    //    historical sites wrote `regex.test(message)`.
+    //    The `.test(` requirement drops a bare, never-applied `/conflict/i`,
+    //    which is what the prose sample in `tests/conventions.test.ts` cites.
+    //
+    // The boundary is textual, NOT syntactic: this rule — like every rule
+    // here — matches raw lines and cannot tell a comment from code. So
+    // `// was: return error.code === 'settings/conflict'` and
+    // `// legacy: /conflict/i.test(message)` ARE flagged, exactly like the
+    // code they quote. That is deliberate: the removed predicate must not
+    // reappear in the tree, commented out included. Only the name-only prose
+    // form above is exempt; `tests/conventions.test.ts` pins both sides of
+    // that line.
     //
     // Known boundaries: like every rule here it runs per LINE, so only a
     // single-line expression matches. A conflict test split across lines, one

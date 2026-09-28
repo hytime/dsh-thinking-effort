@@ -86,15 +86,39 @@ describe('convention guard', () => {
   })
 
   it('does not fire on prose that merely names the conflict code', () => {
-    // The rule is about an executable restatement. A comment or JSDoc sentence
-    // citing `settings/conflict` is documentation, not a second predicate, and
-    // treating it as a violation would push authors to stop naming the code.
+    // Name-only prose: no comparison operator and no `.test(`. This is the
+    // whole comment exemption. Treating even this as a violation would push
+    // authors to stop naming the code they are talking about.
     const sample = [
       '/** The Remote classifies a stale revision as `settings/conflict`; older transports only carry the message. */',
       ' * `/conflict/i` was the previous local test.',
       '// see SETTINGS_CONFLICT above',
     ].join('\n')
     expect(findViolations([{ path: 'src/client/somewhere.ts', source: sample }])).toEqual([])
+  })
+
+  it('still fires on a comment that quotes an executable conflict form', () => {
+    // The exemption above stops at name-only prose: the guard matches raw
+    // lines and cannot tell a comment from code, so quoting the removed
+    // predicate in a comment is flagged exactly like the code itself. An
+    // earlier revision of the rule's comments and `docs/CONVENTIONS.md:28`
+    // claimed a `.test(` requirement "separates a predicate from a comment
+    // that quotes the old pattern" — those comments in fact matched, so the
+    // documentation promised an exemption the guard did not grant. This test
+    // pins the real boundary.
+    const sample = [
+      "// was: return error.code === 'settings/conflict'",
+      '// legacy: /conflict/i.test(message)',
+      " *   if (code === 'SETTINGS_CONFLICT') ...",
+      '// the conflict code lives in shared/conflict.ts',
+    ].join('\n')
+    const found = findViolations([{ path: 'src/client/somewhere.ts', source: sample }])
+    expect(found.map((violation) => violation.rule)).toEqual([
+      'conflict-duplication',
+      'conflict-duplication',
+      'conflict-duplication',
+    ])
+    expect(found.map((violation) => violation.line)).toEqual([1, 2, 3])
   })
 
   it('flags each duplicated identifier literal outside the shared module', () => {
