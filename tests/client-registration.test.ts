@@ -721,6 +721,18 @@ describe('client registration', () => {
     expect(harness.slots.inject).toHaveBeenCalledWith('conversation.input.model', expect.any(Function))
   })
 
+  it('shadows the shipped model seat on purpose, so the priority must stay below 0', () => {
+    const harness = createHarness('modern')
+    apply(harness.context)
+
+    // `conversation.input.model` is a SINGLE slot, and its winner is the FIRST
+    // entry in ASCENDING priority order, so a negative priority SHADOWS the
+    // shipped ModelSelect (priority 0). Renaming this to a positive value would
+    // silently hand the seat back to the official component and hide the slider.
+    const descriptor = harness.registrations[2]?.descriptor
+    expect(descriptor?.priority).toBeLessThan(0)
+  })
+
   it('registers a render factory for the provider compatibility settings surface', () => {
     const harness = createHarness('modern')
     apply(harness.context)

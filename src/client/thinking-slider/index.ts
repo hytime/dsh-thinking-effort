@@ -48,7 +48,12 @@ export type {
 
 /** Target slot key of the composer model seat. */
 export const SEAT_NAME = 'conversation.input.model'
-/** Shadowing priority: the placeholder yields to any real occupant. */
+/**
+ * Shadowing priority. `conversation.input.model` is a SINGLE slot and its
+ * winner is the first entry in ASCENDING priority order, so a negative value
+ * here WINS over the shipped `ModelSelect` (priority 0): this seat replaces the
+ * official effort control on purpose, it does not yield to it.
+ */
 export const SEAT_PRIORITY = -10
 
 /** The seat's injected business face ({@link SliderProps} minus `t`). */

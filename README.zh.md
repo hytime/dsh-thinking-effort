@@ -180,7 +180,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.5
 
 ### Composer 推理档位滑块
 
-当 DSH Web 运行时提供 `modelDirectories` 服务时，客户端会为可选 `conversation.input.model` `seat` 注册低优先级的 `shadow` 实现，不会修改 Composer 本身。滑块读取当前精确 `provider/model` 在宿主侧解析后的 `reasoning.efforts` 数组，因此只显示该模型当前生效的档位。选择档位提交的是普通会话模型选择，不会写入插件的 Settings 文档。
+当 DSH Web 运行时提供 `modelDirectories` 服务时，客户端会为可选 `conversation.input.model` `seat` 注册一个有意压过官方模型选择器的实现——这个槽是单占位槽，优先级越低越胜出——不会修改 Composer 本身。滑块读取当前精确 `provider/model` 在宿主侧解析后的 `reasoning.efforts` 数组，因此只显示该模型当前生效的档位。选择档位提交的是普通会话模型选择，不会写入插件的 Settings 文档。
 
 模型声明了 `defaultEffort` 时，滑块会显示对应档位。模型未声明 `defaultEffort` 时，面板额外提供「跟随模型默认」；提交时不会设置推理档位覆盖值。控件使用宿主 `--dsw-*` 语义 `token`，不维护自己的主题偏好，会跟随当前浅色或深色主题。
 
@@ -283,7 +283,7 @@ DSH 0.1.7 会把 `settings.yaml` 重命名并只导入一次，而更早版本�
 ## 工作方式
 
 - **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位。补齐只写入用户层，因此覆盖的是你自己 profile 声明的模型：由组合 base 或 schema 默认值提供的模型在该层没有可写入的条目，插件不会为其补全，并在宿主日志中说明跳过了多少个。插件同时读取模型级 OpenCode 会话设置，只在匹配的 `llm/stream` 请求中注入按 `opencodeSession.format` 生成（默认 `ses-derive`）的 `x-opencode-session`，并为 `opencodeSession.userAgent` 命中的模型改写 `user-agent`（否则会被 `llm-pi-ai` 适配器的归因头强制覆盖）。
-- **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页；运行时提供 `modelDirectories` 服务时，为可选 Composer `seat` 注册低优先级 `shadow` 实现，并显示宿主已解析的推理档位滑块。模型编辑器把 OpenCode 会话 Header 设置保存在插件自有 namespace，与 `llm-pi-ai.compat` 分开。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
+- **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页；运行时提供 `modelDirectories` 服务时，为可选 Composer `seat` 注册有意压过官方模型选择器的实现（该槽为单占位槽，优先级越低越胜出），并显示宿主已解析的推理档位滑块。模型编辑器把 OpenCode 会话 Header 设置保存在插件自有 namespace，与 `llm-pi-ai.compat` 分开。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
 - **子 agent：** `0.1.7` 及以后默认值存储在本插件自有设置分区的 `subagentEffort`（`0.1.0-rc.7` 至 `0.1.6` 为 `llm-pi-ai` 用户层）。宿主优先读取插件自有分区，再回退 `llm-pi-ai`；只有 `0.1.7` 之前的版本会真正把值放在后者（entry-config 的 `llm-pi-ai` 分区只声明 `providers`，其用户层不会承载这个键）。`agent/request` waterfall 只对未显式指定档位的子 agent 请求进行补全。
 - **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.14`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
 

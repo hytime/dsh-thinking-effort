@@ -14,6 +14,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 文档 / Documentation
+
+- 修正 Composer 座位优先级的描述：`conversation.input.model` 是单占位槽，胜者按优先级**升序**取第一个，因此 `priority: -10` 是**有意压过**官方模型选择器，而非「让位」给后者。原注释与 README 的表述方向相反，代码行为一直正确，本次只改文字以免后人按错误注释改动优先级。
+- Fix the composer seat's priority description: `conversation.input.model` is a single slot whose winner is the FIRST entry in ascending priority order, so `priority: -10` deliberately shadows the shipped model selector rather than yielding to it. The comment and README said the opposite; the behaviour was always correct, and only the wording changes so nobody "fixes" the priority into a behaviour change.
+
 ## [0.3.5] - 2026-09-27
 
 ### 修复 / Fixed
