@@ -30,7 +30,7 @@ import { resolveGatewayCompat, resolveModelGatewayCompat, resolveProviderGateway
 import { editableProviderCompatFields, validateProviderCompat } from '../src/compat/gateway/validation.js'
 import type { GatewayCompatEditability, GatewayCompatFieldKey, GatewayCompatFieldResolution } from '../src/compat/gateway/types.js'
 import { capabilitiesForVersion } from '../src/compat/version-map.js'
-import { GATEWAY_COMPAT_FIELD_KEYS, ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS, fieldsForApi } from '../src/compat/gateway/fields.js'
+import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS, fieldsForApi } from '../src/compat/gateway/fields.js'
 import type { InventoryItem, ModelGatewayCompatUpdate, Translation } from '../src/client/types.js'
 import { revisionOf } from '../src/client/types.js'
 import { hasSessionRemote } from '../src/compat/model-directory.js'
@@ -55,6 +55,8 @@ const realGatewaySchema = {
        requiresThinkingAsText: 0,
        requiresReasoningContentOnAssistantMessages: 0,
        supportsThinkingTokenBudget: 0,
+       thinkingTokenBudgetField: 1,
+       supportsMaxOutputTokens: 0,
        supportsStrictMode: 0,
        supportsLongCacheRetention: 0,
        maxTokensField: 1,
@@ -1533,7 +1535,13 @@ describe('route protocol gating of gateway compat fields', () => {
     expect(fieldsForApi('anthropic-messages')).toEqual(['supportsLongCacheRetention'])
     expect(fieldsForApi('bedrock-converse-stream')).toEqual(['supportsStrictMode'])
     expect(fieldsForApi(undefined)).toEqual(GATEWAY_COMPAT_FIELD_KEYS)
-    expect(fieldsForApi({ api: completionApi })).toEqual(GATEWAY_COMPAT_FIELD_KEYS)
+    // The object form resolves like the string form. `openai-completions` no
+    // longer offers EVERY registry field — `supportsMaxOutputTokens` is
+    // Responses-only from 0.1.3-alpha.2 — so compare against the fields whose
+    // own protocol list admits completions.
+    expect(fieldsForApi({ api: completionApi })).toEqual(
+      GATEWAY_COMPAT_FIELD_KEYS.filter((field) => GATEWAY_COMPAT_FIELDS[field].protocols.includes(completionApi)),
+    )
   })
 
   it('hides openai-completions-only fields from responses editability', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ALPHA1_PLUS_COMPAT_FIELDS, GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, GATEWAY_COMPAT_GROUPS, RC8_COMPAT_FIELDS, SUPPORTED_THINKING_FORMATS } from '../src/compat/gateway/fields.js'
+import { ALPHA1_PLUS_COMPAT_FIELDS, ALPHA3_PLUS_COMPAT_FIELDS, GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, GATEWAY_COMPAT_GROUPS, RC8_COMPAT_FIELDS, SUPPORTED_THINKING_FORMATS, fieldsForApi } from '../src/compat/gateway/fields.js'
 import { LOCALE_DATA } from '../src/client/locales.js'
 
 describe('gateway compat field registry', () => {
@@ -45,10 +45,51 @@ describe('gateway compat field registry', () => {
     expect(RC8_COMPAT_FIELDS).not.toContain('supportsFinishReason')
     expect(RC8_COMPAT_FIELDS).not.toContain('supportsThinkingTokenBudget')
     expect(RC8_COMPAT_FIELDS).toContain('supportsStore')
-    for (const field of RC8_COMPAT_FIELDS) expect(ALPHA1_PLUS_COMPAT_FIELDS).toContain(field) // 只多不少：ALPHA1_PLUS 至少包含 RC8 的全部字段
     expect(ALPHA1_PLUS_COMPAT_FIELDS).toContain('supportsFinishReason')
     expect(ALPHA1_PLUS_COMPAT_FIELDS).toContain('supportsThinkingTokenBudget')
-    expect(RC8_COMPAT_FIELDS.length + 2).toBe(ALPHA1_PLUS_COMPAT_FIELDS.length)
+  })
+
+  it('only widens the field sets from one version window to the next', () => {
+    // 这是硬性不变量：DSH 只增不减地扩充 compatProfile，所以每个窗口的字段集必须是
+    // 上一个窗口的超集且严格更大。把某个窗口写窄会让它区间内的版本丢掉本可配置的字段，
+    // 而"只多不少"这一条比逐个窗口的固定增量更难绕过（新增窗口自动纳入检查）。
+    const windows = [RC8_COMPAT_FIELDS, ALPHA1_PLUS_COMPAT_FIELDS, ALPHA3_PLUS_COMPAT_FIELDS] as const
+    for (let index = 1; index < windows.length; index += 1) {
+      const previous = windows[index - 1]!
+      const current = windows[index]!
+      for (const field of previous) expect(current).toContain(field)
+      expect(current.length).toBeGreaterThan(previous.length)
+    }
+  })
+
+  it('exposes the fields DSH added after 0.1.2 and keeps the version sets widening', () => {
+    expect(GATEWAY_COMPAT_FIELD_KEYS).toContain('thinkingTokenBudgetField')
+    expect(GATEWAY_COMPAT_FIELD_KEYS).toContain('supportsMaxOutputTokens')
+    expect(ALPHA3_PLUS_COMPAT_FIELDS).toContain('thinkingTokenBudgetField')
+    expect(ALPHA3_PLUS_COMPAT_FIELDS).toContain('supportsMaxOutputTokens')
+    expect(ALPHA1_PLUS_COMPAT_FIELDS).not.toContain('thinkingTokenBudgetField')
+    expect(ALPHA1_PLUS_COMPAT_FIELDS).not.toContain('supportsMaxOutputTokens')
+    for (const field of ALPHA1_PLUS_COMPAT_FIELDS) expect(ALPHA3_PLUS_COMPAT_FIELDS).toContain(field)
+  })
+
+  it('offers exactly the wire spellings DSH accepts for the thinking budget field', () => {
+    // DSH 的 THINKING_TOKEN_BUDGET_FIELDS 只认这三个拼写；多一个字面量会被
+    // DSH 的 schema 拒绝，少一个则用户无法选到该拼写。
+    expect(ALPHA3_PLUS_COMPAT_FIELDS).toContain('thinkingTokenBudgetField')
+    const spec = GATEWAY_COMPAT_FIELDS.thinkingTokenBudgetField
+    expect(spec.kind).toBe('enum')
+    expect(spec.kind === 'enum' ? [...spec.enumValues] : []).toEqual([
+      'thinking_token_budget', 'thinking_budget', 'thinking_budget_tokens',
+    ])
+  })
+
+  it('gates the two new fields to the protocols DSH offers them on', () => {
+    expect(fieldsForApi('openai-completions')).toContain('thinkingTokenBudgetField')
+    expect(fieldsForApi('openai-completions')).not.toContain('supportsMaxOutputTokens')
+    for (const api of ['openai-responses', 'azure-openai-responses', 'openai-codex-responses']) {
+      expect(fieldsForApi(api)).toContain('supportsMaxOutputTokens')
+      expect(fieldsForApi(api)).not.toContain('thinkingTokenBudgetField')
+    }
   })
 
   it('exposes the two legacy fields and the new scalar ones in the declared groups', () => {

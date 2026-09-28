@@ -19,7 +19,7 @@
 
 > **兼容边界：** DSH Runtime compatibility 只负责 Settings 传输：新版 DSH 使用 `remote.settings`，旧版 DSH 使用 `connection.api.settings`。插件按运行时实际能力进行探测；旧版没有 Remote provider 时不会因此要求可选的 Remote 服务。
 >
-> Gateway Protocol compatibility 是独立的一层。DSH schema 提供时，插件支持 15 个常用标量 `llm-pi-ai.compat` 字段，按角色与推理、格式与输出、流式与工具、存储与缓存 4 组组织。boolean 字段可设为「自动」「支持」或「不支持」，enum 字段可设为「自动」或具体取值。DSH `0.1.0-rc.7` 不提供网关兼容设置；`0.1.0-rc.8` 至 `<0.1.2-alpha.1` 支持其他字段，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget`；`0.1.2-alpha.1` 及更高版本在 schema 支持时提供全部 15 个字段。安装并启用可选的 `dsh-llm-openai-completions` transport 后，它可以接管符合条件的自定义 OpenAI 兼容思考模型供应商。「自动」会取消当前层覆盖，并恢复继承链中的下一层取值。
+> Gateway Protocol compatibility 是独立的一层。DSH schema 提供时，插件支持 17 个常用标量 `llm-pi-ai.compat` 字段，按角色与推理、格式与输出、流式与工具、存储与缓存 4 组组织。boolean 字段可设为「自动」「支持」或「不支持」，enum 字段可设为「自动」或具体取值。DSH `0.1.0-rc.7` 不提供网关兼容设置；`0.1.0-rc.8` 至 `<0.1.2-alpha.1` 支持其他字段，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget`；`0.1.2-alpha.1` 至 `<0.1.3-alpha.2` 提供其中 15 个，`0.1.3-alpha.2` 及更高版本在 schema 支持时提供全部 17 个字段。安装并启用可选的 `dsh-llm-openai-completions` transport 后，它可以接管符合条件的自定义 OpenAI 兼容思考模型供应商。「自动」会取消当前层覆盖，并恢复继承链中的下一层取值。
 >
 > DSH `0.1.2-alpha.1` 及更高版本通过 `LocaleRuntime` 支持语言包注册外部 locale ID。本插件会动态注册 `ja` 和 `ko`，无需维护 DSH fork。只支持固定内置 locale ID 的旧版 DSH 仍只能使用 `zh` 和 `en`。
 >
@@ -33,11 +33,12 @@
 | --- | --- |
 | `0.1.0-rc.7` | 不支持 |
 | `0.1.0-rc.8` 至 `<0.1.2-alpha.1` | schema 暴露时可用，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget` |
-| `0.1.2-alpha.1` 至 `<0.1.7-0` | schema 暴露时支持全部 15 个字段。达到或超过该上限的版本不做映射：插件照常工作，改为跟随运行时宿主实际报告的能力 |
+| `0.1.2-alpha.1` 至 `<0.1.3-alpha.2` | schema 暴露时支持 15 个字段；`thinkingTokenBudgetField` 与 `supportsMaxOutputTokens` 尚未提供 |
+| `0.1.3-alpha.2` 至 `<0.1.7-0` | schema 暴露时支持全部 17 个字段。达到或超过该上限的版本不做映射：插件照常工作，改为跟随运行时宿主实际报告的能力 |
 
 从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。上表表示各 DSH 版本最多可用的字段集合；当前网关协议还可能进一步缩小集合。
 
-实际可配置字段需要同时满足三项条件：DSH 版本支持、运行时 schema 暴露，以及当前路由的 `api` 协议支持。不支持的字段不会显示，也不会写入 Settings。15 个字段中，`openai-completions` 支持全部 15 个；`openai-responses`、`azure-openai-responses` 和 `openai-codex-responses` 只支持 `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention`。如果 `api` 缺失或无法识别，最终仍以运行时 schema 和 DSH 校验为准。
+实际可配置字段需要同时满足三项条件：DSH 版本支持、运行时 schema 暴露，以及当前路由的 `api` 协议支持。不支持的字段不会显示，也不会写入 Settings。17 个字段中，`openai-completions` 支持除 `supportsMaxOutputTokens` 之外的全部字段；`openai-responses`、`azure-openai-responses` 和 `openai-codex-responses` 只支持 `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention` 和 `supportsMaxOutputTokens`。如果 `api` 缺失或无法识别，最终仍以运行时 schema 和 DSH 校验为准。
 
 DSH `0.1.7` 起改为从 Loader 条目自身的 `Config` schema 派生设置表单（entry-config 模型）；没有导出该 schema 的插件不会出现设置表单。本插件已导出该 schema，因此在 `0.1.7` 及以后，它的设置分区使用 Loader 条目 ID `thinking-effort`；`0.1.0-rc.7` 至 `0.1.6` 仍使用注册的 namespace `dsh-thinking-effort`，客户端会自动解析宿主实际发布的那个 ID。`subagentEffort` 现在存放在本插件自己的分区，且在 `0.1.7` 及以后旧的 `llm-pi-ai` 位置不再是回退读取来源：该分区的 schema 只声明了 `providers`，宿主会拒绝写入其他路径，并从它上报的用户层中丢掉未声明的键。所以升级前存在那里的子 agent 默认值会显示为未设置，需要在插件的设置卡片里重新选择一次。本插件在 `0.1.7` 之前导出的快照仍把该值放在 `llm-pi-ai` 里；导入时插件会把该值迁移到自己的分区——这也正是同一批次里的 providers 能被接受的原因（只要有一个写入路径不是 volatile，宿主就会拒绝整个批次）。`0.1.7` 及以后设置保存在当前 profile 的 `cordis.patch.yml`，而不再是 `~/.dsh/settings.yaml`（`0.1.7` 不再使用该文件）。
 
@@ -79,7 +80,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 | --- | --- |
 | 默认档位补齐 | 为用户层中缺少配置的模型添加 `off`、`high`、`max`，不覆盖已有自定义值；只由组合 base 或 schema 默认值提供的模型不补全，并在宿主日志中报出数量 |
 | 模型级编辑 | 在「设置 → 模型能力与档位」中逐模型勾选档位并填写线上值；catalog/modelOverrides 和 `models[]` 模型都可编辑 compat |
-| 网关兼容配置 | 按 provider 全局或单个模型配置 15 个常用标量字段，按角色与推理、格式与输出、流式与工具、存储与缓存分组并默认收起 |
+| 网关兼容配置 | 按 provider 全局或单个模型配置 17 个常用标量字段，按角色与推理、格式与输出、流式与工具、存储与缓存分组并默认收起 |
 | OpenCode 会话 Header | 按精确模型启用动态 `x-opencode-session`，默认生成与 DSH 会话绑定的确定性 `ses_` 值（提供 template / expression / script 等模式以应对上游格式变化），不保存固定 Header 值 |
 | OpenCode user-agent 覆盖 | 按 provider/model（含自定义路由）改写 `user-agent` 以模仿上游客户端，可为不同路由配置不同值；默认关闭 |
 | 网关值映射 | 例如 DSH 选择 `high` 时，实际向网关发送 `ultra` |
@@ -190,7 +191,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.5
 
 ### 网关兼容配置
 
-provider 的 `compat` 区域是该 provider 下全部模型的全局默认值。设置页将 15 个字段按 4 组组织并默认收起。请使用 DSH 官方 YAML 配置结构：
+provider 的 `compat` 区域是该 provider 下全部模型的全局默认值。设置页将 17 个字段按 4 组组织并默认收起。请使用 DSH 官方 YAML 配置结构：
 
 ```yaml
 providers:

@@ -65,6 +65,9 @@ export const SUPPORTED_THINKING_FORMATS = [
 
 export const MAX_TOKENS_FIELDS = ['max_tokens', 'max_completion_tokens'] as const
 
+/** DSH's own list, so the enum offers exactly the wire spellings pi-ai accepts. */
+export const THINKING_TOKEN_BUDGET_FIELDS = ['thinking_token_budget', 'thinking_budget', 'thinking_budget_tokens'] as const
+
 function booleanField(key: string, group: GatewayCompatGroupId, protocols: readonly GatewayProtocol[]) {
   return { key, kind: 'boolean' as const, group, labelKey: key, protocols }
 }
@@ -83,11 +86,17 @@ export const GATEWAY_COMPAT_FIELDS = {
   supportsDeveloperRole: booleanField('supportsDeveloperRole', 'role', COMPLETIONS_AND_RESPONSES),
   supportsReasoningEffort: booleanField('supportsReasoningEffort', 'role', COMPLETIONS),
   supportsThinkingTokenBudget: booleanField('supportsThinkingTokenBudget', 'role', COMPLETIONS),
+  thinkingTokenBudgetField: enumField('thinkingTokenBudgetField', 'role', COMPLETIONS, THINKING_TOKEN_BUDGET_FIELDS, [
+    { value: 'thinking_token_budget', labelKey: 'thinkingTokenBudgetFieldTokenBudget' },
+    { value: 'thinking_budget', labelKey: 'thinkingTokenBudgetFieldBudget' },
+    { value: 'thinking_budget_tokens', labelKey: 'thinkingTokenBudgetFieldBudgetTokens' },
+  ]),
   thinkingFormat: enumField('thinkingFormat', 'format', COMPLETIONS, SUPPORTED_THINKING_FORMATS),
   maxTokensField: enumField('maxTokensField', 'format', COMPLETIONS, MAX_TOKENS_FIELDS, [
     { value: 'max_tokens', labelKey: 'maxTokensFieldStandard' },
     { value: 'max_completion_tokens', labelKey: 'maxTokensFieldCompletion' },
   ]),
+  supportsMaxOutputTokens: booleanField('supportsMaxOutputTokens', 'format', RESPONSES),
   requiresThinkingAsText: booleanField('requiresThinkingAsText', 'format', COMPLETIONS),
   requiresReasoningContentOnAssistantMessages: booleanField('requiresReasoningContentOnAssistantMessages', 'format', COMPLETIONS),
   supportsUsageInStreaming: booleanField('supportsUsageInStreaming', 'stream', COMPLETIONS),
@@ -145,6 +154,22 @@ export const RC8_COMPAT_FIELDS = [
 export const ALPHA1_PLUS_COMPAT_FIELDS = [
   ...RC8_COMPAT_FIELDS,
   'supportsFinishReason', 'supportsThinkingTokenBudget',
+] as const satisfies readonly GatewayCompatFieldKey[]
+
+/**
+ * The fields DSH began offering in `0.1.3-alpha.2`. Verified against the real
+ * package: `COMPLETIONS_COMPAT_GATE` grew `thinkingTokenBudgetField` (and
+ * `vllmPriority`, task 7) and `RESPONSES_COMPAT_GATE` grew
+ * `supportsMaxOutputTokens`, taking the offer counts from 17/3 to 19/4.
+ * `0.1.2-alpha.2` and `0.1.2-rc.1` were checked and do NOT have them, which is
+ * why the boundary is `0.1.3-alpha.2` and not the older `0.1.2-alpha.1`.
+ *
+ * The boundary is a PRERELEASE comparison, so `0.1.3-0` and `0.1.3-alpha.1`
+ * stay in the previous window: `0.1.3-0` < `0.1.3-alpha.1` < `0.1.3-alpha.2`.
+ */
+export const ALPHA3_PLUS_COMPAT_FIELDS = [
+  ...ALPHA1_PLUS_COMPAT_FIELDS,
+  'thinkingTokenBudgetField', 'supportsMaxOutputTokens',
 ] as const satisfies readonly GatewayCompatFieldKey[]
 
 export type GatewayCompatSelection = 'auto' | string

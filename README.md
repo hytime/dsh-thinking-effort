@@ -19,7 +19,7 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 
 > **Compatibility boundaries:** DSH Runtime compatibility covers the Settings transport only: modern DSH exposes `remote.settings`, while legacy DSH exposes `connection.api.settings`. The plugin detects the available runtime capability and keeps the legacy fallback optional, so the settings page does not require a Remote provider on older DSH builds.
 >
-> Gateway Protocol compatibility is a separate layer. When the DSH schema exposes them, the plugin supports 15 common scalar `llm-pi-ai.compat` fields, grouped into role/reasoning, format/output, streaming/tools, and storage/cache. Boolean fields offer `Auto`, supported, and unsupported; enum fields offer `Auto` and their concrete values. DSH `0.1.0-rc.7` does not provide gateway compat settings. DSH `0.1.0-rc.8` through `<0.1.2-alpha.1` provide the other fields, but not `supportsFinishReason` or `supportsThinkingTokenBudget`; DSH `0.1.2-alpha.1` and later expose all 15 when supported by the schema. The optional `dsh-llm-openai-completions` transport can take over eligible custom OpenAI-compatible thinking providers when it is installed and enabled. `Auto` unsets the current-layer override and restores the next value in the inheritance chain.
+> Gateway Protocol compatibility is a separate layer. When the DSH schema exposes them, the plugin supports 17 common scalar `llm-pi-ai.compat` fields, grouped into role/reasoning, format/output, streaming/tools, and storage/cache. Boolean fields offer `Auto`, supported, and unsupported; enum fields offer `Auto` and their concrete values. DSH `0.1.0-rc.7` does not provide gateway compat settings. DSH `0.1.0-rc.8` through `<0.1.2-alpha.1` provide the other fields, but not `supportsFinishReason` or `supportsThinkingTokenBudget`; DSH `0.1.2-alpha.1` through `<0.1.3-alpha.2` expose 15 of them, and `0.1.3-alpha.2` and later expose all 17 when supported by the schema. The optional `dsh-llm-openai-completions` transport can take over eligible custom OpenAI-compatible thinking providers when it is installed and enabled. `Auto` unsets the current-layer override and restores the next value in the inheritance chain.
 >
 > DSH `0.1.2-alpha.1` and later accept language-pack locale IDs through `LocaleRuntime`. This plugin registers `ja` and `ko` dynamically, so no DSH core fork is required. Older DSH builds that only expose built-in locale IDs support `zh` and `en` only.
 >
@@ -33,11 +33,12 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 | --- | --- |
 | `0.1.0-rc.7` | Not available |
 | `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available when exposed by the DSH schema, but without `supportsFinishReason` and `supportsThinkingTokenBudget` |
-| `0.1.2-alpha.1` to `<0.1.7-0` | All 15 fields when exposed by the DSH schema. Releases at or beyond the newest bound are unmapped: the plugin keeps working and follows the capabilities the running host reports instead |
+| `0.1.2-alpha.1` to `<0.1.3-alpha.2` | 15 fields when exposed by the DSH schema; `thinkingTokenBudgetField` and `supportsMaxOutputTokens` are not offered yet |
+| `0.1.3-alpha.2` to `<0.1.7-0` | All 17 fields when exposed by the DSH schema. Releases at or beyond the newest bound are unmapped: the plugin keeps working and follows the capabilities the running host reports instead |
 
 From DSH `0.1.0-rc.8` onward, field availability follows the runtime schema. The table shows the maximum field set for each DSH version; the route protocol can further reduce it.
 
-A gateway compat field can be configured only when the DSH version, runtime schema, and route's `api` protocol all support it. Unsupported fields stay hidden and are not written to Settings. Among these 15 fields, `openai-completions` supports all 15, while `openai-responses`, `azure-openai-responses`, and `openai-codex-responses` support only `supportsDeveloperRole`, `supportsStrictMode`, and `supportsLongCacheRetention`. If `api` is missing or unrecognized, the runtime schema and DSH validation remain the final authority.
+A gateway compat field can be configured only when the DSH version, runtime schema, and route's `api` protocol all support it. Unsupported fields stay hidden and are not written to Settings. Among these 17 fields, `openai-completions` supports all but `supportsMaxOutputTokens`, while `openai-responses`, `azure-openai-responses`, and `openai-codex-responses` support only `supportsDeveloperRole`, `supportsStrictMode`, `supportsLongCacheRetention`, and `supportsMaxOutputTokens`. If `api` is missing or unrecognized, the runtime schema and DSH validation remain the final authority.
 
 DSH `0.1.7` and later derive each settings form from the Loader entry's own `Config` schema (the entry-config model); a plugin that exports none gets no form at all. This plugin exports that schema, so on `0.1.7`+ its section is the Loader entry id `thinking-effort`, while `0.1.0-rc.7` through `0.1.6` keep the registered namespace `dsh-thinking-effort`; the Client resolves whichever id the running Host publishes. `subagentEffort` now lives in this plugin's own section, and on `0.1.7`+ the old `llm-pi-ai` location is no longer a fallback: that section's schema declares only `providers`, so the Host refuses a write to any other path and drops undeclared keys from the user layer it reports. An existing subagent default therefore reads as unset there and has to be chosen again in the plugin's settings card. A snapshot this plugin exported before `0.1.7` still carries the value inside `llm-pi-ai`; importing it migrates the value into the plugin's own section, which is also what lets its providers import, because the Host refuses the whole batch when any op path is not volatile. On `0.1.7`+ settings are stored in the active profile's `cordis.patch.yml` instead of `~/.dsh/settings.yaml`, which `0.1.7` no longer uses.
 
@@ -70,7 +71,7 @@ These identifiers have different responsibilities:
 | --- | --- |
 | Default levels | Adds `off`, `high`, and `max` without overwriting custom values, for the models your user layer declares; a model only a composition base or a schema default supplies is left unfilled and counted in the Host log |
 | Per-model editor | Select levels and configure gateway values for both catalog/modelOverrides and `models[]` entries in Settings |
-| Gateway compatibility | Configure 15 common scalar fields globally per provider or separately per model, grouped by role/reasoning, format/output, streaming/tools, and storage/cache; groups are collapsed by default |
+| Gateway compatibility | Configure 17 common scalar fields globally per provider or separately per model, grouped by role/reasoning, format/output, streaming/tools, and storage/cache; groups are collapsed by default |
 | OpenCode session Header | Enable a dynamic `x-opencode-session` per exact model. By default a deterministic `ses_…` generator bound to the DSH session (with template / expression / script modes to survive upstream format changes), without storing a fixed Header value |
 | OpenCode user-agent override | Rewrite the `user-agent` header per provider/model (custom routes included) to mimic an upstream client, with optional per-route values; off by default |
 | Gateway mapping | Send `ultra` when the user selects DSH `high` |
@@ -131,7 +132,7 @@ The settings page shows the installed version as a small watermark such as `v0.1
 
 ### Gateway compatibility configuration
 
-The provider `compat` block is the global default for every model under that provider. The Settings page groups the 15 fields into four sections that are collapsed by default. Configure provider defaults with the official DSH YAML shape:
+The provider `compat` block is the global default for every model under that provider. The Settings page groups the 17 fields into four sections that are collapsed by default. Configure provider defaults with the official DSH YAML shape:
 
 ```yaml
 providers:
