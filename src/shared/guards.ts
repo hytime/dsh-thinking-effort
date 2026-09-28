@@ -1,8 +1,8 @@
 /**
- * The one plain-object guard both bundles import. `src/host/types.ts`
- * re-exports it so existing host callers keep their import path, and the
- * `record()`/`isRecord()` helpers each module used to declare privately now
- * delegate here.
+ * The shared plain-object guard. `src/host/types.ts` re-exports it today so
+ * existing host callers keep their import path; Task 3 will migrate the 16
+ * `record()`/`isRecord()` helpers declared across `src/` onto it, which is what
+ * will make it the one guard both bundles import.
  *
  * A plain data object is anything non-null, non-array, and `typeof 'object'`,
  * which deliberately admits class instances: every call site treats the value
