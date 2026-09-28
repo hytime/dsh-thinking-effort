@@ -160,8 +160,91 @@ describe('convention guard', () => {
     expect(found.map((violation) => violation.rule)).toEqual(['snapshot-kind', 'snapshot-kind'])
   })
 
-  it('exempts the plugin slot id, which is not a settings section id', () => {
+  it('exempts the plugin slot id declaration, which is not a settings section id', () => {
     expect(findViolations([{ path: 'src/client/index.ts', source: "const SLOT_ID = 'thinking-effort'" }])).toEqual([])
+  })
+
+  it('does not exempt the rest of src/client/index.ts along with the slot id', () => {
+    // The exemption is one LINE, not a file. An earlier revision skipped all of
+    // `src/client/index.ts`, so every other rule was silently off inside it —
+    // a duplicate literal, a copied guard and a `settings/conflict` comparison
+    // all passed. This test pins the narrowing: the declaration above is still
+    // allowed while a genuine violation on any other line is caught.
+    const lines = [
+      "const SLOT_ID = 'thinking-effort'",
+      "const NS = 'llm-pi-ai'",
+      "if (code === 'settings/conflict') return true",
+      "return typeof value === 'object' && value !== null && !Array.isArray(value)",
+    ]
+    const found = findViolations([{ path: 'src/client/index.ts', source: lines.join('\n') }])
+    expect(found.map((violation) => violation.rule)).toEqual([
+      'identifier-literal',
+      'conflict-duplication',
+      'guard-duplication',
+    ])
+    expect(found.map((violation) => violation.line)).toEqual([2, 3, 4])
+  })
+
+  it('flags a duplicated default-levels object and generator vocabularies', () => {
+    // The constants table's second row used to be aspirational: only
+    // `ALL_LEVELS`'s seven-value sequence had a rule, so re-writing
+    // `DEFAULT_LEVELS` or any `FORMAT_*` vocabulary produced no violation while
+    // `docs/CONVENTIONS.md` listed them as a single source.
+    const found = findViolations([{
+      path: 'src/host/foo.ts',
+      source: [
+        "const DEFAULT_LEVELS = { off: null, high: 'high', max: 'max' } as const",
+        "const FORMAT_MODES = ['ses-derive', 'passthrough', 'template', 'expression', 'script'] as const",
+        "const FORMAT_TIMES = ['firstUse', 'hash'] as const",
+        "const FORMAT_INVALID_POLICIES = ['warn', 'drop', 'send'] as const",
+      ].join('\n'),
+    }])
+    expect(found.map((violation) => violation.rule)).toEqual([
+      'default-levels',
+      'format-modes',
+      'format-times',
+      'format-policies',
+    ])
+    expect(found.map((violation) => violation.line)).toEqual([1, 2, 3, 4])
+  })
+
+  it('allows the shared module to state the constant table', () => {
+    const source = [
+      "export const ALL_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const",
+      "export const DEFAULT_LEVELS = { off: null, high: 'high', max: 'max' } as const",
+      "export const FORMAT_MODES = ['ses-derive', 'passthrough', 'template', 'expression', 'script'] as const",
+      "export const FORMAT_TIMES = ['firstUse', 'hash'] as const",
+      "export const FORMAT_INVALID_POLICIES = ['warn', 'drop', 'send'] as const",
+    ].join('\n')
+    expect(findViolations([{ path: 'src/shared/constants.ts', source }])).toEqual([])
+  })
+
+  it('does not fire on a single generator mode, only on a restated vocabulary', () => {
+    // `'ses-derive'` is a legitimate default and `switch` label in the Host and
+    // the Client; only re-declaring the comma-separated list is duplication.
+    // Flagging the bare names would be a false positive.
+    const source = [
+      "mode: 'ses-derive',",
+      "time: 'firstUse',",
+      "if (config.onInvalid === 'drop') {",
+      "case 'passthrough':",
+    ].join('\n')
+    expect(findViolations([{ path: 'src/host/foo.ts', source }])).toEqual([])
+  })
+
+  it('states the guard rule\'s real whitespace and coverage boundary', () => {
+    // `docs/CONVENTIONS.md` and the rule's own comment used to claim whitespace
+    // was loose without qualification. The tail is spelled
+    // `!Array\.isArray\(\1\)` with no `\s*` inside it, and the whole rule is the
+    // POSITIVE conjunction only. This test pins both boundaries so neither can
+    // be re-described as covered.
+    const spaced = [
+      "return typeof value === 'object' && value !== null && !Array.isArray( value )",
+      "return typeof value === 'object' && value !== null && ! Array.isArray(value)",
+    ].join('\n')
+    expect(findViolations([{ path: 'src/host/foo.ts', source: spaced }])).toEqual([])
+    const negated = "if (typeof node !== 'object' || node === null || Array.isArray(node)) return false"
+    expect(findViolations([{ path: 'src/host/foo.ts', source: negated }])).toEqual([])
   })
 
   it('passes on this repository as it stands', () => {

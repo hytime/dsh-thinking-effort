@@ -22,8 +22,21 @@ const RULES = [
     // ONE identifier without fixing its name: a rule that merely spelled the
     // parameter `value` matched only implementations that happened to use that
     // name, so three real restatements (`compatSource`, `nested`, `entry`) rode
-    // through it. Whitespace is loose for the same reason — the rule is about
-    // the shape of the expression, not the source's exact spacing.
+    // through it. Whitespace is loose BETWEEN the connected tokens for the same
+    // reason — the rule is about the shape of the expression, not the source's
+    // exact spacing, so `typeof  value  ===  'object'` and `value  !==  null`
+    // both match.
+    //
+    // That looseness does NOT reach everywhere: the tail is spelled
+    // `!Array\.isArray\(\1\)`, with no `\s*` after the `!`, after the `(` or
+    // before the `)`. `!Array.isArray( value )` and `! Array.isArray(value)`
+    // therefore escape. Like every rule here it is also textual and single-line
+    // only, and it matches the POSITIVE conjunction alone: a logically
+    // equivalent NEGATED restatement — `typeof x !== 'object' || x === null ||
+    // Array.isArray(x)`, the shape at `src/host/legacy-scan.ts:58,77` and
+    // `src/compat/gateway/ops.ts:150` — is deliberately outside it, because
+    // `src/compat/model-source.ts`'s negated form is intentional (it must also
+    // reject class instances), so a blanket negated-form rule would misfire.
     pattern: /typeof\s+(\w+)\s*===\s*'object'\s*&&\s*\1\s*!==\s*null\s*&&\s*!Array\.isArray\(\1\)/,
   },
   {
@@ -82,7 +95,45 @@ const RULES = [
     rule: 'level-table',
     pattern: /['"]off['"]\s*,\s*['"]minimal['"]\s*,\s*['"]low['"]\s*,\s*['"]medium['"]\s*,\s*['"]high['"]\s*,\s*['"]xhigh['"]\s*,\s*['"]max['"]/,
   },
+  {
+    rule: 'default-levels',
+    // `DEFAULT_LEVELS`'s whole literal. `level-table` only catches
+    // `ALL_LEVELS`'s seven-value sequence, so this rule is what makes the
+    // second row of `docs/CONVENTIONS.md`'s constants table enforced rather
+    // than aspirational: re-writing `{ off: null, high: 'high', max: 'max' }`
+    // elsewhere is now a violation. `src/client/constants.ts`'s preset object
+    // is a different shape (`low`/`medium`, no `max`) and does not match.
+    pattern: /off\s*:\s*null\s*,\s*high\s*:\s*['"]high['"]\s*,\s*max\s*:\s*['"]max['"]/,
+  },
+  {
+    rule: 'format-modes',
+    // `FORMAT_MODES`'s full vocabulary. Anchored on the comma-separated
+    // SEQUENCE, not on a single mode: `'ses-derive'` legitimately appears as a
+    // default and a `switch` label throughout, and flagging those would be a
+    // false positive. Restating the vocabulary as an array is the duplication.
+    pattern: /['"]ses-derive['"]\s*,\s*['"]passthrough['"]\s*,\s*['"]template['"]\s*,\s*['"]expression['"]\s*,\s*['"]script['"]/,
+  },
+  {
+    rule: 'format-times',
+    pattern: /['"]firstUse['"]\s*,\s*['"]hash['"]/,
+  },
+  {
+    rule: 'format-policies',
+    pattern: /['"]warn['"]\s*,\s*['"]drop['"]\s*,\s*['"]send['"]/,
+  },
 ]
+
+/**
+ * The one line that may state the UI slot id.
+ *
+ * `SLOT_ID = 'thinking-effort'` in `src/client/index.ts` is a settings-page SLOT
+ * id, not a settings section id, so `identifier-literal` must not flag it.
+ * The exemption is an EXACT-shape match on the declaration — anchored with `^`
+ * and `$`, so nothing else can share the line — rather than a filename skip.
+ * An earlier revision skipped ALL of `src/client/index.ts`, which also hid a
+ * real violation of any rule anywhere in that file.
+ */
+const SLOT_ID_DECLARATION = /^\s*(?:export\s+)?const\s+SLOT_ID\s*=\s*['"][^'"]*['"]\s*(?:as\s+const\s*)?$/
 
 /**
  * Report every line that restates a shared primitive.
@@ -93,9 +144,12 @@ export function findViolations(files) {
   const violations = []
   for (const { path, source } of files) {
     if (OWNERS.has(path)) continue
-    // `src/client/index.ts`'s SLOT_ID is a UI slot id, not a settings section id.
-    if (path === 'src/client/index.ts') continue
     source.split('\n').forEach((line, index) => {
+      // The UI slot id is not a settings section id, so its declaration line is
+      // exempt — line by line, NOT by filename. Skipping the whole of
+      // `src/client/index.ts` would also have hidden a genuine duplicate
+      // anywhere else in that file, which is the regression this pins.
+      if (SLOT_ID_DECLARATION.test(line)) return
       for (const { rule, pattern } of RULES) {
         if (pattern.test(line)) violations.push({ rule, path, line: index + 1, text: line.trim() })
       }
