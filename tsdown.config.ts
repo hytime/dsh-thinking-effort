@@ -15,10 +15,7 @@ const isReactPlatform = (specifier: string): boolean => (
  * packages/client/tsdown.client.ts pipeline.
  */
 const CSS_VIRTUAL_PREFIX = '\0dsh-css:'
-const GLOBAL_CSS_VIRTUAL_PREFIX = '\0dsh-global-css:'
-const INLINE_CSS_VIRTUAL_PREFIX = '\0dsh-inline-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
-const INLINE_CSS_QUERY = '?inline'
 
 /** Path segment tsc emits under (`/lib/types/`), re-rooted onto `src/`. */
 const TYPES_MARKER = `${sep}lib${sep}types${sep}`
@@ -79,37 +76,6 @@ const cssPlugins = [{
       .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
     for (const [local, exp] of exportEntries) classMap[local] = exp.name
     return styleInjectionModule('@hytime/dsh-thinking-effort', fileId, code.toString(), classMap)
-  },
-}, {
-  name: 'dsh-css-text-inline',
-  resolveId(source: string, importer: string | undefined) {
-    if (!source.endsWith(`.css${INLINE_CSS_QUERY}`)) return null
-    const stylesheet = source.slice(0, -INLINE_CSS_QUERY.length)
-    const abs = importer !== undefined ? sourceAssetPath(stylesheet, importer) : stylesheet
-    return INLINE_CSS_VIRTUAL_PREFIX + abs + CSS_VIRTUAL_SUFFIX
-  },
-  async load(virtualId: string) {
-    if (!virtualId.startsWith(INLINE_CSS_VIRTUAL_PREFIX)) return null
-    const fileId = virtualId.slice(INLINE_CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length)
-    this.addWatchFile(fileId)
-    const source = await readFile(fileId)
-    const { code } = transform({ filename: fileId, code: source, minify: true })
-    return `export default ${JSON.stringify(code.toString())};`
-  },
-}, {
-  name: 'dsh-css-global-inline',
-  resolveId(source: string, importer: string | undefined) {
-    if (!source.endsWith('.css') || source.endsWith('.module.css')) return null
-    const abs = importer !== undefined ? sourceAssetPath(source, importer) : source
-    return GLOBAL_CSS_VIRTUAL_PREFIX + abs + CSS_VIRTUAL_SUFFIX
-  },
-  async load(virtualId: string) {
-    if (!virtualId.startsWith(GLOBAL_CSS_VIRTUAL_PREFIX)) return null
-    const fileId = virtualId.slice(GLOBAL_CSS_VIRTUAL_PREFIX.length, -CSS_VIRTUAL_SUFFIX.length)
-    this.addWatchFile(fileId)
-    const source = await readFile(fileId)
-    const { code } = transform({ filename: fileId, code: source, minify: true })
-    return styleInjectionModule('@hytime/dsh-thinking-effort', fileId, code.toString())
   },
 }]
 

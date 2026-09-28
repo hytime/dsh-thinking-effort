@@ -19,7 +19,7 @@
 
 > **兼容边界：** DSH Runtime compatibility 只负责 Settings 传输：新版 DSH 使用 `remote.settings`，旧版 DSH 使用 `connection.api.settings`。插件按运行时实际能力进行探测；旧版没有 Remote provider 时不会因此要求可选的 Remote 服务。
 >
-> Gateway Protocol compatibility 是独立的一层。DSH schema 提供时，插件支持 15 个常用标量 `llm-pi-ai.compat` 字段，按角色与推理、格式与输出、流式与工具、存储与缓存 4 组组织。boolean 字段可设为「自动」「支持」或「不支持」，enum 字段可设为「自动」或具体取值。DSH `0.1.0-rc.7` 不提供网关兼容设置；`0.1.0-rc.8` 至 `<0.1.2-alpha.1` 支持其他字段，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget`；`0.1.2-alpha.1` 及更高版本在 schema 支持时提供全部 15 个字段。安装并启用可选的 `dsh-llm-openai-completions` transport 后，它可以接管符合条件的自定义 OpenAI 兼容思考模型供应商。「自动」会取消当前层覆盖，并恢复继承链中的下一层取值。
+> Gateway Protocol compatibility 是独立的一层。DSH schema 提供时，插件支持 18 个常用标量 `llm-pi-ai.compat` 字段，按角色与推理、格式与输出、流式与工具、存储与缓存 4 组组织。boolean 字段可设为「自动」「支持」或「不支持」，enum 字段可设为「自动」或具体取值，number 字段可填整数或保持「自动」。DSH `0.1.0-rc.7` 不提供网关兼容设置；`0.1.0-rc.8` 至 `<0.1.2-alpha.1` 支持其他字段，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget`；`0.1.2-alpha.1` 至 `<0.1.3-alpha.2` 提供其中 15 个，`0.1.3-alpha.2` 及更高版本在 schema 支持时提供全部 18 个字段。安装并启用可选的 `dsh-llm-openai-completions` transport 后，它可以接管符合条件的自定义 OpenAI 兼容思考模型供应商。「自动」会取消当前层覆盖，并恢复继承链中的下一层取值。
 >
 > DSH `0.1.2-alpha.1` 及更高版本通过 `LocaleRuntime` 支持语言包注册外部 locale ID。本插件会动态注册 `ja` 和 `ko`，无需维护 DSH fork。只支持固定内置 locale ID 的旧版 DSH 仍只能使用 `zh` 和 `en`。
 >
@@ -33,11 +33,12 @@
 | --- | --- |
 | `0.1.0-rc.7` | 不支持 |
 | `0.1.0-rc.8` 至 `<0.1.2-alpha.1` | schema 暴露时可用，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget` |
-| `0.1.2-alpha.1` 至 `<0.1.7-0` | schema 暴露时支持全部 15 个字段。达到或超过该上限的版本不做映射：插件照常工作，改为跟随运行时宿主实际报告的能力 |
+| `0.1.2-alpha.1` 至 `<0.1.3-alpha.2` | schema 暴露时支持 15 个字段；`thinkingTokenBudgetField`、`vllmPriority` 与 `supportsMaxOutputTokens` 尚未提供 |
+| `0.1.3-alpha.2` 至 `<0.1.7-0` | schema 暴露时支持全部 18 个字段。达到或超过该上限的版本不做映射：插件照常工作，改为跟随运行时宿主实际报告的能力 |
 
 从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。上表表示各 DSH 版本最多可用的字段集合；当前网关协议还可能进一步缩小集合。
 
-实际可配置字段需要同时满足三项条件：DSH 版本支持、运行时 schema 暴露，以及当前路由的 `api` 协议支持。不支持的字段不会显示，也不会写入 Settings。15 个字段中，`openai-completions` 支持全部 15 个；`openai-responses`、`azure-openai-responses` 和 `openai-codex-responses` 只支持 `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention`。如果 `api` 缺失或无法识别，最终仍以运行时 schema 和 DSH 校验为准。
+实际可配置字段需要同时满足三项条件：DSH 版本支持、运行时 schema 暴露，以及当前路由的 `api` 协议支持。不支持的字段不会显示，也不会写入 Settings。18 个字段中，`openai-completions` 支持除 `supportsMaxOutputTokens` 之外的全部字段；`openai-responses`、`azure-openai-responses` 和 `openai-codex-responses` 只支持 `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention` 和 `supportsMaxOutputTokens`。如果 `api` 缺失或无法识别，最终仍以运行时 schema 和 DSH 校验为准。
 
 DSH `0.1.7` 起改为从 Loader 条目自身的 `Config` schema 派生设置表单（entry-config 模型）；没有导出该 schema 的插件不会出现设置表单。本插件已导出该 schema，因此在 `0.1.7` 及以后，它的设置分区使用 Loader 条目 ID `thinking-effort`；`0.1.0-rc.7` 至 `0.1.6` 仍使用注册的 namespace `dsh-thinking-effort`，客户端会自动解析宿主实际发布的那个 ID。`subagentEffort` 现在存放在本插件自己的分区，且在 `0.1.7` 及以后旧的 `llm-pi-ai` 位置不再是回退读取来源：该分区的 schema 只声明了 `providers`，宿主会拒绝写入其他路径，并从它上报的用户层中丢掉未声明的键。所以升级前存在那里的子 agent 默认值会显示为未设置，需要在插件的设置卡片里重新选择一次。本插件在 `0.1.7` 之前导出的快照仍把该值放在 `llm-pi-ai` 里；导入时插件会把该值迁移到自己的分区——这也正是同一批次里的 providers 能被接受的原因（只要有一个写入路径不是 volatile，宿主就会拒绝整个批次）。`0.1.7` 及以后设置保存在当前 profile 的 `cordis.patch.yml`，而不再是 `~/.dsh/settings.yaml`（`0.1.7` 不再使用该文件）。
 
@@ -79,7 +80,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 | --- | --- |
 | 默认档位补齐 | 为用户层中缺少配置的模型添加 `off`、`high`、`max`，不覆盖已有自定义值；只由组合 base 或 schema 默认值提供的模型不补全，并在宿主日志中报出数量 |
 | 模型级编辑 | 在「设置 → 模型能力与档位」中逐模型勾选档位并填写线上值；catalog/modelOverrides 和 `models[]` 模型都可编辑 compat |
-| 网关兼容配置 | 按 provider 全局或单个模型配置 15 个常用标量字段，按角色与推理、格式与输出、流式与工具、存储与缓存分组并默认收起 |
+| 网关兼容配置 | 按 provider 全局或单个模型配置 18 个常用标量字段，按角色与推理、格式与输出、流式与工具、存储与缓存分组并默认收起 |
 | OpenCode 会话 Header | 按精确模型启用动态 `x-opencode-session`，默认生成与 DSH 会话绑定的确定性 `ses_` 值（提供 template / expression / script 等模式以应对上游格式变化），不保存固定 Header 值 |
 | OpenCode user-agent 覆盖 | 按 provider/model（含自定义路由）改写 `user-agent` 以模仿上游客户端，可为不同路由配置不同值；默认关闭 |
 | 网关值映射 | 例如 DSH 选择 `high` 时，实际向网关发送 `ultra` |
@@ -180,7 +181,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.5
 
 ### Composer 推理档位滑块
 
-当 DSH Web 运行时提供 `modelDirectories` 服务时，客户端会为可选 `conversation.input.model` `seat` 注册低优先级的 `shadow` 实现，不会修改 Composer 本身。滑块读取当前精确 `provider/model` 在宿主侧解析后的 `reasoning.efforts` 数组，因此只显示该模型当前生效的档位。选择档位提交的是普通会话模型选择，不会写入插件的 Settings 文档。
+当 DSH Web 运行时提供 `modelDirectories` 服务时，客户端会为可选 `conversation.input.model` `seat` 注册一个有意压过官方模型选择器的实现——这个槽是单占位槽，优先级越低越胜出——不会修改 Composer 本身。滑块读取当前精确 `provider/model` 在宿主侧解析后的 `reasoning.efforts` 数组，因此只显示该模型当前生效的档位。选择档位提交的是普通会话模型选择，不会写入插件的 Settings 文档。
 
 模型声明了 `defaultEffort` 时，滑块会显示对应档位。模型未声明 `defaultEffort` 时，面板额外提供「跟随模型默认」；提交时不会设置推理档位覆盖值。控件使用宿主 `--dsw-*` 语义 `token`，不维护自己的主题偏好，会跟随当前浅色或深色主题。
 
@@ -190,7 +191,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.5
 
 ### 网关兼容配置
 
-provider 的 `compat` 区域是该 provider 下全部模型的全局默认值。设置页将 15 个字段按 4 组组织并默认收起。请使用 DSH 官方 YAML 配置结构：
+provider 的 `compat` 区域是该 provider 下全部模型的全局默认值。设置页将 18 个字段按 4 组组织并默认收起。请使用 DSH 官方 YAML 配置结构：
 
 ```yaml
 providers:
@@ -283,7 +284,7 @@ DSH 0.1.7 会把 `settings.yaml` 重命名并只导入一次，而更早版本�
 ## 工作方式
 
 - **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位。补齐只写入用户层，因此覆盖的是你自己 profile 声明的模型：由组合 base 或 schema 默认值提供的模型在该层没有可写入的条目，插件不会为其补全，并在宿主日志中说明跳过了多少个。插件同时读取模型级 OpenCode 会话设置，只在匹配的 `llm/stream` 请求中注入按 `opencodeSession.format` 生成（默认 `ses-derive`）的 `x-opencode-session`，并为 `opencodeSession.userAgent` 命中的模型改写 `user-agent`（否则会被 `llm-pi-ai` 适配器的归因头强制覆盖）。
-- **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页；运行时提供 `modelDirectories` 服务时，为可选 Composer `seat` 注册低优先级 `shadow` 实现，并显示宿主已解析的推理档位滑块。模型编辑器把 OpenCode 会话 Header 设置保存在插件自有 namespace，与 `llm-pi-ai.compat` 分开。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
+- **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页；运行时提供 `modelDirectories` 服务时，为可选 Composer `seat` 注册有意压过官方模型选择器的实现（该槽为单占位槽，优先级越低越胜出），并显示宿主已解析的推理档位滑块。模型编辑器把 OpenCode 会话 Header 设置保存在插件自有 namespace，与 `llm-pi-ai.compat` 分开。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
 - **子 agent：** `0.1.7` 及以后默认值存储在本插件自有设置分区的 `subagentEffort`（`0.1.0-rc.7` 至 `0.1.6` 为 `llm-pi-ai` 用户层）。宿主优先读取插件自有分区，再回退 `llm-pi-ai`；只有 `0.1.7` 之前的版本会真正把值放在后者（entry-config 的 `llm-pi-ai` 分区只声明 `providers`，其用户层不会承载这个键）。`agent/request` waterfall 只对未显式指定档位的子 agent 请求进行补全。
 - **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.14`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
 

@@ -1,3 +1,5 @@
+import { isUnknownRecord } from '../shared/guards.js'
+
 export type UnknownRecord = Record<string, unknown>
 
 export interface ModelEntry extends UnknownRecord {
@@ -107,9 +109,7 @@ export interface HostContext {
   readonly effect: (callback: () => void | (() => void), label?: string) => unknown
 }
 
-export function isUnknownRecord(value: unknown): value is UnknownRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
+export { isUnknownRecord }
 
 export function isModelEntry(value: unknown): value is ModelEntry {
   return isUnknownRecord(value)

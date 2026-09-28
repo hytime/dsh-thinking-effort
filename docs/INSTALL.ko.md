@@ -47,7 +47,8 @@ version-map은 다음 규칙으로 게이트웨이 capability를 판정합니다
 | --- | --- | --- |
 | `0.1.0-rc.7` | 지원하지 않음 | 지원하지 않음 |
 | `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 | schema가 노출하는 경우 지원하지만 `supportsFinishReason` 및 `supportsThinkingTokenBudget`는 없음 | 선택 사항 |
-| `0.1.2-alpha.1` 이상 지원 범위 | schema가 노출하는 경우 15개 필드 모두 지원 | 선택 사항 |
+| `0.1.2-alpha.1`부터 `<0.1.3-alpha.2`까지 | schema가 노출하는 경우 15개 필드 지원. `thinkingTokenBudgetField`, `vllmPriority`, `supportsMaxOutputTokens`는 아직 제공되지 않음 | 선택 사항 |
+| `0.1.3-alpha.2` 이상 지원 범위 | schema가 노출하는 경우 18개 필드 모두 지원 | 선택 사항 |
 
 DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 런타임 schema 노출에 따라 결정됩니다.
 런타임 schema가 노출하지 않는 필드는 UI에 표시되지 않습니다. 선택 사항인 transport가 설치되지 않았거나 비활성화된 경우 takeover를 적용하지 않습니다.
@@ -189,19 +190,19 @@ Host 또는 플러그인 패키지를 변경한 뒤에는 DSH를 재시작하세
 
 Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델의 `compat` 기본값을 수정합니다. 모델 하나를 펼치면 단일 모델 영역이 열립니다. 4개 그룹은 기본으로 접혀 있습니다.
 
-| 그룹 | boolean 필드 (`Auto` / 지원 / 미지원) | enum 필드 (`Auto` / 구체적인 값) |
-| --- | --- | --- |
-| 역할 및 추론 | `supportsDeveloperRole`, `supportsReasoningEffort`, `supportsThinkingTokenBudget` | — |
-| 형식 및 출력 | `requiresThinkingAsText`, `requiresReasoningContentOnAssistantMessages` | `thinkingFormat`: `openai`, `openrouter`, `deepseek`, `together`, `baseten`, `zai`, `qwen`, `chat-template`, `qwen-chat-template`, `string-thinking`, `ant-ling`; `maxTokensField`: `max_tokens`, `max_completion_tokens` |
-| 스트리밍 및 도구 | `supportsUsageInStreaming`, `supportsFinishReason`, `requiresToolResultName`, `requiresAssistantAfterToolResult`, `supportsStrictMode` | — |
-| 저장 및 캐시 | `supportsStore`, `supportsLongCacheRetention` | `cacheControlFormat`: `anthropic` |
+| 그룹 | boolean 필드 (`Auto` / 지원 / 미지원) | enum 필드 (`Auto` / 구체적인 값) | number 필드 (`Auto` / 정수) |
+| --- | --- | --- | --- |
+| 역할 및 추론 | `supportsDeveloperRole`, `supportsReasoningEffort`, `supportsThinkingTokenBudget` | `thinkingTokenBudgetField`: `thinking_token_budget`, `thinking_budget`, `thinking_budget_tokens` | — |
+| 형식 및 출력 | `requiresThinkingAsText`, `requiresReasoningContentOnAssistantMessages`, `supportsMaxOutputTokens` | `thinkingFormat`: `openai`, `openrouter`, `deepseek`, `together`, `baseten`, `zai`, `qwen`, `chat-template`, `qwen-chat-template`, `string-thinking`, `ant-ling`; `maxTokensField`: `max_tokens`, `max_completion_tokens` | `vllmPriority` |
+| 스트리밍 및 도구 | `supportsUsageInStreaming`, `supportsFinishReason`, `requiresToolResultName`, `requiresAssistantAfterToolResult`, `supportsStrictMode` | — | — |
+| 저장 및 캐시 | `supportsStore`, `supportsLongCacheRetention` | `cacheControlFormat`: `anthropic` | — |
 
 프로토콜 지원 범위는 DSH 버전과 런타임 schema가 정한 최대 범위에 추가로 적용됩니다.
 
-| 라우트 `api` | 이 플러그인의 15개 스칼라 필드 중 지원되는 필드 |
+| 라우트 `api` | 이 플러그인의 18개 스칼라 필드 중 지원되는 필드 |
 | --- | --- |
-| `openai-completions` | 15개 필드 모두 |
-| `openai-responses`, `azure-openai-responses`, `openai-codex-responses` | `supportsDeveloperRole`, `supportsStrictMode`, `supportsLongCacheRetention` |
+| `openai-completions` | `supportsMaxOutputTokens`를 제외한 모든 필드 |
+| `openai-responses`, `azure-openai-responses`, `openai-codex-responses` | `supportsDeveloperRole`, `supportsStrictMode`, `supportsLongCacheRetention`, `supportsMaxOutputTokens` |
 | `anthropic-messages` | `supportsLongCacheRetention` |
 | `bedrock-converse-stream` | `supportsStrictMode` |
 

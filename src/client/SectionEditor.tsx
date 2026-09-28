@@ -10,7 +10,9 @@ import { openCodeSessionOp, openCodeSessionStateFor, isOpenCodeSessionNamespace 
 import { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from './model-ops.js'
 import { isPluginEntrySection, pluginSection, subagentEffortTarget } from './subagent-section.js'
 import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, modelSaveBlockedReason, validateContextWindow, validateLevels } from './validation.js'
-import type { ClientLocale, ClientResult, ContextDraft, DraftCell, InputDraft, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, OpenCodeSessionState, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
+import { revisionOf } from './types.js'
+import { isSettingsConflict } from '../shared/conflict.js'
+import type { ClientLocale, ClientResult, ConfigFormFace, ContextDraft, DraftCell, InputDraft, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, OpenCodeSessionState, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
 import type { Palette } from './theme.js'
 import type { TakeoverRuntimeStore } from './takeover-runtime.js'
 import { iosPalette } from './theme.js'
@@ -24,25 +26,6 @@ import { renderGatewayCompatControls } from './components/GatewayCompatControls.
 const PLUGIN_VERSION = packageJson.version
 
 type DirtyFields = { levels?: boolean; context?: boolean; input?: boolean }
-
-/**
- * Whether a refused write was refused because the section moved since this
- * panel read it.
- *
- * The code is the stable discriminator and is what a modern Remote reports
- * (`settings/conflict`). The legacy in-process bridge surfaces the Host's
- * `SettingsConflictError` instead, whose only stable marker is the message
- * text, so both are accepted. A rejected promise is matched the same way as an
- * `{ok: false}` result because the legacy transport throws where the modern one
- * returns a refusal.
- */
-function isSettingsConflict(error: unknown): boolean {
-  if (error === null || typeof error !== 'object') return false
-  const code = (error as { code?: unknown }).code
-  if (code === 'settings/conflict' || code === 'SETTINGS_CONFLICT') return true
-  const message = (error as { message?: unknown }).message
-  return typeof message === 'string' && /changed since it was read/i.test(message)
-}
 
 interface RunOpsRequest {
   readonly ns: string
@@ -213,7 +196,6 @@ function rebaseUpdates(fresh: readonly InventoryItem[], updates: readonly ModelU
     return item === undefined ? [] : [{ ...update, item }]
   })
 }
-function revisionOf(namespace: SettingsNamespace): number { return typeof namespace.revision === 'number' ? namespace.revision : 0 }
 function availableCompatFieldCount(view: ProviderGatewayCompatView | ModelGatewayCompatView): number {
   const values = view as unknown as Record<string, unknown>
   return GATEWAY_COMPAT_FIELD_KEYS.filter((key) => key !== 'supportsDeveloperRole' && key !== 'maxTokensField' && values[`${key}Available`] === true).length
@@ -354,7 +336,16 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     }
   }
 
-  const load = (): void => {
+  /**
+   * Re-read every section this editor renders through one `describe`.
+   *
+   * `notice` is the success message to surface once the re-read lands. The
+   * default `null` is what the mount-time and card-triggered calls want (they
+   * are reads, not saves); the `configForms` write branch passes its
+   * `successMessage` because that transport carries no response body to project
+   * and would otherwise lose the "saved" notice the legacy path shows.
+   */
+  const load = (notice: string | null = null): void => {
     setState((current) => ({ ...current, loading: true, error: null }))
     settings.describe().then((response) => {
       if (!response.ok) {
@@ -371,11 +362,11 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       if (!found) {
         setState((current) => {
           const next = { ...current, loading: false, busy: false, nsFound: false, namespace: null, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, subagent: null }
-          return applyPluginSectionView(next, plugin, null)
+          return applyPluginSectionView(next, plugin, notice)
         })
         return
       }
-      setState((current) => applyPluginSectionView(applyNamespaceView(current, found, null, plugin), plugin, null))
+      setState((current) => applyPluginSectionView(applyNamespaceView(current, found, notice, plugin), plugin, notice))
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       setState((current) => ({ ...current, loading: false, busy: false, error: t('readSettingsFailed', { message }) }))
@@ -427,6 +418,28 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       if (!response.ok) return undefined
       return response.value.namespaces.find((entry) => entry.ns === target)
     }).catch(() => undefined)
+
+  /**
+   * The official write queue for one section, when this host publishes one.
+   *
+   * Only a WRITE-CAPABLE form is served. An absent revision would make the
+   * host read the write as unconditional, and a memory-mode form (off-loopback)
+   * answers every mutation with `false` — in both cases the hand-rolled
+   * transport below is the better answer, so those forms are ignored rather
+   * than allowed to swallow a save.
+   *
+   * Resolved per write, not once at mount: the service can activate after this
+   * plugin's `apply` (client entries are created concurrently), and `index.ts`
+   * hands over a live view that re-reads it on every lookup.
+   */
+  const formForWrite = (target: string): ConfigFormFace | undefined => {
+    const form = settings.formFor?.(target)
+    if (form === undefined) return undefined
+    const snapshot = form.getSnapshot()
+    // `undefined` revision would make the host read the write as unconditional,
+    // and a memory-mode form (off-loopback) answers every mutate with `false`.
+    return snapshot.writable === true && typeof snapshot.revision === 'number' ? form : undefined
+  }
 
   const runOps = ({ ns, revision, ops, rebuildOps, successMessage, onSuccess, openCodeSessionSavedKey, entrySectionWrite }: RunOpsRequest): void => {
     // The OpenCode-specific copy belongs to the header toggle, whose section id
@@ -482,6 +495,41 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     }
 
     const run = async (): Promise<void> => {
+      const form = formForWrite(ns)
+      if (form !== undefined) {
+        // The form owns a serialized write queue, a revision fence and a
+        // post-refusal re-read, so the panel no longer fences the FIRST attempt
+        // itself against its mount-time revision. That fence does not cover the
+        // rebuild-and-retry below, which still runs. The first attempt omits
+        // `expectedRevision` on purpose: the form fences against the revision
+        // IT tracks, not the panel's mount-time copy, which is exactly the
+        // stale value the fence exists to supersede.
+        // Its `mutate` answers with a bare boolean and carries no descriptor, so
+        // success refreshes through `load()` — the same
+        // `applyNamespaceView`/`applyPluginSectionView` projection the legacy
+        // path reaches through `succeed` — rather than projecting an empty
+        // value, which would blank the provider and model views.
+        if (await form.mutate(ops)) { onSuccess?.(); load(successMessage); return }
+        // A refusal is retried ONCE, and only for a caller that supplied
+        // `rebuildOps`: replaying a stale container array would succeed while
+        // discarding the concurrent change that caused the refusal. The rebuild
+        // still needs a FULL descriptor (`value.providers` for the inventory,
+        // `schema` for the editable compat fields), neither of which the form
+        // snapshot carries, so the re-read goes through `describe()`.
+        if (rebuildOps !== undefined) {
+          const fresh = await latestSection(ns)
+          if (fresh !== undefined) {
+            const rebuilt = rebuildOps(fresh)
+            if (rebuilt.length > 0 && await form.mutate(rebuilt, revisionOf(fresh))) {
+              onSuccess?.(); load(successMessage); return
+            }
+          }
+        }
+        // `mutate` returns only a boolean, so there is no host message to
+        // render; the honest report is the generic write failure.
+        setState((current) => ({ ...current, busy: false, error: writeError(t('writeFailed')) }))
+        return
+      }
       let outcome = await writeOnce(ops, revision)
       // The panel holds the revision it read at mount, so any write to the same
       // section meanwhile — another window, the Host's own default-levels fill,

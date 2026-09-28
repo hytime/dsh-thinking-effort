@@ -20,6 +20,8 @@ import type {
   OpenCodeSessionInvalidPolicy,
   OpenCodeSessionTimeSource,
 } from '../compat/opencode-session.js'
+import { LOG_PREFIX } from '../shared/constants.js'
+import { isUnknownRecord } from '../shared/guards.js'
 
 /**
  * The upstream format enforced by OpenCode Zen free tier, kept as the
@@ -29,7 +31,6 @@ import type {
  */
 export const OPENCODE_SESSION_DEFAULT_REGEX = '^ses_[0-9a-f]{12}[0-9A-Za-z]{14}$'
 
-const LOG_PREFIX = '[@hytime/dsh-thinking-effort]'
 const SHA256_SEED = 'dsh-thinking-effort/opencode-session'
 const BASE62_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 const DSH_SESSION_PREFIX = 'session-'
@@ -91,9 +92,7 @@ export interface FormatterDeps {
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+  return isUnknownRecord(value) ? value : undefined
 }
 
 function ownRecord(value: unknown, key: string): Record<string, unknown> | undefined {

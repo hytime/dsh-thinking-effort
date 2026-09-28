@@ -1,11 +1,12 @@
 import { capabilitiesForVersion } from '../version-map.js'
 import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS } from './fields.js'
-import type { GatewayCompatFieldKey } from './fields.js'
+import type { GatewayCompatFieldKey, GatewayCompatFieldKind } from './fields.js'
 import {
   resolveTakeoverProviders,
   takeoverGatewayCompatInputs,
 } from './takeover.js'
 import type { PiAiSection, TakeoverSection } from './takeover.js'
+import { isUnknownRecord } from '../../shared/guards.js'
 import type {
   GatewayCompat,
   GatewayCompatEditability,
@@ -37,9 +38,7 @@ export type {
 } from './takeover.js'
 
 function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+  return isUnknownRecord(value) ? value : undefined
 }
 
 function compatRecord(value: unknown): Record<string, unknown> | undefined {
@@ -64,6 +63,10 @@ function readCompat(value: unknown): GatewayCompat {
         if (typeof fieldValue === 'string' && (spec.enumValues as readonly string[]).some((entry) => entry === fieldValue)) {
           output[spec.key] = fieldValue
         }
+      } else if (typeof fieldValue === 'number' && Number.isFinite(fieldValue)) {
+        // `number` fields are numeric in the document (`vllmPriority` is
+        // `z.number().step(1)` in DSH), so a string here is not a usable value.
+        output[spec.key] = fieldValue
       }
     }
   }
@@ -124,9 +127,11 @@ export function resolveTakeoverGatewayCompat(input: {
   })
 }
 
-function selectionFor(modelCompatValue: unknown, kind: 'boolean' | 'enum'): string {
+function selectionFor(modelCompatValue: unknown, kind: GatewayCompatFieldKind): string {
   if (modelCompatValue === undefined) return 'auto'
   if (kind === 'boolean') return modelCompatValue ? 'supported' : 'unsupported'
+  // `enum` and `number` both carry their value as a string in the UI; the write
+  // path parses a numeric string back into a number.
   return String(modelCompatValue)
 }
 
@@ -183,13 +188,6 @@ export function resolveProviderGatewayCompat(
   }
   out.source = providerSource(resolution)
   return out as unknown as ProviderGatewayCompatView
-}
-
-export const resolveProviderCompat = resolveProviderGatewayCompat
-export const resolveGatewayCompatibility = resolveGatewayCompat
-
-export function gatewayCompatFieldNames(): readonly GatewayCompatFieldKey[] {
-  return GATEWAY_COMPAT_FIELD_KEYS
 }
 
 export type { MaxTokensField }

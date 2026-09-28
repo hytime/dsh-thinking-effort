@@ -1,15 +1,14 @@
 import { LEGACY_FAILED_PREFIX, LEGACY_RESULT_APPLIED, type LegacyCandidate } from '../compat/legacy-migration.js'
+import { SNAPSHOT_KIND } from '../shared/constants.js'
 import type { HostSettings, SettingsPathOp } from './types.js'
 
 /**
- * The snapshot kind and version the plugin's own snapshot schema declares.
+ * The snapshot version the plugin's own snapshot schema declares.
  *
- * Duplicated as literals rather than imported from
- * `src/client/config-snapshot/types.ts`, because the Host bundle must not pull
- * client code in. `plugin-settings.ts` already duplicates the same `kind` for
- * the same reason, so these two stay next to it in spirit.
+ * The kind is imported from the shared module rather than restated; the version
+ * stays a literal because it is a schema number the Host and the Client each
+ * declare independently, not a cross-module identifier.
  */
-const SNAPSHOT_KIND = 'dsh-thinking-effort/config-snapshot'
 const SNAPSHOT_VERSION = 1
 
 /**

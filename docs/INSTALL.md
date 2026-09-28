@@ -47,7 +47,8 @@ The version map applies these gateway capability rules:
 | --- | --- | --- |
 | `0.1.0-rc.7` | Not available | Unsupported |
 | `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available when exposed by the DSH schema, but without `supportsFinishReason` and `supportsThinkingTokenBudget` | Optional |
-| `0.1.2-alpha.1` and later supported ranges | All 15 fields when exposed by the DSH schema | Optional |
+| `0.1.2-alpha.1` to `<0.1.3-alpha.2` | 15 fields when exposed by the DSH schema; `thinkingTokenBudgetField`, `vllmPriority`, and `supportsMaxOutputTokens` are not offered yet | Optional |
+| `0.1.3-alpha.2` and later supported ranges | All 18 fields when exposed by the DSH schema | Optional |
 
 From DSH `0.1.0-rc.8` onward, field availability follows the runtime schema.
 DSH `0.1.0-rc.8` and later supported ranges follow the field availability shown above. The UI does not show fields that the runtime schema does not expose. If the optional transport is absent or disabled, no takeover is applied.
@@ -189,19 +190,19 @@ Restart DSH after changing Host code or the package; the configuration itself is
 
 The provider global area in the Settings page edits the default `compat` values for every model under that provider. Expanding one model opens its single-model area. The four groups are collapsed by default.
 
-| Group | Boolean fields (`Auto` / supported / unsupported) | Enum fields (`Auto` / concrete values) |
-| --- | --- | --- |
-| Role and reasoning | `supportsDeveloperRole`, `supportsReasoningEffort`, `supportsThinkingTokenBudget` | — |
-| Format and output | `requiresThinkingAsText`, `requiresReasoningContentOnAssistantMessages` | `thinkingFormat`: `openai`, `openrouter`, `deepseek`, `together`, `baseten`, `zai`, `qwen`, `chat-template`, `qwen-chat-template`, `string-thinking`, `ant-ling`; `maxTokensField`: `max_tokens`, `max_completion_tokens` |
-| Streaming and tools | `supportsUsageInStreaming`, `supportsFinishReason`, `requiresToolResultName`, `requiresAssistantAfterToolResult`, `supportsStrictMode` | — |
-| Storage and cache | `supportsStore`, `supportsLongCacheRetention` | `cacheControlFormat`: `anthropic` |
+| Group | Boolean fields (`Auto` / supported / unsupported) | Enum fields (`Auto` / concrete values) | Number fields (`Auto` / an integer) |
+| --- | --- | --- | --- |
+| Role and reasoning | `supportsDeveloperRole`, `supportsReasoningEffort`, `supportsThinkingTokenBudget` | `thinkingTokenBudgetField`: `thinking_token_budget`, `thinking_budget`, `thinking_budget_tokens` | — |
+| Format and output | `requiresThinkingAsText`, `requiresReasoningContentOnAssistantMessages`, `supportsMaxOutputTokens` | `thinkingFormat`: `openai`, `openrouter`, `deepseek`, `together`, `baseten`, `zai`, `qwen`, `chat-template`, `qwen-chat-template`, `string-thinking`, `ant-ling`; `maxTokensField`: `max_tokens`, `max_completion_tokens` | `vllmPriority` |
+| Streaming and tools | `supportsUsageInStreaming`, `supportsFinishReason`, `requiresToolResultName`, `requiresAssistantAfterToolResult`, `supportsStrictMode` | — | — |
+| Storage and cache | `supportsStore`, `supportsLongCacheRetention` | `cacheControlFormat`: `anthropic` | — |
 
 Protocol support is an additional limit on top of the DSH version and runtime schema:
 
-| Route `api` | Supported fields from this plugin's 15 scalar fields |
+| Route `api` | Supported fields from this plugin's 18 scalar fields |
 | --- | --- |
-| `openai-completions` | All 15 fields |
-| `openai-responses`, `azure-openai-responses`, `openai-codex-responses` | `supportsDeveloperRole`, `supportsStrictMode`, `supportsLongCacheRetention` |
+| `openai-completions` | Every field except `supportsMaxOutputTokens` |
+| `openai-responses`, `azure-openai-responses`, `openai-codex-responses` | `supportsDeveloperRole`, `supportsStrictMode`, `supportsLongCacheRetention`, `supportsMaxOutputTokens` |
 | `anthropic-messages` | `supportsLongCacheRetention` |
 | `bedrock-converse-stream` | `supportsStrictMode` |
 

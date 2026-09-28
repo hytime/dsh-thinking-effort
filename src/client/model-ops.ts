@@ -1,3 +1,4 @@
+import { isUnknownRecord } from '../shared/guards.js'
 import type { InventoryItem, ModelUpdate, SettingsOp } from './types.js'
 
 export { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat } from '../compat/gateway/ops.js'
@@ -71,9 +72,7 @@ export function setOps(inventory: readonly InventoryItem[], updates: readonly Mo
     const snapshot = group.updates.find((update) => update.item.modelsSnapshot !== undefined)?.item.modelsSnapshot
     const models = snapshot !== undefined
       ? snapshot.map((entry, index) => {
-        const raw = typeof entry === 'object' && entry !== null && !Array.isArray(entry)
-          ? entry as Record<string, unknown>
-          : undefined
+        const raw = isUnknownRecord(entry) ? entry : undefined
         const update = raw?.id === undefined ? undefined : group.updates.find((candidate) => candidate.item.index === index && candidate.item.model === raw.id)
         return update ? mergeModelUpdate({ ...raw }, update) : cloneOwned(entry)
       })

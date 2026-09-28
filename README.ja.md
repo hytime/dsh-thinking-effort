@@ -18,7 +18,7 @@
 
 > **互換性の境界：** DSH Runtime compatibility は Settings の transport だけを扱います。新しい DSH は `remote.settings`、古い DSH は `connection.api.settings` を公開します。プラグインは実行時の capability を検出し、古い DSH で Remote provider がない場合も、オプションの Remote service を必須にしません。
 >
-> Gateway Protocol compatibility は別の層です。DSH の schema が提供する場合、15 個の一般的なスカラー `llm-pi-ai.compat` フィールドに対応します。フィールドはロールと推論、形式と出力、ストリーミングとツール、保存とキャッシュの 4 グループに分かれ、既定では折りたたまれています。boolean は `Auto`、対応、非対応、enum は `Auto` と具体的な値を選べます。DSH `0.1.0-rc.7` にはゲートウェイ互換設定がなく、`0.1.0-rc.8` から `<0.1.2-alpha.1` では `supportsFinishReason` と `supportsThinkingTokenBudget` がありません。DSH `0.1.2-alpha.1` 以降は schema が対応する場合に 15 フィールドを提供します。オプションの `dsh-llm-openai-completions` transport をインストールして有効にすると、条件を満たすカスタム OpenAI 互換の思考プロバイダーを takeover できます。`Auto` は現在の層の上書きを unset し、継承チェーンの次の値へ戻します。
+> Gateway Protocol compatibility は別の層です。DSH の schema が提供する場合、18 個の一般的なスカラー `llm-pi-ai.compat` フィールドに対応します。フィールドはロールと推論、形式と出力、ストリーミングとツール、保存とキャッシュの 4 グループに分かれ、既定では折りたたまれています。boolean は `Auto`、対応、非対応、enum は `Auto` と具体的な値、number は整数または `Auto` を選べます。DSH `0.1.0-rc.7` にはゲートウェイ互換設定がなく、`0.1.0-rc.8` から `<0.1.2-alpha.1` では `supportsFinishReason` と `supportsThinkingTokenBudget` がありません。DSH `0.1.2-alpha.1` から `<0.1.3-alpha.2` はそのうち 15 フィールドを提供し、`0.1.3-alpha.2` 以降は schema が対応する場合に 18 フィールドすべてを提供します。オプションの `dsh-llm-openai-completions` transport をインストールして有効にすると、条件を満たすカスタム OpenAI 互換の思考プロバイダーを takeover できます。`Auto` は現在の層の上書きを unset し、継承チェーンの次の値へ戻します。
 >
 > DSH `0.1.2-alpha.1` 以降は `LocaleRuntime` の language-pack 拡張をサポートします。このプラグインは `ja` と `ko` を動的に登録するため、DSH の fork は不要です。組み込み locale ID だけを受け付ける古い DSH では `zh` と `en` のみ使用できます。
 >
@@ -32,11 +32,12 @@
 | --- | --- |
 | `0.1.0-rc.7` | 非対応 |
 | `0.1.0-rc.8` から `<0.1.2-alpha.1` | schema が公開する場合は対応。ただし `supportsFinishReason` と `supportsThinkingTokenBudget` はありません |
-| `0.1.2-alpha.1` から `<0.1.7-0` | schema が公開する場合は 15 フィールドに対応。上限以降のリリースは未マップのまま、実行中のホストが報告する能力に従って動作を継続します |
+| `0.1.2-alpha.1` から `<0.1.3-alpha.2` | schema が公開する場合は 15 フィールドに対応。`thinkingTokenBudgetField`、`vllmPriority`、`supportsMaxOutputTokens` はまだ提供されません |
+| `0.1.3-alpha.2` から `<0.1.7-0` | schema が公開する場合は 18 フィールドすべてに対応。上限以降のリリースは未マップのまま、実行中のホストが報告する能力に従って動作を継続します |
 
 DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行時 schema の公開内容に従います。上表は各 DSH バージョンで利用できるフィールドの上限であり、ルートのプロトコルによってさらに絞り込まれます。
 
-ゲートウェイ互換フィールドを設定できるのは、DSH のバージョン、実行時 schema、ルートの `api` プロトコルのすべてが対応している場合だけです。対応しないフィールドは UI に表示されず、Settings にも書き込まれません。この 15 フィールドでは `openai-completions` がすべてを提供し、`openai-responses`、`azure-openai-responses`、`openai-codex-responses` は `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention` だけを提供します。`api` がない、または認識できない場合は、実行時 schema と DSH の検証を最終的な基準にします。
+ゲートウェイ互換フィールドを設定できるのは、DSH のバージョン、実行時 schema、ルートの `api` プロトコルのすべてが対応している場合だけです。対応しないフィールドは UI に表示されず、Settings にも書き込まれません。この 18 フィールドでは `openai-completions` が `supportsMaxOutputTokens` 以外のすべてを提供し、`openai-responses`、`azure-openai-responses`、`openai-codex-responses` は `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention`、`supportsMaxOutputTokens` だけを提供します。`api` がない、または認識できない場合は、実行時 schema と DSH の検証を最終的な基準にします。
 
 DSH `0.1.7` 以降は、各 Loader エントリ自身の `Config` schema から設定フォームを導出します（entry-config モデル）。この schema を公開しないプラグインには設定フォームが表示されません。本プラグインはこれを公開しているため、`0.1.7` 以降の設定セクションは Loader エントリ ID の `thinking-effort` になります。`0.1.0-rc.7` から `0.1.6` までは登録済み namespace の `dsh-thinking-effort` のままで、Client は実行中の Host が公開している方の ID を解決します。`subagentEffort` は本プラグイン自身のセクションに移り、`0.1.7` 以降は旧 `llm-pi-ai` の場所がフォールバックになりません。このセクションの schema は `providers` しか宣言しておらず、Host はそれ以外のパスへの書き込みを拒否し、公開するユーザーレイヤーから未宣言のキーを落とすためです。したがって以前に設定した Subagent の既定値は未設定として表示され、プラグインの設定カードで選び直す必要があります。`0.1.7` より前に本プラグインが書き出したスナップショットは今もこの値を `llm-pi-ai` の中に持っており、インポート時にプラグイン自身のセクションへ移行します。同じバッチの providers が取り込めるのはこの移行のおかげです（volatile でないパスが 1 つでもあると Host はバッチ全体を拒否します）。`0.1.7` 以降の設定は `~/.dsh/settings.yaml` ではなく現在の profile の `cordis.patch.yml` に保存されます（`0.1.7` はこのファイルを使用しません）。
 
@@ -67,7 +68,7 @@ DSH 内蔵モデルだけを使用し、すでに推論コントロールが動�
 | --- | --- |
 | 既定レベル | ユーザーレイヤーで宣言したモデルに限り、カスタム値を上書きせず `off`、`high`、`max` を追加。ベースやスキーマ既定値だけが供給するモデルは補完せず、件数を Host ログに記録 |
 | モデルごとの編集 | Settings からレベルとゲートウェイ値を設定し、カタログ/modelOverrides と `models[]` エントリの両方で compat を編集 |
-| ゲートウェイ互換設定 | 15 個の一般的なスカラーを provider 全体またはモデルごとに設定。ロールと推論、形式と出力、ストリーミングとツール、保存とキャッシュの 4 グループで既定は折りたたみ |
+| ゲートウェイ互換設定 | 18 個の一般的なスカラーを provider 全体またはモデルごとに設定。ロールと推論、形式と出力、ストリーミングとツール、保存とキャッシュの 4 グループで既定は折りたたみ |
 | OpenCode セッション Header | 正確なモデルだけで動的な `x-opencode-session` を有効化。既定では DSH セッションに結び付いた決定論的な `ses_` 値を生成（template / expression / script モードで上流の形式変更に対応）。固定 Header 値は保存しません |
 | OpenCode user-agent 上書き | provider/model（カスタムルート含む）単位で `user-agent` を書き換え、上流クライアントを模倣。ルート別の値も設定可能。既定では無効 |
 | ゲートウェイ値のマッピング | DSH の `high` 選択時に `ultra` を送信可能 |
@@ -119,7 +120,7 @@ profile の確認、移行、検証、トラブルシューティングについ
 
 ### ゲートウェイ互換設定
 
-provider の `compat` ブロックは、その provider 配下のすべてのモデルに対するグローバル既定値です。設定ページでは 15 フィールドを 4 グループに分け、既定で折りたたみます。DSH 公式の YAML 形式で設定します。
+provider の `compat` ブロックは、その provider 配下のすべてのモデルに対するグローバル既定値です。設定ページでは 18 フィールドを 4 グループに分け、既定で折りたたみます。DSH 公式の YAML 形式で設定します。
 
 ```yaml
 providers:

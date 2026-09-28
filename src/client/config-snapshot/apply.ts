@@ -2,6 +2,8 @@ import { planImport } from './plan.js'
 import { autoBackupOps } from './library.js'
 import { snapshotFromNamespaces } from './snapshot.js'
 import { pluginSectionId } from '../subagent-section.js'
+import { isSettingsConflict } from '../../shared/conflict.js'
+import { revisionOf } from '../types.js'
 import type { ApplyOutcome, ApplySettings, ConfigSnapshot, ImportMode, NamespaceOutcome } from './types.js'
 import type { SettingsNamespace } from '../types.js'
 
@@ -25,15 +27,13 @@ export interface ApplyRequest {
   readonly pluginVersion?: string
 }
 
-/** The Remote classifies a stale revision as `settings/conflict`; older transports only carry the message. */
-export function isConflictError(error: { readonly message: string; readonly [key: string]: unknown }): boolean {
-  return error.code === 'settings/conflict' || /conflict/i.test(error.message)
-}
-
-function revisionOf(namespaces: readonly SettingsNamespace[], ns: string): number {
-  const found = namespaces.find((entry) => entry.ns === ns)
-  return found !== undefined && typeof found.revision === 'number' ? found.revision : 0
-}
+/**
+ * Historical name for the shared conflict predicate, kept because this module's
+ * snapshot-apply test (and the emitted `apply.d.ts`) import it. It is the same
+ * function, not a second implementation: the union of the three former
+ * predicates now lives in `src/shared/conflict.ts`.
+ */
+export { isSettingsConflict as isConflictError }
 
 /**
  * Apply a snapshot to the live configuration.
@@ -103,7 +103,7 @@ export async function applySnapshot(request: ApplyRequest): Promise<ApplyOutcome
       ns: namespacePlan.ns,
       ok: false,
       error: response.error.message,
-      conflict: isConflictError(response.error),
+      conflict: isSettingsConflict(response.error),
     })
   }
 

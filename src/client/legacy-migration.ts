@@ -1,4 +1,4 @@
-import { isLegacyMigrationPending, legacyDecisionOf, legacyMigrationOf, type LegacyDecision } from '../compat/legacy-migration.js'
+import { isLegacyMigrationPending, legacyMigrationOf, type LegacyDecision } from '../compat/legacy-migration.js'
 import { pluginSection } from './subagent-section.js'
 import type { SettingsApi, SettingsOp } from './types.js'
 
@@ -34,11 +34,6 @@ export async function readLegacyMigration(settings: SettingsApi): Promise<Legacy
 /** Whether the host is asking, from one already-read control object. */
 export function pendingMigrationOf(user: unknown): boolean {
   return isLegacyMigrationPending(user)
-}
-
-/** The decision the host already recorded, if any. */
-export function recordedDecisionOf(user: unknown): LegacyDecision | undefined {
-  return legacyDecisionOf(user)
 }
 
 /** The `lastResult` of one already-read control object. */

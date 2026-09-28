@@ -1,3 +1,5 @@
+import { isUnknownRecord } from '../shared/guards.js'
+
 /**
  * Which settings architecture the running host exposes.
  *
@@ -21,7 +23,7 @@ export type SettingsModel = 'namespace' | 'entry-config'
  * registers `dsh-thinking-effort` instead — so a miss means "not this model"
  * rather than an error.
  */
-export const PLUGIN_ENTRY_ID = 'thinking-effort'
+export { PLUGIN_ENTRY_ID } from '../shared/constants.js'
 
 function method(value: unknown, name: string): ((...args: unknown[]) => unknown) | undefined {
   if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return undefined
@@ -30,9 +32,7 @@ function method(value: unknown, name: string): ((...args: unknown[]) => unknown)
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+  return isUnknownRecord(value) ? value : undefined
 }
 
 /**
