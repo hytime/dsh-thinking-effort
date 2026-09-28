@@ -30,6 +30,21 @@ describe('convention guard', () => {
     expect(found[0]?.rule).toBe('guard-duplication')
   })
 
+  it('flags a re-implemented object guard whatever its parameter is called', () => {
+    // The rule must bind the parameter rather than spell it: an earlier version
+    // matched only `value`, so restatements using `nested` / `compatSource` /
+    // `entry` passed the guard. Three such sites existed in `src/`.
+    const sample = [
+      'function ownRecord(value: unknown, key: string) {',
+      "  const nested = value[key]",
+      "  return typeof nested === 'object' && nested !== null && !Array.isArray(nested)",
+      '}',
+    ].join('\n')
+    const found = findViolations([{ path: 'src/client/somewhere.ts', source: sample }])
+    expect(found).toHaveLength(1)
+    expect(found[0]?.rule).toBe('guard-duplication')
+  })
+
   it('allows the shared module to state the guard', () => {
     const sample = [
       'export function isUnknownRecord(value: unknown): value is Record<string, unknown> {',

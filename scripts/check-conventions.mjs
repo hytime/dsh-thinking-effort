@@ -18,7 +18,13 @@ const RULES = [
   {
     rule: 'guard-duplication',
     // The exact body of `isUnknownRecord`, which no other module may restate.
-    pattern: /typeof value === 'object' && value !== null && !Array\.isArray\(value\)/,
+    // The `(\w+)` capture plus `\1` backreferences bind the three occurrences to
+    // ONE identifier without fixing its name: a rule that merely spelled the
+    // parameter `value` matched only implementations that happened to use that
+    // name, so three real restatements (`compatSource`, `nested`, `entry`) rode
+    // through it. Whitespace is loose for the same reason — the rule is about
+    // the shape of the expression, not the source's exact spacing.
+    pattern: /typeof\s+(\w+)\s*===\s*'object'\s*&&\s*\1\s*!==\s*null\s*&&\s*!Array\.isArray\(\1\)/,
   },
   {
     rule: 'snapshot-kind',

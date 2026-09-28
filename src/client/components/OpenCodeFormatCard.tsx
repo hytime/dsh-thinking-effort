@@ -1,5 +1,6 @@
 import React from 'react'
 import { ActionButton, Icon } from './Controls.js'
+import { isUnknownRecord } from '../../shared/guards.js'
 import {
   DEFAULT_FORMAT_DRAFT,
   draftFromSettings,
@@ -183,9 +184,7 @@ function ownRecord(value: unknown, key: string): Record<string, unknown> | undef
   const object = value as Record<string, unknown>
   if (!Object.prototype.hasOwnProperty.call(object, key)) return undefined
   const nested = object[key]
-  return typeof nested === 'object' && nested !== null && !Array.isArray(nested)
-    ? nested as Record<string, unknown>
-    : undefined
+  return isUnknownRecord(nested) ? nested : undefined
 }
 
 const isConflict = (message: string): boolean => /conflict/i.test(message)

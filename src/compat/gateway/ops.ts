@@ -1,4 +1,5 @@
 import type { InventoryItem, SettingsOp } from '../../client/types.js'
+import { isUnknownRecord } from '../../shared/guards.js'
 import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, type GatewayCompatFieldKey, type GatewayCompatFieldSpec } from './fields.js'
 import type { GatewayCompatEditability, ModelGatewayCompatUpdate, ProviderGatewayCompatUpdate } from './types.js'
 
@@ -143,9 +144,7 @@ export function opsForModelArrayCompat(
     if (index !== item.index) return clone(entry)
     const model = clone(entry) as Record<string, unknown>
     const compatSource = model.compat
-    const compat = typeof compatSource === 'object' && compatSource !== null && !Array.isArray(compatSource)
-      ? { ...(compatSource as Record<string, unknown>) }
-      : {}
+    const compat = isUnknownRecord(compatSource) ? { ...compatSource } : {}
     GATEWAY_COMPAT_FIELD_KEYS.forEach((key) => {
       if (!Object.prototype.hasOwnProperty.call(update, key)) return
       const value = update[key]

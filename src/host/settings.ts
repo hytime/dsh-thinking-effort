@@ -3,7 +3,7 @@ import { hostCapabilities } from '../compat/capabilities.js'
 import { readSettingsSection, readSettingsSectionUser, settingsChangeEvents } from '../compat/settings-model.js'
 import { settingsModelForRuntime } from '../compat/version-map.js'
 import { mark } from './marker.js'
-import { LLM_PI_AI_NS, LOG_PREFIX } from '../shared/constants.js'
+import { DEFAULT_LEVELS as SHARED_DEFAULT_LEVELS, LLM_PI_AI_NS, LOG_PREFIX } from '../shared/constants.js'
 import {
   HostContext,
   HostSettings,
@@ -13,7 +13,9 @@ import {
 } from './types.js'
 
 export const SETTINGS_NAMESPACE = LLM_PI_AI_NS
-export const DEFAULT_LEVELS = { off: null, high: 'high', max: 'max' } as const
+// The one definition lives in `src/shared/constants.ts`; this binding keeps the
+// existing export name and the two call sites below unchanged.
+export const DEFAULT_LEVELS = SHARED_DEFAULT_LEVELS
 
 /**
  * Most fill passes one trigger may run before it stops re-running itself.
