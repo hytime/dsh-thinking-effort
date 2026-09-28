@@ -9,11 +9,10 @@ import { SETTINGS_NAMESPACE } from './settings.js'
 import { readSettingsSection, readSettingsSectionUser, settingsEntryId, PLUGIN_ENTRY_ID } from '../compat/settings-model.js'
 import { OPENCODE_SESSION_NAMESPACE } from '../compat/opencode-session.js'
 import { hasModelSourceConflict } from '../compat/model-source.js'
+import { ALL_LEVELS, LOG_PREFIX } from '../shared/constants.js'
 
-export const STANDARD_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
+export const STANDARD_LEVELS = ALL_LEVELS
 export type StandardLevel = (typeof STANDARD_LEVELS)[number]
-
-const LOG_PREFIX = '[@hytime/dsh-thinking-effort]'
 
 type Logger = (...args: unknown[]) => void
 

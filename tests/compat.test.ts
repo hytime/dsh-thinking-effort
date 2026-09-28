@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS } from '../src/compat/gateway/fields.ts'
+import { ALPHA1_PLUS_COMPAT_FIELDS, ALPHA3_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS } from '../src/compat/gateway/fields.ts'
 import { clientCapabilities, hostCapabilities } from '../src/compat/capabilities.ts'
 import { capabilitiesForVersion, settingsModelForVersion, takeoverSupportedForVersion, takeoverTransportForVersion } from '../src/compat/version-map.ts'
 import { resolveCompatibility } from '../src/compat/version-adapter.ts'
@@ -39,11 +39,21 @@ const modernCapabilities = {
 } as const
 
 /**
+ * `0.1.3-alpha.2` grew the completions gate by `thinkingTokenBudgetField` and
+ * the Responses gate by `supportsMaxOutputTokens`, so every release at or after
+ * it carries a strictly wider field set than the `0.1.2` line.
+ */
+const alpha3Capabilities = {
+  ...modernCapabilities,
+  gatewayCompatFields: [...ALPHA3_PLUS_COMPAT_FIELDS],
+} as const
+
+/**
  * The `0.1.7` line keeps every transport fact and swaps the settings model:
  * forms come from each Loader entry's Config, so no namespace is registered.
  */
 const entryConfigCapabilities = {
-  ...modernCapabilities,
+  ...alpha3Capabilities,
   settingsModel: 'entry-config',
 } as const
 
@@ -57,7 +67,20 @@ describe('version capability map', () => {
   })
 
   it('returns the complete modern capability matrix', () => {
-    expect(capabilitiesForVersion('0.1.3-alpha.2')).toEqual(modernCapabilities)
+    expect(capabilitiesForVersion('0.1.2-alpha.1')).toEqual(modernCapabilities)
+  })
+
+  it('returns the complete 0.1.3-alpha.2 capability matrix', () => {
+    expect(capabilitiesForVersion('0.1.3-alpha.2')).toEqual(alpha3Capabilities)
+  })
+
+  it('keeps the field-set boundary exactly at 0.1.3-alpha.2', () => {
+    // Prerelease ordering: 0.1.3-0 < 0.1.3-alpha.1 < 0.1.3-alpha.2, so only the
+    // last of the three carries the fields DSH added in 0.1.3-alpha.2.
+    expect(capabilitiesForVersion('0.1.3-0')).toEqual(modernCapabilities)
+    expect(capabilitiesForVersion('0.1.3-alpha.1')).toEqual(modernCapabilities)
+    expect(capabilitiesForVersion('0.1.3-alpha.2')).toEqual(alpha3Capabilities)
+    expect(capabilitiesForVersion('0.1.3-alpha.3')).toEqual(alpha3Capabilities)
   })
 
   it('exposes takeover availability from the mapped capability ranges', () => {
@@ -70,10 +93,10 @@ describe('version capability map', () => {
   })
 
   it('maps the newest published DSH release inside the modern window', () => {
-    expect(capabilitiesForVersion('0.1.5-rc.1')).toEqual(modernCapabilities)
-    expect(capabilitiesForVersion('0.1.5-rc.2')).toEqual(modernCapabilities)
+    expect(capabilitiesForVersion('0.1.5-rc.1')).toEqual(alpha3Capabilities)
+    expect(capabilitiesForVersion('0.1.5-rc.2')).toEqual(alpha3Capabilities)
     expect(takeoverTransportForVersion('0.1.5-rc.2')).toBe('optional')
-    expect(capabilitiesForVersion('0.1.6-alpha.1')).toEqual(modernCapabilities)
+    expect(capabilitiesForVersion('0.1.6-alpha.1')).toEqual(alpha3Capabilities)
     expect(takeoverTransportForVersion('0.1.6-alpha.1')).toBe('optional')
   })
 
@@ -95,11 +118,11 @@ describe('version capability map', () => {
     expect(capabilitiesForVersion('0.1.2+build.7')).toEqual(modernCapabilities)
     expect(capabilitiesForVersion('0.1.3-0+build.7')).toEqual(modernCapabilities)
     expect(capabilitiesForVersion('0.1.3-0')).toEqual(modernCapabilities)
-    expect(capabilitiesForVersion('0.1.3')).toEqual(modernCapabilities)
-    expect(capabilitiesForVersion('0.1.5-rc.2+ci.1')).toEqual(modernCapabilities)
-    expect(capabilitiesForVersion('0.1.6-alpha.1')).toEqual(modernCapabilities)
-    expect(capabilitiesForVersion('0.1.6')).toEqual(modernCapabilities)
-    expect(capabilitiesForVersion('0.1.6-alpha.2')).toEqual(modernCapabilities)
+    expect(capabilitiesForVersion('0.1.3')).toEqual(alpha3Capabilities)
+    expect(capabilitiesForVersion('0.1.5-rc.2+ci.1')).toEqual(alpha3Capabilities)
+    expect(capabilitiesForVersion('0.1.6-alpha.1')).toEqual(alpha3Capabilities)
+    expect(capabilitiesForVersion('0.1.6')).toEqual(alpha3Capabilities)
+    expect(capabilitiesForVersion('0.1.6-alpha.2')).toEqual(alpha3Capabilities)
     expect(capabilitiesForVersion('0.1.7-0')).toEqual(entryConfigCapabilities)
     expect(capabilitiesForVersion('0.1.7-alpha.1+ci.1')).toEqual(entryConfigCapabilities)
     expect(capabilitiesForVersion('0.1.8-0')).toBeUndefined()
@@ -112,7 +135,7 @@ describe('version capability map', () => {
     expect(resolveCompatibility({ version: '0.1.0-rc.8', capabilities: legacy }).versionCapabilities)
       .toEqual(rc8Capabilities)
     expect(resolveCompatibility({ version: '0.1.3-alpha.2+build.7', capabilities: modern }).versionCapabilities)
-      .toEqual(modernCapabilities)
+      .toEqual(alpha3Capabilities)
   })
 
   it('reports the newest published DSH release as the mapped modern profile', () => {
@@ -120,7 +143,7 @@ describe('version capability map', () => {
 
     expect(report.profile).toBe('modern')
     expect(report.expected).toBe('modern')
-    expect(report.versionCapabilities).toEqual(modernCapabilities)
+    expect(report.versionCapabilities).toEqual(alpha3Capabilities)
     expect(report.diagnostics).toHaveLength(0)
   })
 })

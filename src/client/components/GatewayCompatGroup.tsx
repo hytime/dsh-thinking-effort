@@ -33,20 +33,23 @@ function selectStyle(palette: Palette): React.CSSProperties {
   }
 }
 
-function fieldOptions(spec: GatewayCompatFieldSpec, t: Translation): readonly { value: string; label: string }[] {
-  if (spec.kind === 'boolean') {
+/** The registry kinds that render a `<select>`; `number` renders an `<input>`. */
+type SelectCompatFieldSpec = Exclude<GatewayCompatFieldSpec, { readonly kind: 'number' }>
+
+function fieldOptions(spec: SelectCompatFieldSpec, t: Translation): readonly { value: string; label: string }[] {
+  if (spec.kind === 'enum') {
     return [
       { value: 'auto', label: t('gatewayCompatAuto') },
-      { value: 'supported', label: t('gatewayCompatSupported') },
-      { value: 'unsupported', label: t('gatewayCompatUnsupported') },
+      ...spec.enumValues.map((value) => {
+        const option = spec.enumOptions?.find((candidate) => candidate.value === value)
+        return { value, label: option?.labelKey === undefined ? value : t(option.labelKey) }
+      }),
     ]
   }
   return [
     { value: 'auto', label: t('gatewayCompatAuto') },
-    ...spec.enumValues.map((value) => {
-      const option = spec.enumOptions?.find((candidate) => candidate.value === value)
-      return { value, label: option?.labelKey === undefined ? value : t(option.labelKey) }
-    }),
+    { value: 'supported', label: t('gatewayCompatSupported') },
+    { value: 'unsupported', label: t('gatewayCompatUnsupported') },
   ]
 }
 
@@ -60,6 +63,23 @@ function renderField(
 ): React.ReactElement {
   const key = spec.key as GatewayCompatFieldKey
   const value = (view as unknown as Record<string, string>)[key] ?? 'auto'
+  if (spec.kind === 'number') {
+    // A numeric field carries its selection as a string (like every other
+    // field), so the empty value is `auto` and the write path parses it back.
+    return <label key={key} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(110px, auto)', alignItems: 'center', gap: '7px', minWidth: 0, fontSize: '12px', color: palette.text }}>
+      <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{t(spec.labelKey)}</span>
+      <input
+        aria-label={t(spec.labelKey)}
+        type="number"
+        step={spec.step}
+        value={value === 'auto' ? '' : value}
+        placeholder={t('gatewayCompatAuto')}
+        disabled={disabled}
+        onChange={(event) => onChange({ [key]: event.currentTarget.value === '' ? 'auto' : event.currentTarget.value } as Partial<ModelGatewayCompatUpdate>)}
+        style={selectStyle(palette)}
+      />
+    </label>
+  }
   return <label key={key} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(110px, auto)', alignItems: 'center', gap: '7px', minWidth: 0, fontSize: '12px', color: palette.text }}>
     <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{t(spec.labelKey)}</span>
     <select aria-label={t(spec.labelKey)} value={value} disabled={disabled} onChange={(event) => onChange({ [key]: event.currentTarget.value } as Partial<ModelGatewayCompatUpdate>)} style={selectStyle(palette)}>

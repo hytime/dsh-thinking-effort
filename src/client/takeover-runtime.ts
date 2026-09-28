@@ -9,6 +9,8 @@ import type {
   TakeoverSection,
 } from '../compat/gateway/takeover.js'
 import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '../compat/model-source.js'
+import { LLM_PI_AI_NS } from '../shared/constants.js'
+import { isUnknownRecord } from '../shared/guards.js'
 import type {
   ClientResult,
   SettingsApi,
@@ -55,9 +57,7 @@ export function createTakeoverRuntimeStore(): TakeoverRuntimeStore {
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+  return isUnknownRecord(value) ? value : undefined
 }
 
 function piAiValue(namespace: SettingsNamespace | undefined): PiAiSection | undefined {
@@ -91,7 +91,7 @@ export function resolveTakeoverDescription(
   if (!response.ok) return EMPTY_RESOLUTION
   const namespaces = response.value?.namespaces
   if (!Array.isArray(namespaces)) return EMPTY_RESOLUTION
-  const piAiNamespace = namespaces.find((namespace) => namespace.ns === 'llm-pi-ai')
+  const piAiNamespace = namespaces.find((namespace) => namespace.ns === LLM_PI_AI_NS)
   if (piAiNamespace === undefined) return EMPTY_RESOLUTION
   const takeoverNamespace = namespaces.find((namespace) => namespace.ns === 'llm-openai-completions')
   const piAi = piAiValue(piAiNamespace)
@@ -119,10 +119,6 @@ export function resolveTakeoverDescription(
     }
   }
   return { providers, compat }
-}
-
-export async function resolveTakeoverSettings(settings: SettingsApi): Promise<TakeoverRuntimeResolution> {
-  return resolveTakeoverDescription(settings, await settings.describe())
 }
 
 export interface ObservedSettingsApi extends SettingsApi {

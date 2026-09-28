@@ -53,7 +53,8 @@ version-map 按以下规则判断网关能力：
 | --- | --- | --- |
 | `0.1.0-rc.7` | 不支持 | 不支持 |
 | `0.1.0-rc.8` 至 `<0.1.2-alpha.1` | schema 暴露时可用，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget` | 可选 |
-| `0.1.2-alpha.1` 及后续受支持范围 | schema 暴露时支持全部 15 个字段 | 可选 |
+| `0.1.2-alpha.1` 至 `<0.1.3-alpha.2` | schema 暴露时支持 15 个字段；`thinkingTokenBudgetField`、`vllmPriority` 与 `supportsMaxOutputTokens` 尚未提供 | 可选 |
+| `0.1.3-alpha.2` 及后续受支持范围 | schema 暴露时支持全部 18 个字段 | 可选 |
 
 从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。
 运行时 schema 没有暴露的字段不会在界面中显示。可选 transport 未安装或未启用时，不会执行 takeover。
@@ -195,19 +196,19 @@ dsh-thinking-effort:
 
 设置页的 provider 全局区域用于修改该 provider 下全部模型的 `compat` 默认值。展开单个模型后进入单模型区域。4 组字段默认收起。
 
-| 分组 | boolean 字段（自动 / 支持 / 不支持） | enum 字段（自动 / 具体取值） |
-| --- | --- | --- |
-| 角色与推理 | `supportsDeveloperRole`、`supportsReasoningEffort`、`supportsThinkingTokenBudget` | — |
-| 格式与输出 | `requiresThinkingAsText`、`requiresReasoningContentOnAssistantMessages` | `thinkingFormat`：`openai`、`openrouter`、`deepseek`、`together`、`baseten`、`zai`、`qwen`、`chat-template`、`qwen-chat-template`、`string-thinking`、`ant-ling`；`maxTokensField`：`max_tokens`、`max_completion_tokens` |
-| 流式与工具 | `supportsUsageInStreaming`、`supportsFinishReason`、`requiresToolResultName`、`requiresAssistantAfterToolResult`、`supportsStrictMode` | — |
-| 存储与缓存 | `supportsStore`、`supportsLongCacheRetention` | `cacheControlFormat`：`anthropic` |
+| 分组 | boolean 字段（自动 / 支持 / 不支持） | enum 字段（自动 / 具体取值） | number 字段（自动 / 整数） |
+| --- | --- | --- | --- |
+| 角色与推理 | `supportsDeveloperRole`、`supportsReasoningEffort`、`supportsThinkingTokenBudget` | `thinkingTokenBudgetField`：`thinking_token_budget`、`thinking_budget`、`thinking_budget_tokens` | — |
+| 格式与输出 | `requiresThinkingAsText`、`requiresReasoningContentOnAssistantMessages`、`supportsMaxOutputTokens` | `thinkingFormat`：`openai`、`openrouter`、`deepseek`、`together`、`baseten`、`zai`、`qwen`、`chat-template`、`qwen-chat-template`、`string-thinking`、`ant-ling`；`maxTokensField`：`max_tokens`、`max_completion_tokens` | `vllmPriority` |
+| 流式与工具 | `supportsUsageInStreaming`、`supportsFinishReason`、`requiresToolResultName`、`requiresAssistantAfterToolResult`、`supportsStrictMode` | — | — |
+| 存储与缓存 | `supportsStore`、`supportsLongCacheRetention` | `cacheControlFormat`：`anthropic` | — |
 
 协议支持还会在 DSH 版本和运行时 schema 的基础上进一步限制可配置字段：
 
-| 路由 `api` | 本插件 15 个标量字段中支持的字段 |
+| 路由 `api` | 本插件 18 个标量字段中支持的字段 |
 | --- | --- |
-| `openai-completions` | 全部 15 个字段 |
-| `openai-responses`、`azure-openai-responses`、`openai-codex-responses` | `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention` |
+| `openai-completions` | 除 `supportsMaxOutputTokens` 之外的全部字段 |
+| `openai-responses`、`azure-openai-responses`、`openai-codex-responses` | `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention`、`supportsMaxOutputTokens` |
 | `anthropic-messages` | `supportsLongCacheRetention` |
 | `bedrock-converse-stream` | `supportsStrictMode` |
 
@@ -265,7 +266,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.5
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.6
 ```
 
 官方 CLI 会自动完成以下工作：
@@ -295,7 +296,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 升级到指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.5
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.6
 ```
 
 升级后重新执行验证步骤。宿主侧代码需要重启 DSH；浏览器侧代码需要刷新 Web 页面。
@@ -315,7 +316,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.5
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.6
 ```
 
 ### 3.2 旧依赖已被移除，但旧 bundle 残留
@@ -344,7 +345,7 @@ grep -n "dsh-thinking-effort" \
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.5
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.6
 ```
 
 这一步的目的不是继续使用旧插件，而是让官方 CLI 识别旧依赖并自动删除残留 bundle。不要手工把旧包名重新写入新的 bundle 列表。

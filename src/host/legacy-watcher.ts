@@ -15,9 +15,9 @@ import { applyLegacyMigration, rollbackSnapshot } from './legacy-apply.js'
 import { scanLegacyData, type LegacyScan } from './legacy-scan.js'
 import { SETTINGS_NAMESPACE } from './settings.js'
 import { PLUGIN_ENTRY_ID } from '../compat/settings-model.js'
+import { LOG_PREFIX } from '../shared/constants.js'
+import { isUnknownRecord } from '../shared/guards.js'
 import type { HostContext, SettingsPathOp } from './types.js'
-
-const LOG_PREFIX = '[@hytime/dsh-thinking-effort]'
 
 /**
  * Most scan/act passes one settings event may run before the chain stops
@@ -37,9 +37,7 @@ function log(...args: unknown[]): void {
 }
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+  return isUnknownRecord(value) ? value : undefined
 }
 
 /**
@@ -146,9 +144,7 @@ export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationF
      * makes every path look unset, which is not a fact to act on.
      */
     const ownLayer = (user: unknown): Record<string, unknown> | undefined => (
-      typeof user === 'object' && user !== null && !Array.isArray(user)
-        ? user as Record<string, unknown>
-        : undefined
+      isUnknownRecord(user) ? user : undefined
     )
 
     /**

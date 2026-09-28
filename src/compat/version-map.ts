@@ -1,4 +1,4 @@
-import { ALPHA1_PLUS_COMPAT_FIELDS, GATEWAY_COMPAT_FIELDS, RC8_COMPAT_FIELDS } from './gateway/fields.js'
+import { ALPHA1_PLUS_COMPAT_FIELDS, ALPHA3_PLUS_COMPAT_FIELDS, GATEWAY_COMPAT_FIELDS, RC8_COMPAT_FIELDS } from './gateway/fields.js'
 import type { GatewayCompatFieldKey } from './gateway/fields.js'
 import { settingsModelOf } from './settings-model.js'
 import type { SettingsModel } from './settings-model.js'
@@ -52,15 +52,22 @@ const completeBaseModelFields = ['reasoningEfforts', 'input', 'contextWindow'] a
  *
  * The newest window is bounded per minor line, matching how `0.1.6-0` was
  * chosen for the `0.1.5` line: `0.1.6-alpha.1` was verified directly (modern
- * Settings transport, `user`-layer reads, the same 15 editable compat fields,
- * external language packs, optional takeover) and the bound moved to `0.1.7-0`
- * so the whole `0.1.6` line resolves instead of falling out of the map.
+ * Settings transport, `user`-layer reads, the same editable compat fields as
+ * the window it joins, external language packs, optional takeover) and the
+ * bound moved to `0.1.7-0` so the whole `0.1.6` line resolves instead of
+ * falling out of the map.
+ *
+ * The `0.1.2-alpha.1` line splits at `0.1.3-alpha.2`: that prerelease is what
+ * grew the editable field set (`thinkingTokenBudgetField` on completions,
+ * `supportsMaxOutputTokens` on Responses, plus the numeric `vllmPriority`),
+ * measured against the real packages. The split is a prerelease comparison, so
+ * `0.1.3-0` and `0.1.3-alpha.1` still resolve to the narrower set.
  *
  * The `0.1.7` window records the settings rewrite: `0.1.7-alpha.1` was verified
- * directly and keeps the modern transport, the `user` layer, the same 15
- * editable compat fields, external language packs and optional takeover, but
- * replaces namespace registration with per-entry `Config` forms. Its bound is
- * `0.1.8-0` so the whole line resolves.
+ * directly and keeps the modern transport, the `user` layer, the same editable
+ * compat fields, external language packs and optional takeover, but replaces
+ * namespace registration with per-entry `Config` forms. Its bound is `0.1.8-0`
+ * so the whole line resolves.
  */
 const versionRanges: readonly VersionRange[] = [
   {
@@ -91,13 +98,30 @@ const versionRanges: readonly VersionRange[] = [
   },
   {
     minimum: '0.1.2-alpha.1',
-    maximumExclusive: '0.1.7-0',
+    maximumExclusive: '0.1.3-alpha.2',
     capabilities: {
       settingsTransport: 'modern',
       settingsApi: 'remote.settings',
       settingsModel: 'namespace',
       baseModelFields: completeBaseModelFields,
       gatewayCompatFields: ALPHA1_PLUS_COMPAT_FIELDS,
+      externalLanguages: true,
+      takeoverTransport: 'optional',
+    },
+  },
+  {
+    // `0.1.3-alpha.2` grew the completions gate by `thinkingTokenBudgetField`
+    // and `vllmPriority` and the Responses gate by `supportsMaxOutputTokens`
+    // (task 7 adds the numeric one). The bound is the prerelease `alpha.2`
+    // itself, so `0.1.3-0` and `0.1.3-alpha.1` stay in the window above.
+    minimum: '0.1.3-alpha.2',
+    maximumExclusive: '0.1.7-0',
+    capabilities: {
+      settingsTransport: 'modern',
+      settingsApi: 'remote.settings',
+      settingsModel: 'namespace',
+      baseModelFields: completeBaseModelFields,
+      gatewayCompatFields: ALPHA3_PLUS_COMPAT_FIELDS,
       externalLanguages: true,
       takeoverTransport: 'optional',
     },
@@ -110,7 +134,7 @@ const versionRanges: readonly VersionRange[] = [
       settingsApi: 'remote.settings',
       settingsModel: 'entry-config',
       baseModelFields: completeBaseModelFields,
-      gatewayCompatFields: ALPHA1_PLUS_COMPAT_FIELDS,
+      gatewayCompatFields: ALPHA3_PLUS_COMPAT_FIELDS,
       externalLanguages: true,
       takeoverTransport: 'optional',
     },
