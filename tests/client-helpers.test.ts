@@ -216,6 +216,74 @@ describe('client constants and bridge', () => {
   })
 })
 
+describe('configForms bridge', () => {
+  it('attaches nothing for a three-argument call, keeping the legacy key set exact', async () => {
+    const describe = vi.fn().mockResolvedValue({ result: { ok: true, value: { namespaces: [] } } })
+    const mutate = vi.fn().mockResolvedValue({ result: { ok: true, value: { ns: NS } } })
+    const api = settingsBridge({ api: { settings: { describe, mutate } } })
+
+    expect(api).toBeDefined()
+    expect('formFor' in (api as object)).toBe(false)
+    expect(Object.keys(api!).sort()).toEqual(['compatibilityProfile', 'describe', 'externalLanguages', 'mutate'])
+    // The pair is untouched by the new parameter.
+    await expect(api?.describe()).resolves.toEqual({ ok: true, value: { namespaces: [] } })
+    await expect(api?.mutate(NS, [], 7)).resolves.toEqual({ ok: true, value: { ns: NS } })
+    expect(mutate).toHaveBeenCalledWith({ ns: NS, ops: [], expectedRevision: 7 })
+  })
+
+  it('exposes the form on a modern host when the 0.1.7 service is present', () => {
+    const form = { getSnapshot: () => ({ status: 'ready', revision: 3, writable: true }) }
+    const configForms = { get: vi.fn(() => form) }
+    const api = settingsBridge({}, { describe: vi.fn(), mutate: vi.fn() }, undefined, configForms)
+
+    expect(api?.compatibilityProfile).toBe('modern')
+    expect(api?.formFor?.(NS)).toBe(form)
+    expect('formFor' in (api as object)).toBe(true)
+  })
+
+  it('exposes the form on a legacy host too, since the two families are orthogonal', () => {
+    const form = { getSnapshot: () => ({ revision: 1 }) }
+    const api = settingsBridge(
+      { api: { settings: { describe: vi.fn(), mutate: vi.fn() } } },
+      undefined,
+      undefined,
+      { get: () => form },
+    )
+
+    expect(api?.compatibilityProfile).toBe('legacy')
+    expect(api?.formFor?.(NS)).toBe(form)
+  })
+
+  it('re-reads a live view on every lookup, so a late service arrives', () => {
+    let service: { get: (id: string) => unknown } | undefined
+    const live = { get: (entryId: string) => service?.get(entryId) as never }
+    const api = settingsBridge(undefined, { describe: vi.fn(), mutate: vi.fn() }, undefined, live)
+
+    expect(api?.formFor?.(NS)).toBeUndefined()
+
+    const form = { getSnapshot: () => ({ revision: 4 }) }
+    service = { get: () => form }
+
+    expect(api?.formFor?.(NS)).toBe(form)
+  })
+
+  it('treats a non-service fourth argument as absent', () => {
+    for (const configForms of [{}, null, 'configForms', 42, { get: 1 }]) {
+      const api = settingsBridge(undefined, { describe: vi.fn(), mutate: vi.fn() }, undefined, configForms)
+      expect(api).toBeDefined()
+      expect('formFor' in (api as object)).toBe(false)
+    }
+  })
+
+  it('normalizes an absent entry and a nullish result to undefined', () => {
+    const form = { getSnapshot: () => ({ revision: 2 }) }
+    const api = settingsBridge(undefined, { describe: vi.fn(), mutate: vi.fn() }, undefined, { get: (id: string) => (id === NS ? form : null) })
+
+    expect(api?.formFor?.(NS)).toBe(form)
+    expect(api?.formFor?.('other')).toBeUndefined()
+  })
+})
+
 describe('model inventory and operations', () => {
   it('keeps route and model compat keys unambiguous', () => {
     expect(modelCompatKey('a', 'b/c')).not.toBe(modelCompatKey('a/b', 'c'))

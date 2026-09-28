@@ -135,11 +135,51 @@ export type ClientResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: ClientError }
 
+/**
+ * The read-back one settings form publishes for its section.
+ *
+ * Only the three fields this plugin reads are declared: `status`, `revision`
+ * and `writable`. A missing `revision` means the form cannot fence a write, and
+ * `writable: false` means the host is in a memory mode (off-loopback) that
+ * answers every mutation with `false`.
+ */
+export interface ConfigFormSnapshot {
+  readonly status?: string
+  readonly revision?: number
+  readonly writable?: boolean
+}
+
+/**
+ * The official per-entry settings form (`ctx.configForms.get(entryId)`, DSH
+ * 0.1.7 and later). It already owns a serialized write queue, a revision fence
+ * and a post-conflict re-read — the things the panel's `runOps` hand-rolls on
+ * every host that does not provide one.
+ */
+export interface ConfigFormFace {
+  getSnapshot(): ConfigFormSnapshot
+  subscribe(listener: () => void): () => void
+  mutate(ops: readonly SettingsOp[], expectedRevision?: number): Promise<boolean>
+  set(field: string, value: unknown): Promise<boolean>
+  unset(field: string): Promise<boolean>
+  dispose(): Promise<void>
+}
+
+/** The optional `ctx.configForms` service itself. */
+export interface ConfigFormsService {
+  get(entryId: string): ConfigFormFace | undefined
+}
+
 export interface SettingsApi {
   readonly externalLanguages: boolean
   readonly compatibilityProfile: CompatibilityProfile
   describe(): Promise<ClientResult<SettingsDescribeValue>>
   mutate(ns: string, ops: readonly SettingsOp[], expectedRevision: number): Promise<ClientResult<SettingsNamespace>>
+  /**
+   * Present only when the host exposes `ctx.configForms`. When it is, the
+   * editor routes its writes through that form instead of `mutate`; every
+   * other host keeps the `describe`/`mutate` pair alone.
+   */
+  formFor?(entryId: string): ConfigFormFace | undefined
 }
 
 export type CompatibilitySettings = 'remote' | 'legacy' | 'none'

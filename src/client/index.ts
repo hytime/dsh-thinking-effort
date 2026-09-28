@@ -6,7 +6,7 @@ import { LOCALE_NS } from './constants.js'
 import { SectionEditor } from './SectionEditor.js'
 import { LegacyMigrationModal } from './components/LegacyMigrationModal.js'
 import { apply as registerComposerSeat } from './thinking-slider/index.js'
-import type { ClientContext, ClientLocale, ClientSlots } from './types.js'
+import type { ClientContext, ClientLocale, ClientSlots, ConfigFormsService } from './types.js'
 
 export const name = '@hytime/dsh-thinking-effort'
 export const inject = ['slots', 'connection', 'locale'] as const
@@ -22,6 +22,30 @@ const OVERLAY_ORDER = 40
 function hasLanguage(locale: ClientLocale, id: string): boolean {
   const snapshot = locale.getSnapshot?.()
   return Array.isArray(snapshot?.locales) && snapshot.locales.some((entry) => entry?.id === id)
+}
+
+/**
+ * A live view of the optional `ctx.configForms` service (DSH 0.1.7+).
+ *
+ * The service belongs to `@deepseek-ai/dsh-client-ui-settings`, whose fiber can
+ * activate AFTER this plugin's `apply` (client entries are created
+ * concurrently), and `mount()` registers its slots exactly once. Re-reading on
+ * every `get` therefore lets a late arrival reach an editor that is already
+ * mounted, and keeps `configForms` out of the static `inject` array — a
+ * declared-but-missing service parks the whole fiber.
+ *
+ * @param context - The client context whose service table is re-read per call.
+ * @returns A `ConfigFormsService` face that is never itself `undefined`; `get`
+ *   answers `undefined` while the real service has not been provided yet.
+ */
+function configFormsView(context: ClientContext): ConfigFormsService {
+  const resolve = (): ConfigFormsService | undefined => {
+    const value = context.get('configForms')
+    return value !== null && typeof value === 'object' && typeof (value as ConfigFormsService).get === 'function'
+      ? value as ConfigFormsService
+      : undefined
+  }
+  return { get: (entryId) => resolve()?.get(entryId) }
 }
 
 export function apply(context: ClientContext): void {
@@ -81,11 +105,11 @@ export function apply(context: ClientContext): void {
   }
 
   const mountFromRemote = (): void => {
-    mount(settingsBridge(connection, context.get('remote.settings'), locale.addLanguage))
+    mount(settingsBridge(connection, context.get('remote.settings'), locale.addLanguage, configFormsView(context)))
   }
   mountFromRemote()
   context.on('internal/service', (serviceName) => {
-    if (serviceName === 'remote.settings' || serviceName === 'remote') mountFromRemote()
+    if (serviceName === 'remote.settings' || serviceName === 'remote' || serviceName === 'configForms') mountFromRemote()
   })
 
   // Register the composer model slider seat after declaring the Settings page.
