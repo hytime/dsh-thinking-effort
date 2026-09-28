@@ -38,6 +38,9 @@ type PackageManifest = {
   readonly types?: string
   readonly exports: Record<string, string | { readonly types?: string; readonly default?: string }>
   readonly files: readonly string[]
+  readonly engines?: { readonly dsh?: string }
+  readonly peerDependencies?: Record<string, string>
+  readonly peerDependenciesMeta?: Record<string, { readonly optional?: boolean }>
   readonly dsh?: { readonly client?: { readonly inject?: readonly string[]; readonly platform?: string; readonly external?: readonly string[] } }
 }
 
@@ -1309,7 +1312,7 @@ describe('published package composition', () => {
   it('exposes built Host and Client artifacts with declarations', () => {
     const manifest = readPackage()
 
-    expect(manifest.version).toBe('0.3.5')
+    expect(manifest.version).toBe('0.3.6')
     expect(manifest.main).toBe('./lib/index.js')
     expect(manifest.types).toBe('./lib/types/index.d.ts')
     expect(manifest.exports['.']).toEqual({
@@ -1346,6 +1349,23 @@ describe('published package composition', () => {
     expect(manifest.files).not.toContain('CHANGELOG.ja.md')
     expect(manifest.files).not.toContain('CHANGELOG.ko.md')
     expect(manifest.files).toContain('docs/assets/')
+  })
+
+  it('declares its DSH version requirement the way the runtime reads it', () => {
+    const manifest = readPackage()
+
+    // `dsh-app-boot`'s `evaluatePluginCompatibility` reads ONLY `peerDependencies`
+    // and throws on the startup path for an incompatible `@deepseek-ai/dsh` or
+    // `@deepseek-ai/dsh-*` peer. A manifest with no such peer makes that check
+    // return `undefined` — the plugin ships with no version declaration at all,
+    // which is what this test exists to prevent.
+    expect(manifest.peerDependencies?.['@deepseek-ai/dsh']).toBe(manifest.engines?.dsh)
+
+    // The peer must stay optional: `evaluatePluginCompatibility` ignores
+    // `peerDependenciesMeta`, so `optional` never weakens the version verdict,
+    // but without it npm tries to resolve the whole `@deepseek-ai/dsh` tree —
+    // measured as a hang beyond 300s against ~2s in this repository.
+    expect(manifest.peerDependenciesMeta?.['@deepseek-ai/dsh']).toEqual({ optional: true })
   })
 })
 
@@ -1393,7 +1413,7 @@ integrationDescribe('official DSH loader composition', () => {
     const installedDir = join(profile, 'node_modules', '@hytime', 'dsh-thinking-effort')
     const installedManifest = JSON.parse(readFileSync(join(installedDir, 'package.json'), 'utf8')) as PackageManifest
     expect(installedManifest.name).toBe('@hytime/dsh-thinking-effort')
-    expect(installedManifest.version).toBe('0.3.5')
+    expect(installedManifest.version).toBe('0.3.6')
 
     const hostEntry = join(installedDir, 'lib', 'index.js')
     const clientEntry = join(installedDir, 'lib', 'client.js')

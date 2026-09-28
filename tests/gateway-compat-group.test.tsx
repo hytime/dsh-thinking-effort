@@ -81,6 +81,50 @@ describe('GatewayCompatGroup', () => {
 
     expect(onChange).toHaveBeenCalledWith({ supportsStore: 'supported' })
   })
+
+  it('renders a numeric input for a number field and emits its string selection', () => {
+    const onChange = vi.fn()
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root!.render(<GatewayCompatGroup groupId="format" view={modelView({ vllmPriority: 'auto', vllmPriorityAvailable: true })} onChange={onChange} />)
+    })
+    const input = container.querySelector('input[type="number"]') as HTMLInputElement
+    expect(input).not.toBeNull()
+    expect(input.getAttribute('aria-label')).toBe(label('vllmPriority'))
+
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, '3')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    expect(onChange).toHaveBeenCalledWith({ vllmPriority: '3' })
+  })
+
+  it('keeps an untouched numeric field on auto and steps by DSH\u2019s integer step', () => {
+    const onChange = vi.fn()
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root!.render(<GatewayCompatGroup groupId="format" view={modelView({ vllmPriority: '7', vllmPriorityAvailable: true })} onChange={onChange} />)
+    })
+    const input = container.querySelector('input[type="number"]') as HTMLInputElement
+
+    expect(input.value).toBe('7')
+    expect(input.getAttribute('step')).toBe('1')
+    expect(container.querySelectorAll('select')).toHaveLength(0)
+
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      setter?.call(input, '')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    expect(onChange).toHaveBeenCalledWith({ vllmPriority: 'auto' })
+  })
 })
 
 describe('GatewayCompatControls collapse', () => {

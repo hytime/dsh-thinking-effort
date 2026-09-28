@@ -18,7 +18,7 @@
 
 > **호환성 경계:** DSH Runtime compatibility는 Settings transport만 담당합니다. 최신 DSH는 `remote.settings`를 제공하고 이전 DSH는 `connection.api.settings`를 제공합니다. 플러그인은 실제 런타임 capability를 감지하며, 이전 DSH에 Remote provider가 없어도 선택적인 Remote service를 필수로 요구하지 않습니다.
 >
-> Gateway Protocol compatibility는 별도 계층입니다. DSH schema가 제공하는 경우 15개의 일반적인 스칼라 `llm-pi-ai.compat` 필드를 지원합니다. 필드는 역할/추론, 형식/출력, 스트리밍/도구, 저장/캐시의 4개 그룹으로 나뉘며 기본으로 접혀 있습니다. boolean 필드는 `Auto`, 지원, 미지원으로 설정하고 enum 필드는 `Auto` 또는 구체적인 값으로 설정합니다. DSH `0.1.0-rc.7`에는 게이트웨이 호환 설정이 없습니다. `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지는 `supportsFinishReason`와 `supportsThinkingTokenBudget`가 없고, DSH `0.1.2-alpha.1` 이상은 schema가 지원하는 경우 15개 필드를 모두 제공합니다. 선택 사항인 `dsh-llm-openai-completions` transport를 설치하고 활성화하면 조건을 충족하는 사용자 지정 OpenAI 호환 사고 provider를 takeover할 수 있습니다. `Auto`는 현재 계층의 override를 unset하고 상속 체인의 다음 값을 복원합니다.
+> Gateway Protocol compatibility는 별도 계층입니다. DSH schema가 제공하는 경우 18개의 일반적인 스칼라 `llm-pi-ai.compat` 필드를 지원합니다. 필드는 역할/추론, 형식/출력, 스트리밍/도구, 저장/캐시의 4개 그룹으로 나뉘며 기본으로 접혀 있습니다. boolean 필드는 `Auto`, 지원, 미지원으로, enum 필드는 `Auto` 또는 구체적인 값으로, number 필드는 정수 또는 `Auto`로 설정합니다. DSH `0.1.0-rc.7`에는 게이트웨이 호환 설정이 없습니다. `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지는 `supportsFinishReason`와 `supportsThinkingTokenBudget`가 없고, DSH `0.1.2-alpha.1`부터 `<0.1.3-alpha.2`까지는 그중 15개 필드를 제공하며, `0.1.3-alpha.2` 이상은 schema가 지원하는 경우 18개 필드를 모두 제공합니다. 선택 사항인 `dsh-llm-openai-completions` transport를 설치하고 활성화하면 조건을 충족하는 사용자 지정 OpenAI 호환 사고 provider를 takeover할 수 있습니다. `Auto`는 현재 계층의 override를 unset하고 상속 체인의 다음 값을 복원합니다.
 >
 > DSH `0.1.2-alpha.1` 이상은 `LocaleRuntime`의 language-pack 확장을 지원합니다. 이 플러그인은 `ja`와 `ko`를 동적으로 등록하므로 DSH fork가 필요하지 않습니다. 고정된 내장 locale ID만 허용하는 이전 DSH에서는 `zh`와 `en`만 사용할 수 있습니다.
 >
@@ -32,11 +32,12 @@
 | --- | --- |
 | `0.1.0-rc.7` | 지원하지 않음 |
 | `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 | schema가 노출하는 경우 지원하지만 `supportsFinishReason` 및 `supportsThinkingTokenBudget`는 없음 |
-| `0.1.2-alpha.1`부터 `<0.1.7-0`까지 | schema가 노출하는 경우 15개 필드 모두 지원. 상한 이상의 릴리스는 매핑되지 않으며, 플러그인은 계속 동작하면서 실행 중인 호스트가 보고하는 능력을 따릅니다 |
+| `0.1.2-alpha.1`부터 `<0.1.3-alpha.2`까지 | schema가 노출하는 경우 15개 필드 지원. `thinkingTokenBudgetField`, `vllmPriority`, `supportsMaxOutputTokens`는 아직 제공되지 않음 |
+| `0.1.3-alpha.2`부터 `<0.1.7-0`까지 | schema가 노출하는 경우 18개 필드 모두 지원. 상한 이상의 릴리스는 매핑되지 않으며, 플러그인은 계속 동작하면서 실행 중인 호스트가 보고하는 능력을 따릅니다 |
 
 DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 런타임 schema 노출에 따라 결정됩니다. 위 표는 각 DSH 버전의 최대 필드 집합이며, 라우트의 프로토콜에 따라 더 줄어들 수 있습니다.
 
-게이트웨이 호환 필드는 DSH 버전, 런타임 schema, 현재 라우트의 `api` 프로토콜이 모두 지원할 때만 설정할 수 있습니다. 지원하지 않는 필드는 UI에 표시되지 않으며 Settings에도 기록되지 않습니다. 이 15개 필드 중 `openai-completions`는 모두 제공하고, `openai-responses`, `azure-openai-responses`, `openai-codex-responses`는 `supportsDeveloperRole`, `supportsStrictMode`, `supportsLongCacheRetention`만 제공합니다. `api`가 없거나 인식되지 않으면 런타임 schema와 DSH 검증을 최종 기준으로 사용합니다.
+게이트웨이 호환 필드는 DSH 버전, 런타임 schema, 현재 라우트의 `api` 프로토콜이 모두 지원할 때만 설정할 수 있습니다. 지원하지 않는 필드는 UI에 표시되지 않으며 Settings에도 기록되지 않습니다. 이 18개 필드 중 `openai-completions`는 `supportsMaxOutputTokens`를 제외한 모두를 제공하고, `openai-responses`, `azure-openai-responses`, `openai-codex-responses`는 `supportsDeveloperRole`, `supportsStrictMode`, `supportsLongCacheRetention`, `supportsMaxOutputTokens`만 제공합니다. `api`가 없거나 인식되지 않으면 런타임 schema와 DSH 검증을 최종 기준으로 사용합니다.
 
 DSH `0.1.7`부터는 각 Loader 항목 자체의 `Config` schema에서 설정 폼을 도출합니다(entry-config 모델). 이 schema를 내보내지 않는 플러그인에는 설정 폼이 나타나지 않습니다. 이 플러그인은 해당 schema를 내보내므로 `0.1.7` 이상에서 설정 섹션은 Loader 항목 ID인 `thinking-effort`가 됩니다. `0.1.0-rc.7`부터 `0.1.6`까지는 등록된 namespace `dsh-thinking-effort`를 그대로 사용하며, Client는 실행 중인 Host가 게시한 ID를 해석합니다. `subagentEffort`는 이 플러그인 자체 섹션에 저장되며, `0.1.7` 이상에서는 이전 `llm-pi-ai` 위치가 더 이상 폴백이 아닙니다. 그 섹션의 schema는 `providers`만 선언하므로 Host는 다른 경로 쓰기를 거부하고, 게시하는 사용자 계층에서 선언되지 않은 키를 제거합니다. 따라서 이전에 저장한 Subagent 기본값은 설정되지 않은 것으로 표시되며 플러그인 설정 카드에서 다시 선택해야 합니다. `0.1.7` 이전에 이 플러그인이 내보낸 스냅샷은 그 값을 여전히 `llm-pi-ai` 안에 담고 있고, 가져올 때 플러그인 자체 섹션으로 마이그레이션합니다. 같은 배치의 providers까지 함께 가져와지는 것도 이 마이그레이션 덕분입니다(volatile이 아닌 경로가 하나라도 있으면 Host는 배치 전체를 거부합니다). `0.1.7` 이상의 설정은 `~/.dsh/settings.yaml`이 아니라 현재 profile의 `cordis.patch.yml`에 저장됩니다(`0.1.7`은 이 파일을 더 이상 사용하지 않습니다).
 
@@ -67,7 +68,7 @@ DSH 내장 모델만 사용하고 이미 추론 제어가 정상 작동한다면
 | --- | --- |
 | 기본 단계 | 사용자 레이어에서 선언한 모델에 한해 사용자 지정 값을 덮어쓰지 않고 `off`, `high`, `max` 추가. 베이스나 스키마 기본값만 제공하는 모델은 보완하지 않고 개수를 Host 로그에 기록 |
 | 모델별 편집 | Settings에서 단계를 설정하고 catalog/modelOverrides와 `models[]` 항목의 게이트웨이 호환 값을 모두 편집 |
-| 게이트웨이 호환 설정 | 15개의 일반적인 스칼라 필드를 provider 전체 또는 모델별로 설정하며, 역할/추론, 형식/출력, 스트리밍/도구, 저장/캐시로 나뉘고 기본으로 접혀 있음 |
+| 게이트웨이 호환 설정 | 18개의 일반적인 스칼라 필드를 provider 전체 또는 모델별로 설정하며, 역할/추론, 형식/출력, 스트리밍/도구, 저장/캐시로 나뉘고 기본으로 접혀 있음 |
 | OpenCode 세션 Header | 정확한 모델에만 동적 `x-opencode-session`을 활성화합니다. 기본값은 DSH 세션에 묶인 결정적 `ses_` 값을 생성하며(template / expression / script 모드로 상류 형식 변경에 대응), 고정 Header 값을 저장하지 않습니다 |
 | OpenCode user-agent 재정의 | provider/model(커스텀 route 포함) 단위로 `user-agent`를 다시 써서 상류 클라이언트를 흉내냅니다. route별 값도 설정 가능하며 기본값은 꺼져 있습니다 |
 | 게이트웨이 값 매핑 | DSH에서 `high`를 선택하면 `ultra` 전송 가능 |
@@ -85,7 +86,7 @@ profile은 공식 DSH CLI로 관리하세요. 일반 `npm install`은 DSH profil
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 특정 버전 설치
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.5
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.6
 
 # 업데이트
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -119,7 +120,7 @@ profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](
 
 ### 게이트웨이 호환성 설정
 
-provider의 `compat` 블록은 해당 provider 아래 모든 모델의 전역 기본값입니다. Settings 페이지에서는 15개 필드를 4개 그룹으로 나누고 기본으로 접어 둡니다. DSH 공식 YAML 형식으로 설정합니다.
+provider의 `compat` 블록은 해당 provider 아래 모든 모델의 전역 기본값입니다. Settings 페이지에서는 18개 필드를 4개 그룹으로 나누고 기본으로 접어 둡니다. DSH 공식 YAML 형식으로 설정합니다.
 
 ```yaml
 providers:

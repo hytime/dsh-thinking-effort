@@ -82,6 +82,35 @@ export interface SettingsNamespace {
   readonly applies?: string
 }
 
+/**
+ * What {@link revisionOf} reads off a section: only the id is required, so a
+ * caller may hand over a full `SettingsNamespace` or a partial read.
+ */
+export interface RevisionedSection {
+  readonly ns: string
+  /** A non-numeric or absent revision reads as 0. */
+  readonly revision?: unknown
+}
+
+/**
+ * The revision fence one settings section stands at.
+ *
+ * Two call shapes grew independently — a single section (`SectionEditor`) and a
+ * namespace list plus id (the snapshot cards) — but both are one lookup, so
+ * they share this implementation. An absent or malformed revision reads as 0,
+ * which is the value every existing caller already treated as "no fence yet";
+ * the callers that must fail closed instead of writing without a fence check
+ * the read's shape before they get here.
+ */
+export function revisionOf(section: RevisionedSection): number
+export function revisionOf(sections: readonly RevisionedSection[], ns: string): number
+export function revisionOf(input: RevisionedSection | readonly RevisionedSection[], ns?: string): number {
+  const section = Array.isArray(input)
+    ? (input as readonly RevisionedSection[]).find((candidate) => candidate.ns === ns)
+    : input as RevisionedSection
+  return typeof section?.revision === 'number' ? section.revision : 0
+}
+
 export interface OpenCodeSessionState {
   readonly namespace: SettingsNamespace | null
   readonly views: Record<string, boolean>
@@ -106,11 +135,51 @@ export type ClientResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: ClientError }
 
+/**
+ * The read-back one settings form publishes for its section.
+ *
+ * Only the three fields this plugin reads are declared: `status`, `revision`
+ * and `writable`. A missing `revision` means the form cannot fence a write, and
+ * `writable: false` means the host is in a memory mode (off-loopback) that
+ * answers every mutation with `false`.
+ */
+export interface ConfigFormSnapshot {
+  readonly status?: string
+  readonly revision?: number
+  readonly writable?: boolean
+}
+
+/**
+ * The official per-entry settings form (`ctx.configForms.get(entryId)`, DSH
+ * 0.1.7 and later). It already owns a serialized write queue, a revision fence
+ * and a post-conflict re-read — the things the panel's `runOps` hand-rolls on
+ * every host that does not provide one.
+ */
+export interface ConfigFormFace {
+  getSnapshot(): ConfigFormSnapshot
+  subscribe(listener: () => void): () => void
+  mutate(ops: readonly SettingsOp[], expectedRevision?: number): Promise<boolean>
+  set(field: string, value: unknown): Promise<boolean>
+  unset(field: string): Promise<boolean>
+  dispose(): Promise<void>
+}
+
+/** The optional `ctx.configForms` service itself. */
+export interface ConfigFormsService {
+  get(entryId: string): ConfigFormFace | undefined
+}
+
 export interface SettingsApi {
   readonly externalLanguages: boolean
   readonly compatibilityProfile: CompatibilityProfile
   describe(): Promise<ClientResult<SettingsDescribeValue>>
   mutate(ns: string, ops: readonly SettingsOp[], expectedRevision: number): Promise<ClientResult<SettingsNamespace>>
+  /**
+   * Present only when the host exposes `ctx.configForms`. When it is, the
+   * editor routes its writes through that form instead of `mutate`; every
+   * other host keeps the `describe`/`mutate` pair alone.
+   */
+  formFor?(entryId: string): ConfigFormFace | undefined
 }
 
 export type CompatibilitySettings = 'remote' | 'legacy' | 'none'

@@ -1,15 +1,23 @@
 import type { ReasoningLevel } from './types.js'
+import {
+  ALL_LEVELS,
+  DEFAULT_LEVELS as SHARED_DEFAULT_LEVELS,
+  FORMAT_INVALID_POLICIES,
+  FORMAT_MODES,
+  FORMAT_TIMES,
+  LLM_PI_AI_NS,
+} from '../shared/constants.js'
 
-export const ALL_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const
-export const DEFAULT_LEVELS = { off: null, high: 'high', max: 'max' } as const satisfies Partial<Record<ReasoningLevel, string | null>>
+export { ALL_LEVELS, FORMAT_INVALID_POLICIES, FORMAT_MODES, FORMAT_TIMES }
+export const DEFAULT_LEVELS = SHARED_DEFAULT_LEVELS satisfies Partial<Record<ReasoningLevel, string | null>>
 
 export const PRESETS = [
   { key: 'official', levels: DEFAULT_LEVELS, labelKey: 'presetOfficial' },
   { key: 'generic', levels: { off: null, low: 'low', medium: 'medium', high: 'high' }, labelKey: 'presetGeneric' },
 ] as const
 
-export const NS = 'llm-pi-ai'
-export { OPENCODE_SESSION_NAMESPACE as OPENCODE_SESSION_NS } from '../compat/opencode-session.js'
+export const NS = LLM_PI_AI_NS
+export { PLUGIN_NS as OPENCODE_SESSION_NS } from '../shared/constants.js'
 export const LOCALE_NS = 'settings.thinkingEffort'
 export const CONTEXT_MIN = 2000
 export const CONTEXT_1M = 1000000

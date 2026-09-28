@@ -2,14 +2,13 @@ import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, fieldsForApi } from '
 import type { GatewayCompatFieldKey } from './fields.js'
 import type { DshVersionCapabilities } from '../version-map.js'
 import type { GatewayCompatEditability, GatewayCompatValidationResult } from './types.js'
+import { isUnknownRecord } from '../../shared/guards.js'
 
 type RuntimeProfile = 'modern' | 'legacy' | 'unknown'
 type EditabilityCapabilities = DshVersionCapabilities | RuntimeProfile
 
 function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+  return isUnknownRecord(value) ? value : undefined
 }
 
 function hasProperty(value: unknown, key: string): boolean {
@@ -157,14 +156,3 @@ export function validateProviderCompat(
     available: fields.supportsDeveloperRole === true && fields.maxTokensField === true,
   }
 }
-
-export function canEditProviderCompatField(
-  capabilities: EditabilityCapabilities | undefined,
-  descriptorSchema: unknown,
-  field: GatewayCompatFieldKey,
-  api?: unknown,
-): boolean {
-  return editableProviderCompatFields(capabilities, descriptorSchema, api)[field] === true
-}
-
-export const providerCompatEditability = editableProviderCompatFields

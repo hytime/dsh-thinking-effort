@@ -30,8 +30,11 @@ import { resolveGatewayCompat, resolveModelGatewayCompat, resolveProviderGateway
 import { editableProviderCompatFields, validateProviderCompat } from '../src/compat/gateway/validation.js'
 import type { GatewayCompatEditability, GatewayCompatFieldKey, GatewayCompatFieldResolution } from '../src/compat/gateway/types.js'
 import { capabilitiesForVersion } from '../src/compat/version-map.js'
-import { GATEWAY_COMPAT_FIELD_KEYS, ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS, fieldsForApi } from '../src/compat/gateway/fields.js'
+import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS, fieldsForApi } from '../src/compat/gateway/fields.js'
 import type { InventoryItem, ModelGatewayCompatUpdate, Translation } from '../src/client/types.js'
+import { revisionOf } from '../src/client/types.js'
+import { hasSessionRemote } from '../src/compat/model-directory.js'
+import { isSettingsConflict } from '../src/shared/conflict.js'
 import type { TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
 
 const translate: Translation = (key, params) => `${key}${params?.level ? `:${params.level}` : ''}`
@@ -52,6 +55,9 @@ const realGatewaySchema = {
        requiresThinkingAsText: 0,
        requiresReasoningContentOnAssistantMessages: 0,
        supportsThinkingTokenBudget: 0,
+       thinkingTokenBudgetField: 1,
+       vllmPriority: 7,
+       supportsMaxOutputTokens: 0,
        supportsStrictMode: 0,
        supportsLongCacheRetention: 0,
        maxTokensField: 1,
@@ -62,6 +68,7 @@ const realGatewaySchema = {
     '4': { type: 'dict', meta: { default: {} }, inner: 3, sKey: 5 },
     '5': { type: 'string', meta: {} },
     '6': { type: 'object', meta: { default: {} }, dict: { providers: 4 } },
+    '7': { type: 'number', meta: {} },
   },
 } as const
 
@@ -206,6 +213,74 @@ describe('client constants and bridge', () => {
     await api?.mutate(NS, [], 7)
     expect(describe).toHaveBeenCalledWith({})
     expect(mutate).toHaveBeenCalledWith({ ns: NS, ops: [], expectedRevision: 7 })
+  })
+})
+
+describe('configForms bridge', () => {
+  it('attaches nothing for a three-argument call, keeping the legacy key set exact', async () => {
+    const describe = vi.fn().mockResolvedValue({ result: { ok: true, value: { namespaces: [] } } })
+    const mutate = vi.fn().mockResolvedValue({ result: { ok: true, value: { ns: NS } } })
+    const api = settingsBridge({ api: { settings: { describe, mutate } } })
+
+    expect(api).toBeDefined()
+    expect('formFor' in (api as object)).toBe(false)
+    expect(Object.keys(api!).sort()).toEqual(['compatibilityProfile', 'describe', 'externalLanguages', 'mutate'])
+    // The pair is untouched by the new parameter.
+    await expect(api?.describe()).resolves.toEqual({ ok: true, value: { namespaces: [] } })
+    await expect(api?.mutate(NS, [], 7)).resolves.toEqual({ ok: true, value: { ns: NS } })
+    expect(mutate).toHaveBeenCalledWith({ ns: NS, ops: [], expectedRevision: 7 })
+  })
+
+  it('exposes the form on a modern host when the 0.1.7 service is present', () => {
+    const form = { getSnapshot: () => ({ status: 'ready', revision: 3, writable: true }) }
+    const configForms = { get: vi.fn(() => form) }
+    const api = settingsBridge({}, { describe: vi.fn(), mutate: vi.fn() }, undefined, configForms)
+
+    expect(api?.compatibilityProfile).toBe('modern')
+    expect(api?.formFor?.(NS)).toBe(form)
+    expect('formFor' in (api as object)).toBe(true)
+  })
+
+  it('exposes the form on a legacy host too, since the two families are orthogonal', () => {
+    const form = { getSnapshot: () => ({ revision: 1 }) }
+    const api = settingsBridge(
+      { api: { settings: { describe: vi.fn(), mutate: vi.fn() } } },
+      undefined,
+      undefined,
+      { get: () => form },
+    )
+
+    expect(api?.compatibilityProfile).toBe('legacy')
+    expect(api?.formFor?.(NS)).toBe(form)
+  })
+
+  it('re-reads a live view on every lookup, so a late service arrives', () => {
+    let service: { get: (id: string) => unknown } | undefined
+    const live = { get: (entryId: string) => service?.get(entryId) as never }
+    const api = settingsBridge(undefined, { describe: vi.fn(), mutate: vi.fn() }, undefined, live)
+
+    expect(api?.formFor?.(NS)).toBeUndefined()
+
+    const form = { getSnapshot: () => ({ revision: 4 }) }
+    service = { get: () => form }
+
+    expect(api?.formFor?.(NS)).toBe(form)
+  })
+
+  it('treats a non-service fourth argument as absent', () => {
+    for (const configForms of [{}, null, 'configForms', 42, { get: 1 }]) {
+      const api = settingsBridge(undefined, { describe: vi.fn(), mutate: vi.fn() }, undefined, configForms)
+      expect(api).toBeDefined()
+      expect('formFor' in (api as object)).toBe(false)
+    }
+  })
+
+  it('normalizes an absent entry and a nullish result to undefined', () => {
+    const form = { getSnapshot: () => ({ revision: 2 }) }
+    const api = settingsBridge(undefined, { describe: vi.fn(), mutate: vi.fn() }, undefined, { get: (id: string) => (id === NS ? form : null) })
+
+    expect(api?.formFor?.(NS)).toBe(form)
+    expect(api?.formFor?.('other')).toBeUndefined()
   })
 })
 
@@ -473,6 +548,30 @@ describe('model inventory and operations', () => {
     expect(opsForProviderCompat('local', { thinkingFormat: 'auto' }, editable)).toEqual([
       { op: 'unset', path: ['providers', 'local', 'compat', 'thinkingFormat'] },
     ])
+  })
+
+  it('writes a number new field as a parsed number and auto as unset', () => {
+    const editable = editableProviderCompatFields('modern', realGatewaySchema)
+    expect(opsForProviderCompat('local', { vllmPriority: '3' }, editable)).toEqual([
+      { op: 'set', path: ['providers', 'local', 'compat', 'vllmPriority'], value: 3 },
+    ])
+    expect(opsForProviderCompat('local', { vllmPriority: 'auto' }, editable)).toEqual([
+      { op: 'unset', path: ['providers', 'local', 'compat', 'vllmPriority'] },
+    ])
+    // A fractional string is not an integer DSH's `z.number().step(1)` accepts.
+    expect(opsForProviderCompat('local', { vllmPriority: '1.5' }, editable)).toEqual([])
+  })
+
+  it('writes a models[] number field as a parsed number and keeps siblings', () => {
+    const target = item({ model: 'model-b', index: 1, raw: { id: 'model-b', compat: { keep: 'yes' } } })
+    const other = item({ model: 'model-a', index: 0, raw: { id: 'model-a', custom: 'keep-a' } })
+    const editable: GatewayCompatEditability = { vllmPriority: true, editableFields: ['vllmPriority'] }
+
+    expect(opsForModelArrayCompat([other, target], target, { vllmPriority: '5' }, editable)).toEqual([{
+      op: 'set',
+      path: ['providers', 'provider', 'models'],
+      value: [other.raw, { id: 'model-b', compat: { keep: 'yes', vllmPriority: 5 } }],
+    }])
   })
 
   it('does not replace unrelated provider compat fields', () => {
@@ -1530,7 +1629,13 @@ describe('route protocol gating of gateway compat fields', () => {
     expect(fieldsForApi('anthropic-messages')).toEqual(['supportsLongCacheRetention'])
     expect(fieldsForApi('bedrock-converse-stream')).toEqual(['supportsStrictMode'])
     expect(fieldsForApi(undefined)).toEqual(GATEWAY_COMPAT_FIELD_KEYS)
-    expect(fieldsForApi({ api: completionApi })).toEqual(GATEWAY_COMPAT_FIELD_KEYS)
+    // The object form resolves like the string form. `openai-completions` no
+    // longer offers EVERY registry field — `supportsMaxOutputTokens` is
+    // Responses-only from 0.1.3-alpha.2 — so compare against the fields whose
+    // own protocol list admits completions.
+    expect(fieldsForApi({ api: completionApi })).toEqual(
+      GATEWAY_COMPAT_FIELD_KEYS.filter((field) => GATEWAY_COMPAT_FIELDS[field].protocols.includes(completionApi)),
+    )
   })
 
   it('hides openai-completions-only fields from responses editability', () => {
@@ -1646,5 +1751,27 @@ describe('locales and theme', () => {
   it('computes the existing light and dark palettes', () => {
     expect(iosPalette({ backgroundColor: 'rgb(28, 28, 30)', prefersDark: false }).canvas).toBe('#1C1C1E')
     expect(iosPalette({ backgroundColor: 'rgb(242, 242, 247)', prefersDark: false }).canvas).toBe('#F2F2F7')
+  })
+})
+
+describe('shared conflict and revision helpers', () => {
+  it('recognises every conflict spelling through one predicate', () => {
+    expect(isSettingsConflict({ code: 'settings/conflict' })).toBe(true)
+    expect(isSettingsConflict({ code: 'SETTINGS_CONFLICT' })).toBe(true)
+    expect(isSettingsConflict({ message: 'changed since it was read' })).toBe(true)
+    expect(isSettingsConflict({ message: 'config conflict' })).toBe(true)
+    expect(isSettingsConflict({ message: 'not volatile' })).toBe(false)
+  })
+
+  it('reads a revision from a section or a section list', () => {
+    expect(revisionOf({ ns: 'a', revision: 7 })).toBe(7)
+    expect(revisionOf({ ns: 'a' })).toBe(0)
+    expect(revisionOf([{ ns: 'a', revision: 1 }, { ns: 'b', revision: 4 }], 'b')).toBe(4)
+    expect(revisionOf([{ ns: 'a', revision: 1 }], 'missing')).toBe(0)
+  })
+
+  it('probes the session remote through the compat module', () => {
+    expect(hasSessionRemote({ get: () => ({ modelCatalog: () => undefined }) } as never)).toBe(true)
+    expect(hasSessionRemote({ get: () => ({}) } as never)).toBe(false)
   })
 })

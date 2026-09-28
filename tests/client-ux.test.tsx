@@ -19,6 +19,7 @@ import { iosPalette } from '../src/client/theme.js'
 import type {
   ClientLocale,
   ClientResult,
+  ConfigFormFace,
   InventoryItem,
   SettingsApi,
   SettingsNamespace,
@@ -177,22 +178,34 @@ function renderEditor(options: {
   locales?: readonly string[]
   compatibilityProfile?: 'modern' | 'legacy' | 'unknown'
   takeoverResolution?: TakeoverRuntimeResolution
+  /**
+   * The DSH 0.1.7+ `ctx.configForms.get(entryId)` face. Omit it and the editor
+   * sees no `formFor` at all, exactly like every host before 0.1.7.
+   */
+  formFor?: (entryId: string) => ConfigFormFace | undefined
 } = {}): {
   container: HTMLDivElement
   root: Root
   locale: ClientLocale
   mutate: ReturnType<typeof vi.fn>
+  describe: ReturnType<typeof vi.fn>
   unmount: () => void
 } {
   const container = document.createElement('div')
   document.body.append(container)
   const locale = localeSnapshot(options.locales)
   const mutate = vi.fn<SettingsApi['mutate']>(options.mutate ?? (async (ns, _ops, _revision) => ({ ok: true as const, value: ns === 'dsh-thinking-effort' ? openCodeNamespace() : namespace() })))
+  // Counted so a test can prove the form path re-reads after a successful write,
+  // which is how the accepted form result reaches the provider/model views.
+  const describe = vi.fn<() => Promise<ClientResult<{ namespaces: readonly SettingsNamespace[] }>>>(
+    options.describe ?? (async () => ({ ok: true as const, value: { namespaces: [options.baseNamespace ?? namespace(), ...(options.namespaces ?? [])] } })),
+  )
   const settings: SettingsApi = {
     externalLanguages: false,
     compatibilityProfile: options.compatibilityProfile ?? 'unknown',
-    describe: options.describe ?? (async () => ({ ok: true, value: { namespaces: [options.baseNamespace ?? namespace(), ...(options.namespaces ?? [])] } })),
+    describe,
     mutate,
+    ...(options.formFor === undefined ? {} : { formFor: options.formFor }),
   }
   const root = createRoot(container)
   const takeoverRuntime = options.takeoverResolution === undefined ? undefined : createTakeoverRuntimeStore()
@@ -205,6 +218,7 @@ function renderEditor(options: {
     root,
     locale,
     mutate,
+    describe,
     unmount: () => {
       act(() => root.unmount())
       container.remove()
@@ -2377,5 +2391,154 @@ describe('ConfigBackupCard integration', () => {
 
     act(() => root.unmount())
     container.remove()
+  })
+})
+
+/**
+ * The DSH 0.1.7+ write path: when the host exposes `ctx.configForms`, the panel
+ * hands its ops to that form's serialized queue instead of to `settings.mutate`.
+ *
+ * Every case here is a UNIT DOUBLE of the form — it proves the panel chooses and
+ * calls the right branch with the right arguments, not that the real
+ * `ConfigFormController` serializes, fences, or recovers the way its own tests
+ * claim.
+ */
+describe('SectionEditor configForms write path', () => {
+  function formDouble(options: {
+    snapshot?: { status?: string; revision?: number; writable?: boolean }
+    mutate?: (ops: readonly SettingsOp[], expectedRevision?: number) => Promise<boolean>
+  } = {}): ConfigFormFace & { mutate: ReturnType<typeof vi.fn> } {
+    return {
+      // A whole snapshot, not a merge: the revision-less case must genuinely
+      // have no `revision`, and a default spread over it would supply one.
+      getSnapshot: () => options.snapshot ?? { revision: 2, writable: true },
+      subscribe: () => () => undefined,
+      mutate: vi.fn(options.mutate ?? (async () => true)),
+      set: vi.fn(async () => true),
+      unset: vi.fn(async () => true),
+      dispose: vi.fn(async () => undefined),
+    }
+  }
+
+  const saveFirstModel = async (view: ReturnType<typeof renderEditor>): Promise<void> => {
+    openFirstModel(view.container)
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    act(() => button(view.container, text('saveModelChanges')).click())
+    await settle()
+  }
+
+  it('writes through the form, skips the legacy transport, re-reads, and keeps the page populated', async () => {
+    const form = formDouble()
+    const view = renderEditor({ formFor: (entryId) => (entryId === 'llm-pi-ai' ? form : undefined) })
+    await settle()
+    // The settings cards read on mount too, so the re-read this test is about
+    // is measured as a DELTA across the save.
+    const readsBeforeSave = view.describe.mock.calls.length
+
+    await saveFirstModel(view)
+
+    expect(form.mutate).toHaveBeenCalledTimes(1)
+    const ops = form.mutate.mock.calls[0]?.[0] as SettingsOp[]
+    expect(ops).toHaveLength(1)
+    expect(ops[0]?.path).toEqual(['providers', 'provider', 'models'])
+    // The legacy transport is not touched at all on this host.
+    expect(view.mutate).not.toHaveBeenCalled()
+    // `mutate` answers a bare boolean, so the accepted write reaches the views
+    // through a fresh `describe` rather than an echoed descriptor.
+    expect(view.describe.mock.calls.length).toBeGreaterThan(readsBeforeSave)
+    // ...and that re-read repopulates the provider and model views instead of
+    // projecting an empty value (which would blank the page).
+    expect(view.container.textContent).toContain('provider')
+    expect(view.container.textContent).toContain('model-a')
+    expect(view.container.textContent).toContain(text('modelSettingsSaved'))
+    expect(view.container.textContent).toContain(text('quickSettings'))
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
+    view.unmount()
+  })
+
+  it('retries once through the form with ops rebuilt from a fresh read', async () => {
+    const calls: Array<{ ops: readonly SettingsOp[]; revision: number | undefined }> = []
+    let describes = 0
+    const form = formDouble({
+      mutate: async (ops, expectedRevision) => {
+        calls.push({ ops, revision: expectedRevision })
+        return calls.length === 2
+      },
+    })
+    const view = renderEditor({
+      // The fresh read carries a third model and a moved revision, so a replay
+      // of the panel's stale array would be visibly different from the rebuild.
+      describe: async () => {
+        describes += 1
+        const base = namespace({ revision: describes === 1 ? 2 : 5 })
+        if (describes === 1) return { ok: true, value: { namespaces: [base] } }
+        const providers = base.value.providers as Record<string, { models: unknown[] }>
+        providers.provider!.models = [...providers.provider!.models, { id: 'model-c', reasoningEfforts: { off: null }, input: ['text'] }]
+        return { ok: true, value: { namespaces: [base] } }
+      },
+      formFor: () => form,
+    })
+    await settle()
+
+    await saveFirstModel(view)
+
+    expect(form.mutate).toHaveBeenCalledTimes(2)
+    expect(calls[0]?.revision).toBeUndefined()
+    // The rebuilt ops came from the FRESH inventory — the concurrent addition
+    // survives instead of being overwritten by the stale array.
+    const rebuilt = calls[1]?.ops as SettingsOp[]
+    expect(rebuilt).toHaveLength(1)
+    expect((rebuilt[0]?.value as Array<Record<string, unknown>>).map((model) => model.id)).toEqual(['model-a', 'model-b', 'model-c'])
+    expect(calls[1]?.revision).toBe(5)
+    expect(view.mutate).not.toHaveBeenCalled()
+    expect(view.container.textContent).toContain(text('modelSettingsSaved'))
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
+    view.unmount()
+  })
+
+  it('reports a refused form write after one retry instead of falling back to the legacy transport', async () => {
+    const form = formDouble({ mutate: async () => false })
+    const view = renderEditor({ formFor: () => form })
+    await settle()
+
+    await saveFirstModel(view)
+
+    expect(form.mutate).toHaveBeenCalledTimes(2)
+    expect(view.mutate).not.toHaveBeenCalled()
+    const alert = view.container.querySelector('[role="alert"]')?.textContent ?? ''
+    // `mutate` carries no host message, so the generic write failure is the
+    // honest report.
+    expect(alert).toContain(text('writeError', { message: text('writeFailed') }))
+    // The draft and its unsaved marker survive the refusal.
+    expect(view.container.querySelector('[title="' + text('unsaved') + '"]')).not.toBeNull()
+    view.unmount()
+  })
+
+  it.each([
+    ['an unwritable form', { revision: 2, writable: false }],
+    ['a revision-less form', { writable: true }],
+  ])('leaves the legacy transport in charge for %s', async (_label, snapshot) => {
+    const form = formDouble({ snapshot })
+    const view = renderEditor({ formFor: () => form })
+    await settle()
+
+    await saveFirstModel(view)
+
+    expect(form.mutate).not.toHaveBeenCalled()
+    expect(view.mutate).toHaveBeenCalledTimes(1)
+    expect(view.mutate.mock.calls[0]?.[0]).toBe('llm-pi-ai')
+    view.unmount()
+  })
+
+  it('leaves the legacy transport in charge when the host exposes no form at all', async () => {
+    const view = renderEditor()
+    await settle()
+
+    await saveFirstModel(view)
+
+    expect(view.mutate).toHaveBeenCalledTimes(1)
+    expect(view.container.textContent).toContain(text('modelSettingsSaved'))
+    expect(view.container.querySelector('[role="alert"]')).toBeNull()
+    view.unmount()
   })
 })

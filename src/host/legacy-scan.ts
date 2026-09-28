@@ -3,10 +3,11 @@ import { join } from 'node:path'
 import { parse } from 'yaml'
 import type { LegacyCandidate } from '../compat/legacy-migration.js'
 import { LEGACY_LLM_SHAPE, LEGACY_OWN_SHAPE, leavesOf, type LegacyLeaf } from './legacy-shape.js'
+import { LLM_PI_AI_NS, PLUGIN_NS } from '../shared/constants.js'
 
 /** Where one candidate came from, as the prompt reports it. */
 export const LEGACY_MIGRATION_SOURCES = {
-  live: 'llm-pi-ai',
+  live: LLM_PI_AI_NS,
   document: 'settings.yaml',
   imported: 'settings.yaml.imported',
 } as const
@@ -116,8 +117,8 @@ export async function scanLegacyData(input: LegacyScanInput): Promise<LegacyScan
       continue
     }
     const document = parseDocument(text)
-    for (const leaf of leavesOf(LEGACY_OWN_SHAPE, sectionOf(document, 'dsh-thinking-effort'))) offer(leaf, source)
-    for (const leaf of leavesOf(LEGACY_LLM_SHAPE, sectionOf(document, 'llm-pi-ai'))) offer(leaf, source)
+    for (const leaf of leavesOf(LEGACY_OWN_SHAPE, sectionOf(document, PLUGIN_NS))) offer(leaf, source)
+    for (const leaf of leavesOf(LEGACY_LLM_SHAPE, sectionOf(document, LLM_PI_AI_NS))) offer(leaf, source)
   }
 
   const candidates = [...found.values()].sort((left, right) => comparePaths(left.path, right.path))

@@ -1,3 +1,5 @@
+// Deliberately NOT the shared `isUnknownRecord`: this guard must also reject
+// class instances to tell a hand-written profile from a constructed one.
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const prototype = Object.getPrototypeOf(value)

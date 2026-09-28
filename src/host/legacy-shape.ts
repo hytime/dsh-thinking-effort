@@ -8,6 +8,8 @@
  * settings document can never become a write into the plugin's own section.
  */
 
+import { isUnknownRecord } from '../shared/guards.js'
+
 /** One declared node of a legacy section. A scalar declares its own type. */
 export type LegacyShape =
   | { readonly kind: 'scalar'; readonly type: 'string' | 'boolean' }
@@ -112,9 +114,7 @@ export const LEGACY_LLM_SHAPE: LegacyShape = {
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+  return isUnknownRecord(value) ? value : undefined
 }
 
 /** Whether a document value is exactly the type its declared leaf requires. */

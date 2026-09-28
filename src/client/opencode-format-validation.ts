@@ -11,6 +11,7 @@ import {
   OPENCODE_SESSION_NAMESPACE,
 } from '../compat/opencode-session.js'
 import type { SettingsOp } from './types.js'
+import { isUnknownRecord } from '../shared/guards.js'
 
 /**
  * The section the generator settings live in — the legacy registered namespace.
@@ -70,9 +71,7 @@ export const DEFAULT_FORMAT_DRAFT: FormatDraft = {
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined
+  return isUnknownRecord(value) ? value : undefined
 }
 
 function own(value: unknown, key: string): unknown {

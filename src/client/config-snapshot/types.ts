@@ -1,13 +1,13 @@
 import type { SettingsNamespace, SettingsOp } from '../types.js'
-import { OPENCODE_SESSION_NAMESPACE } from '../../compat/opencode-session.js'
+import { LLM_PI_AI_NS, PLUGIN_NS } from '../../shared/constants.js'
 
-export const SNAPSHOT_KIND = 'dsh-thinking-effort/config-snapshot'
+export { SNAPSHOT_KIND } from '../../shared/constants.js'
 export const SNAPSHOT_VERSION = 1
 export const SNAPSHOT_MAX_BYTES = 2 * 1024 * 1024
 export const MAX_PROFILES = 20
 export const MAX_PROFILE_NAME = 40
 
-export const LLM_NAMESPACE = 'llm-pi-ai'
+export const LLM_NAMESPACE = LLM_PI_AI_NS
 /**
  * The plugin section's legacy id: what rc.7 … 0.1.6 register, and the snapshot
  * key this build falls back to when the host publishes no entry section. Under
@@ -16,7 +16,7 @@ export const LLM_NAMESPACE = 'llm-pi-ai'
  * `describe()` result it already holds — `pluginSectionId` — and only falls
  * back to this constant when neither id is published.
  */
-export const PLUGIN_NAMESPACE = OPENCODE_SESSION_NAMESPACE
+export const PLUGIN_NAMESPACE = PLUGIN_NS
 
 /**
  * Namespaces a snapshot carries, in write order. `dsh-thinking-effort` is
