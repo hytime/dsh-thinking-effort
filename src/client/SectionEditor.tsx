@@ -498,10 +498,12 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       const form = formForWrite(ns)
       if (form !== undefined) {
         // The form owns a serialized write queue, a revision fence and a
-        // post-refusal re-read, so the hand-rolled retry below is unnecessary
-        // here. The first attempt omits `expectedRevision` on purpose: the form
-        // fences against the revision IT tracks, not the panel's mount-time
-        // copy, which is exactly the stale value the fence exists to supersede.
+        // post-refusal re-read, so the panel no longer fences the FIRST attempt
+        // itself against its mount-time revision. That fence does not cover the
+        // rebuild-and-retry below, which still runs. The first attempt omits
+        // `expectedRevision` on purpose: the form fences against the revision
+        // IT tracks, not the panel's mount-time copy, which is exactly the
+        // stale value the fence exists to supersede.
         // Its `mutate` answers with a bare boolean and carries no descriptor, so
         // success refreshes through `load()` — the same
         // `applyNamespaceView`/`applyPluginSectionView` projection the legacy
