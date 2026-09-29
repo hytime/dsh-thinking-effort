@@ -34,6 +34,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 type PackageManifest = {
   readonly name?: string
   readonly version: string
+  readonly packageManager?: string
   readonly main?: string
   readonly types?: string
   readonly exports: Record<string, string | { readonly types?: string; readonly default?: string }>
@@ -1313,6 +1314,7 @@ describe('published package composition', () => {
     const manifest = readPackage()
 
     expect(manifest.version).toBe('0.3.6')
+    expect(manifest.packageManager).toBe('pnpm@11.7.0')
     expect(manifest.main).toBe('./lib/index.js')
     expect(manifest.types).toBe('./lib/types/index.d.ts')
     expect(manifest.exports['.']).toEqual({
