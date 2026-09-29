@@ -26,10 +26,11 @@ docs/94d15cfd-3ff0-4695-ac9f-c10cb578b500.png
 # macOS Finder metadata, written into any directory the Finder visits.
 .DS_Store
 
-# Stray machine-local tool config the repository does not use: the official
-# toolchain is npm (`package-lock.json`) and nothing here references pnpm or
-# lefthook. Both files are unfinished leftovers — the root pnpm-workspace.yaml
-# still carries pnpm's `set this to true or false` placeholder, and
-# lefthook.yml is lefthook's commented-out example template.
+# Stray machine-local tool config the repository does not use: repository CI and
+# root dependency installation use npm (`package-lock.json`). The published
+# package separately pins pnpm in `packageManager` because DSH profile plugin
+# operations run through pnpm. The root pnpm lock/workspace files remain local
+# leftovers — the workspace still carries pnpm's placeholder build setting —
+# and lefthook.yml is lefthook's commented-out example template.
 /pnpm-workspace.yaml
 /lefthook.yml
