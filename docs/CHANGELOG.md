@@ -14,6 +14,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 修复 / Fixed
+
+- 修复 Composer 思考面板在窄屏上定位出界：面板锚定触发器右边缘向左展开 336px，手机上模型按钮贴着屏幕左边缘，面板大半被推出屏幕、滑杆基本点不到；CSS 的 `min(336px, 100vw - 32px)` 只限宽度、限不了起始位置。现在面板打开时量一次触发器实际位置：原锚点位置放得进屏幕就保持不动（桌面行为完全不变），放不下时才把面板 clamp 到 `[16px, 视口宽 - 16px]` 区间内，窗口 resize 与页面滚动时重算。
+- Fix the composer thinking panel overflowing the viewport on narrow screens: the panel is anchored to the trigger's right edge and opens 336px leftward, so on phones — where the model button sits flush against the left edge of the screen — most of the panel lands off-screen and the slider is essentially untappable; the CSS `min(336px, 100vw - 32px)` bounds the width but not the starting position. The panel now measures the trigger's actual position on open: the original anchor is kept whenever it fits the viewport (desktop behavior is unchanged), and only when it overflows is the panel clamped into `[16px, viewport width - 16px]`, recomputed on window resize and page scroll.
+
 ## [0.3.6] - 2026-09-29
 
 ### 新增 / Added
