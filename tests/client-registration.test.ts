@@ -675,13 +675,13 @@ describe('client registration', () => {
 
     // A mapped version keeps owning its transport, even when the profile could take over.
     expect(resolveTakeoverProviders({ version: '0.1.0-rc.7', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual([])
-    // The newest published release is mapped, so it takes the mapped path.
-    expect(resolveTakeoverProviders({ version: '0.1.5-rc.2', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual(['local'])
+    // The 0.2.0 line is mapped to the same window, so it takes the mapped path too.
+    expect(resolveTakeoverProviders({ version: '0.2.0-rc.2', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual(['local'])
     // An unmapped newer version falls back to what the host actually reports.
-    expect(resolveTakeoverProviders({ version: '0.2.0', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual(['local'])
+    expect(resolveTakeoverProviders({ version: '0.3.0', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual(['local'])
     // The fallback still fails closed without a capable profile or schema.
-    expect(resolveTakeoverProviders({ version: '0.2.0', runtimeProfile: 'unknown', descriptorSchema: fullSchema, piAi })).toEqual([])
-    expect(resolveTakeoverProviders({ version: '0.2.0', runtimeProfile: 'modern', descriptorSchema: { properties: { providers: { additionalProperties: { properties: { compat: { properties: {} } } } } } }, piAi })).toEqual([])
+    expect(resolveTakeoverProviders({ version: '0.3.0', runtimeProfile: 'unknown', descriptorSchema: fullSchema, piAi })).toEqual([])
+    expect(resolveTakeoverProviders({ version: '0.3.0', runtimeProfile: 'modern', descriptorSchema: { properties: { providers: { additionalProperties: { properties: { compat: { properties: {} } } } } } }, piAi })).toEqual([])
     // Invalid version metadata never falls back.
     expect(resolveTakeoverProviders({ version: 42, runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual([])
   })
