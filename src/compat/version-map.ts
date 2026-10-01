@@ -66,8 +66,13 @@ const completeBaseModelFields = ['reasoningEfforts', 'input', 'contextWindow'] a
  * The `0.1.7` window records the settings rewrite: `0.1.7-alpha.1` was verified
  * directly and keeps the modern transport, the `user` layer, the same editable
  * compat fields, external language packs and optional takeover, but replaces
- * namespace registration with per-entry `Config` forms. Its bound is `0.1.8-0`
- * so the whole line resolves.
+ * namespace registration with per-entry `Config` forms. `0.2.0-rc.2` was
+ * verified to stay inside that same window: the settings controller,
+ * `configForms`, `plugin-compatibility`, the locale pack and the model
+ * directory are byte-identical to `0.2.0-rc.1`, the pi-ai `compatProfile` is
+ * unchanged, and the one gate that release adds (`mistral-conversations`)
+ * offers no field, so the plugin's editable set is untouched. Its bound is
+ * `0.2.1-0` so the whole `0.1.7` through `0.2.0` span resolves.
  */
 const versionRanges: readonly VersionRange[] = [
   {
@@ -127,8 +132,12 @@ const versionRanges: readonly VersionRange[] = [
     },
   },
   {
+    // Verified through `0.2.0-rc.2`: the 0.1.7 line's window was extended rather
+    // than split, because the 0.2.0 line changed none of the capabilities it
+    // maps. The bound is the first release of the next minor line (`0.2.1-0`),
+    // so `0.2.0` and its prereleases resolve here.
     minimum: '0.1.7-0',
-    maximumExclusive: '0.1.8-0',
+    maximumExclusive: '0.2.1-0',
     capabilities: {
       settingsTransport: 'modern',
       settingsApi: 'remote.settings',

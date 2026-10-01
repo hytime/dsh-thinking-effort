@@ -24,6 +24,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - 把开发依赖 `jsdom` 间接引入的 `undici` 从 7.29.0 提升到 7.30.0，修复 `npm audit` 报出的高危项（含 TLS 证书校验绕过 GHSA-w293-vg96-wgc3 等 2026-09-29 批次公告）。这些是 devDependencies，不进发布包的运行时依赖图（发布包只依赖 `schemastery` 与 `yaml`），因此对插件使用者没有暴露面；但 CI 的 `npm audit --audit-level=high` 在 `quality` job 内，`publish` 依赖它，不修会挡住下一次发布。`@vitest/mocker` 的 2 个 moderate 仍在，修复需要 `vitest@5`（破坏性变更），故不在本次范围内。
 - Raised `undici` — pulled in transitively by the dev dependency `jsdom` — from 7.29.0 to 7.30.0, clearing the high-severity findings `npm audit` reported (including the TLS certificate-validation bypass GHSA-w293-vg96-wgc3, part of the 2026-09-29 advisory batch). These are devDependencies and do not enter the published package's runtime dependency graph (which is only `schemastery` and `yaml`), so there is no exposure for plugin users; but `npm audit --audit-level=high` runs inside CI's `quality` job, which `publish` depends on, so leaving it unfixed would block the next release. The two moderate `@vitest/mocker` findings remain, since fixing them requires `vitest@5`, a breaking change, and are out of scope here.
 
+### 兼容性 / Compatibility
+
+- 版本映射的最新窗口上界由 `0.1.8-0` 扩展到 `0.2.1-0`，使 DSH `0.1.7` 至 `0.2.0` 整段落在同一个已验证的窗口内。`0.2.0-rc.2` 相对 `0.2.0-rc.1` 逐一核对过插件依赖的 API：设置控制器、`configForms`、`plugin-compatibility`、语言包与模型目录等文件逐字节相同，pi-ai 的 `compatProfile` 亦未变；该版本新增的 `mistral-conversations` 协议在 `COMPAT_GATES` 中提供 0 个字段，且不在 `llm-pi-ai` 的 `PROTOCOLS` 里，用户路由无法声明它，因此不改动插件的 18 字段集合。此前 `0.2.0` 落在窗口之外（未映射），插件仍可工作但会退化为跟随运行时报告的能力；现在它与 `0.1.7` 走同一条已验证路径。
+- Extended the newest version-map window's upper bound from `0.1.8-0` to `0.2.1-0`, so DSH `0.1.7` through `0.2.0` all resolve inside one verified window. Against `0.2.0-rc.1`, `0.2.0-rc.2` was checked file by file on every API this plugin depends on: the settings controller, `configForms`, `plugin-compatibility`, the locale pack and the model directory are byte-identical, and the pi-ai `compatProfile` is unchanged; the one protocol that release adds (`mistral-conversations`) offers no field in `COMPAT_GATES` and is absent from `llm-pi-ai`'s `PROTOCOLS`, so a configured route cannot name it and the plugin's 18-field set is untouched. Previously `0.2.0` fell outside every window (unmapped): the plugin still worked, but degraded to following the capabilities the running host reports. It now takes the same verified path as `0.1.7`.
+
 ## [0.3.6] - 2026-09-29
 
 ### 新增 / Added
@@ -32,6 +37,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - DSH `0.1.3-alpha.2` added three gateway compat fields: `thinkingTokenBudgetField` (completions), the numeric `vllmPriority` (completions), and `supportsMaxOutputTokens` (Responses). The plugin now surfaces and writes them like every other compat field, which takes the configurable scalar fields from 15 to 18 on `0.1.3-alpha.2` and later. Because `supportsMaxOutputTokens` is offered only on the Responses protocols, `openai-completions` no longer offers every field: it supports the 17 others.
 - 设置页的写入在 DSH `0.1.7` 及更高版本上改走 `ctx.configForms` 的官方串行化写入队列与 revision 护栏。此前面板自行维护「冲突后重读并重试一次」的逻辑；官方表单服务本身已带串行队列、版本护栏与拒绝后的重读，首次写入因此不再由面板用挂载时读到的 revision 自己围栏（表单按它自己跟踪的 revision 判断），但重建仍需要表单快照不具备的完整描述符（库存的 `value.providers`、可编辑 compat 字段的 `schema`），所以写入被拒绝后仍会重读并重建一次。`0.1.0-rc.7` 到 `0.1.6` 等更早的宿主没有该服务，仍走原来的 `describe` / `mutate` 路径，行为完全不变（含原有的冲突重试）。新路径上写入被拒绝时界面显示通用的「保存失败」文案：表单的 `mutate` 只返回一个布尔值，没有可原样呈现的宿主消息，编造原因或假装成功都不如实报告。
 - Settings writes on DSH `0.1.7` and later now go through `ctx.configForms`'s official serialized write queue and its revision fence. The panel previously carried its own "re-read and retry once after a conflict" logic; the official form service already owns a serialized queue, a revision fence and a post-refusal re-read, so the first write is no longer fenced by the panel against the revision it read at mount (the form fences against the revision IT tracks); a rebuild still needs a full descriptor the form snapshot does not carry (`value.providers` for the inventory, `schema` for the editable compat fields), so a refused write is still re-read and rebuilt ONCE. Older hosts — `0.1.0-rc.7` through `0.1.6` — expose no such service and keep the original `describe` / `mutate` path with unchanged behaviour, retry included. On the new path a refused write surfaces the generic "save failed" text, because the form's `mutate` answers with a bare boolean: there is no host message to render verbatim, and inventing a reason or pretending success would be less honest than reporting the failure.
+
 
 ### 兼容性 / Compatibility
 
@@ -288,6 +294,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - 新增日语和韩语 README、INSTALL、CHANGELOG 文档，并提供四语言互链。
 - Add Japanese and Korean README, INSTALL, and CHANGELOG documents with links across all four languages.
 
+
 ### 兼容性 / Compatibility
 
 - 版本升级到 `0.1.7`，设置页版本水印同步显示 `v0.1.7`。
@@ -331,6 +338,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - Preserve custom subagent wire values after refreshing the settings page.
 - 将子 agent 自定义线上值映射回当前模型支持的 DSH 标准档位。
 - Map custom subagent wire values back to the DSH effort supported by the selected model.
+
 
 ### 兼容性 / Compatibility
 
