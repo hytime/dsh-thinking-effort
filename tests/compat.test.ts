@@ -108,6 +108,17 @@ describe('version capability map', () => {
     expect(settingsModelForVersion('0.1.6-alpha.2')).toBe('namespace')
   })
 
+  it('keeps the 0.2.0 line inside the verified 0.1.7 window', () => {
+    // `0.2.0-rc.2` changed none of the capabilities this window records, so the
+    // bound moved to the next minor line instead of the `0.2.0` releases
+    // dropping out of the map.
+    expect(capabilitiesForVersion('0.2.0-rc.1')).toEqual(entryConfigCapabilities)
+    expect(capabilitiesForVersion('0.2.0-rc.2')).toEqual(entryConfigCapabilities)
+    expect(capabilitiesForVersion('0.2.0')).toEqual(entryConfigCapabilities)
+    expect(takeoverTransportForVersion('0.2.0-rc.2')).toBe('optional')
+    expect(settingsModelForVersion('0.2.0-rc.2')).toBe('entry-config')
+  })
+
   it('keeps every half-open boundary and accepts semver build metadata', () => {
     expect(capabilitiesForVersion('0.1.0-rc.6')).toBeUndefined()
     expect(capabilitiesForVersion('0.1.0-rc.7+ci.1')).toEqual(rc7Capabilities)
@@ -125,8 +136,9 @@ describe('version capability map', () => {
     expect(capabilitiesForVersion('0.1.6-alpha.2')).toEqual(alpha3Capabilities)
     expect(capabilitiesForVersion('0.1.7-0')).toEqual(entryConfigCapabilities)
     expect(capabilitiesForVersion('0.1.7-alpha.1+ci.1')).toEqual(entryConfigCapabilities)
-    expect(capabilitiesForVersion('0.1.8-0')).toBeUndefined()
-    expect(capabilitiesForVersion('0.2.0')).toBeUndefined()
+    expect(capabilitiesForVersion('0.2.0-rc.2+build.9')).toEqual(entryConfigCapabilities)
+    expect(capabilitiesForVersion('0.2.1-0')).toBeUndefined()
+    expect(capabilitiesForVersion('0.3.0')).toBeUndefined()
   })
 
   it('carries the complete mapped matrix in compatibility reports', () => {
@@ -158,11 +170,20 @@ describe('compatibility profiles', () => {
     expect(modernRange.profile).toBe('legacy')
     expect(modernRange.expected).toBe('modern')
 
-    const unknownFuture = resolveCompatibility({ version: '0.2.0', capabilities: legacy })
+    const unknownFuture = resolveCompatibility({ version: '0.3.0', capabilities: legacy })
     expect(unknownFuture.profile).toBe('legacy')
     expect(unknownFuture.expected).toBeUndefined()
     expect(unknownFuture.versionCapabilities).toBeUndefined()
     expect(unknownFuture.diagnostics).toHaveLength(0)
+  })
+
+  it('reports the 0.2.0 line against its mapped profile', () => {
+    const report = resolveCompatibility({ version: '0.2.0-rc.2', capabilities: modern })
+
+    expect(report.profile).toBe('modern')
+    expect(report.expected).toBe('modern')
+    expect(report.versionCapabilities).toEqual(entryConfigCapabilities)
+    expect(report.diagnostics).toHaveLength(0)
   })
 
   it('uses detected capabilities when version metadata is absent', () => {

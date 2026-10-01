@@ -88,6 +88,26 @@ function dispose(root: ReturnType<typeof createRoot>, container: HTMLDivElement)
   container.remove()
 }
 
+/** jsdom reports a zero rect and a fixed viewport, so geometry is stubbed per test. */
+function setViewportWidth(width: number): void {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: width })
+}
+
+function stubRootRect(container: HTMLDivElement, left: number, width: number): void {
+  const root = container.querySelector('[data-seat-root]') as HTMLElement
+  expect(root).not.toBeNull()
+  root.getBoundingClientRect = () => ({
+    x: left, y: 0, left, top: 0, right: left + width, bottom: 28,
+    width, height: 28, toJSON: () => ({}),
+  }) as DOMRect
+}
+
+function panelLeft(container: HTMLDivElement): string {
+  const panel = container.querySelector('[data-seat-panel]') as HTMLDivElement
+  expect(panel).not.toBeNull()
+  return panel.style.left
+}
+
 afterEach(() => {
   document.body.innerHTML = ''
 })
@@ -499,6 +519,53 @@ describe('continuous range dragging', () => {
     // Older directory builds carry no `pending`; the seat must still read the
     // confirmed value rather than a local guess.
     expect(directory.getSnapshot().pending).toBeUndefined()
+
+    dispose(root, container)
+  })
+
+  it('clamps the panel into a narrow viewport instead of following the off-screen anchor', () => {
+    setViewportWidth(390)
+    const directory = createSnapshotStore(state())
+    const { container, root } = renderSeat({ directory, t })
+    // The chip sits flush against the left edge, so the 336px right-anchored
+    // panel would start at -38px and most of it would be unreachable.
+    stubRootRect(container, 16, 282)
+
+    openPanel(container)
+    expect(panelLeft(container)).toBe('0px')
+
+    dispose(root, container)
+  })
+
+  it('keeps the original right-aligned anchor whenever the panel fits', () => {
+    setViewportWidth(1440)
+    const directory = createSnapshotStore(state())
+    const { container, root } = renderSeat({ directory, t })
+    stubRootRect(container, 600, 150)
+
+    openPanel(container)
+    // Anchored to the trigger's right edge: 414px viewport-left, 186px back
+    // from a trigger whose left edge is at 600px.
+    expect(panelLeft(container)).toBe('-186px')
+
+    dispose(root, container)
+  })
+
+  it('recomputes the clamp when the window is resized while the panel is open', () => {
+    setViewportWidth(1440)
+    const directory = createSnapshotStore(state())
+    const { container, root } = renderSeat({ directory, t })
+    stubRootRect(container, 600, 150)
+
+    openPanel(container)
+    expect(panelLeft(container)).toBe('-186px')
+
+    // A real resize shrinks the viewport AND reflows the chip with it, so the
+    // stub moves too; the panel must re-clamp against the new geometry.
+    setViewportWidth(390)
+    stubRootRect(container, 16, 282)
+    act(() => { window.dispatchEvent(new Event('resize')) })
+    expect(panelLeft(container)).toBe('0px')
 
     dispose(root, container)
   })

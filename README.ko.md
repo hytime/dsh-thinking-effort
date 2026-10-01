@@ -33,7 +33,7 @@
 | `0.1.0-rc.7` | 지원하지 않음 |
 | `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 | schema가 노출하는 경우 지원하지만 `supportsFinishReason` 및 `supportsThinkingTokenBudget`는 없음 |
 | `0.1.2-alpha.1`부터 `<0.1.3-alpha.2`까지 | schema가 노출하는 경우 15개 필드 지원. `thinkingTokenBudgetField`, `vllmPriority`, `supportsMaxOutputTokens`는 아직 제공되지 않음 |
-| `0.1.3-alpha.2`부터 `<0.1.7-0`까지 | schema가 노출하는 경우 18개 필드 모두 지원. 상한 이상의 릴리스는 매핑되지 않으며, 플러그인은 계속 동작하면서 실행 중인 호스트가 보고하는 능력을 따릅니다 |
+| `0.1.3-alpha.2`부터 `<0.2.1-0`까지 | schema가 노출하는 경우 18개 필드 모두 지원. 이 범위는 `0.1.7` 설정 재작성과 `0.2.0` 라인에 걸쳐 있으며, 둘 다 편집 가능한 필드 집합이 동일함을 검증했습니다. 상한 이상의 릴리스는 매핑되지 않으며, 플러그인은 계속 동작하면서 실행 중인 호스트가 보고하는 능력을 따릅니다 |
 
 DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 런타임 schema 노출에 따라 결정됩니다. 위 표는 각 DSH 버전의 최대 필드 집합이며, 라우트의 프로토콜에 따라 더 줄어들 수 있습니다.
 
@@ -86,7 +86,7 @@ profile은 공식 DSH CLI로 관리하세요. 일반 `npm install`은 DSH profil
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 특정 버전 설치
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.6
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
 
 # 업데이트
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
