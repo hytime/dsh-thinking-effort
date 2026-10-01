@@ -19,6 +19,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - 修复 Composer 思考面板在窄屏上定位出界：面板锚定触发器右边缘向左展开 336px，手机上模型按钮贴着屏幕左边缘，面板大半被推出屏幕、滑杆基本点不到；CSS 的 `min(336px, 100vw - 32px)` 只限宽度、限不了起始位置。现在面板打开时量一次触发器实际位置：原锚点位置放得进屏幕就保持不动（桌面行为完全不变），放不下时才把面板 clamp 到 `[16px, 视口宽 - 16px]` 区间内，窗口 resize 与页面滚动时重算。
 - Fix the composer thinking panel overflowing the viewport on narrow screens: the panel is anchored to the trigger's right edge and opens 336px leftward, so on phones — where the model button sits flush against the left edge of the screen — most of the panel lands off-screen and the slider is essentially untappable; the CSS `min(336px, 100vw - 32px)` bounds the width but not the starting position. The panel now measures the trigger's actual position on open: the original anchor is kept whenever it fits the viewport (desktop behavior is unchanged), and only when it overflows is the panel clamped into `[16px, viewport width - 16px]`, recomputed on window resize and page scroll.
 
+### 安全 / Security
+
+- 把开发依赖 `jsdom` 间接引入的 `undici` 从 7.29.0 提升到 7.30.0，修复 `npm audit` 报出的高危项（含 TLS 证书校验绕过 GHSA-w293-vg96-wgc3 等 2026-09-29 批次公告）。这些是 devDependencies，不进发布包的运行时依赖图（发布包只依赖 `schemastery` 与 `yaml`），因此对插件使用者没有暴露面；但 CI 的 `npm audit --audit-level=high` 在 `quality` job 内，`publish` 依赖它，不修会挡住下一次发布。`@vitest/mocker` 的 2 个 moderate 仍在，修复需要 `vitest@5`（破坏性变更），故不在本次范围内。
+- Raised `undici` — pulled in transitively by the dev dependency `jsdom` — from 7.29.0 to 7.30.0, clearing the high-severity findings `npm audit` reported (including the TLS certificate-validation bypass GHSA-w293-vg96-wgc3, part of the 2026-09-29 advisory batch). These are devDependencies and do not enter the published package's runtime dependency graph (which is only `schemastery` and `yaml`), so there is no exposure for plugin users; but `npm audit --audit-level=high` runs inside CI's `quality` job, which `publish` depends on, so leaving it unfixed would block the next release. The two moderate `@vitest/mocker` findings remain, since fixing them requires `vitest@5`, a breaking change, and are out of scope here.
+
 ## [0.3.6] - 2026-09-29
 
 ### 新增 / Added
