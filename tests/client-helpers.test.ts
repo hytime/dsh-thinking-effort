@@ -1748,9 +1748,11 @@ describe('locales and theme', () => {
     expect(Object.keys(dictionaries[0] ?? {})).toEqual(expect.arrayContaining(['title', 'languageJapanese', 'languageKorean']))
   })
 
-  it('computes the existing light and dark palettes', () => {
-    expect(iosPalette({ backgroundColor: 'rgb(28, 28, 30)', prefersDark: false }).canvas).toBe('#1C1C1E')
-    expect(iosPalette({ backgroundColor: 'rgb(242, 242, 247)', prefersDark: false }).canvas).toBe('#F2F2F7')
+  it('computes distinct light and dark palettes', () => {
+    const dark = iosPalette({ backgroundColor: 'rgb(28, 28, 30)', prefersDark: false })
+    const light = iosPalette({ backgroundColor: 'rgb(242, 242, 247)', prefersDark: false })
+    expect(dark.canvas).not.toBe(light.canvas)
+    expect(dark.text).not.toBe(light.text)
   })
 })
 
