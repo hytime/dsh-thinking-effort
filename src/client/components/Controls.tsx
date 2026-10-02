@@ -59,7 +59,7 @@ export interface ActionButtonProps {
 
 export function ActionButton({ text = '', onClick, disabled = false, tone = 'secondary', palette, icon, label, testId, children }: ActionButtonProps): React.ReactElement {
   const visual = tone === 'primary'
-    ? { background: palette.accent, color: '#FFFFFF', border: palette.accent }
+    ? { background: palette.accent, color: palette.foreground, border: palette.accent }
     : tone === 'danger'
       ? { background: palette.dangerBg, color: palette.danger, border: palette.dangerBorder }
       : tone === 'ghost'
@@ -78,5 +78,5 @@ export interface SwitchControlProps {
 }
 
 export function SwitchControl({ checked, onChange, disabled = false, label, palette }: SwitchControlProps): React.ReactElement {
-  return <button type="button" role="switch" aria-checked={checked} aria-label={label} title={label} disabled={disabled} onClick={() => onChange(!checked)} style={{ width: '38px', height: '22px', minWidth: '38px', padding: 0, position: 'relative', border: `1px solid ${checked ? palette.accent : palette.border}`, borderRadius: '11px', backgroundColor: checked ? palette.accent : palette.switchOff, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1, transition: 'background-color 160ms ease, border-color 160ms ease, opacity 160ms ease' }}><span style={{ position: 'absolute', top: '2px', left: '2px', width: '16px', height: '16px', borderRadius: '50%', backgroundColor: '#FFFFFF', boxShadow: '0 1px 2px rgba(0,0,0,0.22)', transform: checked ? 'translateX(16px)' : 'translateX(0)', transition: 'transform 160ms ease' }} /></button>
+  return <button type="button" role="switch" aria-checked={checked} aria-label={label} title={label} disabled={disabled} onClick={() => onChange(!checked)} style={{ width: '38px', height: '22px', minWidth: '38px', padding: 0, position: 'relative', border: `1px solid ${checked ? palette.accent : palette.border}`, borderRadius: '11px', backgroundColor: checked ? palette.accent : palette.switchOff, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1, transition: 'background-color 160ms ease, border-color 160ms ease, opacity 160ms ease' }}><span style={{ position: 'absolute', top: '2px', left: '2px', width: '16px', height: '16px', borderRadius: '50%', backgroundColor: palette.foreground, boxShadow: '0 1px 2px rgba(0,0,0,0.22)', transform: checked ? 'translateX(16px)' : 'translateX(0)', transition: 'transform 160ms ease' }} /></button>
 }
