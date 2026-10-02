@@ -4,7 +4,7 @@
  * injected session-selection callback.
  */
 import {
-  createElement, useEffect, useRef, useState, useSyncExternalStore,
+  createElement, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore,
 } from 'react'
 import type { ChangeEvent, CSSProperties, KeyboardEvent, ReactNode } from 'react'
 import type { Translation } from '../types.js'
@@ -207,7 +207,9 @@ export function Slider({ directory, load, select, locked = false, t }: SliderPro
   // panel overflows the viewport. Keep the original right-aligned anchor
   // whenever it fits; only clamp the panel into the viewport when it would
   // overflow. Recompute while open if the page scrolls or the window resizes.
-  useEffect(() => {
+  // 面板会用绝对定位元素替换原本参与布局的触发器，首次打开时根节点会先收缩并移动。
+  // 在浏览器绘制前完成测量并写入补偿偏移，否则初始 `left: 0` 帧会在触发器原来的右侧短暂闪现。
+  useLayoutEffect(() => {
     if (!open) return
     const compute = (): void => {
       const root = rootRef.current
