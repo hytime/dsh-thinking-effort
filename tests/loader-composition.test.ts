@@ -210,15 +210,18 @@ function runOfficialDsh(cliRoot: string, home: string, args: readonly string[]):
 }
 
 function packLocalPackage(destination: string): string {
-  const packed = JSON.parse(execFileSync('npm', [
-    'pack', '--json', '--pack-destination', destination,
+  // `--skip-manifest-obfuscation` keeps `packageManager` in the packed
+  // manifest; pnpm strips it by default, and the official DSH CLI rejects a
+  // plugin tarball whose manifest no longer declares pnpm.
+  const packed = JSON.parse(execFileSync('pnpm', [
+    'pack', '--json', '--skip-manifest-obfuscation', '--pack-destination', destination,
   ], {
     cwd: root,
-    env: { ...process.env, npm_config_cache: '/tmp/dsh-pi-effort-npm-cache' },
     encoding: 'utf8',
-  })) as Array<{ filename: string }>
-  const tarball = packed[0]?.filename
-  if (tarball === undefined) throw new Error('npm pack did not report a tarball filename')
+  })) as { filename: string } | Array<{ filename: string }>
+  const entry = Array.isArray(packed) ? packed[0] : packed
+  const tarball = entry?.filename
+  if (tarball === undefined) throw new Error('pnpm pack did not report a tarball filename')
   return join(destination, basename(tarball))
 }
 

@@ -24,26 +24,29 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Typecheck source
-        run: npm run typecheck
+        run: pnpm run typecheck
 
       - name: Typecheck tests
-        run: npm run typecheck:test
+        run: pnpm run typecheck:test
 
       - name: Run tests
-        run: npm test
+        run: pnpm test
 
       - name: Check compiled Host entry
         run: node --check lib/index.js
@@ -52,10 +55,10 @@ jobs:
         run: node --check lib/client.js
 
       - name: Check package contents
-        run: npm pack --dry-run
+        run: pnpm pack --dry-run
 
       - name: Audit dependencies
-        run: npm audit --audit-level=high
+        run: pnpm audit --audit-level=high
 
       - name: Check diff whitespace
         run: git diff --check
@@ -80,7 +83,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.19.0
-          cache: npm
 
       - name: Collect pull request diff and description
         env:

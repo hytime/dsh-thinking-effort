@@ -19,17 +19,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22.19.0
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Verify release tag and package
         run: node scripts/verify-release.mjs "$GITHUB_REF_NAME"
@@ -40,29 +43,29 @@ jobs:
           PACKAGE_VERSION="$(node -p "require('./package.json').version")"
           query_output="$RUNNER_TEMP/dsh-thinking-effort-npm-view.txt"
           set +e
-          npm view @hytime/dsh-thinking-effort@${PACKAGE_VERSION} version --json > "$query_output" 2>&1
+          pnpm view @hytime/dsh-thinking-effort@${PACKAGE_VERSION} version --json > "$query_output" 2>&1
           query_status=$?
           set -e
           if [ "$query_status" -eq 0 ]; then
             echo "npm version ${PACKAGE_VERSION} already exists" >&2
             exit 1
           fi
-          if ! grep -Eiq 'E404|HTTP[[:space:]]+404' "$query_output"; then
+          if ! grep -Eiq 'ERR_PNPM_PACKAGE_NOT_FOUND|E404|HTTP[[:space:]]+404' "$query_output"; then
             cat "$query_output" >&2
             exit "$query_status"
           fi
 
       - name: Typecheck source
-        run: npm run typecheck
+        run: pnpm run typecheck
 
       - name: Typecheck tests
-        run: npm run typecheck:test
+        run: pnpm run typecheck:test
 
       - name: Run release tests
-        run: npm run test:release
+        run: pnpm run test:release
 
       - name: Run tests
-        run: npm test
+        run: pnpm test
 
       - name: Check compiled Host entry
         run: node --check lib/index.js
@@ -71,10 +74,10 @@ jobs:
         run: node --check lib/client.js
 
       - name: Check package contents
-        run: npm pack --dry-run
+        run: pnpm pack --dry-run
 
       - name: Audit dependencies
-        run: npm audit --audit-level=high
+        run: pnpm audit --audit-level=high
 
       - name: Check diff whitespace
         run: git diff --check
@@ -88,17 +91,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22.19.0
-          cache: npm
+          cache: pnpm
 
       - name: Install package dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build current package
-        run: npm run build
+        run: pnpm run build
 
       - name: Install Chromium
         run: |
@@ -160,7 +166,6 @@ jobs:
             git clone --depth 1 --branch dsh-v0.1.6-alpha.1 https://github.com/deepseek-ai/deepseek-harness.git "$NAMESPACE_ROOT"
             git clone --depth 1 --branch dsh-v0.1.7-alpha.1 https://github.com/deepseek-ai/deepseek-harness.git "$ENTRY_ROOT"
 
-            npm install --global pnpm@11.7.0
             pnpm --version
             for root in "$RC7_ROOT" "$RC2_ROOT" "$ALPHA_ROOT" "$NAMESPACE_ROOT" "$ENTRY_ROOT"; do
               (cd "$root" && pnpm install --frozen-lockfile && pnpm run build)
@@ -177,8 +182,10 @@ jobs:
             (cd "$root" && pnpm rebuild --pending fs-ext)
           done
 
-          npm pack --json --pack-destination "$RUN_ROOT" > "$RUN_ROOT/pack.json"
-          tarball_name="$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8'))[0].filename)" "$RUN_ROOT/pack.json")"
+          pnpm pack --skip-manifest-obfuscation --json --pack-destination "$RUN_ROOT" > "$RUN_ROOT/pack.json"
+          # pnpm reports an absolute tarball path where npm reported a bare
+          # filename; basename makes the join correct for the pnpm output.
+          tarball_name="$(node -e "console.log(require('path').basename(JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).filename))" "$RUN_ROOT/pack.json")"
           TARBALL="$RUN_ROOT/$tarball_name"
           test -f "$TARBALL"
 
@@ -201,7 +208,7 @@ jobs:
           DSH_LOADER_INTEGRATION=1 \
           DSH_CLI_ROOTS="$RC7_ROOT,$RC2_ROOT,$ALPHA_ROOT,$NAMESPACE_ROOT,$ENTRY_ROOT" \
           DSH_REQUIRE_THINKING_EFFORT_DOM=1 \
-          npm test -- tests/loader-composition.test.ts &
+          pnpm test tests/loader-composition.test.ts &
           DSH_TEST_PID=$!
           wait "$DSH_TEST_PID"
 
@@ -226,11 +233,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up pnpm for npm Trusted Publishing
+        uses: pnpm/action-setup@v6
+
+      # No `registry-url` here on purpose. It makes actions/setup-node write
+      # `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` into a runner-level
+      # .npmrc; with no token set (the trusted-publishing case) that placeholder
+      # is a liability, and pnpm only falls back to OIDC once the value reads as
+      # empty. pnpm publishes to registry.npmjs.org by default, so nothing is
+      # lost, and the guard below fails loudly if a static token ever reappears.
       - name: Set up Node.js for npm Trusted Publishing
         uses: actions/setup-node@v4
         with:
           node-version: 24.x
-          registry-url: https://registry.npmjs.org
 
       - name: Verify tag points to main
         run: |
@@ -238,21 +253,32 @@ jobs:
           git fetch --no-tags origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
-      - name: Remove setup-node npm auth
-        run: npm config delete //registry.npmjs.org/:_authToken
-
-      - name: Verify npm version for Trusted Publishing
+      - name: Verify OIDC-only npm authentication
         run: |
           set -Eeuo pipefail
-          npm_version="$(npm --version)"
-          printf 'npm %s\n' "$npm_version"
-          node -e 'const [major, minor, patch] = process.argv[1].split(".").map(Number); if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) throw new Error("npm >= 11.5.1 is required")' "$npm_version"
+          token="$(pnpm config get //registry.npmjs.org/:_authToken 2>/dev/null || true)"
+          if [[ -n "$token" && "$token" != "undefined" ]]; then
+            echo "a static npm token is configured; trusted publishing must be the only auth source" >&2
+            exit 1
+          fi
+
+      - name: Verify pnpm version for Trusted Publishing
+        run: |
+          set -Eeuo pipefail
+          pnpm_version="$(pnpm --version)"
+          printf 'pnpm %s\n' "$pnpm_version"
+          node -e 'const [major] = process.argv[1].split(".").map(Number); if (major < 11) throw new Error("pnpm >= 11 is required for OIDC publishing")' "$pnpm_version"
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
+      # `--skip-manifest-obfuscation` keeps `packageManager: pnpm@11.7.0` in the
+      # published manifest. pnpm strips that field by default, and the official
+      # DSH CLI rejects the plugin during profile installation when it is
+      # missing, which is what blocked publishing before.
+      # `--no-git-checks` is required because the tag checkout is detached.
       - name: Publish package with provenance
-        run: npm publish --provenance --access public
+        run: pnpm publish --provenance --access public --skip-manifest-obfuscation --no-git-checks

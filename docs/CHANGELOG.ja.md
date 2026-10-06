@@ -10,6 +10,14 @@
 
 ## [Unreleased]
 
+### 変更
+
+- リポジトリのツールチェーンを npm から pnpm へ移行しました。`package-lock.json` を削除し、`pnpm-lock.yaml` と `pnpm-workspace.yaml` をコミット対象に変更しました。CI と公開 workflow は `pnpm install --frozen-lockfile`、`pnpm run ...`、`pnpm pack`、`pnpm audit` を使い、`setup-node` のキャッシュは `pnpm` に切り替えました。lockfile キャッシュと監査ゲートは変更していません。
+
+### セキュリティ
+
+- `undici` を 7.30.0、`source-map-js` を 1.2.2 へ引き上げ（いずれも開発依存 `jsdom` が推移的に取り込みます）、`pnpm audit --audit-level high` が報告していた `undici` 10 件と `source-map-js` 1 件の勧告を解消しました。`vitest` を 3.2.7 から 4.1.11 へ上げると `tinypool` に依存しなくなり、critical 2 件も解消します。いずれも devDependencies であり、公開パッケージの実行時依存グラフ（`schemastery` と `yaml` のみ）には入りません。任意の `--provenance` と OIDC 公開経路は pnpm 11 がネイティブに実装しており、workflow でも維持しています。
+
 ## [0.3.7] - 2026-10-01
 
 ### 修正

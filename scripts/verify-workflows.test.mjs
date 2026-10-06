@@ -12,15 +12,15 @@ const publishFixtureRoot = path.join(repositoryRoot, 'scripts', 'fixtures');
 const publishCleanupFixturePath = path.join(publishFixtureRoot, 'publish-invalid-cleanup.yml');
 const publishNpmTokenFixturePath = path.join(publishFixtureRoot, 'publish-invalid-npm-token.yml');
 const requiredCommands = [
-  'npm ci',
-  'npm run build',
-  'npm run typecheck',
-  'npm run typecheck:test',
-  'npm test',
+  'pnpm install --frozen-lockfile',
+  'pnpm run build',
+  'pnpm run typecheck',
+  'pnpm run typecheck:test',
+  'pnpm test',
   'node --check lib/index.js',
   'node --check lib/client.js',
-  'npm pack --dry-run',
-  'npm audit --audit-level=high',
+  'pnpm pack --dry-run',
+  'pnpm audit --audit-level=high',
   'git diff --check',
 ];
 
@@ -162,7 +162,7 @@ function assertWorkflowStructure(workflow) {
     '${{ matrix.node-version }}',
     'setup-node must use the matrix Node version',
   );
-  assert.equal(setupNode.with?.cache, 'npm', 'setup-node must use npm cache');
+  assert.equal(setupNode.with?.cache, 'pnpm', 'setup-node must use pnpm cache');
 
   const runCommands = quality.steps.filter((step) => Object.hasOwn(step, 'run')).map((step) => step.run);
   assert.deepEqual(
@@ -275,7 +275,7 @@ test('CI workflow configures setup-node, permissions, and PR concurrency structu
   const setupNode = quality.steps.find((step) => step.uses === 'actions/setup-node@v4');
 
   assert.equal(setupNode.with['node-version'], '${{ matrix.node-version }}');
-  assert.equal(setupNode.with.cache, 'npm');
+  assert.equal(setupNode.with.cache, 'pnpm');
   assert.equal(workflow.permissions.contents, 'read');
   assert.equal(quality.permissions?.contents ?? workflow.permissions.contents, 'read');
   assert.notEqual(workflow.permissions['id-token'], 'write');
@@ -382,7 +382,7 @@ const malformedWorkflowCases = [
     mutate: (workflow) => {
       workflow.jobs.quality.steps.find((step) => step.uses === 'actions/setup-node@v4').with.cache = 'yarn';
     },
-    message: 'setup-node must use npm cache',
+    message: 'setup-node must use pnpm cache',
   },
   {
     name: 'quality run steps',
@@ -478,41 +478,47 @@ async function readPublishWorkflow() {
   return parse(await readFile(publishWorkflowPath, 'utf8'));
 }
 
-const publishAuthCleanupCommand = 'npm config delete //registry.npmjs.org/:_authToken';
-const publishNpmVersionCommand = `set -Eeuo pipefail
-npm_version="$(npm --version)"
-printf 'npm %s\\n' "$npm_version"
-node -e 'const [major, minor, patch] = process.argv[1].split(".").map(Number); if (major < 11 || (major === 11 && (minor < 5 || (minor === 5 && patch < 1)))) throw new Error("npm >= 11.5.1 is required")' "$npm_version"
+const publishAuthCleanupCommand = `set -Eeuo pipefail
+token="$(pnpm config get //registry.npmjs.org/:_authToken 2>/dev/null || true)"
+if [[ -n "$token" && "$token" != "undefined" ]]; then
+  echo "a static npm token is configured; trusted publishing must be the only auth source" >&2
+  exit 1
+fi
+`;
+const publishPnpmVersionCommand = `set -Eeuo pipefail
+pnpm_version="$(pnpm --version)"
+printf 'pnpm %s\\n' "$pnpm_version"
+node -e 'const [major] = process.argv[1].split(".").map(Number); if (major < 11) throw new Error("pnpm >= 11 is required for OIDC publishing")' "$pnpm_version"
 `;
 
 const publishQualityCommands = [
-  'npm ci',
-  'npm run build',
+  'pnpm install --frozen-lockfile',
+  'pnpm run build',
   'node scripts/verify-release.mjs "$GITHUB_REF_NAME"',
   `set -Eeuo pipefail
 PACKAGE_VERSION="$(node -p "require('./package.json').version")"
 query_output="$RUNNER_TEMP/dsh-thinking-effort-npm-view.txt"
 set +e
-npm view @hytime/dsh-thinking-effort@\${PACKAGE_VERSION} version --json > "$query_output" 2>&1
+pnpm view @hytime/dsh-thinking-effort@\${PACKAGE_VERSION} version --json > "$query_output" 2>&1
 query_status=$?
 set -e
 if [ "$query_status" -eq 0 ]; then
   echo "npm version \${PACKAGE_VERSION} already exists" >&2
   exit 1
 fi
-if ! grep -Eiq 'E404|HTTP[[:space:]]+404' "$query_output"; then
+if ! grep -Eiq 'ERR_PNPM_PACKAGE_NOT_FOUND|E404|HTTP[[:space:]]+404' "$query_output"; then
   cat "$query_output" >&2
   exit "$query_status"
 fi
 `,
-  'npm run typecheck',
-  'npm run typecheck:test',
-  'npm run test:release',
-  'npm test',
+  'pnpm run typecheck',
+  'pnpm run typecheck:test',
+  'pnpm run test:release',
+  'pnpm test',
   'node --check lib/index.js',
   'node --check lib/client.js',
-  'npm pack --dry-run',
-  'npm audit --audit-level=high',
+  'pnpm pack --dry-run',
+  'pnpm audit --audit-level=high',
   'git diff --check',
 ];
 
@@ -544,11 +550,11 @@ function assertPublishWorkflowStructure(workflow) {
     'quality job must use Node 22.19.0',
   );
   const duplicateCheck = publishRunCommands(quality).find((command) =>
-    command.includes('npm view @hytime/dsh-thinking-effort@${PACKAGE_VERSION} version --json'),
+    command.includes('pnpm view @hytime/dsh-thinking-effort@${PACKAGE_VERSION} version --json'),
   );
   assert.ok(duplicateCheck, 'quality job must check whether the package version already exists');
   assert.match(duplicateCheck, /PACKAGE_VERSION="\$\(node -p/);
-  assert.match(duplicateCheck, /grep -Eiq 'E404\|HTTP\[\[:space:\]\]\+404'/);
+  assert.match(duplicateCheck, /grep -Eiq 'ERR_PNPM_PACKAGE_NOT_FOUND\|E404\|HTTP\[\[:space:\]\]\+404'/);
   assert.doesNotMatch(duplicateCheck, /not found/i);
   const publishTagGuard = publish.steps.find((step) => step.name === 'Verify tag points to main');
   assert.equal(
@@ -559,28 +565,36 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 `,
     'publish job must verify that the tag points to main',
   );
-  const publishAuthCleanup = publish.steps.find((step) => step.name === 'Remove setup-node npm auth');
+  const publishAuthCleanup = publish.steps.find((step) => step.name === 'Verify OIDC-only npm authentication');
   assert.equal(
     publishAuthCleanup?.run,
     publishAuthCleanupCommand,
-    'publish job must remove setup-node auth without changing registry configuration',
+    'publish job must assert that no static npm token can shadow trusted publishing',
   );
-  const publishNpmVersion = publish.steps.find((step) => step.name === 'Verify npm version for Trusted Publishing');
+  const publishPnpmVersion = publish.steps.find((step) => step.name === 'Verify pnpm version for Trusted Publishing');
   assert.equal(
-    publishNpmVersion?.run,
-    publishNpmVersionCommand,
-    'publish job must assert the npm Trusted Publishing minimum version',
+    publishPnpmVersion?.run,
+    publishPnpmVersionCommand,
+    'publish job must assert the pnpm Trusted Publishing minimum version',
   );
   const publishInstall = publish.steps.find((step) => step.name === 'Install dependencies');
-  assert.equal(publishInstall?.run, 'npm ci');
+  assert.equal(publishInstall?.run, 'pnpm install --frozen-lockfile');
   const publishBuild = publish.steps.find((step) => step.name === 'Build');
-  assert.equal(publishBuild?.run, 'npm run build');
+  assert.equal(publishBuild?.run, 'pnpm run build');
   const publishPackage = publish.steps.find((step) => step.name === 'Publish package with provenance');
-  assert.equal(publishPackage?.run, 'npm publish --provenance --access public');
+  assert.equal(
+    publishPackage?.run,
+    'pnpm publish --provenance --access public --skip-manifest-obfuscation --no-git-checks',
+  );
+  assert.match(
+    publishPackage.run,
+    /--skip-manifest-obfuscation/,
+    'publish must keep packageManager in the published manifest, which the DSH CLI requires',
+  );
   assert.deepEqual(
     publishRunCommands(publish),
-    [publishTagGuard?.run, publishAuthCleanup?.run, publishNpmVersion?.run, publishInstall?.run, publishBuild?.run, publishPackage?.run],
-    'publish job must verify, isolate auth, check npm, install, build, and publish in order',
+    [publishTagGuard?.run, publishAuthCleanup?.run, publishPnpmVersion?.run, publishInstall?.run, publishBuild?.run, publishPackage?.run],
+    'publish job must verify, isolate auth, check pnpm, install, build, and publish in order',
   );
   assert.equal(
     publish.steps.find((step) => step.uses === 'actions/setup-node@v4')?.with?.['node-version'],
@@ -589,13 +603,19 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
   );
   assert.equal(
     publish.steps.find((step) => step.uses === 'actions/setup-node@v4')?.with?.['registry-url'],
-    'https://registry.npmjs.org',
-    'publish job must configure the npm registry',
+    undefined,
+    'publish must not let setup-node write a placeholder _authToken that could shadow OIDC',
   );
   assertNoPublishAuthTokens(workflow);
-  assert.equal(publishRunCommands(publish).some((command) => command.includes('npm view ')), false);
-  assert.ok(publishRunCommands(publish).includes('npm ci'), 'publish job must run npm ci');
-  assert.ok(publishRunCommands(publish).includes('npm run build'), 'publish job must run npm run build');
+  assert.equal(publishRunCommands(publish).some((command) => /\bnpm view /.test(command)), false);
+  assert.ok(
+    publishRunCommands(publish).includes('pnpm install --frozen-lockfile'),
+    'publish job must run pnpm install --frozen-lockfile',
+  );
+  assert.ok(
+    publishRunCommands(publish).includes('pnpm run build'),
+    'publish job must run pnpm run build',
+  );
   assert.ok(Array.isArray(compatibility.steps), 'compatibility job must define steps');
   assertCompatibilityCleanupStructure(compatibility);
   assert.deepEqual(compatibility.needs, 'quality', 'compatibility must need quality');
@@ -617,16 +637,17 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
     'dsh-v0.1.6-alpha.1',
     'dsh-v0.1.7-alpha.1',
     'DSH_CLI_ROOTS="$RC7_ROOT,$RC2_ROOT,$ALPHA_ROOT,$NAMESPACE_ROOT,$ENTRY_ROOT"',
-    'npm install --global pnpm@11.7.0',
     'pnpm --version',
     'pnpm install --frozen-lockfile',
     'pnpm rebuild --pending fs-ext',
     'pnpm run build',
+    "require('path').basename(JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).filename)",
     'CHROME_PATH',
     'dsh plugin',
     'DSH_LOADER_INTEGRATION=1',
     'DSH_REQUIRE_THINKING_EFFORT_DOM=1',
-    'npm test -- tests/loader-composition.test.ts',
+    'pnpm test tests/loader-composition.test.ts',
+    '--skip-manifest-obfuscation',
     'trap',
     'DSH_TEST_PID=$!',
     'kill "$DSH_TEST_PID"',
@@ -643,12 +664,17 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
   assert.equal((compatibilityBuild.run.match(/git clone --depth 1 --branch/g) ?? []).length, 5);
   assert.doesNotMatch(compatibilityBuild.run, /dsh-v0\.1\.2-alpha\.[12]/);
   assert.doesNotMatch(compatibilityBuild.run, /corepack enable/);
+  assert.doesNotMatch(compatibilityBuild.run, /\bnpm (?:ci|install|run|test|pack|audit|publish|view|config)\b/);
   assert.match(compatibilityBuild.run, /pnpm --version/);
+  assert.match(compatibilityBuild.run, /pnpm\/action-setup@v6|pnpm --version/);
 
   assert.match(publishTagGuard.run, /git fetch --no-tags origin main/);
   assert.match(publishTagGuard.run, /git merge-base --is-ancestor "\$GITHUB_SHA" origin\/main/);
   assert.doesNotMatch(publishRunCommands(publish).join('\n'), /npm view @hytime\/dsh-thinking-effort@\$\{PACKAGE_VERSION\} version --json/);
-  assert.equal(publishPackage.run, 'npm publish --provenance --access public');
+  assert.equal(
+    publishPackage.run,
+    'pnpm publish --provenance --access public --skip-manifest-obfuscation --no-git-checks',
+  );
 
 }
 

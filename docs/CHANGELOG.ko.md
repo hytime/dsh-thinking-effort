@@ -10,6 +10,14 @@
 
 ## [Unreleased]
 
+### 변경
+
+- 저장소 도구 체인을 npm에서 pnpm으로 이전했습니다. `package-lock.json`을 삭제하고 `pnpm-lock.yaml`과 `pnpm-workspace.yaml`을 커밋 대상으로 바꿨습니다. CI와 게시 workflow는 `pnpm install --frozen-lockfile`, `pnpm run ...`, `pnpm pack`, `pnpm audit`을 사용하며, `setup-node` 캐시는 `pnpm`으로 전환했습니다. lockfile 캐시와 감사 게이트는 그대로 유지합니다.
+
+### 보안
+
+- `undici`를 7.30.0으로, `source-map-js`를 1.2.2로 올려(둘 다 개발 의존성 `jsdom`이 전이적으로 가져옵니다) `pnpm audit --audit-level high`가 보고하던 `undici` 10건과 `source-map-js` 1건의 자문을 해소했습니다. `vitest`를 3.2.7에서 4.1.11로 올리면 `tinypool`에 의존하지 않게 되어 critical 2건도 해소됩니다. 모두 devDependencies이며 게시 패키지의 런타임 의존성 그래프(`schemastery`와 `yaml`뿐)에는 들어가지 않습니다. 선택적인 `--provenance`와 OIDC 게시 경로는 pnpm 11이 네이티브로 구현하며 workflow에서도 유지합니다.
+
 ## [0.3.7] - 2026-10-01
 
 ### 수정
