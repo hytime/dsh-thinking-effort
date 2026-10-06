@@ -21,8 +21,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### 安全 / Security
 
-- 把 `undici` 提升到 7.30.0、`source-map-js` 提升到 1.2.2（两者都由开发依赖 `jsdom` 间接引入），清除 `pnpm audit --audit-level high` 报出的 10 条 `undici` 与 1 条 `source-map-js` 公告；`vitest` 从 3.2.7 升到 4.1.11 后不再依赖 `tinypool`，消除 2 条 critical 公告。它们都在 devDependencies 内，不进发布包的运行时依赖图（发布包只依赖 `schemastery` 与 `yaml`）。可选的 `--provenance` 与 OIDC 发布路径由 pnpm 11 原生实现并已在 workflow 中保留。
-- Raised `undici` to 7.30.0 and `source-map-js` to 1.2.2 — both pulled in transitively by the dev dependency `jsdom` — clearing the 10 `undici` and 1 `source-map-js` advisories `pnpm audit --audit-level high` reported; `vitest` 3.2.7 → 4.1.11 no longer depends on `tinypool`, removing the 2 critical advisories. All of them sit in devDependencies and stay out of the published package's runtime dependency graph (which is only `schemastery` and `yaml`). The optional `--provenance` and OIDC publishing path is implemented natively by pnpm 11 and is preserved in the workflow.
+- 迁移后在 pnpm 下重跑审计，把 `source-map-js` 从 1.2.1 提升到 1.2.2（由开发依赖 `jsdom` 间接引入），并把 `vitest` 从 3.2.7 升到 4.1.11 —— 后者不再依赖 `tinypool`，消除 2 条 critical 公告；`pnpm audit --audit-level high` 现为 0 条。`undici` 在迁移前已是 7.30.0，本次没有改动它。这些都在 devDependencies 内，不进发布包的运行时依赖图（发布包只依赖 `schemastery` 与 `yaml`）。可选的 `--provenance` 与 OIDC 发布路径由 pnpm 11 原生实现并已在 workflow 中保留。
+- After the migration, re-ran the audit under pnpm: raised `source-map-js` from 1.2.1 to 1.2.2 (pulled in transitively by the dev dependency `jsdom`) and `vitest` from 3.2.7 to 4.1.11, which no longer depends on `tinypool` and so removes the 2 critical advisories; `pnpm audit --audit-level high` now reports 0. `undici` was already 7.30.0 before the migration and is unchanged here. All of them sit in devDependencies and stay out of the published package's runtime dependency graph (which is only `schemastery` and `yaml`). The optional `--provenance` and OIDC publishing path is implemented natively by pnpm 11 and is preserved in the workflow.
 
 ## [0.3.7] - 2026-10-01
 

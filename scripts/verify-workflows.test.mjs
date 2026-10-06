@@ -17,6 +17,7 @@ const requiredCommands = [
   'pnpm run typecheck',
   'pnpm run typecheck:test',
   'pnpm test',
+  'pnpm run test:release',
   'node --check lib/index.js',
   'node --check lib/client.js',
   'pnpm pack --dry-run',
@@ -157,6 +158,15 @@ function assertWorkflowStructure(workflow) {
     'quality job must use actions/checkout@v4',
   );
   assert.ok(setupNode, 'quality job must use actions/setup-node@v4');
+  // GitHub's runner images ship no pnpm, so every `pnpm ...` step below would
+  // be command-not-found without this action. It must precede setup-node,
+  // whose `cache: pnpm` also resolves the pnpm store path.
+  const setupPnpmIndex = quality.steps.findIndex((step) => step.uses === 'pnpm/action-setup@v6');
+  assert.notEqual(setupPnpmIndex, -1, 'quality job must install pnpm with pnpm/action-setup@v6');
+  assert.ok(
+    setupPnpmIndex < quality.steps.indexOf(setupNode),
+    'pnpm must be installed before setup-node runs',
+  );
   assert.equal(
     setupNode.with?.['node-version'],
     '${{ matrix.node-version }}',
@@ -666,7 +676,12 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
   assert.doesNotMatch(compatibilityBuild.run, /corepack enable/);
   assert.doesNotMatch(compatibilityBuild.run, /\bnpm (?:ci|install|run|test|pack|audit|publish|view|config)\b/);
   assert.match(compatibilityBuild.run, /pnpm --version/);
-  assert.match(compatibilityBuild.run, /pnpm\/action-setup@v6|pnpm --version/);
+  // The compatibility job's `run` script never names the action, so the guard
+  // belongs on the job's steps, not on the script text.
+  assert.ok(
+    compatibility.steps.some((step) => step.uses === 'pnpm/action-setup@v6'),
+    'compatibility job must install pnpm with pnpm/action-setup@v6',
+  );
 
   assert.match(publishTagGuard.run, /git fetch --no-tags origin main/);
   assert.match(publishTagGuard.run, /git merge-base --is-ancestor "\$GITHUB_SHA" origin\/main/);

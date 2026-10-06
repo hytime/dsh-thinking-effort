@@ -16,7 +16,7 @@
 
 ### セキュリティ
 
-- `undici` を 7.30.0、`source-map-js` を 1.2.2 へ引き上げ（いずれも開発依存 `jsdom` が推移的に取り込みます）、`pnpm audit --audit-level high` が報告していた `undici` 10 件と `source-map-js` 1 件の勧告を解消しました。`vitest` を 3.2.7 から 4.1.11 へ上げると `tinypool` に依存しなくなり、critical 2 件も解消します。いずれも devDependencies であり、公開パッケージの実行時依存グラフ（`schemastery` と `yaml` のみ）には入りません。任意の `--provenance` と OIDC 公開経路は pnpm 11 がネイティブに実装しており、workflow でも維持しています。
+- 移行後に pnpm で監査をやり直し、`source-map-js` を 1.2.1 から 1.2.2 へ引き上げ（開発依存 `jsdom` が推移的に取り込みます）、`vitest` を 3.2.7 から 4.1.11 へ上げました。後者は `tinypool` に依存しなくなり、critical 2 件を解消します。`pnpm audit --audit-level high` は現在 0 件です。`undici` は移行前から 7.30.0 で、今回は変更していません。いずれも devDependencies であり、公開パッケージの実行時依存グラフ（`schemastery` と `yaml` のみ）には入りません。任意の `--provenance` と OIDC 公開経路は pnpm 11 がネイティブに実装しており、workflow でも維持しています。
 
 ## [0.3.7] - 2026-10-01
 

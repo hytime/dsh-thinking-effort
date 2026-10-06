@@ -48,6 +48,9 @@ jobs:
       - name: Run tests
         run: pnpm test
 
+      - name: Run release and workflow guards
+        run: pnpm run test:release
+
       - name: Check compiled Host entry
         run: node --check lib/index.js
 

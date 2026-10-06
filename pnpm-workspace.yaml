@@ -8,5 +8,4 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@deepseek-ai/cosmokit@1.8.4'
   - '@deepseek-ai/schemastery@3.18.3'
-  - undici@7.29.1
   - source-map-js@1.2.2
