@@ -14,6 +14,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 变更 / Changed
+
+- 仓库工具链从 npm 迁移到 pnpm：`package-lock.json` 移除，改提交 `pnpm-lock.yaml` 与 `pnpm-workspace.yaml`，CI 与发布 workflow 改用 `pnpm install --frozen-lockfile`、`pnpm run ...`、`pnpm pack`、`pnpm audit`，`setup-node` 的缓存改为 `pnpm`，锁文件缓存与审计门禁保持不变。
+- Migrated the repository toolchain from npm to pnpm: `package-lock.json` is removed in favour of committed `pnpm-lock.yaml` and `pnpm-workspace.yaml`, and CI and the publish workflow now use `pnpm install --frozen-lockfile`, `pnpm run ...`, `pnpm pack`, and `pnpm audit`, with `setup-node` caching switched to `pnpm`; the lockfile cache and the audit gate are unchanged.
+
+### 安全 / Security
+
+- 迁移后在 pnpm 下重跑审计，把 `source-map-js` 从 1.2.1 提升到 1.2.2（由开发依赖 `jsdom` 间接引入），并把 `vitest` 从 3.2.7 升到 4.1.11 —— 后者不再依赖 `tinypool`，消除 2 条 critical 公告；`pnpm audit --audit-level high` 现为 0 条。`undici` 在迁移前已是 7.30.0，本次没有改动它。这些都在 devDependencies 内，不进发布包的运行时依赖图（发布包只依赖 `schemastery` 与 `yaml`）。可选的 `--provenance` 与 OIDC 发布路径由 pnpm 11 原生实现并已在 workflow 中保留。
+- After the migration, re-ran the audit under pnpm: raised `source-map-js` from 1.2.1 to 1.2.2 (pulled in transitively by the dev dependency `jsdom`) and `vitest` from 3.2.7 to 4.1.11, which no longer depends on `tinypool` and so removes the 2 critical advisories; `pnpm audit --audit-level high` now reports 0. `undici` was already 7.30.0 before the migration and is unchanged here. All of them sit in devDependencies and stay out of the published package's runtime dependency graph (which is only `schemastery` and `yaml`). The optional `--provenance` and OIDC publishing path is implemented natively by pnpm 11 and is preserved in the workflow.
+
 ## [0.3.7] - 2026-10-01
 
 ### 修复 / Fixed

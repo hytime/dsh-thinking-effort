@@ -1,6 +1,6 @@
 # 설치 안내 (공식 DSH CLI)
 
-이 안내는 DSH 공식 `dsh plugin` 명령만 사용합니다. 이 명령은 대상 profile에 의존성을 설치하고 `dsh.profile.bundles`를 동기화합니다. 일반 `npm install`, profile 내부의 직접 `pnpm add`, profile manifest 수동 편집으로 대체하지 마세요.
+이 안내는 DSH 공식 `dsh plugin` 명령만 사용합니다. 이 명령은 대상 profile에 의존성을 설치하고 `dsh.profile.bundles`를 동기화합니다. 일반 `pnpm install`, profile 내부의 직접 `pnpm add`, profile manifest 수동 편집으로 대체하지 마세요.
 
 - [English installation guide](./INSTALL.md)
 - [中文安装指南](./INSTALL.zh.md)
@@ -29,7 +29,7 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 실행 중인 DSH 프로세스가 사용하는 profile을 선택하세요. `web`이 일반적이지만 실제 `--profile` 인자가 기준입니다.
 
-게시 패키지의 Host 진입점은 `lib/index.js`, Client 진입점은 `lib/client.js`입니다. TypeScript 또는 locale 소스에서 개발할 때는 DSH를 실행하거나 패키지를 만들기 전에 `npm run build`를 실행하세요.
+게시 패키지의 Host 진입점은 `lib/index.js`, Client 진입점은 `lib/client.js`입니다. TypeScript 또는 locale 소스에서 개발할 때는 DSH를 실행하거나 패키지를 만들기 전에 `pnpm run build`를 실행하세요.
 
 현재 DSH에는 공개된 semver metadata 계약이 없으므로 런타임 capability detection이 권위 있는 출처입니다. 선택적 버전은 명시적인 metadata 또는 테스트 입력이 있을 때만 사용하며, 알 수 없는 유효한 버전도 감지된 capability에 따라 계속 실행합니다. 최신 `remote.settings`와 이전 `connection.api.settings`를 모두 지원합니다.
 
@@ -375,7 +375,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 
 유지 관리자는 `package.json` 버전과 해당하는 모든 `CHANGELOG`를 업데이트하여 커밋한 뒤 일치하는 `v<version>` tag를 만듭니다. tag가 가리키는 커밋은 `main` 기록에 포함되어야 합니다. `publish.yml` workflow는 버전이나 CHANGELOG를 자동으로 변경하지 않습니다.
 
-npm 패키지에 GitHub Trusted Publishing을 설정하세요. 저장소는 `hytime/dsh-thinking-effort`, workflow는 `publish.yml`입니다. 게시에는 GitHub OIDC와 provenance를 사용하고 `npm publish --provenance --access public`을 실행합니다. `NPM_TOKEN`이나 장기 token은 사용하지 않습니다. npm에 같은 버전이 이미 있으면 게시가 중단됩니다.
+npm 패키지에 GitHub Trusted Publishing을 설정하세요. 저장소는 `hytime/dsh-thinking-effort`, workflow는 `publish.yml`입니다. 게시에는 GitHub OIDC와 provenance를 사용하고 `pnpm publish --provenance --access public --skip-manifest-obfuscation`을 실행합니다. `NPM_TOKEN`이나 장기 token은 사용하지 않습니다. `--skip-manifest-obfuscation`은 필수입니다. pnpm은 기본적으로 `packageManager`를 게시 매니페스트에서 제거하며, 공식 DSH CLI는 그 필드가 없는 플러그인을 profile 설치 시 거부합니다. npm에 같은 버전이 이미 있으면 게시가 중단됩니다.
 
 게시 전에 workflow는 rc7 → rc2 → alpha2 → namespace → entry 순서로 다섯 개의 임시 공식 DSH capability representative checkout을 만들고, 공식 `dsh plugin` 명령으로 현재 tarball을 설치한 뒤 실제 호환성 테스트를 실행합니다.
 
@@ -385,7 +385,7 @@ npm 패키지에 GitHub Trusted Publishing을 설정하세요. 저장소는 `hyt
 - `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`) — 최신 namespace 모델 capability representative(실제 브라우저 DOM 프로브 실행)
 - `dsh-v0.1.7-alpha.1` (`0.1.7-alpha.1`) — entry-config capability representative(설정 폼은 각 Loader 엔트리 자체의 `Config`에서 도출. 실제 브라우저 DOM 프로브도 실행)
 
-일반 CI는 테스트 전용이며 Pull Request와 `main` 푸시에서 실행됩니다. `npm ci`를 사용하므로 의존성 변경 시 `package-lock.json`을 커밋하세요.
+일반 CI는 테스트 전용이며 Pull Request와 `main` 푸시에서 실행됩니다. `pnpm install --frozen-lockfile`를 사용하므로 의존성 변경 시 `pnpm-lock.yaml`을 커밋하세요.
 
 ## 7. 제거
 

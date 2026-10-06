@@ -1,6 +1,6 @@
 # Installation Guide (Official DSH CLI)
 
-This guide uses only the official DSH `dsh plugin` command. The command installs the dependency into a profile and synchronizes `dsh.profile.bundles`. Do not replace it with plain `npm install`, direct `pnpm add` in the profile, or manual edits to the profile manifest.
+This guide uses only the official DSH `dsh plugin` command. The command installs the dependency into a profile and synchronizes `dsh.profile.bundles`. Do not replace it with plain `pnpm install`, direct `pnpm add` in the profile, or manual edits to the profile manifest.
 
 - [English installation guide](./INSTALL.md)
 - [中文安装指南](./INSTALL.zh.md)
@@ -29,7 +29,7 @@ dsh --version
 ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 ```
 
-Use the built package entries `lib/index.js` for Host and `lib/client.js` for Client. When developing from TypeScript or locale sources, run `npm run build` before starting DSH or packing the package.
+Use the built package entries `lib/index.js` for Host and `lib/client.js` for Client. When developing from TypeScript or locale sources, run `pnpm run build` before starting DSH or packing the package.
 
 Current DSH does not expose a public semver metadata contract, so runtime capability detection is authoritative. An optional version is used only when explicit metadata or test input supplies it; unknown valid versions still use the detected capabilities. Both modern `remote.settings` and legacy `connection.api.settings` are supported.
 
@@ -380,7 +380,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 
 Maintainers update the `package.json` version and all applicable `CHANGELOG` files, commit those changes, and create the matching `v<version>` tag. The tag must point to a commit in the `main` history. The `publish.yml` workflow does not change versions or changelogs automatically.
 
-Configure npm GitHub Trusted Publishing for repository `hytime/dsh-thinking-effort` and workflow `publish.yml`. Publishing uses GitHub OIDC and provenance with `npm publish --provenance --access public`; no `NPM_TOKEN` or long-lived token is used. A version that already exists in npm blocks the release.
+Configure npm GitHub Trusted Publishing for repository `hytime/dsh-thinking-effort` and workflow `publish.yml`. Publishing uses GitHub OIDC and provenance with `pnpm publish --provenance --access public --skip-manifest-obfuscation`; no `NPM_TOKEN` or long-lived token is used. `--skip-manifest-obfuscation` is required because pnpm otherwise strips `packageManager` from the published manifest, and the official DSH CLI rejects the plugin during profile installation when that field is missing. A version that already exists in npm blocks the release.
 
 Before publishing, the workflow builds five temporary official DSH capability representatives in rc7 → rc2 → alpha2 → namespace → entry order and runs the real compatibility suite after installing the current tarball with the official `dsh plugin` command:
 
@@ -390,7 +390,7 @@ Before publishing, the workflow builds five temporary official DSH capability re
 - `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`) — newest namespace-model representative (runs the real-browser DOM probe)
 - `dsh-v0.1.7-alpha.1` (`0.1.7-alpha.1`) — entry-config representative (settings forms are derived from each Loader entry's own `Config`; also runs the real-browser DOM probe)
 
-The ordinary CI workflow remains test-only and runs on pull requests and `main` pushes. Keep `package-lock.json` committed for its `npm ci` installation.
+The ordinary CI workflow remains test-only and runs on pull requests and `main` pushes. Keep `pnpm-lock.yaml` committed for its `pnpm install --frozen-lockfile` installation.
 
 ## 7. Remove
 
