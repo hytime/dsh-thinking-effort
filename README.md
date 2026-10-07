@@ -34,7 +34,7 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 | `0.1.0-rc.7` | Not available |
 | `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available when exposed by the DSH schema, but without `supportsFinishReason` and `supportsThinkingTokenBudget` |
 | `0.1.2-alpha.1` to `<0.1.3-alpha.2` | 15 fields when exposed by the DSH schema; `thinkingTokenBudgetField`, `vllmPriority`, and `supportsMaxOutputTokens` are not offered yet |
-| `0.1.3-alpha.2` to `<0.2.1-0` | All 18 fields when exposed by the DSH schema. This spans the `0.1.7` settings rewrite and the `0.2.0` line, both verified to keep the same editable field set. Releases at or beyond the newest bound are unmapped: the plugin keeps working and follows the capabilities the running host reports instead |
+| `0.1.3-alpha.2` to `<0.2.2-0` | All 18 fields when exposed by the DSH schema. This spans the `0.1.7` settings rewrite and the `0.2.0`/`0.2.1` lines, all verified to keep the same editable field set. Releases at or beyond the newest bound are unmapped: the plugin keeps working and follows the capabilities the running host reports instead |
 
 From DSH `0.1.0-rc.8` onward, field availability follows the runtime schema. The table shows the maximum field set for each DSH version; the route protocol can further reduce it.
 
@@ -90,7 +90,7 @@ Use the official DSH CLI to manage the plugin profile. A plain `pnpm install` do
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # Install a specific version
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
 
 # Upgrade
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
