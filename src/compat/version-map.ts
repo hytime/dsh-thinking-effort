@@ -71,8 +71,17 @@ const completeBaseModelFields = ['reasoningEfforts', 'input', 'contextWindow'] a
  * `configForms`, `plugin-compatibility`, the locale pack and the model
  * directory are byte-identical to `0.2.0-rc.1`, the pi-ai `compatProfile` is
  * unchanged, and the one gate that release adds (`mistral-conversations`)
- * offers no field, so the plugin's editable set is untouched. Its bound is
- * `0.2.1-0` so the whole `0.1.7` through `0.2.0` span resolves.
+ * offers no field, so the plugin's editable set is untouched. `0.2.1-alpha.1`
+ * was verified the same way against `0.2.0-rc.2`: every API this plugin reads
+ * is byte-identical (settings controller, `configForms`,
+ * `plugin-compatibility`, locale pack, model directory, the
+ * `conversation.input.model` seat contract — still `{ locked }` — and the
+ * `modelDirectories`/`remote.session` faces), pi-ai stays at 0.87.1 with the
+ * same offered field sets, and the release's breaking changes miss this
+ * plugin: it imports no `./invariant` entry, registers no input-stats
+ * extension, and is configured as a package-root specifier rather than a
+ * subpath specifier. The bound is `0.2.2-0`, so the whole `0.1.7` through
+ * `0.2.1` span resolves.
  */
 const versionRanges: readonly VersionRange[] = [
   {
@@ -132,12 +141,12 @@ const versionRanges: readonly VersionRange[] = [
     },
   },
   {
-    // Verified through `0.2.0-rc.2`: the 0.1.7 line's window was extended rather
-    // than split, because the 0.2.0 line changed none of the capabilities it
-    // maps. The bound is the first release of the next minor line (`0.2.1-0`),
-    // so `0.2.0` and its prereleases resolve here.
+    // Verified through `0.2.1-alpha.1`: the 0.1.7 line's window was extended
+    // rather than split, because neither the 0.2.0 nor the 0.2.1 line changed
+    // any capability it maps. The bound is the first release of the next minor
+    // line (`0.2.2-0`), so `0.2.0`, `0.2.1` and their prereleases resolve here.
     minimum: '0.1.7-0',
-    maximumExclusive: '0.2.1-0',
+    maximumExclusive: '0.2.2-0',
     capabilities: {
       settingsTransport: 'modern',
       settingsApi: 'remote.settings',

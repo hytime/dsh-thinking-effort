@@ -236,12 +236,13 @@ jobs:
       - name: Set up pnpm for npm Trusted Publishing
         uses: pnpm/action-setup@v6
 
-      # No `registry-url` here on purpose. It makes actions/setup-node write
-      # `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` into a runner-level
-      # .npmrc; with no token set (the trusted-publishing case) that placeholder
-      # is a liability, and pnpm only falls back to OIDC once the value reads as
-      # empty. pnpm publishes to registry.npmjs.org by default, so nothing is
-      # lost, and the guard below fails loudly if a static token ever reappears.
+      # No `registry-url` here on purpose. It makes actions/setup-node write an
+      # `_authToken` line referencing the token environment variable into a
+      # runner-level .npmrc; with that variable unset (the trusted-publishing
+      # case) the placeholder is a liability, and pnpm only falls back to OIDC
+      # once the value reads as empty. pnpm publishes to registry.npmjs.org by
+      # default, so nothing is lost, and the guard below fails loudly if a
+      # static token ever reappears.
       - name: Set up Node.js for npm Trusted Publishing
         uses: actions/setup-node@v4
         with:
