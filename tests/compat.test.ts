@@ -119,6 +119,20 @@ describe('version capability map', () => {
     expect(settingsModelForVersion('0.2.0-rc.2')).toBe('entry-config')
   })
 
+  it('keeps the 0.2.1 line inside the same verified window', () => {
+    // `0.2.1-alpha.1` changed none of the capabilities this window records
+    // either: every API the plugin reads is byte-identical to `0.2.0-rc.2`, and
+    // its breaking changes (removed `./invariant` exports, split input-stats
+    // extensions, subpath plugins no longer reading package.json) miss a
+    // package-root plugin that imports none of them.
+    expect(capabilitiesForVersion('0.2.1-alpha.0')).toEqual(entryConfigCapabilities)
+    expect(capabilitiesForVersion('0.2.1-alpha.1')).toEqual(entryConfigCapabilities)
+    expect(capabilitiesForVersion('0.2.1')).toEqual(entryConfigCapabilities)
+    expect(takeoverTransportForVersion('0.2.1-alpha.1')).toBe('optional')
+    expect(settingsModelForVersion('0.2.1-alpha.1')).toBe('entry-config')
+    expect(capabilitiesForVersion('0.2.2-0')).toBeUndefined()
+  })
+
   it('keeps every half-open boundary and accepts semver build metadata', () => {
     expect(capabilitiesForVersion('0.1.0-rc.6')).toBeUndefined()
     expect(capabilitiesForVersion('0.1.0-rc.7+ci.1')).toEqual(rc7Capabilities)
@@ -137,7 +151,8 @@ describe('version capability map', () => {
     expect(capabilitiesForVersion('0.1.7-0')).toEqual(entryConfigCapabilities)
     expect(capabilitiesForVersion('0.1.7-alpha.1+ci.1')).toEqual(entryConfigCapabilities)
     expect(capabilitiesForVersion('0.2.0-rc.2+build.9')).toEqual(entryConfigCapabilities)
-    expect(capabilitiesForVersion('0.2.1-0')).toBeUndefined()
+    expect(capabilitiesForVersion('0.2.1-alpha.1+build.3')).toEqual(entryConfigCapabilities)
+    expect(capabilitiesForVersion('0.2.2-0')).toBeUndefined()
     expect(capabilitiesForVersion('0.3.0')).toBeUndefined()
   })
 
