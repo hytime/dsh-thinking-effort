@@ -14,6 +14,23 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-10-07
+
+### 兼容性 / Compatibility
+
+- 版本映射最新窗口的上界由 `0.2.1-0` 扩展到 `0.2.2-0`，使 DSH `0.1.7` 至 `0.2.1` 落在同一个已验证窗口内。`0.2.1-alpha.1` 相对 `0.2.0-rc.2` 逐一核对过插件读取的每个 API：设置控制器、`configForms`、`plugin-compatibility`、语言包、模型目录、`conversation.input.model` 座位契约（仍是 `{ locked }`）以及 `modelDirectories` / `remote.session` 两个面均逐字节相同，pi-ai 仍为 0.87.1 且各 gate 的 offer 集合不变（completions 19 / responses 4 / anthropic 7 / bedrock 1，新增的 `mistral-conversations` 依旧 offer 0 个字段）。该版本的破坏性变更也不触及本插件：不导入任何 `./invariant` 入口、不注册输入区统计扩展，且以包根说明符而非子路径说明符被配置（新规则下只有包根说明符会读取其导出的 `package.json`）。此前 `0.2.1` 落在窗口之外（未映射），插件仍可工作但会退化为跟随运行时报告的能力；现在它与 `0.1.7` 走同一条已验证路径。
+- Extended the newest version-map window's upper bound from `0.2.1-0` to `0.2.2-0`, so DSH `0.1.7` through `0.2.1` resolve inside one verified window. Every API this plugin reads was checked file by file against `0.2.0-rc.2`: the settings controller, `configForms`, `plugin-compatibility`, the locale pack, the model directory, the `conversation.input.model` seat contract (still `{ locked }`) and the `modelDirectories` / `remote.session` faces are byte-identical, pi-ai stays at 0.87.1 with identical per-gate offered field sets (completions 19, responses 4, anthropic 7, bedrock 1; the added `mistral-conversations` gate still offers none). The release's breaking changes also miss this plugin: it imports no `./invariant` entry, registers no input-stats extension, and is configured as a package-root specifier rather than a subpath specifier, which under the new rule is the only form that still reads its exported `package.json`. Previously `0.2.1` fell outside every window (unmapped): the plugin still worked, but degraded to following the capabilities the running host reports. It now takes the same verified path as `0.1.7`.
+
+### 变更 / Changed
+
+- 仓库工具链从 npm 迁移到 pnpm：`package-lock.json` 移除，改提交 `pnpm-lock.yaml` 与 `pnpm-workspace.yaml`，CI 与发布 workflow 改用 `pnpm install --frozen-lockfile`、`pnpm run ...`、`pnpm pack`、`pnpm audit`，`setup-node` 的缓存改为 `pnpm`，锁文件缓存与审计门禁保持不变。工作流守卫 `test:release` 也加入 PR 阶段的 CI，使发布 workflow 的结构断言在合并前就被检查。
+- Migrated the repository toolchain from npm to pnpm: `package-lock.json` is removed in favour of committed `pnpm-lock.yaml` and `pnpm-workspace.yaml`, and CI and the publish workflow now use `pnpm install --frozen-lockfile`, `pnpm run ...`, `pnpm pack`, and `pnpm audit`, with `setup-node` caching switched to `pnpm`; the lockfile cache and the audit gate are unchanged. The `test:release` workflow guards now also run in pull-request CI, so the publish workflow's structural assertions are checked before merge.
+
+### 安全 / Security
+
+- 迁移后在 pnpm 下重跑审计，把 `source-map-js` 从 1.2.1 提升到 1.2.2（由开发依赖 `jsdom` 间接引入），并把 `vitest` 从 3.2.7 升到 4.1.11 —— 后者不再依赖 `tinypool`，消除 2 条 critical 公告；`pnpm audit --audit-level high` 现为 0 条。`undici` 在迁移前已是 7.30.0，本次没有改动它。这些都在 devDependencies 内，不进发布包的运行时依赖图（发布包只依赖 `schemastery` 与 `yaml`）。可选的 `--provenance` 与 OIDC 发布路径由 pnpm 11 原生实现并已在 workflow 中保留。
+- After the migration, re-ran the audit under pnpm: raised `source-map-js` from 1.2.1 to 1.2.2 (pulled in transitively by the dev dependency `jsdom`) and `vitest` from 3.2.7 to 4.1.11, which no longer depends on `tinypool` and so removes the 2 critical advisories; `pnpm audit --audit-level high` now reports 0. `undici` was already 7.30.0 before the migration and is unchanged here. All of them sit in devDependencies and stay out of the published package's runtime dependency graph (which is only `schemastery` and `yaml`). The optional `--provenance` and OIDC publishing path is implemented natively by pnpm 11 and is preserved in the workflow.
+
 ## [0.3.7] - 2026-10-01
 
 ### 修复 / Fixed

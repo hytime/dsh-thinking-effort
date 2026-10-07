@@ -210,15 +210,18 @@ function runOfficialDsh(cliRoot: string, home: string, args: readonly string[]):
 }
 
 function packLocalPackage(destination: string): string {
-  const packed = JSON.parse(execFileSync('npm', [
-    'pack', '--json', '--pack-destination', destination,
+  // `--skip-manifest-obfuscation` keeps `packageManager` in the packed
+  // manifest; pnpm strips it by default, and the official DSH CLI rejects a
+  // plugin tarball whose manifest no longer declares pnpm.
+  const packed = JSON.parse(execFileSync('pnpm', [
+    'pack', '--json', '--skip-manifest-obfuscation', '--pack-destination', destination,
   ], {
     cwd: root,
-    env: { ...process.env, npm_config_cache: '/tmp/dsh-pi-effort-npm-cache' },
     encoding: 'utf8',
-  })) as Array<{ filename: string }>
-  const tarball = packed[0]?.filename
-  if (tarball === undefined) throw new Error('npm pack did not report a tarball filename')
+  })) as { filename: string } | Array<{ filename: string }>
+  const entry = Array.isArray(packed) ? packed[0] : packed
+  const tarball = entry?.filename
+  if (tarball === undefined) throw new Error('pnpm pack did not report a tarball filename')
   return join(destination, basename(tarball))
 }
 
@@ -1313,7 +1316,7 @@ describe('published package composition', () => {
   it('exposes built Host and Client artifacts with declarations', () => {
     const manifest = readPackage()
 
-    expect(manifest.version).toBe('0.3.7')
+    expect(manifest.version).toBe('0.3.8')
     expect(manifest.packageManager).toBe('pnpm@11.7.0')
     expect(manifest.main).toBe('./lib/index.js')
     expect(manifest.types).toBe('./lib/types/index.d.ts')
@@ -1415,7 +1418,7 @@ integrationDescribe('official DSH loader composition', () => {
     const installedDir = join(profile, 'node_modules', '@hytime', 'dsh-thinking-effort')
     const installedManifest = JSON.parse(readFileSync(join(installedDir, 'package.json'), 'utf8')) as PackageManifest
     expect(installedManifest.name).toBe('@hytime/dsh-thinking-effort')
-    expect(installedManifest.version).toBe('0.3.7')
+    expect(installedManifest.version).toBe('0.3.8')
 
     const hostEntry = join(installedDir, 'lib', 'index.js')
     const clientEntry = join(installedDir, 'lib', 'client.js')

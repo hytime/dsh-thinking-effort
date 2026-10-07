@@ -10,6 +10,20 @@
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-10-07
+
+### 호환성
+
+- 버전 맵 최신 윈도의 상한을 `0.2.1-0`에서 `0.2.2-0`으로 넓혀, DSH `0.1.7`부터 `0.2.1`까지가 검증된 동일 윈도에 들어가도록 했습니다. `0.2.1-alpha.1`은 `0.2.0-rc.2` 대비 이 플러그인이 읽는 모든 API를 파일 단위로 대조했습니다. 설정 컨트롤러, `configForms`, `plugin-compatibility`, 로케일 팩, 모델 디렉터리, `conversation.input.model` 시트 계약(여전히 `{ locked }`), `modelDirectories` / `remote.session` 두 면 모두 바이트 단위로 동일하며, pi-ai는 0.87.1 그대로이고 각 게이트의 offer 집합도 바뀌지 않았습니다(completions 19 / responses 4 / anthropic 7 / bedrock 1, 추가된 `mistral-conversations`는 여전히 0개 필드). 이 릴리스의 파괴적 변경도 이 플러그인에는 닿지 않습니다. `./invariant` 엔트리를 전혀 임포트하지 않고 입력 영역 통계 확장도 등록하지 않으며, 하위 경로 지정자가 아닌 패키지 루트 지정자로 구성되어 있기 때문입니다(새 규칙에서 `package.json`을 읽는 것은 패키지 루트 지정자뿐입니다). 이전에는 `0.2.1`이 어떤 윈도에도 속하지 않아(미매핑) 플러그인은 계속 동작하되 실행 중인 호스트가 보고하는 능력을 따르는 형태로 축소되었습니다. 이제 `0.1.7`과 동일한 검증된 경로를 사용합니다.
+
+### 변경
+
+- 저장소 도구 체인을 npm에서 pnpm으로 이전했습니다. `package-lock.json`을 삭제하고 `pnpm-lock.yaml`과 `pnpm-workspace.yaml`을 커밋 대상으로 바꿨습니다. CI와 게시 workflow는 `pnpm install --frozen-lockfile`, `pnpm run ...`, `pnpm pack`, `pnpm audit`을 사용하며, `setup-node` 캐시는 `pnpm`으로 전환했습니다. lockfile 캐시와 감사 게이트는 그대로 유지합니다. workflow 가드 `test:release`도 Pull Request 단계 CI에 추가되어, 게시 workflow의 구조 검증이 병합 전에 검사됩니다.
+
+### 보안
+
+- 이전 후 pnpm에서 감사를 다시 실행해 `source-map-js`를 1.2.1에서 1.2.2로 올리고(개발 의존성 `jsdom`이 전이적으로 가져옵니다) `vitest`를 3.2.7에서 4.1.11로 올렸습니다. 후자는 `tinypool`에 의존하지 않게 되어 critical 2건을 해소합니다. `pnpm audit --audit-level high`는 현재 0건입니다. `undici`는 이전 전부터 7.30.0이었고 이번에 변경하지 않았습니다. 모두 devDependencies이며 게시 패키지의 런타임 의존성 그래프(`schemastery`와 `yaml`뿐)에는 들어가지 않습니다. 선택적인 `--provenance`와 OIDC 게시 경로는 pnpm 11이 네이티브로 구현하며 workflow에서도 유지합니다.
+
 ## [0.3.7] - 2026-10-01
 
 ### 수정

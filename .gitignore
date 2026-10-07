@@ -14,7 +14,6 @@ docs/superpowers/
 
 # Local runtime and manual-test artifacts.
 thinking-effort-loaded.json
-pnpm-lock.yaml
 docs/68d52d9f-5742-4164-9685-6b9e7f5a86e9.png
 docs/94d15cfd-3ff0-4695-ac9f-c10cb578b500.png
 .superpowers/
@@ -26,11 +25,11 @@ docs/94d15cfd-3ff0-4695-ac9f-c10cb578b500.png
 # macOS Finder metadata, written into any directory the Finder visits.
 .DS_Store
 
-# Stray machine-local tool config the repository does not use: repository CI and
-# root dependency installation use npm (`package-lock.json`). The published
-# package separately pins pnpm in `packageManager` because DSH profile plugin
-# operations run through pnpm. The root pnpm lock/workspace files remain local
-# leftovers — the workspace still carries pnpm's placeholder build setting —
-# and lefthook.yml is lefthook's commented-out example template.
-/pnpm-workspace.yaml
+# Stray machine-local tool config the repository does not use. The repository
+# installs, builds, tests, audits, and publishes through pnpm: `pnpm-lock.yaml`
+# and `pnpm-workspace.yaml` are committed, and CI runs `pnpm install
+# --frozen-lockfile`. The published package pins pnpm in `packageManager`
+# because DSH profile plugin operations run through pnpm, and pnpm strips that
+# field from the published manifest unless it is published with
+# `--skip-manifest-obfuscation`, which the release job passes.
 /lefthook.yml

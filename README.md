@@ -23,7 +23,7 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 >
 > DSH `0.1.2-alpha.1` and later accept language-pack locale IDs through `LocaleRuntime`. This plugin registers `ja` and `ko` dynamically, so no DSH core fork is required. Older DSH builds that only expose built-in locale IDs support `zh` and `en` only.
 >
-> The published runtime entries are `lib/index.js` (Host) and `lib/client.js` (Client). After changing TypeScript or locale sources, run `npm run build` before running DSH or packing the plugin. Current DSH does not expose a public semver metadata contract, so runtime capability detection is authoritative. An optional version is used only when explicit metadata or test input supplies it; unknown valid versions still use the detected capabilities. The plugin supports both modern `remote.settings` and legacy `connection.api.settings`.
+> The published runtime entries are `lib/index.js` (Host) and `lib/client.js` (Client). After changing TypeScript or locale sources, run `pnpm run build` before running DSH or packing the plugin. Current DSH does not expose a public semver metadata contract, so runtime capability detection is authoritative. An optional version is used only when explicit metadata or test input supplies it; unknown valid versions still use the detected capabilities. The plugin supports both modern `remote.settings` and legacy `connection.api.settings`.
 >
 > The Host registers its `dsh-thinking-effort` Settings namespace through the host-provided Settings `installSection` when available, and falls back to the legacy `register` path otherwise. Under the `0.1.7`+ entry-config model neither path exists, and the section comes from the exported `Config` instead. It does not depend on `@deepseek-ai/dsh-settings` at runtime, so the package installs cleanly into DSH profiles configured with `autoInstallPeers: false` without introducing a second Cordis runtime.
 
@@ -34,7 +34,7 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 | `0.1.0-rc.7` | Not available |
 | `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available when exposed by the DSH schema, but without `supportsFinishReason` and `supportsThinkingTokenBudget` |
 | `0.1.2-alpha.1` to `<0.1.3-alpha.2` | 15 fields when exposed by the DSH schema; `thinkingTokenBudgetField`, `vllmPriority`, and `supportsMaxOutputTokens` are not offered yet |
-| `0.1.3-alpha.2` to `<0.2.1-0` | All 18 fields when exposed by the DSH schema. This spans the `0.1.7` settings rewrite and the `0.2.0` line, both verified to keep the same editable field set. Releases at or beyond the newest bound are unmapped: the plugin keeps working and follows the capabilities the running host reports instead |
+| `0.1.3-alpha.2` to `<0.2.2-0` | All 18 fields when exposed by the DSH schema. This spans the `0.1.7` settings rewrite and the `0.2.0`/`0.2.1` lines, all verified to keep the same editable field set. Releases at or beyond the newest bound are unmapped: the plugin keeps working and follows the capabilities the running host reports instead |
 
 From DSH `0.1.0-rc.8` onward, field availability follows the runtime schema. The table shows the maximum field set for each DSH version; the route protocol can further reduce it.
 
@@ -83,14 +83,14 @@ These identifiers have different responsibilities:
 
 ## Install, upgrade, and remove
 
-Use the official DSH CLI to manage the plugin profile. A plain `npm install` does not register a DSH profile bundle.
+Use the official DSH CLI to manage the plugin profile. A plain `pnpm install` does not register a DSH profile bundle.
 
 ```bash
 # Install the latest version
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # Install a specific version
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
 
 # Upgrade
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -242,7 +242,7 @@ See the complete Chinese, English, Japanese, and Korean screenshot gallery in [`
 ## CI and release maintenance
 
 - Pull requests and pushes to `main` run the quality matrix on Node `22.19.0` and `24.x`.
-- The workflow uses `npm ci`; maintainers must commit `package-lock.json` when dependencies change.
+- The workflow uses `pnpm install --frozen-lockfile`; maintainers must commit `pnpm-lock.yaml` when dependencies change.
 - The ordinary CI workflow does not publish to npm. Publishing is triggered only by a `v<version>` tag through `publish.yml`.
 - Before creating a release tag, update `package.json` version and `CHANGELOG.md` files, commit those changes, and create the matching `v<version>` tag. The tag must point to a commit in the `main` history.
 - npm Trusted Publishing must be configured for repository `hytime/dsh-thinking-effort` and workflow `publish.yml`. The workflow publishes provenance through GitHub OIDC and does not require `NPM_TOKEN`.

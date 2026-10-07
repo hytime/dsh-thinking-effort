@@ -20,7 +20,7 @@ import { pathToFileURL } from 'node:url'
 
 /** Changelog files whose entries must stay under `[Unreleased]`. */
 const CHANGELOG_PATTERN = /^docs\/CHANGELOG(\.[a-z]{2})?\.md$/
-/** Build output that `npm run build` regenerates and `.gitignore` excludes. */
+/** Build output that `pnpm run build` regenerates and `.gitignore` excludes. */
 const GENERATED_PATTERN = /^lib\//
 /** The integration branch external pull requests must target. */
 const DEFAULT_EXPECTED_BASE = 'dev'
@@ -179,7 +179,7 @@ export function evaluatePolicy({
     if (GENERATED_PATTERN.test(path)) {
       findings.push({
         code: 'generated-artifact',
-        message: `PR 包含构建产物 ${path}：lib/ 由 npm run build 生成且被 gitignore，不应提交。`,
+        message: `PR 包含构建产物 ${path}：lib/ 由 pnpm run build 生成且被 gitignore，不应提交。`,
       })
     }
     if (CHANGELOG_PATTERN.test(path)) {

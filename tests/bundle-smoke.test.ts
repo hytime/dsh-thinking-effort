@@ -36,7 +36,7 @@ function readArtifact(relativePath: string): string {
     return readFileSync(resolve(root, relativePath), 'utf8')
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
-    throw new Error(`Missing ${relativePath}; run npm run build first. ${detail}`)
+    throw new Error(`Missing ${relativePath}; run pnpm run build first. ${detail}`)
   }
 }
 

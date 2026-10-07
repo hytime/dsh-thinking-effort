@@ -1,6 +1,6 @@
 # 安装指南（官方 DSH CLI）
 
-本指南只使用 DSH 官方 `dsh plugin` 命令管理插件。命令会在目标 profile 中安装依赖，并自动同步 `dsh.profile.bundles`；不要用普通 `npm install`、profile 目录下的直接 `pnpm add` 或手工编辑 profile 配置替代它。
+本指南只使用 DSH 官方 `dsh plugin` 命令管理插件。命令会在目标 profile 中安装依赖，并自动同步 `dsh.profile.bundles`；不要用普通 `pnpm install`、profile 目录下的直接 `pnpm add` 或手工编辑 profile 配置替代它。
 
 - [English installation guide](./INSTALL.md)
 - [日本語インストールガイド](./INSTALL.ja.md)
@@ -35,7 +35,7 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 选择正在运行的 profile。一般部署使用 `web`，但应以实际启动命令中的 `--profile` 为准。
 
-发布包使用 `lib/index.js` 作为 Host 入口，使用 `lib/client.js` 作为 Client 入口。从 TypeScript 或 locale 源码开发时，启动 DSH 或打包前必须先运行 `npm run build`。
+发布包使用 `lib/index.js` 作为 Host 入口，使用 `lib/client.js` 作为 Client 入口。从 TypeScript 或 locale 源码开发时，启动 DSH 或打包前必须先运行 `pnpm run build`。
 
 当前 DSH 没有公开的 semver metadata 契约，因此运行时能力探测是权威来源。只有显式 metadata 或测试输入提供时才使用可选版本；未知合法版本仍按实际能力运行。插件同时支持新版 `remote.settings` 和旧版 `connection.api.settings`。
 
@@ -266,7 +266,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
 ```
 
 官方 CLI 会自动完成以下工作：
@@ -296,7 +296,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 升级到指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
 ```
 
 升级后重新执行验证步骤。宿主侧代码需要重启 DSH；浏览器侧代码需要刷新 Web 页面。
@@ -316,7 +316,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
 ```
 
 ### 3.2 旧依赖已被移除，但旧 bundle 残留
@@ -345,7 +345,7 @@ grep -n "dsh-thinking-effort" \
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
 ```
 
 这一步的目的不是继续使用旧插件，而是让官方 CLI 识别旧依赖并自动删除残留 bundle。不要手工把旧包名重新写入新的 bundle 列表。
@@ -461,7 +461,7 @@ Composer `seat` 是可选能力。`modelDirectories` 服务不可用时不会注
 
 维护者先更新 `package.json` 版本和所有适用的 `CHANGELOG`，提交这些变更，再创建匹配的 `v<version>` tag。tag 指向的提交必须位于 `main` 历史中。`publish.yml` workflow 不会自动修改版本或 CHANGELOG。
 
-请为 npm 包配置 GitHub Trusted Publisher：仓库为 `hytime/dsh-thinking-effort`，workflow 为 `publish.yml`。发布使用 GitHub OIDC 和 provenance，命令为 `npm publish --provenance --access public`，不使用 `NPM_TOKEN` 或长期 token。如果 npm 中已存在相同版本，发布会被阻止。
+请为 npm 包配置 GitHub Trusted Publisher：仓库为 `hytime/dsh-thinking-effort`，workflow 为 `publish.yml`。发布使用 GitHub OIDC 和 provenance，命令为 `pnpm publish --provenance --access public --skip-manifest-obfuscation`，不使用 `NPM_TOKEN` 或长期 token。`--skip-manifest-obfuscation` 是必需的：pnpm 默认会把 `packageManager` 从发布清单里剥掉，而官方 DSH CLI 在向 profile 安装插件时会因缺这个字段拒绝该插件。如果 npm 中已存在相同版本，发布会被阻止。
 
 发布前 workflow 会按 rc7 → rc2 → alpha2 → namespace → entry 顺序创建五个临时官方 DSH 能力代表 checkout，使用官方 `dsh plugin` 命令安装当前 tarball，再运行真实兼容测试：
 
@@ -471,7 +471,7 @@ Composer `seat` 是可选能力。`modelDirectories` 服务不可用时不会注
 - `dsh-v0.1.6-alpha.1`（`0.1.6-alpha.1`）——最新的 namespace 模型能力代表（执行真实浏览器 DOM 探针）
 - `dsh-v0.1.7-alpha.1`（`0.1.7-alpha.1`）——entry-config 能力代表（设置表单由各 Loader 条目自己的 `Config` 推导；同样执行真实浏览器 DOM 探针）
 
-普通 CI 仍然只做测试，会在 Pull Request 和推送到 `main` 时运行。它使用 `npm ci`，依赖变更时请保持 `package-lock.json` 已提交。
+普通 CI 仍然只做测试，会在 Pull Request 和推送到 `main` 时运行。它使用 `pnpm install --frozen-lockfile`，依赖变更时请保持 `pnpm-lock.yaml` 已提交。
 
 ## 7. 卸载
 

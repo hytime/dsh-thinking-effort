@@ -1,6 +1,6 @@
 # インストールガイド（公式 DSH CLI）
 
-このガイドでは DSH 公式の `dsh plugin` コマンドだけを使用します。コマンドは対象 profile に依存関係を追加し、`dsh.profile.bundles` を同期します。通常の `npm install`、profile 内での直接 `pnpm add`、profile マニフェストの手動編集で置き換えないでください。
+このガイドでは DSH 公式の `dsh plugin` コマンドだけを使用します。コマンドは対象 profile に依存関係を追加し、`dsh.profile.bundles` を同期します。通常の `pnpm install`、profile 内での直接 `pnpm add`、profile マニフェストの手動編集で置き換えないでください。
 
 - [English installation guide](./INSTALL.md)
 - [中文安装指南](./INSTALL.zh.md)
@@ -29,7 +29,7 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 実行中の DSH プロセスが使用する profile を選択してください。`web` が一般的ですが、実際の `--profile` 引数が正式な指定です。
 
-公開パッケージの Host 入口は `lib/index.js`、Client 入口は `lib/client.js` です。TypeScript または locale のソースから開発する場合は、DSH の起動やパッケージ作成の前に `npm run build` を実行してください。
+公開パッケージの Host 入口は `lib/index.js`、Client 入口は `lib/client.js` です。TypeScript または locale のソースから開発する場合は、DSH の起動やパッケージ作成の前に `pnpm run build` を実行してください。
 
 現在の DSH には公開された semver metadata 契約がないため、実行時の capability detection を権威あるソースとします。任意のバージョンは明示的な metadata またはテスト入力がある場合だけ使用し、未知の有効なバージョンでも検出した能力に従って動作します。新しい `remote.settings` と旧来の `connection.api.settings` の両方に対応します。
 
@@ -254,7 +254,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 今回のリリースを明示してインストールします。
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
 ```
 
 公式 CLI は profile の依存関係、lockfile、`dsh.profile.bundles` を自動的に更新します。YAML の行を手動で追加しないでください。
@@ -270,7 +270,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 特定バージョンへ更新する場合：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
 ```
 
 Host の変更には DSH を再起動し、Client の変更には Web ページを更新してください。
@@ -288,7 +288,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
 ```
 
 依存関係は別のツールで削除済みですが、古い bundle が残っている場合は次で composition を確認します。
@@ -302,7 +302,7 @@ dsh --profile <profile> --dump-default-config
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
 ```
 
 新しい bundle リストに旧パッケージ名を追加しないでください。
@@ -317,7 +317,7 @@ grep -n "@hytime/dsh-thinking-effort" \
 node -p "require('${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/node_modules/@hytime/dsh-thinking-effort/package.json').version"
 ```
 
-このリリースではバージョンが `0.3.7` である必要があります。
+このリリースではバージョンが `0.3.8` である必要があります。
 
 ## 日本語と韓国語の対応状況
 
@@ -375,7 +375,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 
 メンテナーは `package.json` の version と該当する `CHANGELOG` を更新してコミットし、一致する `v<version>` tag を作成します。tag の指す commit は `main` の履歴に含まれている必要があります。`publish.yml` workflow は version や CHANGELOG を自動変更しません。
 
-npm パッケージには GitHub Trusted Publishing を設定してください。リポジトリは `hytime/dsh-thinking-effort`、workflow は `publish.yml` です。公開は GitHub OIDC と provenance を使い、`npm publish --provenance --access public` を実行します。`NPM_TOKEN` や長期 token は使用しません。npm に同じ version が存在する場合、公開は停止します。
+npm パッケージには GitHub Trusted Publishing を設定してください。リポジトリは `hytime/dsh-thinking-effort`、workflow は `publish.yml` です。公開は GitHub OIDC と provenance を使い、`pnpm publish --provenance --access public --skip-manifest-obfuscation` を実行します。`NPM_TOKEN` や長期 token は使用しません。`--skip-manifest-obfuscation` は必須です。pnpm は既定で `packageManager` を公開マニフェストから取り除き、公式 DSH CLI はそのフィールドがないプラグインを profile へのインストール時に拒否します。npm に同じ version が存在する場合、公開は停止します。
 
 公開前に workflow は rc7 → rc2 → alpha2 → namespace → entry の順で、5 つの一時的な公式 DSH capability representative checkout を作成します。公式 `dsh plugin` コマンドで現在の tarball をインストールしてから、実際の互換性テストを実行します。
 
@@ -385,7 +385,7 @@ npm パッケージには GitHub Trusted Publishing を設定してください�
 - `dsh-v0.1.6-alpha.1`（`0.1.6-alpha.1`）— 最新の namespace モデル capability representative（実ブラウザ DOM プローブを実行）
 - `dsh-v0.1.7-alpha.1`（`0.1.7-alpha.1`）— entry-config capability representative（設定フォームは各 Loader エントリ自身の `Config` から導出。実ブラウザ DOM プローブも実行）
 
-通常の CI はテスト専用で、Pull Request と `main` への push で実行されます。`npm ci` を使うため、依存関係変更時は `package-lock.json` をコミットしてください。
+通常の CI はテスト専用で、Pull Request と `main` への push で実行されます。`pnpm install --frozen-lockfile` を使うため、依存関係変更時は `pnpm-lock.yaml` をコミットしてください。
 
 ## 7. 削除
 

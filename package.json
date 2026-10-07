@@ -1,6 +1,6 @@
 {
   "name": "@hytime/dsh-thinking-effort",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "description": "为 DSH 的 pi-ai 第三方模型补充可配置的思考强度档位，并设置子 agent 默认思考强度。",
   "private": false,
   "engines": {
@@ -15,7 +15,7 @@
     "test:policy": "node --test scripts/pr-policy.test.mjs",
     "test:conventions": "node scripts/check-conventions.mjs",
     "test:watch": "vitest",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "pnpm run build"
   },
   "type": "module",
   "main": "./lib/index.js",
@@ -107,7 +107,7 @@
     "react-dom": "^18.3.1",
     "tsdown": "^0.22.14",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.7"
+    "vitest": "^4.1.11"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/dsh": {

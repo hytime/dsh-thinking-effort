@@ -23,7 +23,7 @@
 >
 > DSH `0.1.2-alpha.1` 及更高版本通过 `LocaleRuntime` 支持语言包注册外部 locale ID。本插件会动态注册 `ja` 和 `ko`，无需维护 DSH fork。只支持固定内置 locale ID 的旧版 DSH 仍只能使用 `zh` 和 `en`。
 >
-> 发布包的运行入口是 `lib/index.js`（Host）和 `lib/client.js`（Client）。修改 TypeScript 或 locale 源文件后，运行 `npm run build`，再启动 DSH 或打包插件。当前 DSH 没有公开的 semver metadata 契约，因此运行时能力探测是权威来源。只有显式 metadata 或测试输入提供时才使用可选版本；未知合法版本仍按实际能力运行。插件同时支持新版 `remote.settings` 和旧版 `connection.api.settings`。
+> 发布包的运行入口是 `lib/index.js`（Host）和 `lib/client.js`（Client）。修改 TypeScript 或 locale 源文件后，运行 `pnpm run build`，再启动 DSH 或打包插件。当前 DSH 没有公开的 semver metadata 契约，因此运行时能力探测是权威来源。只有显式 metadata 或测试输入提供时才使用可选版本；未知合法版本仍按实际能力运行。插件同时支持新版 `remote.settings` 和旧版 `connection.api.settings`。
 >
 > Host 在宿主提供 Settings `installSection` 时用它注册插件自有的 `dsh-thinking-effort` namespace，否则回退到旧版 `register` 路径。在 `0.1.7` 及以后的 entry-config 模型下这两条路径都不存在，设置分区改由导出的 `Config` 提供。插件不在运行时依赖 `@deepseek-ai/dsh-settings`，因此在配置为 `autoInstallPeers: false` 的 DSH profile 中也能干净安装，不会引入第二份 Cordis 运行时。
 
@@ -34,7 +34,7 @@
 | `0.1.0-rc.7` | 不支持 |
 | `0.1.0-rc.8` 至 `<0.1.2-alpha.1` | schema 暴露时可用，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget` |
 | `0.1.2-alpha.1` 至 `<0.1.3-alpha.2` | schema 暴露时支持 15 个字段；`thinkingTokenBudgetField`、`vllmPriority` 与 `supportsMaxOutputTokens` 尚未提供 |
-| `0.1.3-alpha.2` 至 `<0.2.1-0` | schema 暴露时支持全部 18 个字段。该区间横跨 `0.1.7` 的设置重写与 `0.2.0` 线，两者都已验证保持相同的可编辑字段集合。达到或超过该上限的版本不做映射：插件照常工作，改为跟随运行时宿主实际报告的能力 |
+| `0.1.3-alpha.2` 至 `<0.2.2-0` | schema 暴露时支持全部 18 个字段。该区间横跨 `0.1.7` 的设置重写与 `0.2.0`／`0.2.1` 线，均已验证保持相同的可编辑字段集合。达到或超过该上限的版本不做映射：插件照常工作，改为跟随运行时宿主实际报告的能力 |
 
 从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。上表表示各 DSH 版本最多可用的字段集合；当前网关协议还可能进一步缩小集合。
 
@@ -92,7 +92,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 
 ## 安装、升级与卸载
 
-DSH 插件必须通过官方 `dsh plugin` 命令安装。普通 `npm install` 只会把包放入当前 Node.js 项目，不能替代 DSH profile 的依赖和 bundle 注册；也不要手工编辑 profile 的 `package.json`。
+DSH 插件必须通过官方 `dsh plugin` 命令安装。普通 `pnpm install` 只会把包放入当前 Node.js 项目，不能替代 DSH profile 的依赖和 bundle 注册；也不要手工编辑 profile 的 `package.json`。
 
 ### 1. 确认 profile
 
@@ -113,7 +113,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
 ```
 
 官方 CLI 会同时更新 profile 依赖、锁文件和 `dsh.profile.bundles`，无需手工追加 YAML。
@@ -148,7 +148,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
 ```
 
 如果旧依赖已经被其他工具移除，但 profile 的 bundle 列表仍残留旧名称，先从旧 profile 的 `pnpm-lock.yaml` 找到旧 GitHub commit，再使用官方命令恢复并移除：
@@ -156,7 +156,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
 ```
 
 不要把 `dsh-thinking-effort` 添加到新的 `dsh.profile.bundles` 中。
@@ -328,7 +328,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 ## CI 与发布维护
 
 - Pull Request 和推送到 `main` 会在 Node `22.19.0` 与 `24.x` 上运行质量矩阵。
-- workflow 使用 `npm ci`；依赖变更时，维护者必须提交 `package-lock.json`。
+- workflow 使用 `pnpm install --frozen-lockfile`；依赖变更时，维护者必须提交 `pnpm-lock.yaml`。
 - 普通 CI workflow 不会发布 npm；发布只由 `publish.yml` 接收匹配的 `v<version>` tag 后执行。
 - 创建发布 tag 前，维护者先更新 `package.json` 版本和各语言 `CHANGELOG`，提交这些变更，再创建匹配的 `v<version>` tag。tag 指向的提交必须位于 `main` 历史中。
 - npm 包必须配置 GitHub Trusted Publisher：仓库为 `hytime/dsh-thinking-effort`，workflow 为 `publish.yml`。发布使用 GitHub OIDC 生成 provenance，不需要 `NPM_TOKEN`。

@@ -22,7 +22,7 @@
 >
 > DSH `0.1.2-alpha.1` 以降は `LocaleRuntime` の language-pack 拡張をサポートします。このプラグインは `ja` と `ko` を動的に登録するため、DSH の fork は不要です。組み込み locale ID だけを受け付ける古い DSH では `zh` と `en` のみ使用できます。
 >
-> 公開パッケージの実行入口は `lib/index.js`（Host）と `lib/client.js`（Client）です。TypeScript または locale のソースを変更した後は、DSH を起動またはパッケージを作成する前に `npm run build` を実行してください。現在の DSH には公開された semver metadata 契約がないため、実行時の capability detection を権威あるソースとします。任意のバージョンは明示的な metadata またはテスト入力がある場合だけ使用し、未知の有効なバージョンでも検出した能力に従って動作します。新しい `remote.settings` と旧来の `connection.api.settings` の両方に対応します。
+> 公開パッケージの実行入口は `lib/index.js`（Host）と `lib/client.js`（Client）です。TypeScript または locale のソースを変更した後は、DSH を起動またはパッケージを作成する前に `pnpm run build` を実行してください。現在の DSH には公開された semver metadata 契約がないため、実行時の capability detection を権威あるソースとします。任意のバージョンは明示的な metadata またはテスト入力がある場合だけ使用し、未知の有効なバージョンでも検出した能力に従って動作します。新しい `remote.settings` と旧来の `connection.api.settings` の両方に対応します。
 >
 > Host は、ホストが提供する Settings の `installSection` が利用できる場合はそれを使ってプラグイン固有の `dsh-thinking-effort` namespace を登録し、それ以外は旧版の `register` パスにフォールバックします。`0.1.7` 以降の entry-config モデルではどちらの経路も存在せず、設定セクションは公開した `Config` から提供されます。実行時に `@deepseek-ai/dsh-settings` に依存しないため、`autoInstallPeers: false` に設定した DSH profile でも Cordis ランタイムを二重に導入せずにクリーンにインストールできます。
 
@@ -33,7 +33,7 @@
 | `0.1.0-rc.7` | 非対応 |
 | `0.1.0-rc.8` から `<0.1.2-alpha.1` | schema が公開する場合は対応。ただし `supportsFinishReason` と `supportsThinkingTokenBudget` はありません |
 | `0.1.2-alpha.1` から `<0.1.3-alpha.2` | schema が公開する場合は 15 フィールドに対応。`thinkingTokenBudgetField`、`vllmPriority`、`supportsMaxOutputTokens` はまだ提供されません |
-| `0.1.3-alpha.2` から `<0.2.1-0` | schema が公開する場合は 18 フィールドすべてに対応。この範囲は `0.1.7` の Settings 書き換えと `0.2.0` ラインにまたがり、どちらも編集可能なフィールド集合が同じであることを検証済みです。上限以降のリリースは未マップのまま、実行中のホストが報告する能力に従って動作を継続します |
+| `0.1.3-alpha.2` から `<0.2.2-0` | schema が公開する場合は 18 フィールドすべてに対応。この範囲は `0.1.7` の Settings 書き換えと `0.2.0`／`0.2.1` ラインにまたがり、いずれも編集可能なフィールド集合が同じであることを検証済みです。上限以降のリリースは未マップのまま、実行中のホストが報告する能力に従って動作を継続します |
 
 DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行時 schema の公開内容に従います。上表は各 DSH バージョンで利用できるフィールドの上限であり、ルートのプロトコルによってさらに絞り込まれます。
 
@@ -79,14 +79,14 @@ DSH 内蔵モデルだけを使用し、すでに推論コントロールが動�
 
 ## インストール、更新、削除
 
-profile の管理には公式 DSH CLI を使用してください。通常の `npm install` では DSH profile の bundle は登録されません。
+profile の管理には公式 DSH CLI を使用してください。通常の `pnpm install` では DSH profile の bundle は登録されません。
 
 ```bash
 # 最新版をインストール
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 特定バージョンをインストール
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.7
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
 
 # 更新
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -229,7 +229,7 @@ DSH 0.1.7 は `settings.yaml` の名前を変更して一度だけ取り込み�
 ## CI とリリースのメンテナンス
 
 - Pull Request と `main` への push では、Node `22.19.0` と `24.x` の品質マトリックスを実行します。
-- workflow は `npm ci` を使用するため、依存関係を変更した場合はメンテナーが `package-lock.json` をコミットしてください。
+- workflow は `pnpm install --frozen-lockfile` を使用するため、依存関係を変更した場合はメンテナーが `pnpm-lock.yaml` をコミットしてください。
 - 通常の CI workflow は npm に公開しません。`publish.yml` は `v<version>` tag によってのみ公開を開始します。
 - リリース tag を作成する前に、メンテナーは `package.json` の version と各言語の `CHANGELOG` を更新してコミットし、一致する `v<version>` tag を作成します。tag の指す commit は `main` の履歴に含まれている必要があります。
 - npm パッケージには GitHub Trusted Publisher を設定してください。リポジトリは `hytime/dsh-thinking-effort`、workflow は `publish.yml` です。公開は GitHub OIDC による provenance を含み、`NPM_TOKEN` は必要ありません。

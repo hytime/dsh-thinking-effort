@@ -10,6 +10,20 @@
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-10-07
+
+### 互換性
+
+- バージョンマップの最新ウィンドウの上界を `0.2.1-0` から `0.2.2-0` に広げ、DSH `0.1.7` から `0.2.1` までが検証済みの同一ウィンドウに収まるようにしました。`0.2.1-alpha.1` は `0.2.0-rc.2` に対して、このプラグインが読むすべての API をファイル単位で照合済みです。設定コントローラー、`configForms`、`plugin-compatibility`、ロケールパック、モデルディレクトリ、`conversation.input.model` シート契約（依然 `{ locked }`）、`modelDirectories` / `remote.session` の両面はいずれもバイト単位で同一で、pi-ai は 0.87.1 のままで各ゲートの offer 集合も変わりません（completions 19 / responses 4 / anthropic 7 / bedrock 1、追加された `mistral-conversations` は依然 0 フィールド）。このリリースの破壊的変更もこのプラグインには届きません。`./invariant` エントリを一切インポートせず、入力欄統計拡張も登録せず、サブパス指定子ではなくパッケージルート指定子として構成されているためです（新しい規則で `package.json` を読むのはパッケージルート指定子だけです）。以前は `0.2.1` がどのウィンドウにも入らず（未マップ）、プラグインは動作を続けるものの実行中のホストが報告する能力に従う形へ縮退していました。現在は `0.1.7` と同じ検証済みの経路を通ります。
+
+### 変更
+
+- リポジトリのツールチェーンを npm から pnpm へ移行しました。`package-lock.json` を削除し、`pnpm-lock.yaml` と `pnpm-workspace.yaml` をコミット対象に変更しました。CI と公開 workflow は `pnpm install --frozen-lockfile`、`pnpm run ...`、`pnpm pack`、`pnpm audit` を使い、`setup-node` のキャッシュは `pnpm` に切り替えました。lockfile キャッシュと監査ゲートは変更していません。workflow ガードの `test:release` も Pull Request 段階の CI に加わり、公開 workflow の構造アサーションがマージ前に検査されます。
+
+### セキュリティ
+
+- 移行後に pnpm で監査をやり直し、`source-map-js` を 1.2.1 から 1.2.2 へ引き上げ（開発依存 `jsdom` が推移的に取り込みます）、`vitest` を 3.2.7 から 4.1.11 へ上げました。後者は `tinypool` に依存しなくなり、critical 2 件を解消します。`pnpm audit --audit-level high` は現在 0 件です。`undici` は移行前から 7.30.0 で、今回は変更していません。いずれも devDependencies であり、公開パッケージの実行時依存グラフ（`schemastery` と `yaml` のみ）には入りません。任意の `--provenance` と OIDC 公開経路は pnpm 11 がネイティブに実装しており、workflow でも維持しています。
+
 ## [0.3.7] - 2026-10-01
 
 ### 修正
