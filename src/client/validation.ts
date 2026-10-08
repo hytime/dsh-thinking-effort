@@ -50,10 +50,13 @@ export function validateContextWindow(
 ): { value?: number; error?: string } {
   if (!draft) return { value: undefined }
   if (draft.oneMillion) return { value: CONTEXT_1M }
-  const raw = typeof draft.value === 'string' ? draft.value.trim() : ''
+  const raw = typeof draft.value === 'string' ? draft.value.trim().toLowerCase() : ''
   if (raw === '') return { value: undefined }
-  if (!/^\d+$/.test(raw)) return { error: translate('contextInteger') }
-  const value = Number(raw)
+  // `k` (any case) stands in for the three trailing zeros, so `32k` is 32000.
+  // The stored value stays a plain integer; only the typed form accepts the suffix.
+  const thousands = /^(\d+)\s*k$/.exec(raw)
+  if (thousands === null && !/^\d+$/.test(raw)) return { error: translate('contextInteger') }
+  const value = thousands === null ? Number(raw) : Number(thousands[1]) * 1000
   if (!Number.isSafeInteger(value) || value < CONTEXT_MIN || value > CONTEXT_MAX) return { error: translate('contextRange') }
   return { value }
 }

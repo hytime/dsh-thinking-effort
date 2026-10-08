@@ -47,7 +47,7 @@
   "pageTitle": "模型能力与档位",
   "subagentCardTitle": "子 agent 默认档位",
   "inputCapabilityMinimum": "至少启用一种输入能力",
-  "contextInteger": "上下文长度必须是整数（2000-1000000）",
+  "contextInteger": "上下文长度须为整数或用 k 表示千位（如 32k），范围 2000-1000000",
   "contextRange": "上下文长度必须在 2000 到 1000000 之间",
   "saveMissingNamespace": "保存成功但未返回最新设置",
   "settingsUpdated": "设置已更新",

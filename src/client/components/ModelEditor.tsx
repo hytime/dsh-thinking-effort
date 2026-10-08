@@ -1,5 +1,5 @@
 import React from 'react'
-import { ALL_LEVELS, CONTEXT_1M, CONTEXT_MAX, CONTEXT_MIN, LEVEL_LABEL_KEYS } from '../constants.js'
+import { ALL_LEVELS, CONTEXT_1M, LEVEL_LABEL_KEYS } from '../constants.js'
 import { GATEWAY_COMPAT_FIELD_KEYS, type GatewayCompatFieldKey } from '../../compat/gateway/fields.js'
 import type { ContextDraft, DraftCell, InputDraft, InventoryItem, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ReasoningDraft, Translation } from '../types.js'
 import type { Palette } from '../theme.js'
@@ -65,7 +65,7 @@ export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '8px', marginBottom: '8px' }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) auto', alignItems: 'center', gap: '8px', minWidth: 0, padding: '8px', border: `0.5px solid ${palette.border}`, borderRadius: '6px', backgroundColor: palette.field }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 650 }}><Icon name="context" size={15} /><span>{t('contextLength')}</span></span>
-        <input type="number" inputMode="numeric" min={CONTEXT_MIN} max={CONTEXT_MAX} step={1} value={contextDraft.oneMillion ? String(CONTEXT_1M) : contextDraft.value} disabled={busy || contextDraft.oneMillion} placeholder={t('providerDefaultShort')} aria-label={t('contextLength')} onChange={(event) => onContextChange(event.currentTarget.value)} style={{ boxSizing: 'border-box', width: '100%', minWidth: 0, height: '30px', padding: '0 8px', border: `0.5px solid ${palette.border}`, borderRadius: '6px', fontSize: '13px', backgroundColor: palette.group, color: palette.text, outline: 'none' }} />
+        <input type="text" inputMode="text" value={contextDraft.oneMillion ? String(CONTEXT_1M) : contextDraft.value} disabled={busy || contextDraft.oneMillion} placeholder={t('providerDefaultShort')} aria-label={t('contextLength')} onChange={(event) => onContextChange(event.currentTarget.value)} style={{ boxSizing: 'border-box', width: '100%', minWidth: 0, height: '30px', padding: '0 8px', border: `0.5px solid ${palette.border}`, borderRadius: '6px', fontSize: '13px', backgroundColor: palette.group, color: palette.text, outline: 'none' }} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', minWidth: 0, fontSize: '12px', whiteSpace: 'nowrap' }}><span>{t('oneMillionMode')}</span><SwitchControl checked={contextDraft.oneMillion} onChange={onOneMillionChange} disabled={busy} label={t('oneMillionMode')} palette={palette} /></div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr) minmax(0, 1fr)', alignItems: 'center', gap: '8px', minWidth: 0, padding: '8px', border: `0.5px solid ${palette.border}`, borderRadius: '6px', backgroundColor: palette.field }}>

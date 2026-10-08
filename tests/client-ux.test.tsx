@@ -2031,6 +2031,31 @@ describe('SectionEditor user behavior', () => {
     view.unmount()
   })
 
+  it('accepts a k suffix in the context field and normalizes it to the stored integer', async () => {
+    const saved = namespace({ revision: 3 })
+    const view = renderEditor({
+      mutate: async (_ns, _ops, _revision) => ({ ok: true as const, value: saved }),
+    })
+    await settle()
+    openFirstModel(view.container)
+
+    // Turn on a thinking level so the model is savable (an off-only draft is blocked).
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    const context = view.container.querySelector(`input[aria-label="${text('contextLength')}"]`) as HTMLInputElement
+    act(() => {
+      setValue(context, '32k')
+    })
+    act(() => button(view.container, text('saveModelChanges')).click())
+    await settle()
+
+    const ops = view.mutate.mock.calls[0]?.[1] as SettingsOp[]
+    const model = (ops[0]?.value as Array<Record<string, unknown>>)[0]
+    expect(model.contextWindow).toBe(32000)
+    // After a successful save the field shows the stored integer, not the typed `32k`.
+    expect(context.value).toBe('32000')
+    view.unmount()
+  })
+
   it('saves the selected subagent effort and writes the configured namespace key', async () => {
     const view = renderEditor()
     await settle()
@@ -2453,6 +2478,28 @@ describe('SectionEditor configForms write path', () => {
     expect(view.container.textContent).toContain(text('modelSettingsSaved'))
     expect(view.container.textContent).toContain(text('quickSettings'))
     expect(view.container.querySelector('[role="alert"]')).toBeNull()
+    view.unmount()
+  })
+
+  it('normalizes a k-suffixed context to the stored integer on the form transport', async () => {
+    const form = formDouble()
+    const view = renderEditor({ formFor: (entryId) => (entryId === 'llm-pi-ai' ? form : undefined) })
+    await settle()
+    openFirstModel(view.container)
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+    const context = view.container.querySelector(`input[aria-label="${text('contextLength')}"]`) as HTMLInputElement
+    act(() => {
+      setValue(context, '32k')
+    })
+    act(() => button(view.container, text('saveModelChanges')).click())
+    await settle()
+
+    const ops = form.mutate.mock.calls[0]?.[0] as SettingsOp[]
+    const model = (ops[0]?.value as Array<Record<string, unknown>>)[0]
+    expect(model.contextWindow).toBe(32000)
+    // The write path and the normalization both survived the form re-read.
+    expect(view.container.textContent).toContain(text('modelSettingsSaved'))
+    expect((view.container.querySelector(`input[aria-label="${text('contextLength')}"]`) as HTMLInputElement).value).toBe('32000')
     view.unmount()
   })
 

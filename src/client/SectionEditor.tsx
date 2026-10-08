@@ -25,6 +25,11 @@ import { renderGatewayCompatControls } from './components/GatewayCompatControls.
 
 const PLUGIN_VERSION = packageJson.version
 
+// How long the success badge floats in the panel's top-right before it fades
+// on its own. Every field edit clears the notice (they set notice: null), so a
+// later save re-shows it and restarts this countdown.
+const NOTICE_DISMISS_MS = 3000
+
 type DirtyFields = { levels?: boolean; context?: boolean; input?: boolean }
 
 interface RunOpsRequest {
@@ -346,7 +351,13 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
    * and would otherwise lose the "saved" notice the legacy path shows.
    */
   const load = (notice: string | null = null): void => {
-    setState((current) => ({ ...current, loading: true, error: null }))
+    // Only the first read — before any inventory is on screen — swaps the page
+    // for the loading placeholder. A save refreshes through here too, and
+    // collapsing a populated list to one line shrinks the document height, which
+    // is what yanked the panel back to the top (losing the user's scroll and the
+    // row they had just edited) on every save. Keeping the current list mounted
+    // while the re-read is in flight preserves that position.
+    setState((current) => ({ ...current, loading: current.inventory.length === 0, error: null }))
     settings.describe().then((response) => {
       if (!response.ok) {
         setState((current) => ({ ...current, loading: false, busy: false, error: response.error.message }))
@@ -403,6 +414,14 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       return { ...current, providerViews, providerDrafts, modelCompatViews, modelCompatDrafts }
     })
   }, [takeoverResolution])
+
+  React.useEffect(() => {
+    if (state.notice === null) return undefined
+    const timer = setTimeout(() => {
+      setState((current) => (current.notice === null ? current : { ...current, notice: null }))
+    }, NOTICE_DISMISS_MS)
+    return () => clearTimeout(timer)
+  }, [state.notice])
 
   /**
    * Re-read one section as the document now stands, so a write refused as stale
@@ -596,7 +615,21 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       },
       successMessage: t('modelSettingsSaved'),
       onSuccess: () => {
-        setState((current) => ({ ...current, dirty: removeDirtyFields(current.dirty, key, ['levels', 'context', 'input']) }))
+        // Normalize the context field to the integer that was actually stored:
+        // a `32k` entry would otherwise keep echoing the typed form, which no
+        // longer matches the row's canonical value. `1M` mode renders from the
+        // toggle, so its draft is left alone.
+        setState((current) => {
+          const base = current.contextDrafts[key] ?? contextDraftFrom(item)
+          const draft = contextDraft.touched && context.value !== undefined && contextDraft.oneMillion !== true
+            ? { ...base, value: String(context.value), previousValue: String(context.value) }
+            : current.contextDrafts[key]
+          return {
+            ...current,
+            dirty: removeDirtyFields(current.dirty, key, ['levels', 'context', 'input']),
+            contextDrafts: draft === undefined ? current.contextDrafts : { ...current.contextDrafts, [key]: draft },
+          }
+        })
       },
     })
   }
@@ -853,8 +886,9 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   const languageOptions: Array<[string, string]> = [['zh', 'languageChinese'], ['en', 'languageEnglish'], ['ja', 'languageJapanese'], ['ko', 'languageKorean']]
 
   return <div style={{ position: 'relative', maxWidth: '920px', margin: '0 auto', padding: '6px 8px 34px', color: palette.text, fontFamily: '-apple-system, BlinkMacSystemFont, SF Pro Text, Segoe UI, sans-serif' }}>
+    {state.notice ? <div style={{ position: 'sticky', top: '8px', zIndex: 20, height: 0, pointerEvents: 'none' }}><div role="status" aria-live="polite" style={{ position: 'absolute', right: '8px', top: 0, pointerEvents: 'auto', display: 'inline-flex', alignItems: 'center', gap: '5px', maxWidth: 'calc(100% - 16px)', padding: '6px 10px', border: `1px solid ${palette.accentBorder}`, borderRadius: '8px', color: palette.accent, backgroundColor: palette.accentSoft, boxShadow: palette.shadow, fontSize: '12px', lineHeight: '16px', fontWeight: 650 }}><Icon name="check" size={13} />{state.notice}</div></div> : null}
     <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', fontSize: '12px', marginBottom: '4px' }}>{t('languageLabel')}<select value={snapshot.active} onChange={(event) => locale.setLocale?.(event.currentTarget.value)} style={{ height: '26px', padding: '0 7px', border: `1px solid ${palette.border}`, borderRadius: '7px', backgroundColor: palette.field, color: palette.text, fontSize: '12px' }}>{languageOptions.map(([id, key]) => available.has(id) ? <option key={id} value={id}>{t(key)}</option> : null)}</select></label>
-    <h3 style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: '8px', rowGap: '4px', fontSize: '18px', lineHeight: '24px', fontWeight: 700, letterSpacing: 0, margin: '0 0 7px' }}><Icon name="sliders" size={19} /><span>{t('pageTitle')}</span>{state.notice ? <span role="status" aria-live="polite" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginLeft: 'auto', padding: '2px 6px', border: `1px solid ${palette.accentBorder}`, borderRadius: '6px', color: palette.accent, backgroundColor: palette.accentSoft, fontSize: '11px', lineHeight: '16px', fontWeight: 650 }}><Icon name="check" size={12} />{state.notice}</span> : null}</h3>
+    <h3 style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: '8px', rowGap: '4px', fontSize: '18px', lineHeight: '24px', fontWeight: 700, letterSpacing: 0, margin: '0 0 7px' }}><Icon name="sliders" size={19} /><span>{t('pageTitle')}</span></h3>
     {state.error ? <div role="alert" aria-live="assertive" style={{ fontSize: '12px', lineHeight: '18px', color: palette.danger, backgroundColor: palette.dangerBg, border: `1px solid ${palette.dangerBorder}`, borderRadius: '8px', padding: '6px 8px', margin: '0 0 8px' }}>{state.error}</div> : null}
     <SubagentSettings effort={state.subagent?.effort ?? null} namespaceFound={state.subagent !== null} draft={state.subagentDraft} custom={state.subagentCustom} busy={state.busy} palette={palette} t={t} onDraftChange={(value) => setState((current) => ({ ...current, notice: null, subagentDraft: value }))} onCustomChange={(value) => setState((current) => ({ ...current, notice: null, subagentCustom: value }))} onSave={applySubagentEffort} />
     <ConfigBackupCard settings={settings} palette={palette} t={t} onApplied={load} />

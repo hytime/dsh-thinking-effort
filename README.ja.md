@@ -203,7 +203,7 @@ DSH 0.1.7 は `settings.yaml` の名前を変更して一度だけ取り込み�
 
 ### 設定ページの構成
 
-ページ上部に言語セレクターがあります。その下の **Subagent default effort** カードは明示値のないリクエストの既定値を管理します。**Quick settings** は一括プリセットを適用します。プロバイダーとモデルの一覧は展開/折りたたみができ、各モデル行に入力能力、コンテキスト長、ゲートウェイ互換値の編集領域が表示されます。`models[]` の保存は配列インデックス path op ではなく、配列全体の set を使用します。
+ページ上部に言語セレクターがあります。その下の **Subagent default effort** カードは明示値のないリクエストの既定値を管理します。**Quick settings** は一括プリセットを適用します。プロバイダーとモデルの一覧は展開/折りたたみができ、各モデル行に入力能力、コンテキスト長、ゲートウェイ互換値の編集領域が表示されます。`models[]` の保存は配列インデックス path op ではなく、配列全体の set を使用します。コンテキスト長入力欄では千の単位として `k`（大文字小文字を問わない）を使えます。たとえば `32k` は `32000` です。
 
 ![日本語版 Model capabilities and effort 設定ページ](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/screenshots/plugin-ja-settings-expanded.png)
 
