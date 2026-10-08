@@ -18,10 +18,10 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 - 「模型能力与档位」面板保存后不再强制跳回页面顶部：保存触发的重新读取会保留当前模型列表（仅在首次读取、列表尚未加载时才显示加载占位），因此滚动位置和刚编辑的行保持不变。
 - 成功提示改为钉在设置面板右上角的浮层，不再内联嵌在标题栏顶部；用 `position: sticky` 实现——横向锁在面板内、纵向钉在视口顶部，面板里滚到哪里都一直可见，并在约 3 秒后自动消失（任何字段编辑都会清掉提示，所以再次保存会重新显示并重新计时）。
-- 上下文长度输入现在接受用 `k`（大小写均可）代替三个零，例如 `32k` 等于 `32000`；存储的仍是整数，错误提示已同步更新。
+- 上下文长度输入现在接受用 `k`（大小写均可）按 1024 倍换算，例如 `64k` 等于 `65536`；存储的仍是整数，错误提示已同步更新。
 - The 模型能力与档位 / model capability panel no longer jumps to the top after a save: the refresh a save triggers keeps the current model list mounted (the loading placeholder now appears only on the first read, before anything is loaded), so the scroll position and the row you just edited stay in place.
 - The success notice is now a floating badge anchored to the settings panel's top-right corner instead of an inline pill in the page title. It uses `position: sticky` so it stays pinned to the panel's right edge and visible no matter how far you scroll within the panel, and it fades out on its own after about 3 seconds (any field edit clears it, so a later save re-shows it and restarts the countdown).
-- The context length field now accepts `k` (any case) in place of the three trailing zeros, so `32k` means `32000`; the stored value is still an integer and the validation message was updated to match.
+- The context length field now accepts `k` (any case) as a ×1024 multiplier, so `64k` means `65536`; the stored value is still an integer and the validation message was updated to match.
 
 ## [0.3.8] - 2026-10-07
 

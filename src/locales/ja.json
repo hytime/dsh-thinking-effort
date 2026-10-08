@@ -47,7 +47,7 @@
   "pageTitle": "モデルの能力と推論強度",
   "subagentCardTitle": "Subagent の既定の推論強度",
   "inputCapabilityMinimum": "少なくとも 1 つの入力能力を有効にしてください",
-  "contextInteger": "コンテキスト長は整数、または千の単位を表す k（例: 32k）で入力してください（2000-1000000）",
+  "contextInteger": "コンテキスト長は整数、または 1024 倍を表す k（例: 64k = 65536）で入力してください（2000-1000000）",
   "contextRange": "コンテキスト長は 2000 から 1000000 の範囲で指定してください",
   "saveMissingNamespace": "保存しましたが、最新の設定が返されませんでした",
   "settingsUpdated": "設定を更新しました",

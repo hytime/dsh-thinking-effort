@@ -2050,9 +2050,9 @@ describe('SectionEditor user behavior', () => {
 
     const ops = view.mutate.mock.calls[0]?.[1] as SettingsOp[]
     const model = (ops[0]?.value as Array<Record<string, unknown>>)[0]
-    expect(model.contextWindow).toBe(32000)
+    expect(model.contextWindow).toBe(32768)
     // After a successful save the field shows the stored integer, not the typed `32k`.
-    expect(context.value).toBe('32000')
+    expect(context.value).toBe('32768')
     view.unmount()
   })
 
@@ -2496,10 +2496,10 @@ describe('SectionEditor configForms write path', () => {
 
     const ops = form.mutate.mock.calls[0]?.[0] as SettingsOp[]
     const model = (ops[0]?.value as Array<Record<string, unknown>>)[0]
-    expect(model.contextWindow).toBe(32000)
+    expect(model.contextWindow).toBe(32768)
     // The write path and the normalization both survived the form re-read.
     expect(view.container.textContent).toContain(text('modelSettingsSaved'))
-    expect((view.container.querySelector(`input[aria-label="${text('contextLength')}"]`) as HTMLInputElement).value).toBe('32000')
+    expect((view.container.querySelector(`input[aria-label="${text('contextLength')}"]`) as HTMLInputElement).value).toBe('32768')
     view.unmount()
   })
 

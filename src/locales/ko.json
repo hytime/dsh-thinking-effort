@@ -47,7 +47,7 @@
   "pageTitle": "모델 기능 및 추론 강도",
   "subagentCardTitle": "Subagent 기본 추론 강도",
   "inputCapabilityMinimum": "입력 기능을 하나 이상 활성화하세요",
-  "contextInteger": "컨텍스트 길이는 정수 또는 천 단위를 나타내는 k(예: 32k)로 입력하세요 (2000-1000000)",
+  "contextInteger": "컨텍스트 길이는 정수 또는 1024 배를 나타내는 k(예: 64k = 65536)로 입력하세요 (2000-1000000)",
   "contextRange": "컨텍스트 길이는 2000에서 1000000 사이여야 합니다",
   "saveMissingNamespace": "저장했지만 최신 설정을 받지 못했습니다",
   "settingsUpdated": "설정이 업데이트되었습니다",
