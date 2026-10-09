@@ -86,7 +86,7 @@ profile은 공식 DSH CLI로 관리하세요. 일반 `pnpm install`은 DSH profi
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 특정 버전 설치
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.9
 
 # 업데이트
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
