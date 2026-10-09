@@ -113,7 +113,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.9
 ```
 
 官方 CLI 会同时更新 profile 依赖、锁文件和 `dsh.profile.bundles`，无需手工追加 YAML。
@@ -148,7 +148,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.9
 ```
 
 如果旧依赖已经被其他工具移除，但 profile 的 bundle 列表仍残留旧名称，先从旧 profile 的 `pnpm-lock.yaml` 找到旧 GitHub commit，再使用官方命令恢复并移除：
@@ -156,7 +156,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.9
 ```
 
 不要把 `dsh-thinking-effort` 添加到新的 `dsh.profile.bundles` 中。
@@ -274,7 +274,7 @@ DSH 0.1.7 会把 `settings.yaml` 重命名并只导入一次，而更早版本�
 
 ### 设置页界面
 
-页面顶部是语言选择器；其下方的「子 agent 默认档位」卡片控制没有显式档位的请求。「一键设置」负责批量应用预设。供应商和模型列表支持展开/收起；每个模型行显示输入能力、上下文长度，并在设置区域提供网关兼容控件。`models[]` 保存使用完整数组 set，而不是数组索引 path op。
+页面顶部是语言选择器；其下方的「子 agent 默认档位」卡片控制没有显式档位的请求。「一键设置」负责批量应用预设。供应商和模型列表支持展开/收起；每个模型行显示输入能力、上下文长度，并在设置区域提供网关兼容控件。`models[]` 保存使用完整数组 set，而不是数组索引 path op。上下文长度输入还支持用 `k`（大小写不限）表示 1024 倍，例如 `64k` 即 `65536`。页面按与 `dsh-web-mobile` 相同的断点（1023px / 767px / 480px）在窄屏重排：成对字段降为单列、标签堆叠在控件上方、固定控件宽度被释放，因此手机上无需横向滚动即可操作。
 
 ![中文模型能力与档位设置页](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/screenshots/plugin-zh-settings-expanded.png)
 

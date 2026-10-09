@@ -90,7 +90,7 @@ Use the official DSH CLI to manage the plugin profile. A plain `pnpm install` do
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # Install a specific version
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.9
 
 # Upgrade
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -215,7 +215,7 @@ DSH `0.1.7` renames `settings.yaml` and imports it exactly once, and plugin rele
 
 ### Settings page layout
 
-The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and gateway compatibility controls in its settings area. `models[]` saves use one complete array set rather than an array-index path operation.
+The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and gateway compatibility controls in its settings area. `models[]` saves use one complete array set rather than an array-index path operation. The context length field also accepts `k` (any case) as a ×1024 multiplier, so `64k` means `65536`. The page reflows for narrow screens on the same breakpoints as `dsh-web-mobile` (1023px / 767px / 480px): paired fields become a single column, labels stack above their controls, and the fixed control widths are released, so the card stays usable on a phone without horizontal scrolling.
 
 ![English Model capabilities and effort settings page](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/screenshots/plugin-en-settings-expanded.png)
 

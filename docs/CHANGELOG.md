@@ -14,6 +14,24 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-10-09
+
+### 修复 / Fixed
+
+- 修复首次展开模型选择面板时的定位闪现：面板打开时会用绝对定位元素替换原本参与布局的触发器，而定位 effect 原先用 `useEffect`，浏览器已经绘制了初始 `left: 0` 帧后才测量并写入补偿偏移，于是首帧会在触发器原来的右侧短暂闪现。改用 `useLayoutEffect`，在绘制前完成测量。第二次打开时测量结果已存在，所以此前通常不会再现。
+- Fix the composer model panel flashing at the wrong position the first time it opens: opening replaces the laid-out trigger with an absolutely positioned panel, and the positioning effect ran in `useEffect`, so the browser had already painted an initial `left: 0` frame before the measurement and compensating offset were written. It now uses `useLayoutEffect`, which measures before paint. A second open rarely showed it because the measurement was already available.
+- 设置卡片在窄屏（手机竖屏）下溢出卡片边界、需要横向拖动才能看全：版面原先全部写成内联 `style`，而内联样式无法携带媒体查询，固定宽度与多列网格在窄屏不会重排。现在设置页的布局改为 `settings.module.css`，按 `dsh-web-mobile` 使用的同一组断点重排：≤1023px 取消徽标区的固定轨道，≤767px 成对的字段降为单列、1M 开关移到字段下方独占一行，≤480px 标签与控件全部纵向堆叠、136/140/180px 的固定下限与 154px 徽标轨道一并释放。实测把卡片钉到 280px 宽时，原先越界的上下文长度行与输入能力行不再越界；320px 及以上与改动前一致。只作用于本插件自己的类，未使用 `!important`，以免与 `dsh-web-mobile` 等改动核心 UI 的插件互相干扰。
+- Fix the settings card overflowing its bounds on narrow screens, which needed horizontal dragging to read: the layout was written entirely as inline `style` objects, and an inline style cannot carry a media query, so the fixed widths and multi-column grids never reflowed. The settings layout now lives in `settings.module.css` and reflows on the same breakpoints `dsh-web-mobile` uses: ≤1023px releases the badge cluster's fixed track, ≤767px collapses paired fields to one column and gives the 1M switch its own row, and ≤480px stacks every label above its control and drops the 136/140/180px floors and the 154px badge track. Pinned to a 280px card the context-length and input-capability rows — the two that used to stick out — now fit, and 320px and above are unchanged. The rules only ever touch this plugin's own classes and use no `!important`, so they cannot fight `dsh-web-mobile` or any other plugin that rewrites the core UI.
+
+### 变更 / Changed
+
+- 「模型能力与档位」面板保存后不再强制跳回页面顶部：保存触发的重新读取会保留当前模型列表（仅在首次读取、列表尚未加载时才显示加载占位），因此滚动位置和刚编辑的行保持不变。
+- 成功提示改为钉在设置面板右上角的浮层，不再内联嵌在标题栏顶部；用 `position: sticky` 实现——横向锁在面板内、纵向钉在视口顶部，面板里滚到哪里都一直可见，并在约 3 秒后自动消失（任何字段编辑都会清掉提示，所以再次保存会重新显示并重新计时）。
+- 上下文长度输入现在接受用 `k`（大小写均可）按 1024 倍换算，例如 `64k` 等于 `65536`；存储的仍是整数，错误提示已同步更新。
+- The model capability panel (模型能力与档位) no longer jumps to the top after a save: the refresh a save triggers keeps the current model list mounted (the loading placeholder now appears only on the first read, before anything is loaded), so the scroll position and the row you just edited stay in place.
+- The success notice is now a floating badge anchored to the settings panel's top-right corner instead of an inline pill in the page title. It uses `position: sticky` so it stays pinned to the panel's right edge and visible no matter how far you scroll within the panel, and it fades out on its own after about 3 seconds (any field edit clears it, so a later save re-shows it and restarts the countdown).
+- The context length field now accepts `k` (any case) as a ×1024 multiplier, so `64k` means `65536`; the stored value is still an integer and the validation message was updated to match.
+
 ## [0.3.8] - 2026-10-07
 
 ### 兼容性 / Compatibility

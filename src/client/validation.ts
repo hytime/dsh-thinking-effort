@@ -50,10 +50,13 @@ export function validateContextWindow(
 ): { value?: number; error?: string } {
   if (!draft) return { value: undefined }
   if (draft.oneMillion) return { value: CONTEXT_1M }
-  const raw = typeof draft.value === 'string' ? draft.value.trim() : ''
+  const raw = typeof draft.value === 'string' ? draft.value.trim().toLowerCase() : ''
   if (raw === '') return { value: undefined }
-  if (!/^\d+$/.test(raw)) return { error: translate('contextInteger') }
-  const value = Number(raw)
+  // `k` follows the binary convention the industry uses for token budgets, so
+  // `64k` is 65536 rather than 64000. The stored value stays a plain integer.
+  const kSuffix = /^(\d+)\s*k$/.exec(raw)
+  if (kSuffix === null && !/^\d+$/.test(raw)) return { error: translate('contextInteger') }
+  const value = kSuffix === null ? Number(raw) : Number(kSuffix[1]) * 1024
   if (!Number.isSafeInteger(value) || value < CONTEXT_MIN || value > CONTEXT_MAX) return { error: translate('contextRange') }
   return { value }
 }

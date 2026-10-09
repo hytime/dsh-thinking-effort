@@ -86,7 +86,7 @@ profile은 공식 DSH CLI로 관리하세요. 일반 `pnpm install`은 DSH profi
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 특정 버전 설치
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.8
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.9
 
 # 업데이트
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -203,7 +203,7 @@ DSH 0.1.7은 `settings.yaml`의 이름을 바꾸고 한 번만 가져오는데, 
 
 ### 설정 페이지 구성
 
-페이지 상단에는 언어 선택기가 있습니다. 그 아래의 **Subagent default effort** 카드는 명시적인 값이 없는 요청의 기본값을 관리합니다. **Quick settings**는 일괄 프리셋을 적용합니다. 제공자와 모델 목록은 펼치거나 접을 수 있으며, 각 모델 행에는 입력 기능, 컨텍스트 길이 및 게이트웨이 호환성 편집 영역이 표시됩니다. `models[]` 저장은 배열 인덱스 path op가 아니라 전체 배열 set을 사용합니다.
+페이지 상단에는 언어 선택기가 있습니다. 그 아래의 **Subagent default effort** 카드는 명시적인 값이 없는 요청의 기본값을 관리합니다. **Quick settings**는 일괄 프리셋을 적용합니다. 제공자와 모델 목록은 펼치거나 접을 수 있으며, 각 모델 행에는 입력 기능, 컨텍스트 길이 및 게이트웨이 호환성 편집 영역이 표시됩니다. `models[]` 저장은 배열 인덱스 path op가 아니라 전체 배열 set을 사용합니다. 컨텍스트 길이 입력란에서는 `k`(대소문자 무관)를 1024 배로 해석합니다. 예를 들어 `64k`는 `65536`입니다.페이지는 `dsh-web-mobile`과 같은 브레이크포인트(1023px / 767px / 480px)로 좁은 화면에 맞게 재배치됩니다. 짝지은 필드는 1열이 되고, 라벨은 컨트롤 위에 쌓이며, 고정 너비는 해제되어 휴대폰에서도 가로 스크롤 없이 사용할 수 있습니다.
 
 ![한국어 Model capabilities and effort 설정 페이지](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/screenshots/plugin-ko-settings-expanded.png)
 

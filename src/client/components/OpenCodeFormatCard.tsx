@@ -18,6 +18,7 @@ import type { Palette } from '../theme.js'
 import { revisionOf } from '../types.js'
 import { isSettingsConflict } from '../../shared/conflict.js'
 import type { SettingsApi, SettingsDescribeValue, SettingsNamespace, Translation } from '../types.js'
+import css from '../settings.module.css'
 
 /**
  * Localization keys for the five generator modes. Typed as a complete map over
@@ -302,7 +303,7 @@ export function OpenCodeFormatCard({ settings, palette, t, revision, namespace =
   const textField = (field: FormatField, labelKey: string): React.ReactElement => {
     const problem = errorFor(field)
     return <div style={{ display: 'grid', gap: '3px' }}>
-      <label style={rowStyle}>
+      <label className={css.wideFieldRow}>
         <span style={labelStyle}>{t(labelKey)}</span>
         <input
           type="text"
@@ -377,11 +378,11 @@ export function OpenCodeFormatCard({ settings, palette, t, revision, namespace =
           detail: state.unsupportedStored.map((entry) => `${t(ENUM_LABEL_KEYS[entry.field]!)} → ${entry.fallback}`).join(', '),
         })}
       </div>}
-      <label style={rowStyle}>
+      <label className={css.wideFieldRow}>
         <span style={labelStyle}>{t('formatModeLabel')}</span>
         {modeSelect}
       </label>
-      {timeSelect === null ? null : <label style={rowStyle}>
+      {timeSelect === null ? null : <label className={css.wideFieldRow}>
         <span style={labelStyle}>{t('formatTimeLabel')}</span>
         {timeSelect}
       </label>}
@@ -389,7 +390,7 @@ export function OpenCodeFormatCard({ settings, palette, t, revision, namespace =
       {state.draft.mode === 'expression' ? textField('expression', 'formatExpressionLabel') : null}
       {state.draft.mode === 'script' ? textField('script', 'formatScriptLabel') : null}
       {textField('validate', 'formatValidateLabel')}
-      {state.draft.validate.trim() === '' ? null : <label style={rowStyle}>
+      {state.draft.validate.trim() === '' ? null : <label className={css.wideFieldRow}>
         <span style={labelStyle}>{t('formatOnInvalidLabel')}</span>
         <select
           value={state.draft.onInvalid}
@@ -408,10 +409,9 @@ export function OpenCodeFormatCard({ settings, palette, t, revision, namespace =
   </div>
 }
 
-const rowStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'auto minmax(0, 1fr)', alignItems: 'center', gap: '8px' }
 const labelStyle: React.CSSProperties = { fontSize: '12px', fontWeight: 600 }
 const selectStyle = (palette: Palette): React.CSSProperties => ({
-  height: '28px', minWidth: '180px', maxWidth: '100%', padding: '0 10px',
+  height: '28px', maxWidth: '100%', padding: '0 10px',
   border: `1px solid ${palette.border}`, borderRadius: '8px', fontSize: '13px',
   backgroundColor: palette.field, color: palette.text, colorScheme: 'light dark', boxShadow: palette.shadow,
 })

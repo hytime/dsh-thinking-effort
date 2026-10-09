@@ -17,6 +17,7 @@ import type { Palette } from './theme.js'
 import type { TakeoverRuntimeStore } from './takeover-runtime.js'
 import { iosPalette } from './theme.js'
 import { ActionButton, Icon } from './components/Controls.js'
+import css from './settings.module.css'
 import { ModelRow } from './components/ModelRow.js'
 import { SubagentSettings } from './components/SubagentSettings.js'
 import { ConfigBackupCard } from './components/ConfigBackupCard.js'
@@ -24,6 +25,11 @@ import { OpenCodeFormatCard } from './components/OpenCodeFormatCard.js'
 import { renderGatewayCompatControls } from './components/GatewayCompatControls.js'
 
 const PLUGIN_VERSION = packageJson.version
+
+// How long the success badge floats in the panel's top-right before it fades
+// on its own. Every field edit clears the notice (they set notice: null), so a
+// later save re-shows it and restarts this countdown.
+const NOTICE_DISMISS_MS = 3000
 
 type DirtyFields = { levels?: boolean; context?: boolean; input?: boolean }
 
@@ -346,7 +352,13 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
    * and would otherwise lose the "saved" notice the legacy path shows.
    */
   const load = (notice: string | null = null): void => {
-    setState((current) => ({ ...current, loading: true, error: null }))
+    // Only the first read — before any inventory is on screen — swaps the page
+    // for the loading placeholder. A save refreshes through here too, and
+    // collapsing a populated list to one line shrinks the document height, which
+    // is what yanked the panel back to the top (losing the user's scroll and the
+    // row they had just edited) on every save. Keeping the current list mounted
+    // while the re-read is in flight preserves that position.
+    setState((current) => ({ ...current, loading: current.inventory.length === 0, error: null }))
     settings.describe().then((response) => {
       if (!response.ok) {
         setState((current) => ({ ...current, loading: false, busy: false, error: response.error.message }))
@@ -403,6 +415,14 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       return { ...current, providerViews, providerDrafts, modelCompatViews, modelCompatDrafts }
     })
   }, [takeoverResolution])
+
+  React.useEffect(() => {
+    if (state.notice === null) return undefined
+    const timer = setTimeout(() => {
+      setState((current) => (current.notice === null ? current : { ...current, notice: null }))
+    }, NOTICE_DISMISS_MS)
+    return () => clearTimeout(timer)
+  }, [state.notice])
 
   /**
    * Re-read one section as the document now stands, so a write refused as stale
@@ -596,7 +616,21 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       },
       successMessage: t('modelSettingsSaved'),
       onSuccess: () => {
-        setState((current) => ({ ...current, dirty: removeDirtyFields(current.dirty, key, ['levels', 'context', 'input']) }))
+        // Normalize the context field to the integer that was actually stored:
+        // a `32k` entry would otherwise keep echoing the typed form, which no
+        // longer matches the row's canonical value. `1M` mode renders from the
+        // toggle, so its draft is left alone.
+        setState((current) => {
+          const base = current.contextDrafts[key] ?? contextDraftFrom(item)
+          const draft = contextDraft.touched && context.value !== undefined && contextDraft.oneMillion !== true
+            ? { ...base, value: String(context.value), previousValue: String(context.value) }
+            : current.contextDrafts[key]
+          return {
+            ...current,
+            dirty: removeDirtyFields(current.dirty, key, ['levels', 'context', 'input']),
+            contextDrafts: draft === undefined ? current.contextDrafts : { ...current.contextDrafts, [key]: draft },
+          }
+        })
       },
     })
   }
@@ -852,18 +886,19 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   const available = new Set(snapshot.locales?.map((entry) => entry.id).filter((id): id is string => typeof id === 'string') ?? ['zh', 'en', 'ja', 'ko'])
   const languageOptions: Array<[string, string]> = [['zh', 'languageChinese'], ['en', 'languageEnglish'], ['ja', 'languageJapanese'], ['ko', 'languageKorean']]
 
-  return <div style={{ position: 'relative', maxWidth: '920px', margin: '0 auto', padding: '6px 8px 34px', color: palette.text, fontFamily: '-apple-system, BlinkMacSystemFont, SF Pro Text, Segoe UI, sans-serif' }}>
-    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', fontSize: '12px', marginBottom: '4px' }}>{t('languageLabel')}<select value={snapshot.active} onChange={(event) => locale.setLocale?.(event.currentTarget.value)} style={{ height: '26px', padding: '0 7px', border: `1px solid ${palette.border}`, borderRadius: '7px', backgroundColor: palette.field, color: palette.text, fontSize: '12px' }}>{languageOptions.map(([id, key]) => available.has(id) ? <option key={id} value={id}>{t(key)}</option> : null)}</select></label>
-    <h3 style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: '8px', rowGap: '4px', fontSize: '18px', lineHeight: '24px', fontWeight: 700, letterSpacing: 0, margin: '0 0 7px' }}><Icon name="sliders" size={19} /><span>{t('pageTitle')}</span>{state.notice ? <span role="status" aria-live="polite" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginLeft: 'auto', padding: '2px 6px', border: `1px solid ${palette.accentBorder}`, borderRadius: '6px', color: palette.accent, backgroundColor: palette.accentSoft, fontSize: '11px', lineHeight: '16px', fontWeight: 650 }}><Icon name="check" size={12} />{state.notice}</span> : null}</h3>
+  return <div className={css.settingsRoot} style={{ color: palette.text, fontFamily: '-apple-system, BlinkMacSystemFont, SF Pro Text, Segoe UI, sans-serif' }}>
+    {state.notice ? <div style={{ position: 'sticky', top: '8px', zIndex: 20, height: 0, pointerEvents: 'none' }}><div role="status" aria-live="polite" style={{ position: 'absolute', right: '8px', top: 0, pointerEvents: 'auto', display: 'inline-flex', alignItems: 'center', gap: '5px', maxWidth: 'calc(100% - 16px)', padding: '6px 10px', border: `1px solid ${palette.accentBorder}`, borderRadius: '8px', color: palette.accent, backgroundColor: palette.accentSoft, boxShadow: palette.shadow, fontSize: '12px', lineHeight: '16px', fontWeight: 650 }}><Icon name="check" size={13} />{state.notice}</div></div> : null}
+    <label className={css.controlRowEnd} style={{ fontSize: '12px', marginBottom: '4px' }}>{t('languageLabel')}<select value={snapshot.active} onChange={(event) => locale.setLocale?.(event.currentTarget.value)} style={{ height: '26px', padding: '0 7px', border: `1px solid ${palette.border}`, borderRadius: '7px', backgroundColor: palette.field, color: palette.text, fontSize: '12px' }}>{languageOptions.map(([id, key]) => available.has(id) ? <option key={id} value={id}>{t(key)}</option> : null)}</select></label>
+    <h3 style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: '8px', rowGap: '4px', fontSize: '18px', lineHeight: '24px', fontWeight: 700, letterSpacing: 0, margin: '0 0 7px' }}><Icon name="sliders" size={19} /><span>{t('pageTitle')}</span></h3>
     {state.error ? <div role="alert" aria-live="assertive" style={{ fontSize: '12px', lineHeight: '18px', color: palette.danger, backgroundColor: palette.dangerBg, border: `1px solid ${palette.dangerBorder}`, borderRadius: '8px', padding: '6px 8px', margin: '0 0 8px' }}>{state.error}</div> : null}
     <SubagentSettings effort={state.subagent?.effort ?? null} namespaceFound={state.subagent !== null} draft={state.subagentDraft} custom={state.subagentCustom} busy={state.busy} palette={palette} t={t} onDraftChange={(value) => setState((current) => ({ ...current, notice: null, subagentDraft: value }))} onCustomChange={(value) => setState((current) => ({ ...current, notice: null, subagentCustom: value }))} onSave={applySubagentEffort} />
     <ConfigBackupCard settings={settings} palette={palette} t={t} onApplied={load} />
     <OpenCodeFormatCard settings={settings} palette={palette} t={t} revision={state.openCodeSessionReads} namespace={state.pluginSection?.ns ?? OPENCODE_SESSION_NS} onApplied={load} />
     {state.nsFound === false ? <p style={{ fontSize: '12px', opacity: 0.75 }}>{t('noNamespace')}</p> : <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: state.quickSettingsOpen ? '4px' : '6px' }}><ActionButton text={t('quickSettings')} onClick={() => setState((current) => ({ ...current, quickSettingsOpen: !current.quickSettingsOpen }))} disabled={state.busy} palette={palette} icon={state.quickSettingsOpen ? 'chevronUp' : 'sliders'} />{state.quickSettingsOpen ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flexBasis: '100%', padding: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.field }}>{PRESETS.map((preset) => <ActionButton key={preset.key} text={t(preset.labelKey)} onClick={() => { setState((current) => ({ ...current, quickSettingsOpen: false })); applyPreset(preset.levels) }} disabled={state.busy} palette={palette} icon={preset.key === 'official' ? 'sparkles' : 'sliders'} />)}</div> : null}</div>
+      <div className={css.controlRow} style={{ marginBottom: state.quickSettingsOpen ? '4px' : '6px' }}><ActionButton text={t('quickSettings')} onClick={() => setState((current) => ({ ...current, quickSettingsOpen: !current.quickSettingsOpen }))} disabled={state.busy} palette={palette} icon={state.quickSettingsOpen ? 'chevronUp' : 'sliders'} />{state.quickSettingsOpen ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flexBasis: '100%', padding: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.field }}>{PRESETS.map((preset) => <ActionButton key={preset.key} text={t(preset.labelKey)} onClick={() => { setState((current) => ({ ...current, quickSettingsOpen: false })); applyPreset(preset.levels) }} disabled={state.busy} palette={palette} icon={preset.key === 'official' ? 'sparkles' : 'sliders'} />)}</div> : null}</div>
       <div style={{ position: 'relative', marginBottom: '7px' }}><span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: palette.secondary, pointerEvents: 'none' }}><Icon name="search" size={15} /></span><input type="text" value={state.query} placeholder={t('searchPlaceholder')} onChange={(event) => { const value = event.currentTarget.value; setState((current) => ({ ...current, query: value })) }} style={{ boxSizing: 'border-box', width: '100%', height: '30px', padding: '0 10px 0 30px', border: `1px solid ${palette.border}`, borderRadius: '8px', fontSize: '13px', backgroundColor: palette.field, color: palette.text, outline: 'none', boxShadow: palette.shadow }} /></div>
       {state.loading ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{t('loading')}</div> : visible.length === 0 ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{state.inventory.length === 0 ? t('noModels') : t('noMatches')}</div> :
-         routes.map((route) => { const providerModels = visible.filter((item) => item.route === route); const providerOpen = query !== '' || state.expandedProviders[route] === true; return <div key={route} style={{ marginBottom: '6px' }}><div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'center', columnGap: '8px', minHeight: '32px', padding: '4px 6px', marginBottom: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.raised }}><span style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}><span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', minWidth: '22px', border: `1px solid ${palette.border}`, borderRadius: '7px', color: palette.secondary, backgroundColor: palette.group }}><Icon name="layers" size={14} /></span><span style={{ display: 'grid', gap: '1px', minWidth: 0 }}><span style={{ color: palette.text, fontSize: '12px', fontWeight: 700, overflowWrap: 'anywhere' }}>{route}</span><span style={{ color: palette.accent, fontSize: '10px', lineHeight: '11px', fontWeight: 700 }}>{t('vendor')}</span></span></span><span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: palette.secondary, whiteSpace: 'nowrap' }}><span>{t('modelCount', { count: providerModels.length })}</span>{query !== '' ? <span>{t('searchResults')}</span> : <ActionButton text="" onClick={() => toggleProvider(route)} palette={palette} tone="ghost" icon={providerOpen ? 'chevronUp' : 'chevronDown'} label={providerOpen ? t('collapseProvider') : t('expandProvider')} />}</span></div>{providerOpen && state.providerDrafts[route] ? <>
+         routes.map((route) => { const providerModels = visible.filter((item) => item.route === route); const providerOpen = query !== '' || state.expandedProviders[route] === true; return <div key={route} style={{ marginBottom: '6px' }}><div className={css.entityHeader} style={{ minHeight: '32px', padding: '4px 6px', marginBottom: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.raised }}><span style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}><span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', minWidth: '22px', border: `1px solid ${palette.border}`, borderRadius: '7px', color: palette.secondary, backgroundColor: palette.group }}><Icon name="layers" size={14} /></span><span style={{ display: 'grid', gap: '1px', minWidth: 0 }}><span style={{ color: palette.text, fontSize: '12px', fontWeight: 700, overflowWrap: 'anywhere' }}>{route}</span><span style={{ color: palette.accent, fontSize: '10px', lineHeight: '11px', fontWeight: 700 }}>{t('vendor')}</span></span></span><span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: palette.secondary, whiteSpace: 'nowrap' }}><span>{t('modelCount', { count: providerModels.length })}</span>{query !== '' ? <span>{t('searchResults')}</span> : <ActionButton text="" onClick={() => toggleProvider(route)} palette={palette} tone="ghost" icon={providerOpen ? 'chevronUp' : 'chevronDown'} label={providerOpen ? t('collapseProvider') : t('expandProvider')} />}</span></div>{providerOpen && state.providerDrafts[route] ? <>
           {renderGatewayCompatControls({ view: state.providerDrafts[route], onChange: (next) => patchProviderCompat(route, next), disabled: state.busy, expanded: state.providerCompatExpanded[route] === true, onToggleExpanded: () => toggleProviderCompatExpanded(route), availableCount: availableCompatFieldCount(state.providerDrafts[route]) }, { palette, t })}{state.providerDirty[route] ? <ActionButton text={t('saveGatewayCompat')} onClick={() => applyProviderCompat(route)} disabled={state.busy} tone="primary" palette={palette} icon="check" /> : null}</> : null}{providerOpen ? providerModels.map((item) => { const key = keyOf(item); const dirty = state.dirty[key] ?? {}; const compatAvailable = state.modelCompatViews[key] !== undefined; const openCodeSessionEditable = state.openCodeSessionAvailable && item.modelSourceConflict !== true; return <ModelRow key={`${key}-${item.inOverrides ? 'override' : item.index}`} item={item} open={state.expanded[key] === true} draft={state.drafts[key]} contextDraft={state.contextDrafts[key] ?? contextDraftFrom(item)} inputDraft={state.inputDrafts[key] ?? inputDraftFrom(item)} dirty={dirty.levels === true || dirty.context === true || dirty.input === true} busy={state.busy} palette={palette} t={t} onToggle={() => toggleExpand(item)} onLevelChange={(level, patch) => patchDraft(item, level, patch)} onContextChange={(value) => patchContextValue(item, value)} onOneMillionChange={(enabled) => setOneMillion(item, enabled)} onInputChange={(modality, enabled) => patchInputCapability(item, modality, enabled)} onSave={() => applyModel(item)} blockedReason={modelSaveBlockedReason(buildLevels(state.drafts[key] ?? {}), state.contextDrafts[key] ?? contextDraftFrom(item), state.inputDrafts[key] ?? inputDraftFrom(item), t)} onRestoreReasoning={() => restoreReasoningDefaults(item)} onRestoreCapability={() => restoreProviderDefaults(item)}
                          compatView={compatAvailable ? state.modelCompatDrafts[key] : undefined}
                           compatExpanded={state.modelCompatExpanded[key] === true}
