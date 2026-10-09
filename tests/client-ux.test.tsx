@@ -2056,6 +2056,98 @@ describe('SectionEditor user behavior', () => {
     view.unmount()
   })
 
+  it('keeps the loaded model list mounted while a save re-reads settings', async () => {
+    // A save on the configForms transport refreshes through `load()`. Swapping
+    // the populated list for the one-line loading placeholder collapses the
+    // document height, which is what reset the scroll position and lost the row
+    // just edited, so the placeholder must be reserved for the first read only.
+    // The re-read is held open so the in-flight state is what gets asserted.
+    const form: ConfigFormFace & { mutate: ReturnType<typeof vi.fn> } = {
+      getSnapshot: () => ({ revision: 2, writable: true }),
+      subscribe: () => () => undefined,
+      mutate: vi.fn(async () => true),
+      set: vi.fn(async () => true),
+      unset: vi.fn(async () => true),
+      dispose: vi.fn(async () => undefined),
+    }
+    let release: ((value: ClientResult<{ namespaces: readonly SettingsNamespace[] }>) => void) | undefined
+    const view = renderEditor({
+      formFor: (entryId) => (entryId === 'llm-pi-ai' ? form : undefined),
+      // Every read before the write answers straight away; the re-read the save
+      // triggers is the one held open, so the in-flight render is observable.
+      describe: () => (form.mutate.mock.calls.length === 0
+        ? Promise.resolve({ ok: true as const, value: { namespaces: [namespace()] } })
+        : new Promise((resolve) => { release = resolve })),
+    })
+    await settle()
+    openFirstModel(view.container)
+    act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+
+    const before = view.container.textContent ?? ''
+    expect(before).toContain('model-a')
+    expect(before).not.toContain(text('loading'))
+
+    act(() => button(view.container, text('saveModelChanges')).click())
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(form.mutate).toHaveBeenCalled()
+    // The re-read is in flight: the list must still be on screen.
+    expect(view.container.textContent).not.toContain(text('loading'))
+    expect(view.container.querySelector('input[aria-label="' + text('contextLength') + '"]')).not.toBeNull()
+
+    await act(async () => {
+      release?.({ ok: true as const, value: { namespaces: [namespace({ revision: 3 })] } })
+      await Promise.resolve()
+    })
+    await settle()
+    expect(view.container.textContent).not.toContain(text('loading'))
+    view.unmount()
+  })
+
+  it('still shows the loading placeholder on the first read', async () => {
+    let release: ((value: ClientResult<{ namespaces: readonly SettingsNamespace[] }>) => void) | undefined
+    const view = renderEditor({
+      describe: () => new Promise((resolve) => { release = resolve }),
+    })
+    // The mount-time read has not answered yet, so the placeholder is required.
+    expect(view.container.textContent).toContain(text('loading'))
+    await act(async () => {
+      release?.({ ok: true as const, value: { namespaces: [namespace()] } })
+      await Promise.resolve()
+    })
+    await settle()
+    expect(view.container.textContent).not.toContain(text('loading'))
+    view.unmount()
+  })
+  it('dismisses the success notice on its own after the countdown', async () => {
+    // The notice is a transient badge, so it must clear itself without another
+    // interaction. Nothing else observes the timer, which is why the countdown
+    // is pinned here rather than left to the manual browser check.
+    vi.useFakeTimers()
+    try {
+      const saved = namespace({ revision: 3 })
+      const view = renderEditor({
+        mutate: async (_ns, _ops, _revision) => ({ ok: true as const, value: saved }),
+      })
+      await settle()
+      openFirstModel(view.container)
+      act(() => button(view.container, `${text('levelMinimal')}${text('levelSuffix')}`).click())
+      act(() => button(view.container, text('saveModelChanges')).click())
+      await settle()
+      expect(view.container.textContent).toContain(text('modelSettingsSaved'))
+
+      // Just short of the deadline the badge is still up, so the assertion
+      // below cannot pass merely because the notice never rendered.
+      await act(async () => { vi.advanceTimersByTime(2500) })
+      expect(view.container.textContent).toContain(text('modelSettingsSaved'))
+
+      await act(async () => { vi.advanceTimersByTime(500) })
+      expect(view.container.textContent).not.toContain(text('modelSettingsSaved'))
+      view.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('saves the selected subagent effort and writes the configured namespace key', async () => {
     const view = renderEditor()
     await settle()
