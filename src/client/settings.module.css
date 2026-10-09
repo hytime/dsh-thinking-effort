@@ -1,0 +1,240 @@
+/**
+ * Layout for the settings page only.
+ *
+ * The settings UI was built from inline `style` objects, which cannot carry a
+ * media query: at phone widths the fixed `min-width`s and multi-column grids
+ * simply overflowed the panel. Inline styles also outrank every class selector,
+ * so a layout property that still sits in `style` cannot be overridden here —
+ * each one migrated below was REMOVED from its component rather than duplicated,
+ * and the two must not be written in both places again.
+ *
+ * Only layout lives here (display / columns / wrapping / min-width). Colours,
+ * borders, radii and shadows stay inline, because they come from the runtime
+ * palette and would otherwise have to be injected as CSS variables too.
+ *
+ * Breakpoints follow the ones `dsh-web-mobile` uses, so both plugins reflow at
+ * the same widths when they share a page:
+ *   <= 1023px  tablet portrait
+ *   <=  767px  large phone / phone landscape
+ *   <=  480px  phone portrait
+ * No `!important` anywhere, and no global element selectors: `dsh-web-mobile`
+ * rewrites core UI markup, so this file must only ever touch its own classes.
+ */
+
+/* The page shell. The cap stays a `max-width` rather than `width: min(100%, …)`:
+   padding sits outside a max-width box by default, and a border-box `width`
+   silently reclaimed those 16px from every row inside the card, which measured
+   as a narrower panel than before. The padding lives here rather than inline so
+   the phone breakpoint can narrow it. */
+.settingsRoot {
+  position: relative;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 6px 8px 34px;
+}
+
+/* A row of controls that may wrap (language picker, quick settings, buttons). */
+.controlRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.controlRowEnd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* Two or more fields side by side, each with its natural minimum. */
+.pairGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: 8px;
+}
+
+.pairGridTight {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  gap: 6px;
+}
+
+/* Label on the left, control on the right; the control keeps a readable floor
+   but may not push past the card. */
+.labelControlRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(min(110px, 40%), auto);
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+/* A control cluster that sits at the end of a header row (model badges, the
+   settings toggle). The base track keeps the desktop width it always had; the
+   breakpoints below release it so the badges can shrink instead of pushing the
+   row past the card. */
+.headerCluster {
+  display: grid;
+  grid-template-columns: 154px 28px;
+  align-items: center;
+  column-gap: 8px;
+  min-width: 0;
+}
+
+/* Provider / model header: name plus trailing cluster. */
+.entityHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  min-width: 0;
+}
+
+/* Context length row: label, field, 1M switch. As a single column the field
+   still spans comfortably, which is the layout a phone can actually use. */
+.contextRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Input-capability row: label plus the two modality switches. */
+.capabilityRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Wire-value row inside the effort table: level name, level label, input. */
+.levelRow {
+  display: grid;
+  grid-template-columns: 38px 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+/* The per-model badges: text, image, context summary. The context chip carries
+   a readable floor on desktop and gives it up when the row gets narrow. */
+.modelBadges {
+  display: grid;
+  grid-template-columns: 22px 22px minmax(86px, 1fr);
+  column-gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+/* A form row: fixed-ish control then its input. */
+.wideFieldRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+/* A select that should not force the card wider than the screen. */
+.responsiveSelect {
+  min-width: min(100%, 136px);
+}
+
+.responsiveSelectWide {
+  min-width: min(100%, 180px);
+}
+
+/* The free-text field beside a select: takes the remaining room, keeps a
+   readable floor, and gives it up on the narrowest screens. */
+.responsiveCustomInput {
+  flex: 1 1 160px;
+  min-width: min(100%, 140px);
+  box-sizing: border-box;
+}
+
+@media (max-width: 1023px) {
+  /* Tablet portrait: the badge cluster stops reserving a fixed track, so a long
+     model name takes the space instead of the row overflowing. */
+  .headerCluster {
+    grid-template-columns: minmax(0, auto) 28px;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Large phone / phone landscape: paired fields become one column. */
+  .pairGrid,
+  .pairGridTight {
+    grid-template-columns: 1fr;
+  }
+
+  .contextRow,
+  .capabilityRow {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  /* The 1M switch moves to its own line under the field rather than being
+     squeezed against it. */
+  .contextRow > :last-child,
+  .capabilityRow > :last-child {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Phone portrait: everything that was side by side stacks. */
+  .settingsRoot {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .labelControlRow,
+  .entityHeader,
+  .wideFieldRow {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 5px;
+  }
+
+  .headerCluster {
+    grid-template-columns: auto auto;
+  }
+
+  /* The context chip is the only badge with a minimum width; drop its floor so
+     the two 22px toggles always fit on a phone. */
+  .modelBadges {
+    grid-template-columns: 22px 22px minmax(0, 1fr);
+  }
+
+  .contextRow,
+  .capabilityRow {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 5px;
+  }
+
+  .levelRow {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  /* The level label is the least important cell; the input keeps the width. */
+  .levelRow > :nth-child(2) {
+    display: none;
+  }
+
+  .responsiveSelect,
+  .responsiveSelectWide {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .responsiveCustomInput {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .controlRowEnd {
+    justify-content: flex-start;
+  }
+}

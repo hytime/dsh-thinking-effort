@@ -80,6 +80,40 @@ function cssVendorPseudo(bundle: string, local: string, pseudo: string): string 
   return match![0]
 }
 
+/**
+ * The body of one `@media` block, found by the pixel width it keys on. Written
+ * as a brace walker rather than a lazy `[^}]*` because the block contains many
+ * nested `{...}` rule bodies, so it cannot be captured by a single character
+ * class.
+ */
+function mediaBlock(bundle: string, width: string): string {
+  const header = new RegExp(`@media \\((?:max-width: ?${width}px|width<=${width}px)\\)\\{`).exec(bundle)
+  if (header === null) return ''
+  let depth = 1
+  let index = header.index + header[0].length
+  const start = index
+  while (index < bundle.length && depth > 0) {
+    const char = bundle[index]
+    if (char === '{') depth += 1
+    else if (char === '}') depth -= 1
+    index += 1
+  }
+  return bundle.slice(start, index - 1)
+}
+
+/**
+ * One local's rule inside an already-extracted stylesheet fragment.
+ *
+ * lightningcss merges rules that share a body into a single selector list
+ * (`.x,.y,.z{...}`), so the local may appear anywhere in a comma-separated
+ * prefix rather than at the start of the rule.
+ */
+function classRuleIn(scope: string, local: string): string {
+  const match = new RegExp(`[^{}]*\\.[A-Za-z0-9_-]+_${local}(?:,[^{}]*)?\\{[^}]*\\}`).exec(scope)
+  expect(match, `${local} rule missing from the media block`).not.toBeNull()
+  return match![0]
+}
+
 function loadDescriptor(source: string): Descriptor {
   let descriptor: Descriptor | undefined
   vm.runInNewContext(source, {
@@ -559,5 +593,82 @@ describe('composer seat affordances', () => {
     // The label row is absolutely positioned, so it has to be told how tall it
     // is, and that height has to grow with the same scale.
     expect(cssRule(bundle, 'scale')).toContain('height:calc(20px + var(--dsh-content-font-delta-secondary,0px))')
+  })
+})
+
+describe('settings page responsive layout', () => {
+  /**
+   * The settings page was built from inline `style` objects, which cannot carry
+   * a media query, so at phone widths its fixed `min-width`s and multi-column
+   * grids overflowed the panel (issue #48). The layout now lives in
+   * `settings.module.css`, and these assertions run against the built artifact
+   * because the whole point is that the breakpoints survive the build: a
+   * lightningcss or tsdown change that dropped them would leave every jsdom
+   * test green while the phone layout silently regressed.
+   *
+   * lightningcss rewrites `@media (max-width: 480px)` to the range form
+   * `@media (width<=480px)`, so both spellings are accepted here.
+   */
+  const breakpoints = ['1023', '767', '480'] as const
+
+  it('ships the three breakpoints that reflow the panel', () => {
+    const bundle = readArtifact('lib/client.js')
+
+    for (const width of breakpoints) {
+      const maxWidth = new RegExp(`@media \\(max-width: ?${width}px\\)`)
+      const range = new RegExp(`@media \\(width<=${width}px\\)`)
+      expect(
+        maxWidth.test(bundle) || range.test(bundle),
+        `breakpoint ${width}px missing from the built client`,
+      ).toBe(true)
+    }
+  })
+
+  it('keeps every layout class the components reference in the bundle', () => {
+    const bundle = readArtifact('lib/client.js')
+
+    // `.settingsRoot` is deliberately not `.root`: the composer seat already
+    // owns that local name in its own stylesheet, and a duplicate made the
+    // seat's rule lookup pick up this file instead.
+    const locals = [
+      'settingsRoot',
+      'controlRow',
+      'controlRowEnd',
+      'pairGrid',
+      'pairGridTight',
+      'labelControlRow',
+      'entityHeader',
+      'headerCluster',
+      'modelBadges',
+      'contextRow',
+      'capabilityRow',
+      'levelRow',
+      'wideFieldRow',
+      'responsiveSelect',
+      'responsiveSelectWide',
+      'responsiveCustomInput',
+    ]
+
+    for (const local of locals) {
+      expect(() => cssRule(bundle, local), `${local} rule missing`).not.toThrow()
+    }
+  })
+
+  it('drops the phone-hostile fixed floors inside the narrow breakpoint', () => {
+    const bundle = readArtifact('lib/client.js')
+
+    // The 136px/140px/180px floors and the 154px badge track are what pushed the
+    // card past a 375px viewport, so each one needs a release in a narrow
+    // breakpoint — not just a `min()` on the base rule.
+    const phone = mediaBlock(bundle, '480')
+    expect(phone, 'no 480px breakpoint body').not.toBe('')
+    for (const local of ['responsiveSelect', 'responsiveSelectWide', 'responsiveCustomInput']) {
+      expect(classRuleIn(phone, local), `${local} must be released at 480px`).toMatch(/min-width:0/)
+    }
+    expect(classRuleIn(phone, 'modelBadges')).toContain('minmax(0,1fr)')
+
+    // The base rule keeps the desktop track, so the release above is a real
+    // change and not a no-op.
+    expect(cssRule(bundle, 'headerCluster')).toContain('154px')
   })
 })
