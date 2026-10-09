@@ -23,6 +23,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - The success notice is now a floating badge anchored to the settings panel's top-right corner instead of an inline pill in the page title. It uses `position: sticky` so it stays pinned to the panel's right edge and visible no matter how far you scroll within the panel, and it fades out on its own after about 3 seconds (any field edit clears it, so a later save re-shows it and restarts the countdown).
 - The context length field now accepts `k` (any case) as a ×1024 multiplier, so `64k` means `65536`; the stored value is still an integer and the validation message was updated to match.
 
+### 修复 / Fixed
+
+- 设置卡片在窄屏（手机竖屏）下溢出卡片边界、需要横向拖动才能看全：版面原先全部写成内联 `style`，而内联样式无法携带媒体查询，固定宽度与多列网格在窄屏不会重排。现在设置页的布局改为 `settings.module.css`，按 `dsh-web-mobile` 使用的同一组断点重排：≤1023px 取消徽标区的固定轨道，≤767px 成对的字段降为单列、1M 开关移到字段下方独占一行，≤480px 标签与控件全部纵向堆叠、136/140/180px 的固定下限与 154px 徽标轨道一并释放。实测把卡片钉到 280px 宽时，原先越界的上下文长度行与输入能力行不再越界；320px 及以上与改动前一致。只作用于本插件自己的类，未使用 `!important`，以免与 `dsh-web-mobile` 等改动核心 UI 的插件互相干扰。
+- Fix the settings card overflowing its bounds on narrow screens, which needed horizontal dragging to read: the layout was written entirely as inline `style` objects, and an inline style cannot carry a media query, so the fixed widths and multi-column grids never reflowed. The settings layout now lives in `settings.module.css` and reflows on the same breakpoints `dsh-web-mobile` uses: ≤1023px releases the badge cluster's fixed track, ≤767px collapses paired fields to one column and gives the 1M switch its own row, and ≤480px stacks every label above its control and drops the 136/140/180px floors and the 154px badge track. Pinned to a 280px card the context-length and input-capability rows — the two that used to stick out — now fit, and 320px and above are unchanged. The rules only ever touch this plugin's own classes and use no `!important`, so they cannot fight `dsh-web-mobile` or any other plugin that rewrites the core UI.
+
 ## [0.3.8] - 2026-10-07
 
 ### 兼容性 / Compatibility

@@ -4,6 +4,7 @@ import type { ModelGatewayCompatUpdate, ModelGatewayCompatView, ProviderGatewayC
 import { en } from '../locales.js'
 import type { Palette } from '../theme.js'
 import { iosPalette } from '../theme.js'
+import css from '../settings.module.css'
 
 export interface GatewayCompatGroupProps {
   readonly groupId: GatewayCompatGroupId
@@ -66,7 +67,7 @@ function renderField(
   if (spec.kind === 'number') {
     // A numeric field carries its selection as a string (like every other
     // field), so the empty value is `auto` and the write path parses it back.
-    return <label key={key} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(110px, auto)', alignItems: 'center', gap: '7px', minWidth: 0, fontSize: '12px', color: palette.text }}>
+    return <label key={key} className={css.labelControlRow} style={{ fontSize: '12px', color: palette.text }}>
       <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{t(spec.labelKey)}</span>
       <input
         aria-label={t(spec.labelKey)}
@@ -80,7 +81,7 @@ function renderField(
       />
     </label>
   }
-  return <label key={key} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(110px, auto)', alignItems: 'center', gap: '7px', minWidth: 0, fontSize: '12px', color: palette.text }}>
+  return <label key={key} className={css.labelControlRow} style={{ fontSize: '12px', color: palette.text }}>
     <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{t(spec.labelKey)}</span>
     <select aria-label={t(spec.labelKey)} value={value} disabled={disabled} onChange={(event) => onChange({ [key]: event.currentTarget.value } as Partial<ModelGatewayCompatUpdate>)} style={selectStyle(palette)}>
       {fieldOptions(spec, t).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -96,7 +97,7 @@ export function GatewayCompatGroup({ groupId, view, onChange, disabled = false, 
   const titleKey = GATEWAY_COMPAT_GROUPS.find((group) => group.id === groupId)?.titleKey ?? groupId
   return <div style={{ display: 'grid', gap: '4px' }}>
     <div style={{ fontSize: '11px', fontWeight: 700, color: palette.secondary }}>{t(titleKey)}</div>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '6px' }}>
+    <div className={css.pairGridTight}>
       {available.map((spec) => renderField(spec, view, onChange, disabled, palette, t))}
     </div>
   </div>
