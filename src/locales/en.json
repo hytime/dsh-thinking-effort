@@ -47,7 +47,7 @@
   "pageTitle": "Model capabilities and effort",
   "subagentCardTitle": "Subagent default effort",
   "inputCapabilityMinimum": "Enable at least one input capability",
-  "contextInteger": "Context length must be an integer (2000-1000000)",
+  "contextInteger": "Context length must be an integer or a k value meaning ×1024 (e.g. 64k = 65536), range 2000-1000000",
   "contextRange": "Context length must be between 2000 and 1000000",
   "saveMissingNamespace": "Saved, but the latest settings were not returned",
   "settingsUpdated": "Settings updated",

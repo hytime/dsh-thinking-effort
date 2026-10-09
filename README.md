@@ -215,7 +215,7 @@ DSH `0.1.7` renames `settings.yaml` and imports it exactly once, and plugin rele
 
 ### Settings page layout
 
-The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and gateway compatibility controls in its settings area. `models[]` saves use one complete array set rather than an array-index path operation.
+The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and gateway compatibility controls in its settings area. `models[]` saves use one complete array set rather than an array-index path operation. The context length field also accepts `k` (any case) as a ×1024 multiplier, so `64k` means `65536`.
 
 ![English Model capabilities and effort settings page](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/screenshots/plugin-en-settings-expanded.png)
 
