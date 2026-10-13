@@ -241,6 +241,7 @@ export interface ClientContext {
   /** Mount a named Cordis plugin with its own static service dependencies. */
   plugin(plugin: { name?: string; inject?: readonly string[]; apply: (scope: ClientContext) => void }): unknown
   on(event: 'internal/service', callback: (name: string) => void): unknown
+  on(event: 'connection/reset', callback: () => void): unknown
   effect(callback: () => void | (() => void), label?: string): unknown
 }
 
