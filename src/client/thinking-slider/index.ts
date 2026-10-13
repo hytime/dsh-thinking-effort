@@ -19,7 +19,7 @@
  */
 import { createElement } from 'react'
 import { LOCALE_NS } from '../constants.js'
-import { asModelDirectories, hasSessionRemote, modelDirectoryCompatibility, type ModelDirectoriesSeam } from '../../compat/model-directory.js'
+import { asModelDirectories, createModelDirectoryFaceResolver, hasSessionRemote, modelDirectoryCompatibility } from '../../compat/model-directory.js'
 import type { ClientContext, ClientLocale, ClientSlots, Translation } from '../types.js'
 import { Slider } from './slider.js'
 import type { ModelDirectoryState, ModelSelection } from './slider.js'
@@ -63,22 +63,6 @@ export interface ComposerSeatInjected {
   readonly select: (selection: ModelSelection) => Promise<boolean>
 }
 
-/** Build one session's injected face from the shared directory service. */
-function seatFace(
-  modelDirectories: ModelDirectoriesSeam,
-  sessionId: string,
-): ComposerSeatInjected {
-  const instance = modelDirectories.directoryFor(sessionId)
-  return {
-    // The component reads through useSyncExternalStore, so the injected
-    // `directory` must be the STORE itself (subscribe/getSnapshot), not the
-    // owning controller.
-    directory: instance.store,
-    load: () => { void instance.load().catch(() => {}) },
-    select: (selection) => instance.select(selection).then(() => true, () => false),
-  }
-}
-
 /**
  * Register the composer model seat over a Cordis-style client context. The
  * optional `modelDirectories` service is a declared `inject` dependency, so the
@@ -110,6 +94,7 @@ export function apply(context: ClientContext): void {
         if (scopedSlots === undefined) return
         const directories = asModelDirectories(scope.get('modelDirectories'))
         if (directories === undefined) return
+        const resolveFace = createModelDirectoryFaceResolver(scope, directories)
 
         // Match the official ui-model-selection composition: slots.inject owns
         // the registration effect for the declaring plugin fiber and disposes
@@ -119,7 +104,7 @@ export function apply(context: ClientContext): void {
             name: SEAT_NAME,
             priority: SEAT_PRIORITY,
             locale: LOCALE_NS,
-            inject: (sessionId: string) => seatFace(directories, sessionId),
+            inject: (sessionId: string) => resolveFace(sessionId),
           },
           (props: ComposerSeatInjected & { readonly locked?: boolean; readonly t: Translation }) => createElement(Slider, {
             directory: props.directory,

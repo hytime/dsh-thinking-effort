@@ -4,6 +4,8 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { Slider } from '../src/client/thinking-slider/slider.js'
+import { createModelDirectoryFaceResolver } from '../src/compat/model-directory.js'
+import type { ClientContext } from '../src/client/types.js'
 import type { ModelDirectoryState, SliderProps } from '../src/client/thinking-slider/slider.js'
 
 const dictionary: Record<string, string> = {
@@ -568,5 +570,48 @@ describe('continuous range dragging', () => {
     expect(panelLeft(container)).toBe('0px')
 
     dispose(root, container)
+  })
+})
+
+describe('session projection gaps', () => {
+  it('keeps the session scale and submits its model while the upstream directory falls back', async () => {
+    const current = { provider: 'custom', model: 'session-model', reasoningEffort: 'high' }
+    const fallback = { provider: 'custom', model: 'default-model', reasoningEffort: 'medium' }
+    const efforts = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].map(id => ({ id, name: id }))
+    const raw = createSnapshotStore(state({ current, pending: null, groups: [{ id: 'custom', name: 'Custom', models: [
+      { id: 'session-model', name: 'Session model', reasoning: { efforts } },
+      { id: 'default-model', name: 'Default model', reasoning: { efforts: efforts.slice(2) } },
+    ] }] }))
+    const projected = createSnapshotStore<unknown>({ lastUsed: null, next: current })
+    const submitted: Array<{ provider: string; model: string; reasoningEffort?: string }> = []
+    const controller = { store: raw, load: async () => {}, select: async (selection: {provider: string; model: string; reasoningEffort?: string}) => {
+      submitted.push(selection)
+      projected.set({ lastUsed: null, next: selection })
+      raw.set({ ...raw.getSnapshot(), current: selection })
+      return { ok: true }
+    } }
+    const disposers: Array<() => void> = []
+    const owner = { effect: (callback: () => () => void) => { disposers.push(callback()) } }
+    const binding = { session: { projections: { faceOf: () => projected } } }
+    const context = { get: () => ({ binding: () => binding, scope: () => owner }), effect: owner.effect, on: () => {} } as unknown as ClientContext
+    const face = createModelDirectoryFaceResolver(context, { directoryFor: () => controller })('session')
+    const { container, root } = renderSeat({ ...face, t })
+    openPanel(container)
+    const range = container.querySelector('[data-seat-input]') as HTMLInputElement
+    for (let cycle = 0; cycle < 3; cycle++) {
+      act(() => { projected.set({ lastUsed: null, next: null }); raw.set({ ...raw.getSnapshot(), current: fallback }) })
+      expect(range.max).toBe('6')
+      expect(container.querySelector('[data-seat-model-row]')?.textContent).toContain('Session model')
+      expect(container.querySelector('[data-seat-active]')?.textContent).toBe('high')
+      act(() => { projected.set({ lastUsed: null, next: current }); raw.set({ ...raw.getSnapshot(), current }) })
+    }
+    act(() => { projected.set({ lastUsed: null, next: null }); raw.set({ ...raw.getSnapshot(), current: fallback }) })
+    await act(async () => { setRangeValue(range, '6') })
+    expect(submitted).toEqual([{ provider: 'custom', model: 'session-model', reasoningEffort: 'max' }])
+    act(() => { projected.set({ lastUsed: null, next: fallback }); raw.set({ ...raw.getSnapshot(), current: fallback }) })
+    expect(range.max).toBe('4')
+    expect(container.querySelector('[data-seat-model-row]')?.textContent).toContain('Default model')
+    dispose(root, container)
+    for (const cleanup of disposers) cleanup()
   })
 })

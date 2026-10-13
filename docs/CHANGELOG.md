@@ -14,6 +14,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 修复 / Fixed
+
+- 修复 Composer 在会话模型投影暂缺时回退到全局默认模型、导致档位刻度跳变及档位操作提交错误模型的问题；支持公开会话投影的宿主会保留已确认选择，主动切换仍立即生效。
+- Fix Composer falling back to the global default model during session-selection projection gaps, which changed the effort scale and could submit an effort change for the wrong model. Hosts exposing the public session projection retain the confirmed selection while explicit switches remain immediate.
+
 ## [0.3.9] - 2026-10-09
 
 ### 修复 / Fixed
