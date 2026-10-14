@@ -14,6 +14,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-10-14
+
 ### 修复 / Fixed
 
 - 修复 Composer 在会话模型投影暂缺时回退到全局默认模型、导致档位刻度跳变及档位操作提交错误模型的问题；支持公开会话投影的宿主会保留已确认选择，主动切换仍立即生效。
