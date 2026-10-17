@@ -14,6 +14,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 文档 / Documentation
+
+- 在「重要限制」补充说明：档位发送的值不一定代表 token 预算。部分网关把它当作提示词指令，会把 `high` / `max` / `xhigh` 折叠成同一行为、把 `medium` 当作不附加说明，或在参数缺失时回退到自己的默认值；这类网关通常要把 `off` 填成 `none` 才真正关闭思考。
+- Document that a level's value is not necessarily a token budget: some gateways treat it as a prompt instruction, fold `high` / `max` / `xhigh` onto one behaviour, treat `medium` as saying nothing, or fall back to their own default when the parameter is absent. On those gateways an `off` value of `none` is usually what actually disables thinking.
+
 ## [0.3.10] - 2026-10-14
 
 ### 修复 / Fixed

@@ -235,6 +235,7 @@ See the complete Chinese, English, Japanese, and Korean screenshot gallery in [`
 - Non-`off` levels require a gateway value. An empty `off` value means that the parameter is omitted.
 - The selected subagent level must be supported by the target model, or the gateway may return `UNSUPPORTED_REASONING_EFFORT`.
 - `off` and an unset effort may both omit `reasoning`; whether this disables thinking depends on the gateway protocol.
+- The value a level sends is not necessarily a token budget. Some gateways treat it as a prompt instruction, fold several levels onto the same behaviour (for example rewriting `high` to `xhigh`), treat `medium` as "say nothing", or fall back to their own default when the parameter is absent. Check the gateway's chat template or documentation before assuming that a level changes the thinking length; in such gateways an `off` value of `none` is usually what actually disables thinking.
 - The Composer slider is available only when the Web runtime provides the optional `modelDirectories` service. The `seat` is not registered when that service is unavailable, and the plugin leaves Composer unchanged.
 - Host changes require a DSH restart. Settings, locale, and Client bundle changes take effect after a Web page refresh.
 - The profile library and the pre-import backup live in the plugin's own settings section and are not carried by an export. To move named profiles to another machine, export each profile and import it there.
