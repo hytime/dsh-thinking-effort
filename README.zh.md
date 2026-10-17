@@ -321,6 +321,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 - 非 `off` 档位必须填写线上值；`off` 留空表示不发送该参数。
 - 子 agent 使用的模型必须支持所选档位，否则网关可能返回 `UNSUPPORTED_REASONING_EFFORT`。
 - `off` 和未设置都可能表现为不发送 `reasoning` 参数，是否真正关闭思考取决于第三方网关的协议语义。
+- 档位发送的值不一定代表 token 预算。部分网关把它当作提示词指令，会把多个档位折叠成同一行为（例如把 `high` 改写为 `xhigh`）、把 `medium` 当作「不附加任何说明」，或在参数缺失时回退到自己的默认值。在假定某个档位会改变思考长度之前，先查网关的 chat template 或文档；这类网关通常要把 `off` 的值填成 `none` 才真正关闭思考。
 - Composer 滑块只在 Web 运行时提供可选 `modelDirectories` 服务时注册。该服务不可用时，不会注册 `seat`，插件也不会修改 Composer。
 - 宿主逻辑修改需要重启 DSH；Settings、locale 和 Client bundle 修改需要刷新 Web 页面。
 - 「配置备份与方案」的方案库和导入前的自动备份都保存在插件自有的设置分区中，不会随导出文件迁移。要把命名方案带到另一台机器，需要逐个「导出」再在目标机器上导入。
