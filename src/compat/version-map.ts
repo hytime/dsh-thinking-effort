@@ -141,10 +141,18 @@ const versionRanges: readonly VersionRange[] = [
     },
   },
   {
-    // Verified through `0.2.1-alpha.1`: the 0.1.7 line's window was extended
+    // Verified through `0.2.1-rc.2`: the 0.1.7 line's window was extended
     // rather than split, because neither the 0.2.0 nor the 0.2.1 line changed
     // any capability it maps. The bound is the first release of the next minor
     // line (`0.2.2-0`), so `0.2.0`, `0.2.1` and their prereleases resolve here.
+    //
+    // Each published 0.2.1 prerelease was checked against the API surfaces this
+    // plugin reads: `dsh-settings`, `dsh-client-store` and `dsh-client-ui-slots`
+    // were byte-identical between `0.2.1-alpha.1` and `0.2.1-rc.2`; the
+    // `dsh-client-ui-model-selection` and `dsh-api-session-controller` changes
+    // in that range were confined to their own UI and projection-cache code and
+    // left the directory snapshot fields, the `syncInputs` fallback and the
+    // `modelSelection` projection view unchanged.
     minimum: '0.1.7-0',
     maximumExclusive: '0.2.2-0',
     capabilities: {
