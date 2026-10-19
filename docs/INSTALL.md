@@ -374,7 +374,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 | Settings page is missing | Restart DSH, refresh the page, and check the scoped bundle in the profile composition. |
 | Language selection does not persist | Confirm the DSH locale service is mounted and that the profile can write settings. |
 | Effort write fails | Every non-`off` level needs a gateway value. |
-| Subagent returns `UNSUPPORTED_REASONING_EFFORT` | Choose an effort supported by the target model or restore the provider default. |
+| Subagent returns `UNSUPPORTED_REASONING_EFFORT` | Choose an effort supported by the target model, or clear the subagent default so the child keeps inheriting the parent session's effort. |
 
 ## Release maintenance
 

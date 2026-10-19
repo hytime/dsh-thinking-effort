@@ -135,10 +135,11 @@ export interface PluginStoredSnapshot {
 /** The namespace's resolved shape: an OpenCode session section plus the snapshot fields. */
 export interface PluginSettings extends OpenCodeSessionSettings {
   /**
-   * The subagent thinking effort the plugin applies when a request carries no
-   * explicit `reasoningEffort`. Empty means "unset, follow the provider
-   * default", which is why its default is an empty string rather than a level:
-   * the stored value is a wire spelling, not necessarily a level key.
+   * The subagent thinking effort the plugin applies to subagent requests,
+   * overriding the effort a child inherits from its parent session. Empty means
+   * "unset", which leaves the request untouched so inheritance keeps deciding,
+   * so the default is an empty string rather than a level: the stored
+   * value is a wire spelling, not necessarily a level key.
    */
   readonly subagentEffort?: string
   /** The host-managed legacy-data migration control object. */

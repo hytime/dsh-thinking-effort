@@ -51,7 +51,7 @@ This plugin provides the configuration layer needed to:
 - Add default `off`, `high`, and `max` options to models your own profile declares without a declaration; a model that only a composition base or a schema default supplies is left unfilled and counted in the Host log;
 - Configure reasoning levels per model from the DSH settings page;
 - Map a DSH level such as `high` to a gateway value such as `ultra`;
-- Set a default reasoning effort for subagents while preserving explicit request values;
+- Apply a default reasoning effort to subagent requests, overriding the effort the child inherits from the parent session (including a level you picked in the Composer for the parent session);
 - Keep existing user-defined model declarations unchanged.
 
 The plugin is usually unnecessary when you only use built-in DSH models and their reasoning controls already work.
@@ -77,7 +77,7 @@ These identifiers have different responsibilities:
 | Gateway mapping | Send `ultra` when the user selects DSH `high` |
 | Backup and profiles | Export the current configuration as a JSON file for migration; save named profiles locally and switch between them; choose merge or replace before importing, with an impact preview |
 | Composer effort slider | Registers an optional Composer `seat` when the Web runtime exposes `modelDirectories`, with host-resolved tiers for the current `provider/model` |
-| Subagent default | Apply a default effort only when a subagent request has no explicit value |
+| Subagent default | Apply the configured effort to subagent requests, overriding the inherited parent-session effort; with no default set the request is left untouched and the child keeps inheriting |
 | Multilingual settings | Includes Chinese, English, Japanese, and Korean dictionaries; Japanese/Korean switching uses DSH language-pack support |
 | Version watermark | Show the installed plugin version in the bottom-right corner |
 
@@ -215,7 +215,7 @@ DSH `0.1.7` renames `settings.yaml` and imports it exactly once, and plugin rele
 
 ### Settings page layout
 
-The page header contains the language selector. Below it, the Subagent default effort card controls the default for requests without an explicit effort. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and gateway compatibility controls in its settings area. `models[]` saves use one complete array set rather than an array-index path operation. The context length field also accepts `k` (any case) as a ×1024 multiplier, so `64k` means `65536`. The page reflows for narrow screens on the same breakpoints as `dsh-web-mobile` (1023px / 767px / 480px): paired fields become a single column, labels stack above their controls, and the fixed control widths are released, so the card stays usable on a phone without horizontal scrolling.
+The page header contains the language selector. Below it, the Subagent default effort card sets the effort applied to subagent requests, overriding the effort the child inherits from its parent session. The Quick settings controls apply a preset across models. Provider sections can be expanded or collapsed; each model row exposes input capabilities, context length, and gateway compatibility controls in its settings area. `models[]` saves use one complete array set rather than an array-index path operation. The context length field also accepts `k` (any case) as a ×1024 multiplier, so `64k` means `65536`. The page reflows for narrow screens on the same breakpoints as `dsh-web-mobile` (1023px / 767px / 480px): paired fields become a single column, labels stack above their controls, and the fixed control widths are released, so the card stays usable on a phone without horizontal scrolling.
 
 ![English Model capabilities and effort settings page](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/screenshots/plugin-en-settings-expanded.png)
 
@@ -226,8 +226,8 @@ See the complete Chinese, English, Japanese, and Korean screenshot gallery in [`
 
 - **Host:** Scans `llm-pi-ai` `models` and `modelOverrides` on startup and settings changes, adding defaults only where `reasoningEfforts` is missing. It writes through the user layer only, so it covers the models your own profile declares: a model a composition base or a schema default supplies has no entry in that layer to write into, so it is left alone and the Host logs how many were skipped. It also observes the model-level OpenCode session setting and injects the generated `x-opencode-session` (default `ses-derive`, configurable per `opencodeSession.format`) only into matching `llm/stream` requests, and rewrites `user-agent` for models opted into `opencodeSession.userAgent` (otherwise forced by the `llm-pi-ai` adapter's attribution header).
 - **Client:** Registers the Settings page through the DSH Settings Remote (`ctx.remote.settings`) and, when the runtime exposes `modelDirectories`, registers the optional Composer `seat` that deliberately shadows the shipped model selector on this single slot (a lower priority wins) plus a host-resolved effort slider. The model editor stores OpenCode session Header settings in the plugin namespace, separately from `llm-pi-ai.compat`. Chinese, English, Japanese, and Korean dictionaries are maintained separately in `src/locales/zh.json`, `src/locales/en.json`, `src/locales/ja.json`, and `src/locales/ko.json`, then generated into the client bundle before publishing.
-- **Subagents:** Stores the default as `subagentEffort` in the plugin's own settings section on `0.1.7`+ (the `llm-pi-ai` user layer on `0.1.0-rc.7` through `0.1.6`). The Host reads the plugin's own section first and falls back to `llm-pi-ai`, where the value can only live on the releases before `0.1.7` — the entry-config `llm-pi-ai` section declares only `providers`, so its user layer never carries the key. The `agent/request` waterfall only fills requests that do not already specify an effort.
-- **No configured default:** The plugin does not automatically choose `off`, `high`, or `max`; the request omits `reasoning` and the gateway decides its own default behavior.
+- **Subagents:** Stores the default as `subagentEffort` in the plugin's own settings section on `0.1.7`+ (the `llm-pi-ai` user layer on `0.1.0-rc.7` through `0.1.6`). The Host reads the plugin's own section first and falls back to `llm-pi-ai`, where the value can only live on the releases before `0.1.7` — the entry-config `llm-pi-ai` section declares only `providers`, so its user layer never carries the key. The `agent/request` waterfall applies the configured effort to subagent requests, overriding the effort the child inherits from its parent session; an unset default — or a custom wire value the child's model cannot map — leaves the request untouched, so the child keeps inheriting.
+- **No configured default:** The plugin does not automatically choose `off`, `high`, or `max`; it applies only the effort you configure and never invents a level.
 
 ## Limitations
 

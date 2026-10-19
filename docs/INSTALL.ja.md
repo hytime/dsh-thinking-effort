@@ -369,7 +369,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 | 設定ページが表示されない | DSH を再起動し、ページを更新して scoped bundle の composition を確認します。 |
 | 言語選択が保存されない | DSH locale service が mount され、profile に設定を書き込めることを確認します。 |
 | 推論強度の書き込みに失敗する | `off` 以外のすべてのレベルにゲートウェイ値が必要です。 |
-| `UNSUPPORTED_REASONING_EFFORT` が返る | 対象モデルが対応するレベルを選ぶか、プロバイダーの既定値へ戻します。 |
+| `UNSUPPORTED_REASONING_EFFORT` が返る | 対象モデルが対応するレベルを選ぶか、Subagent の既定値を解除して親セッションのレベルを継承させます。 |
 
 ## リリースのメンテナンス
 
