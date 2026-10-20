@@ -1959,7 +1959,7 @@ describe('SectionEditor user behavior', () => {
     view.unmount()
   })
 
-  it('shows the provider default when the namespace exists without an effort', async () => {
+  it('shows the inherit option when the namespace exists without an effort', async () => {
     const view = renderEditor({
       describe: async () => ({ ok: true, value: { namespaces: [namespace({ user: { subagentEffort: null } })] } }),
     })

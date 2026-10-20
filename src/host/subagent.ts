@@ -129,7 +129,6 @@ export async function handleAgentRequest(
   const config = await next()
   try {
     if (!isSubagentPayload(payload) || !isAgentRequestConfig(config)) return config
-    if (config.reasoningEffort !== undefined) return config
     const effort = resolveSubagentEffort(
       ctx.settings,
       config,

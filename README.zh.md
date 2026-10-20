@@ -50,8 +50,8 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 
 - 为你自己 profile 声明的、缺少档位的模型补上默认选项，安装后即可在 Composer 中看到「推理等级」；只由组合 base 或 schema 默认值提供的模型不会被补全，跳过的数量会写入宿主日志；
 - 在设置页按模型自定义档位，并把 `high` 映射为网关需要的任意字符串，例如 `ultra`；
-- 为子 agent 设置统一的默认思考强度，同时保留显式指定值的优先级；
-- 子 agent 的自定义线上值会按实际模型的 `reasoningEfforts` 映射回标准档位，找不到映射时不会注入非法档位；
+- 为子 agent 设置统一的默认思考强度，并用它覆盖子 agent 从父会话继承来的档位（包括你在 Composer 里为父会话选定的档位）；
+- 子 agent 的自定义线上值会按实际模型的 `reasoningEfforts` 映射回标准档位，找不到映射时按未配置默认档位处理、不改动请求；
 - 不修改已经存在的用户自定义档位，避免覆盖现有配置。
 
 ## 适合谁？
@@ -85,7 +85,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 | OpenCode user-agent 覆盖 | 按 provider/model（含自定义路由）改写 `user-agent` 以模仿上游客户端，可为不同路由配置不同值；默认关闭 |
 | 网关值映射 | 例如 DSH 选择 `high` 时，实际向网关发送 `ultra` |
 | 配置备份与方案 | 把当前配置导出成 JSON 文件用于跨机器迁移；在本机保存多份命名方案并可在其中切换；导入前可选择「合并」或「替换」并预览影响范围 |
-| 子 agent 默认值 | 为未显式指定档位的子 agent 请求自动填入默认思考强度 |
+| 子 agent 默认值 | 把配置的档位应用到子 agent 请求，覆盖子 agent 从父会话继承来的档位；未配置时不动请求，子 agent 继续继承父会话档位 |
 | 快捷预设 | 一键应用官方 DeepSeek 风格或通用档位组合 |
 | Composer 分档滑块 | 运行时提供 `modelDirectories` 服务时，注册 Composer 的可选 `seat`，显示当前 `provider/model` 的宿主已解析推理档位 |
 | 多语言设置 | 已包含中文、English、日本語和한국어字典；日语/韩语切换使用 DSH 的语言包支持 |
@@ -113,7 +113,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.11
 ```
 
 官方 CLI 会同时更新 profile 依赖、锁文件和 `dsh.profile.bundles`，无需手工追加 YAML。
@@ -148,7 +148,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.11
 ```
 
 如果旧依赖已经被其他工具移除，但 profile 的 bundle 列表仍残留旧名称，先从旧 profile 的 `pnpm-lock.yaml` 找到旧 GitHub commit，再使用官方命令恢复并移除：
@@ -156,7 +156,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.10
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.11
 ```
 
 不要把 `dsh-thinking-effort` 添加到新的 `dsh.profile.bundles` 中。
@@ -165,7 +165,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.10
 
 1. 打开 DSH「设置 → 模型能力与档位」。
 2. 使用页面顶部的「页面语言」选择中文、English、日本語或한국어。DSH 默认优先使用已保存的语言，其次使用浏览器语言，最后回退 English；选择会持久化到 DSH。
-3. 在「子 agent 默认档位」卡片中选择没有显式值时使用的默认档位，然后点击「应用」。
+3. 在「子 agent 默认档位」卡片中选择要应用到子 agent 请求的默认档位，然后点击「应用」。
 4. 使用「一键设置」将官方 DeepSeek 风格或通用预设应用到全部模型，或展开供应商和模型进行详细配置。
 5. 使用搜索框按模型名称或 ID 筛选。模型行会显示文字/图像输入能力、已声明的上下文长度，以及打开单模型设置的按钮。
 6. 勾选需要的标准档位，并填写发送给网关的线上值。例如：
@@ -274,7 +274,7 @@ DSH 0.1.7 会把 `settings.yaml` 重命名并只导入一次，而更早版本�
 
 ### 设置页界面
 
-页面顶部是语言选择器；其下方的「子 agent 默认档位」卡片控制没有显式档位的请求。「一键设置」负责批量应用预设。供应商和模型列表支持展开/收起；每个模型行显示输入能力、上下文长度，并在设置区域提供网关兼容控件。`models[]` 保存使用完整数组 set，而不是数组索引 path op。上下文长度输入还支持用 `k`（大小写不限）表示 1024 倍，例如 `64k` 即 `65536`。页面按与 `dsh-web-mobile` 相同的断点（1023px / 767px / 480px）在窄屏重排：成对字段降为单列、标签堆叠在控件上方、固定控件宽度被释放，因此手机上无需横向滚动即可操作。
+页面顶部是语言选择器；其下方的「子 agent 默认档位」卡片设置应用到子 agent 请求的档位，覆盖子 agent 从父会话继承来的档位。「一键设置」负责批量应用预设。供应商和模型列表支持展开/收起；每个模型行显示输入能力、上下文长度，并在设置区域提供网关兼容控件。`models[]` 保存使用完整数组 set，而不是数组索引 path op。上下文长度输入还支持用 `k`（大小写不限）表示 1024 倍，例如 `64k` 即 `65536`。页面按与 `dsh-web-mobile` 相同的断点（1023px / 767px / 480px）在窄屏重排：成对字段降为单列、标签堆叠在控件上方、固定控件宽度被释放，因此手机上无需横向滚动即可操作。
 
 ![中文模型能力与档位设置页](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/screenshots/plugin-zh-settings-expanded.png)
 
@@ -285,7 +285,7 @@ DSH 0.1.7 会把 `settings.yaml` 重命名并只导入一次，而更早版本�
 
 - **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位。补齐只写入用户层，因此覆盖的是你自己 profile 声明的模型：由组合 base 或 schema 默认值提供的模型在该层没有可写入的条目，插件不会为其补全，并在宿主日志中说明跳过了多少个。插件同时读取模型级 OpenCode 会话设置，只在匹配的 `llm/stream` 请求中注入按 `opencodeSession.format` 生成（默认 `ses-derive`）的 `x-opencode-session`，并为 `opencodeSession.userAgent` 命中的模型改写 `user-agent`（否则会被 `llm-pi-ai` 适配器的归因头强制覆盖）。
 - **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页；运行时提供 `modelDirectories` 服务时，为可选 Composer `seat` 注册有意压过官方模型选择器的实现（该槽为单占位槽，优先级越低越胜出），并显示宿主已解析的推理档位滑块。模型编辑器把 OpenCode 会话 Header 设置保存在插件自有 namespace，与 `llm-pi-ai.compat` 分开。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
-- **子 agent：** `0.1.7` 及以后默认值存储在本插件自有设置分区的 `subagentEffort`（`0.1.0-rc.7` 至 `0.1.6` 为 `llm-pi-ai` 用户层）。宿主优先读取插件自有分区，再回退 `llm-pi-ai`；只有 `0.1.7` 之前的版本会真正把值放在后者（entry-config 的 `llm-pi-ai` 分区只声明 `providers`，其用户层不会承载这个键）。`agent/request` waterfall 只对未显式指定档位的子 agent 请求进行补全。
+- **子 agent：** `0.1.7` 及以后默认值存储在本插件自有设置分区的 `subagentEffort`（`0.1.0-rc.7` 至 `0.1.6` 为 `llm-pi-ai` 用户层）。宿主优先读取插件自有分区，再回退 `llm-pi-ai`；只有 `0.1.7` 之前的版本会真正把值放在后者（entry-config 的 `llm-pi-ai` 分区只声明 `providers`，其用户层不会承载这个键）。`agent/request` waterfall 把配置的档位应用到子 agent 请求，覆盖子 agent 从父会话继承来的档位；未配置、或自定义线上值无法在子 agent 的模型上解析时，请求保持原样，子 agent 继续继承父会话档位。
 - **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.14`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
 
 ## 安装验证
@@ -321,6 +321,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 - 非 `off` 档位必须填写线上值；`off` 留空表示不发送该参数。
 - 子 agent 使用的模型必须支持所选档位，否则网关可能返回 `UNSUPPORTED_REASONING_EFFORT`。
 - `off` 和未设置都可能表现为不发送 `reasoning` 参数，是否真正关闭思考取决于第三方网关的协议语义。
+- 档位发送的值不一定代表 token 预算。部分网关把它当作提示词指令，会把多个档位折叠成同一行为（例如把 `high` 改写为 `xhigh`）、把 `medium` 当作「不附加任何说明」，或在参数缺失时回退到自己的默认值。在假定某个档位会改变思考长度之前，先查网关的 chat template 或文档；这类网关通常要把 `off` 的值填成 `none` 才真正关闭思考。
 - Composer 滑块只在 Web 运行时提供可选 `modelDirectories` 服务时注册。该服务不可用时，不会注册 `seat`，插件也不会修改 Composer。
 - 宿主逻辑修改需要重启 DSH；Settings、locale 和 Client bundle 修改需要刷新 Web 页面。
 - 「配置备份与方案」的方案库和导入前的自动备份都保存在插件自有的设置分区中，不会随导出文件迁移。要把命名方案带到另一台机器，需要逐个「导出」再在目标机器上导入。
@@ -341,7 +342,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 - **设置页没有出现：** 重启 DSH 后刷新 Web 页面，确认 profile 的 bundle 清单包含 `@hytime/dsh-thinking-effort`。
 - **宿主没有补齐：** 检查 `$DSH_HOME/thinking-effort-loaded.json` 是否存在；日志前缀为 `[@hytime/dsh-thinking-effort]`。
 - **写入档位失败：** 检查非 `off` 档位是否填写了线上值，并确认目标模型配置仍然存在。
-- **子 agent 报 `UNSUPPORTED_REASONING_EFFORT`：** 改用该模型支持的档位，或恢复为「提供方默认」。
+- **子 agent 报 `UNSUPPORTED_REASONING_EFFORT`：** 改用该模型支持的档位，或把「子 agent 默认档位」选回「继承父会话档位」（不覆盖，让子 agent 继续继承）。
 
 ## 许可证
 

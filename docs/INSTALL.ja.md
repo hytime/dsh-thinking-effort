@@ -254,7 +254,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 今回のリリースを明示してインストールします。
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.11
 ```
 
 公式 CLI は profile の依存関係、lockfile、`dsh.profile.bundles` を自動的に更新します。YAML の行を手動で追加しないでください。
@@ -270,7 +270,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 特定バージョンへ更新する場合：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.11
 ```
 
 Host の変更には DSH を再起動し、Client の変更には Web ページを更新してください。
@@ -288,7 +288,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.11
 ```
 
 依存関係は別のツールで削除済みですが、古い bundle が残っている場合は次で composition を確認します。
@@ -302,7 +302,7 @@ dsh --profile <profile> --dump-default-config
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.10
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.11
 ```
 
 新しい bundle リストに旧パッケージ名を追加しないでください。
@@ -317,7 +317,7 @@ grep -n "@hytime/dsh-thinking-effort" \
 node -p "require('${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/node_modules/@hytime/dsh-thinking-effort/package.json').version"
 ```
 
-このリリースではバージョンが `0.3.10` である必要があります。
+このリリースではバージョンが `0.3.11` である必要があります。
 
 ## 日本語と韓国語の対応状況
 
@@ -369,7 +369,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 | 設定ページが表示されない | DSH を再起動し、ページを更新して scoped bundle の composition を確認します。 |
 | 言語選択が保存されない | DSH locale service が mount され、profile に設定を書き込めることを確認します。 |
 | 推論強度の書き込みに失敗する | `off` 以外のすべてのレベルにゲートウェイ値が必要です。 |
-| `UNSUPPORTED_REASONING_EFFORT` が返る | 対象モデルが対応するレベルを選ぶか、プロバイダーの既定値へ戻します。 |
+| `UNSUPPORTED_REASONING_EFFORT` が返る | 対象モデルが対応するレベルを選ぶか、Subagent の既定値を解除して親セッションのレベルを継承させます。 |
 
 ## リリースのメンテナンス
 

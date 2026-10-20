@@ -976,14 +976,85 @@ describe('subagent request hook', () => {
     expect((customResult as Record<string, unknown>)?.reasoningEffort).toBe('high')
   })
 
-  it('leaves the config unchanged for main agents, missing headers, or explicit effort', async () => {
+  it('overrides the effort a child inherited from its parent session', async () => {
+    // When the parent session has a selected effort, the host seeds the child
+    // request with it, so the configured default is dead unless it wins over
+    // that inherited value.
+    const harness = createHarness({
+      writable: false,
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'high' } }],
+    })
+    const config = { provider: 'oc', model: 'deepseek-v4.1-flash', reasoningEffort: 'max', maxTokens: 393216 }
+
+    const result = await harness.listener('agent/request')?.callback(
+      { agent: { session: { header: { origin: 'subagent' } } } },
+      async () => config,
+    )
+
+    expect(result).toEqual({
+      provider: 'oc',
+      model: 'deepseek-v4.1-flash',
+      reasoningEffort: 'high',
+      maxTokens: 393216,
+    })
+  })
+
+  it('leaves the inherited effort untouched when no default is configured', async () => {
+    // No configured default means no opinion: inheritance stays the only
+    // source of the child's effort, so the request must not be rebuilt.
+    const harness = createHarness({ writable: false })
+    const config = { provider: 'route', model: 'model', reasoningEffort: 'max' }
+
+    const result = await harness.listener('agent/request')?.callback(
+      { agent: { session: { header: { origin: 'subagent' } } } },
+      async () => config,
+    )
+
+    expect(result).toBe(config)
+  })
+
+  it('leaves an inherited effort untouched when the configured value cannot be mapped', async () => {
+    // A custom wire value this model does not declare cannot become a level, so
+    // the plugin has nothing to apply and must not rewrite the request.
+    const harness = createHarness({
+      writable: false,
+      section: { providers: { route: { models: [{ id: 'model', reasoningEfforts: { high: 'high' } }] } } },
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'ultra' } }],
+    })
+    const config = { provider: 'route', model: 'model', reasoningEffort: 'max' }
+
+    const result = await harness.listener('agent/request')?.callback(
+      { agent: { session: { header: { origin: 'subagent' } } } },
+      async () => config,
+    )
+
+    expect(result).toBe(config)
+  })
+
+  it('applies the default to a route-changed child that inherited no effort', async () => {
+    // A child on another route loses the inherited effort, so the default is
+    // the only value left to apply.
+    const harness = createHarness({
+      writable: false,
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'high' } }],
+    })
+    const config = { provider: 'route', model: 'model' }
+
+    const result = await harness.listener('agent/request')?.callback(
+      { agent: { session: { header: { origin: 'subagent' } } } },
+      async () => config,
+    )
+
+    expect(result).toEqual({ ...config, reasoningEffort: 'high' })
+  })
+
+  it('leaves the config unchanged for main agents and missing session headers', async () => {
     const harness = createHarness({
       writable: false,
       descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'max' } }],
     })
     const mainConfig = { provider: 'route', model: 'model' }
     const missingHeaderConfig = { provider: 'route', model: 'model' }
-    const explicitConfig = { provider: 'route', model: 'model', reasoningEffort: 'low' }
     const listener = harness.listener('agent/request')
 
     await expect(listener?.callback(
@@ -992,10 +1063,6 @@ describe('subagent request hook', () => {
     )).resolves.toBe(mainConfig)
     await expect(listener?.callback({ agent: { session: {} } }, async () => missingHeaderConfig))
       .resolves.toBe(missingHeaderConfig)
-    await expect(listener?.callback(
-      { agent: { session: { header: { origin: 'subagent' } } } },
-      async () => explicitConfig,
-    )).resolves.toBe(explicitConfig)
   })
 
   it('awaits next before handling and does not swallow downstream errors', async () => {
