@@ -50,7 +50,7 @@ DSH `0.1.7`부터는 각 Loader 항목 자체의 `Config` schema에서 설정 �
 - 직접 선언한 profile의 설정 없는 모델에 `off`, `high`, `max` 기본 항목을 추가합니다. 컴포지션 베이스나 스키마 기본값만 제공하는 모델은 보완하지 않고 건너뛴 개수를 Host 로그에 남깁니다.
 - DSH 설정 페이지에서 모델별 추론 단계를 설정합니다.
 - DSH의 `high`를 게이트웨이의 `ultra`와 같은 값으로 매핑합니다.
-- 명시적인 요청 값을 유지하면서 Subagent 기본 추론 강도를 설정합니다.
+- 설정한 기본 추론 강도를 Subagent 요청에 적용하고, 부모 세션에서 상속한 단계(Composer에서 부모 세션에 선택한 단계 포함)를 덮어씁니다.
 - 기존 사용자 모델 설정을 변경하지 않습니다.
 
 DSH 내장 모델만 사용하고 이미 추론 제어가 정상 작동한다면 이 플러그인은 보통 필요하지 않습니다.
@@ -73,7 +73,7 @@ DSH 내장 모델만 사용하고 이미 추론 제어가 정상 작동한다면
 | OpenCode user-agent 재정의 | provider/model(커스텀 route 포함) 단위로 `user-agent`를 다시 써서 상류 클라이언트를 흉내냅니다. route별 값도 설정 가능하며 기본값은 꺼져 있습니다 |
 | 게이트웨이 값 매핑 | DSH에서 `high`를 선택하면 `ultra` 전송 가능 |
 | 설정 백업 및 프로필 | 현재 설정을 JSON 파일로 내보내 이전에 활용하고, 이름 있는 프로필을 저장해 전환합니다. 가져오기 전에 병합 또는 교체를 선택하고 영향을 미리 확인합니다 |
-| Subagent 기본값 | 명시적 값이 없는 요청에만 기본값 적용 |
+| Subagent 기본값 | 설정한 단계를 Subagent 요청에 적용하고 부모 세션에서 상속한 단계를 덮어씀. 설정하지 않으면 요청을 건드리지 않고 부모 세션 단계를 계속 상속 |
 | 다국어 설정 | 中文, English, 日本語, 한국어 사전 포함; 일본어/한국어 전환은 DSH language-pack 지원을 사용 |
 | 버전 표시 | 설정 페이지 오른쪽 아래에 설치된 버전 표시 |
 
@@ -102,7 +102,7 @@ profile 확인, 마이그레이션, 검증 및 문제 해결은 [INSTALL.ko.md](
 
 1. DSH에서 **Settings → Model capabilities and effort**를 엽니다.
 2. 상단 **Page language** 선택기에서 `中文`, `English`, `日本語` 또는 `한국어`를 선택합니다. DSH는 저장된 locale, 브라우저 언어, English 순서로 fallback합니다.
-3. **Subagent default effort** 카드에서 명시적인 값이 없는 요청에 사용할 기본값을 선택하고 **Apply**를 클릭합니다.
+3. **Subagent default effort** 카드에서 Subagent 요청에 적용할 기본값을 선택하고 **Apply**를 클릭합니다.
 4. **Quick settings**에서 공식 DeepSeek 방식 또는 일반 프리셋을 모든 모델에 적용하거나, 제공자와 모델을 펼쳐 상세 설정을 엽니다.
 5. 검색 필드에서 모델 이름 또는 ID로 필터링합니다. 모델 행에는 텍스트/이미지 입력 기능, 선언된 컨텍스트 길이 및 모델 설정 버튼이 표시됩니다.
 6. 단계를 선택하고 게이트웨이에 보낼 값을 입력합니다.
@@ -203,7 +203,7 @@ DSH 0.1.7은 `settings.yaml`의 이름을 바꾸고 한 번만 가져오는데, 
 
 ### 설정 페이지 구성
 
-페이지 상단에는 언어 선택기가 있습니다. 그 아래의 **Subagent default effort** 카드는 명시적인 값이 없는 요청의 기본값을 관리합니다. **Quick settings**는 일괄 프리셋을 적용합니다. 제공자와 모델 목록은 펼치거나 접을 수 있으며, 각 모델 행에는 입력 기능, 컨텍스트 길이 및 게이트웨이 호환성 편집 영역이 표시됩니다. `models[]` 저장은 배열 인덱스 path op가 아니라 전체 배열 set을 사용합니다. 컨텍스트 길이 입력란에서는 `k`(대소문자 무관)를 1024 배로 해석합니다. 예를 들어 `64k`는 `65536`입니다.페이지는 `dsh-web-mobile`과 같은 브레이크포인트(1023px / 767px / 480px)로 좁은 화면에 맞게 재배치됩니다. 짝지은 필드는 1열이 되고, 라벨은 컨트롤 위에 쌓이며, 고정 너비는 해제되어 휴대폰에서도 가로 스크롤 없이 사용할 수 있습니다.
+페이지 상단에는 언어 선택기가 있습니다. 그 아래의 **Subagent default effort** 카드는 Subagent 요청에 적용할 기본값을 관리하며, 부모 세션에서 상속한 단계를 덮어씁니다. **Quick settings**는 일괄 프리셋을 적용합니다. 제공자와 모델 목록은 펼치거나 접을 수 있으며, 각 모델 행에는 입력 기능, 컨텍스트 길이 및 게이트웨이 호환성 편집 영역이 표시됩니다. `models[]` 저장은 배열 인덱스 path op가 아니라 전체 배열 set을 사용합니다. 컨텍스트 길이 입력란에서는 `k`(대소문자 무관)를 1024 배로 해석합니다. 예를 들어 `64k`는 `65536`입니다.페이지는 `dsh-web-mobile`과 같은 브레이크포인트(1023px / 767px / 480px)로 좁은 화면에 맞게 재배치됩니다. 짝지은 필드는 1열이 되고, 라벨은 컨트롤 위에 쌓이며, 고정 너비는 해제되어 휴대폰에서도 가로 스크롤 없이 사용할 수 있습니다.
 
 ![한국어 Model capabilities and effort 설정 페이지](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/screenshots/plugin-ko-settings-expanded.png)
 
@@ -214,8 +214,8 @@ DSH 0.1.7은 `settings.yaml`의 이름을 바꾸고 한 번만 가져오는데, 
 
 - **Host:** 시작 및 설정 변경 시 `llm-pi-ai`의 `models`와 `modelOverrides`를 검사하고 `reasoningEfforts`가 없는 경우에만 기본값을 추가합니다. 쓰기는 사용자 레이어에만 적용되므로, 직접 선언한 프로필의 모델만 보완됩니다. 컴포지션 베이스나 스키마 기본값만 제공하는 모델은 쓸 대상 항목이 없어 보완하지 않고, 건너뛴 개수를 Host 로그에 남깁니다. 또한 모델별 OpenCode 세션 설정을 읽고 일치하는 `llm/stream` 요청에만 `opencodeSession.format`에 따라 생성(기본값 `ses-derive`)한 `x-opencode-session`을 주입하며, `opencodeSession.userAgent`로 선택한 모델의 `user-agent`를 다시 씁니다(그 외에는 `llm-pi-ai` adapter의 attribution 헤더가 강제).
 - **Client:** DSH Settings Remote(`ctx.remote.settings`)와 locale service로 설정 페이지를 등록합니다. 모델 편집기는 OpenCode 세션 Header를 전용 namespace에 저장하며 `llm-pi-ai.compat`와 분리합니다. 사전은 `src/locales/ja.json`, `src/locales/ko.json` 등에서 관리하고 게시 전에 클라이언트 bundle로 생성합니다.
-- **Subagent:** `0.1.7` 이상에서는 이 플러그인 자체 설정 섹션에 `subagentEffort`를 저장합니다(`0.1.0-rc.7`부터 `0.1.6`까지는 `llm-pi-ai` 사용자 레이어). Host는 플러그인 자체 섹션을 먼저 읽고 `llm-pi-ai`로 폴백합니다. 후자에 값이 들어가는 것은 `0.1.7` 이전뿐입니다(entry-config의 `llm-pi-ai` 섹션은 `providers`만 선언하므로 그 사용자 레이어가 이 키를 담지 않습니다). `agent/request` waterfall은 명시적 값이 없는 요청에만 기본값을 추가합니다.
-- **기본값 없음:** 플러그인은 `off`, `high`, `max`를 자동으로 선택하지 않습니다. `reasoning`을 생략하고 게이트웨이 기본 동작을 따릅니다.
+- **Subagent:** `0.1.7` 이상에서는 이 플러그인 자체 설정 섹션에 `subagentEffort`를 저장합니다(`0.1.0-rc.7`부터 `0.1.6`까지는 `llm-pi-ai` 사용자 레이어). Host는 플러그인 자체 섹션을 먼저 읽고 `llm-pi-ai`로 폴백합니다. 후자에 값이 들어가는 것은 `0.1.7` 이전뿐입니다(entry-config의 `llm-pi-ai` 섹션은 `providers`만 선언하므로 그 사용자 레이어가 이 키를 담지 않습니다). `agent/request` waterfall은 설정한 단계를 Subagent 요청에 적용하고 부모 세션에서 상속한 단계를 덮어씁니다. 설정하지 않았거나 사용자 정의 실값을 Subagent 모델에서 해석할 수 없으면 요청을 건드리지 않으므로 Subagent는 부모 세션 단계를 계속 상속합니다.
+- **기본값 없음:** 플러그인은 `off`, `high`, `max`를 자동으로 선택하지 않습니다. 설정한 단계만 적용하며 스스로 단계를 정하지 않습니다.
 
 ## 제한 사항
 

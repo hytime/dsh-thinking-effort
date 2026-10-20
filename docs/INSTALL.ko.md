@@ -369,7 +369,7 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 | 설정 페이지가 표시되지 않음 | DSH를 재시작하고 페이지를 새로 고친 뒤 scoped bundle composition을 확인하세요. |
 | 언어 선택이 저장되지 않음 | DSH locale service가 mount되어 있고 profile에 설정을 쓸 수 있는지 확인하세요. |
 | 추론 강도 쓰기 실패 | `off`가 아닌 모든 단계에는 게이트웨이 값이 필요합니다. |
-| `UNSUPPORTED_REASONING_EFFORT` 반환 | 대상 모델이 지원하는 강도를 선택하거나 제공자 기본값으로 복원하세요. |
+| `UNSUPPORTED_REASONING_EFFORT` 반환 | 대상 모델이 지원하는 강도를 선택하거나 Subagent 기본값을 해제해 부모 세션 단계를 상속하게 하세요. |
 
 ## 릴리스 유지 관리
 
