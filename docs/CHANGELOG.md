@@ -14,6 +14,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.11] - 2026-10-20
+
 ### 修复 / Fixed
 
 - 修复子 agent 默认档位在请求已带父会话继承档位时被忽略：旧逻辑把任何已存在的档位当作显式指定而直接返回，导致父会话已选定档位、沿用其路由的子 agent 不使用配置值。未配置默认档位时仍不改动请求。
