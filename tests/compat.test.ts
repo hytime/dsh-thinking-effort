@@ -130,7 +130,18 @@ describe('version capability map', () => {
     expect(capabilitiesForVersion('0.2.1')).toEqual(entryConfigCapabilities)
     expect(takeoverTransportForVersion('0.2.1-alpha.1')).toBe('optional')
     expect(settingsModelForVersion('0.2.1-alpha.1')).toBe('entry-config')
-    expect(capabilitiesForVersion('0.2.2-0')).toBeUndefined()
+  })
+
+  it('keeps the 0.2.2 line inside the same verified window', () => {
+    // `0.2.2-alpha.2` keeps the settings/gateway capabilities this map records.
+    // Its AgentLoop changes request-time effort selection; the Host handles that
+    // separate runtime contract through agent.model when available.
+    expect(capabilitiesForVersion('0.2.2-alpha.0')).toEqual(entryConfigCapabilities)
+    expect(capabilitiesForVersion('0.2.2-alpha.2')).toEqual(entryConfigCapabilities)
+    expect(capabilitiesForVersion('0.2.2')).toEqual(entryConfigCapabilities)
+    expect(takeoverTransportForVersion('0.2.2-alpha.2')).toBe('optional')
+    expect(settingsModelForVersion('0.2.2-alpha.2')).toBe('entry-config')
+    expect(capabilitiesForVersion('0.2.3-0')).toBeUndefined()
   })
 
   it('keeps every half-open boundary and accepts semver build metadata', () => {
@@ -152,7 +163,8 @@ describe('version capability map', () => {
     expect(capabilitiesForVersion('0.1.7-alpha.1+ci.1')).toEqual(entryConfigCapabilities)
     expect(capabilitiesForVersion('0.2.0-rc.2+build.9')).toEqual(entryConfigCapabilities)
     expect(capabilitiesForVersion('0.2.1-alpha.1+build.3')).toEqual(entryConfigCapabilities)
-    expect(capabilitiesForVersion('0.2.2-0')).toBeUndefined()
+    expect(capabilitiesForVersion('0.2.2-alpha.2+build.5')).toEqual(entryConfigCapabilities)
+    expect(capabilitiesForVersion('0.2.3-0')).toBeUndefined()
     expect(capabilitiesForVersion('0.3.0')).toBeUndefined()
   })
 

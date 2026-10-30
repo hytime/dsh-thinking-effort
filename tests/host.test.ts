@@ -419,6 +419,52 @@ describe('Host composition', () => {
     expect(harness.listener('agent/request')?.options).toEqual({ global: true })
   })
 
+  it('registers model-selection initialization for hosts that expose agent.model', () => {
+    const harness = createHarness({ writable: false })
+
+    expect(harness.listener('agent/created')?.options).toEqual({ global: true })
+  })
+
+  it('selects the configured subagent effort before a new-host agent starts', () => {
+    const harness = createHarness({
+      writable: false,
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'high' } }],
+    })
+    const select = vi.fn()
+    const agent = {
+      session: { header: { origin: 'subagent' } },
+      model: {
+        current: () => ({ provider: 'provider', model: 'model', reasoningEffort: 'max' }),
+        select,
+      },
+    }
+
+    harness.listener('agent/created')?.callback({ agent })
+
+    expect(select).toHaveBeenCalledWith({ provider: 'provider', model: 'model', reasoningEffort: 'high' })
+  })
+
+  it('does not rewrite agent/request effort when the host exposes agent.model', async () => {
+    const harness = createHarness({
+      writable: false,
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'high' } }],
+    })
+    const config = { provider: 'provider', model: 'model', reasoningEffort: 'max' }
+    const next = vi.fn(async () => config)
+    const agent = {
+      session: { header: { origin: 'subagent' } },
+      model: {
+        current: () => config,
+        select: vi.fn(),
+      },
+    }
+
+    const result = await harness.listener('agent/request')?.callback({ agent }, next)
+
+    expect(result).toBe(config)
+    expect(next).toHaveBeenCalledOnce()
+  })
+
   it('reads subagent effort after the settings namespace registers', async () => {
     const harness = createHarness({
       writable: false,

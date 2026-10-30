@@ -2,7 +2,7 @@ import { mark } from './host/marker.js'
 import { installSettingsWatcher } from './host/settings.js'
 import { installOpenCodeSession } from './host/opencode-session.js'
 import { installLegacyMigration } from './host/legacy-watcher.js'
-import { handleAgentRequest } from './host/subagent.js'
+import { handleAgentCreated, handleAgentRequest } from './host/subagent.js'
 import type { HostContext } from './host/types.js'
 
 export const name = '@hytime/dsh-thinking-effort'
@@ -19,6 +19,9 @@ export function apply(ctx: HostContext): void {
   installSettingsWatcher(ctx)
   installOpenCodeSession(ctx)
   installLegacyMigration(ctx)
+  ctx.on('agent/created', (...args: unknown[]) => {
+    handleAgentCreated(ctx, args[0])
+  }, { global: true })
   ctx.on('agent/request', (...args: unknown[]) => {
     const payload = args[0]
     const next = args[1] as () => Promise<unknown>
