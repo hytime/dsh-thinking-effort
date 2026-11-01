@@ -10,6 +10,14 @@
 
 ## [Unreleased]
 
+## [0.3.12] - 2026-10-31
+
+### 互換性
+
+- 最新のバージョンマップ上限を `0.2.3-0` に拡張しました。`0.2.1-rc.5` のプラグイン利用 API は `0.2.1-rc.4` から変わっておらず、Chat の推論本文 Slot に追加された `rawText` は本プラグインが使用しません。`0.2.2-alpha.2` でも設定コントローラー、`configForms`、`plugin-compatibility` は互換です。モデルディレクトリの利用面（`directoryFor`、store、`load`、`select`、`{ lastUsed, next }` 投影）は維持され、追加された badge/`resolveText` は公式セレクター UI のみで使われます。pi-ai の `supportsMidConvoEffort: 'withhold'` は設定可能なフィールドを増やさず、各ゲートの offer 集合は 19/4/7/1/0、プラグインの 18 フィールドも引き続き利用できます。ロケールに ja/es/fr/de/ru/pt が追加され、本プラグインは登録済みの ja を重複登録しません。
+- DSH 0.2.2-alpha.2 のモデル選択契約に対応しました。`agent/request` では推論強度を変更できなくなったため、`agent.model.select()` を提供する Host では `agent/created` 時に Subagent の既定強度を記録し、旧 Host では `agent/request` をフォールバックとして使用します。Cordis peer 範囲に DSH 0.2.2-alpha.2 が使う `4.0.6-alpha.1` も含めました。
+- pi-ai の route-level 既定値は `defaultContextWindow` が 262144 から 1000000、`defaultMaxTokens` が 32768 から 128000 に変わりました。本プラグインの編集対象はモデルに明示された `contextWindow` のみで、これらのルート既定値を設定へ書き戻しません。
+
 ## [0.3.11] - 2026-10-20
 
 ### 修正

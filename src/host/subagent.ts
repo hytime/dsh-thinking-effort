@@ -114,11 +114,48 @@ export function resolveSubagentEffort(
   return undefined
 }
 
-function isSubagentPayload(payload: unknown): boolean {
-  if (!isUnknownRecord(payload) || !isUnknownRecord(payload.agent)) return false
-  const session = payload.agent.session
-  if (!isUnknownRecord(session) || !isUnknownRecord(session.header)) return false
-  return session.header.origin === 'subagent'
+function subagentAgentOf(payload: unknown): Record<string, unknown> | undefined {
+  if (!isUnknownRecord(payload) || !isUnknownRecord(payload.agent)) return undefined
+  const agent = payload.agent
+  const session = agent.session
+  if (!isUnknownRecord(session) || !isUnknownRecord(session.header)) return undefined
+  return session.header.origin === 'subagent' ? agent : undefined
+}
+
+function hasAgentModelSelection(agent: Record<string, unknown> | undefined): boolean {
+  const model = agent?.model
+  return isUnknownRecord(model) && typeof model.current === 'function' && typeof model.select === 'function'
+}
+
+/** Select a new-host subagent's configured effort before its first model step. */
+export function handleAgentCreated(ctx: Pick<HostContext, 'settings' | 'fiber'>, payload: unknown): void {
+  const agent = subagentAgentOf(payload)
+  if (agent === undefined) return
+  const model = isUnknownRecord(agent.model) ? agent.model : undefined
+  const current = model?.current
+  const select = model?.select
+  if (model === undefined || typeof current !== 'function' || typeof select !== 'function') return
+
+  try {
+    const selection: unknown = Reflect.apply(current, model, [])
+    if (!isAgentRequestConfig(selection)
+      || typeof selection.provider !== 'string'
+      || typeof selection.model !== 'string') return
+    const effort = resolveSubagentEffort(
+      ctx.settings,
+      selection,
+      log,
+      settingsEntryId(ctx, OPENCODE_SESSION_NAMESPACE),
+    )
+    if (effort === undefined || effort === selection.reasoningEffort) return
+    Reflect.apply(select, model, [{
+      provider: selection.provider,
+      model: selection.model,
+      reasoningEffort: effort,
+    }])
+  } catch (error) {
+    log('subagent model selection error:', error instanceof Error ? error.message : String(error))
+  }
 }
 
 export async function handleAgentRequest(
@@ -128,7 +165,8 @@ export async function handleAgentRequest(
 ): Promise<unknown> {
   const config = await next()
   try {
-    if (!isSubagentPayload(payload) || !isAgentRequestConfig(config)) return config
+    const agent = subagentAgentOf(payload)
+    if (agent === undefined || !isAgentRequestConfig(config) || hasAgentModelSelection(agent)) return config
     const effort = resolveSubagentEffort(
       ctx.settings,
       config,

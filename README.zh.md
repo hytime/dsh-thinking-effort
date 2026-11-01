@@ -34,7 +34,7 @@
 | `0.1.0-rc.7` | 不支持 |
 | `0.1.0-rc.8` 至 `<0.1.2-alpha.1` | schema 暴露时可用，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget` |
 | `0.1.2-alpha.1` 至 `<0.1.3-alpha.2` | schema 暴露时支持 15 个字段；`thinkingTokenBudgetField`、`vllmPriority` 与 `supportsMaxOutputTokens` 尚未提供 |
-| `0.1.3-alpha.2` 至 `<0.2.2-0` | schema 暴露时支持全部 18 个字段。该区间横跨 `0.1.7` 的设置重写与 `0.2.0`／`0.2.1` 线，均已验证保持相同的可编辑字段集合。达到或超过该上限的版本不做映射：插件照常工作，改为跟随运行时宿主实际报告的能力 |
+| `0.1.3-alpha.2` 至 `<0.2.3-0` | schema 暴露时支持全部 18 个字段。该区间横跨 `0.1.7` 的设置重写与 `0.2.0` 至 `0.2.2` 各线，均已验证保持相同的可编辑字段集合。达到或超过该上限的版本不做映射：插件照常工作，改为跟随运行时宿主实际报告的能力 |
 
 从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。上表表示各 DSH 版本最多可用的字段集合；当前网关协议还可能进一步缩小集合。
 
@@ -113,7 +113,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.11
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
 ```
 
 官方 CLI 会同时更新 profile 依赖、锁文件和 `dsh.profile.bundles`，无需手工追加 YAML。
@@ -148,7 +148,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.11
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
 ```
 
 如果旧依赖已经被其他工具移除，但 profile 的 bundle 列表仍残留旧名称，先从旧 profile 的 `pnpm-lock.yaml` 找到旧 GitHub commit，再使用官方命令恢复并移除：
@@ -156,7 +156,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.11
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.11
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
 ```
 
 不要把 `dsh-thinking-effort` 添加到新的 `dsh.profile.bundles` 中。
@@ -285,7 +285,7 @@ DSH 0.1.7 会把 `settings.yaml` 重命名并只导入一次，而更早版本�
 
 - **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位。补齐只写入用户层，因此覆盖的是你自己 profile 声明的模型：由组合 base 或 schema 默认值提供的模型在该层没有可写入的条目，插件不会为其补全，并在宿主日志中说明跳过了多少个。插件同时读取模型级 OpenCode 会话设置，只在匹配的 `llm/stream` 请求中注入按 `opencodeSession.format` 生成（默认 `ses-derive`）的 `x-opencode-session`，并为 `opencodeSession.userAgent` 命中的模型改写 `user-agent`（否则会被 `llm-pi-ai` 适配器的归因头强制覆盖）。
 - **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页；运行时提供 `modelDirectories` 服务时，为可选 Composer `seat` 注册有意压过官方模型选择器的实现（该槽为单占位槽，优先级越低越胜出），并显示宿主已解析的推理档位滑块。模型编辑器把 OpenCode 会话 Header 设置保存在插件自有 namespace，与 `llm-pi-ai.compat` 分开。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
-- **子 agent：** `0.1.7` 及以后默认值存储在本插件自有设置分区的 `subagentEffort`（`0.1.0-rc.7` 至 `0.1.6` 为 `llm-pi-ai` 用户层）。宿主优先读取插件自有分区，再回退 `llm-pi-ai`；只有 `0.1.7` 之前的版本会真正把值放在后者（entry-config 的 `llm-pi-ai` 分区只声明 `providers`，其用户层不会承载这个键）。`agent/request` waterfall 把配置的档位应用到子 agent 请求，覆盖子 agent 从父会话继承来的档位；未配置、或自定义线上值无法在子 agent 的模型上解析时，请求保持原样，子 agent 继续继承父会话档位。
+- **子 agent：** `0.1.7` 及以后默认值存储在本插件自有设置分区的 `subagentEffort`（`0.1.0-rc.7` 至 `0.1.6` 为 `llm-pi-ai` 用户层）。宿主优先读取插件自有分区，再回退 `llm-pi-ai`；只有 `0.1.7` 之前的版本会把值放在后者，因为 entry-config 分区只声明 `providers`。具备 `agent.model.current()` 和 `agent.model.select()` 的宿主会在 `agent/created` 阶段、子 agent 首个模型步骤前应用配置档位；较早宿主继续使用 `agent/request` waterfall 回退。未配置默认值或自定义线上值无法在目标模型上解析时，插件不改动当前选择，子 agent 继续继承父会话档位。
 - **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.14`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
 
 ## 安装验证
