@@ -80,8 +80,13 @@ const completeBaseModelFields = ['reasoningEfforts', 'input', 'contextWindow'] a
  * same offered field sets, and the release's breaking changes miss this
  * plugin: it imports no `./invariant` entry, registers no input-stats
  * extension, and is configured as a package-root specifier rather than a
- * subpath specifier. The bound is `0.2.2-0`, so the whole `0.1.7` through
- * `0.2.1` span resolves.
+ * subpath specifier. `0.2.1-rc.5` keeps the consumed API faces of `0.2.1-rc.4`;
+ * its Chat reasoning-body Slot change is unused by this plugin. `0.2.2-alpha.2`
+ * keeps the settings and gateway capabilities in this window, but changes the
+ * AgentLoop selection contract. The Host applies subagent effort through
+ * `agent.model.select()` at `agent/created` when available, with the legacy
+ * `agent/request` fallback for older hosts. The bound is `0.2.3-0`, the first
+ * release of the next minor line.
  */
 const versionRanges: readonly VersionRange[] = [
   {
@@ -141,20 +146,32 @@ const versionRanges: readonly VersionRange[] = [
     },
   },
   {
-    // Verified through `0.2.1-rc.2`: the 0.1.7 line's window was extended
-    // rather than split, because neither the 0.2.0 nor the 0.2.1 line changed
-    // any capability it maps. The bound is the first release of the next minor
-    // line (`0.2.2-0`), so `0.2.0`, `0.2.1` and their prereleases resolve here.
+    // Verified through `0.2.2-alpha.2`: the 0.1.7 line's window was extended
+    // rather than split, because no release from 0.2.0 through 0.2.2 changed any
+    // capability it maps. The bound is the first release of the next minor line
+    // (`0.2.3-0`), so `0.2.0`, `0.2.1`, `0.2.2` and their prereleases resolve here.
     //
-    // Each published 0.2.1 prerelease was checked against the API surfaces this
+    // Each published 0.2.x prerelease was checked against the API surfaces this
     // plugin reads: `dsh-settings`, `dsh-client-store` and `dsh-client-ui-slots`
     // were byte-identical between `0.2.1-alpha.1` and `0.2.1-rc.2`; the
     // `dsh-client-ui-model-selection` and `dsh-api-session-controller` changes
     // in that range were confined to their own UI and projection-cache code and
     // left the directory snapshot fields, the `syncInputs` fallback and the
     // `modelSelection` projection view unchanged.
+    //
+    // `0.2.2-alpha.2` keeps the mapped settings and gateway capabilities: the
+    // settings controller, `configForms` and `plugin-compatibility` are
+    // unchanged from `0.2.1-rc.4`; the model-directory face this plugin consumes
+    // keeps `directoryFor`, store, `load`, `select` and the `{ lastUsed, next }`
+    // projection view. pi-ai adds `supportsMidConvoEffort: 'withhold'`, so the
+    // offered field sets stay 19/4/7/1/0 and this plugin's 18 fields remain
+    // editable. The locale package adds ja/es/fr/de/ru/pt, while the seat's new
+    // badge resolver is unused by this plugin. Separately, alpha.2 changes the
+    // `agent/request` selection contract; the Host uses `agent.model.select()`
+    // at `agent/created` when available and retains the waterfall fallback on
+    // older hosts.
     minimum: '0.1.7-0',
-    maximumExclusive: '0.2.2-0',
+    maximumExclusive: '0.2.3-0',
     capabilities: {
       settingsTransport: 'modern',
       settingsApi: 'remote.settings',

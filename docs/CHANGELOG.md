@@ -14,6 +14,17 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.12] - 2026-10-31
+
+### 兼容性 / Compatibility
+
+- 版本映射最新窗口的上界由 `0.2.2-0` 扩展到 `0.2.3-0`。`0.2.1-rc.5` 相对 `0.2.1-rc.4` 的插件依赖 API 面没有变化；唯一相关 UI 改动是 Chat 推理正文 Slot 新增 `rawText`，本插件不消费该 Slot。`0.2.2-alpha.2` 的设置控制器、`configForms` 与 `plugin-compatibility` 面保持兼容；模型目录仍提供本插件使用的 `directoryFor`、store、`load`、`select` 及 `{ lastUsed, next }` 投影视图，新增 badge/`resolveText` 仅影响官方选择器 UI。pi-ai 新增的 `supportsMidConvoEffort: 'withhold'` 不提供可配置字段，各 gate 的 offer 集合仍为 19/4/7/1/0，插件 18 个字段仍可编辑。该版本还新增 ja/es/fr/de/ru/pt 语言；本插件会跳过已注册的 ja，并继续为自身命名空间注册词典。
+- The newest version-map window now ends at `0.2.3-0`. The plugin-facing API surfaces checked in `0.2.1-rc.5` are unchanged from `0.2.1-rc.4`; its relevant UI change adds `rawText` to Chat's reasoning-body Slot, which this plugin does not use. In `0.2.2-alpha.2`, the settings controller, `configForms`, and `plugin-compatibility` remain compatible. The model-directory face used here still provides `directoryFor`, store, `load`, `select`, and the `{ lastUsed, next }` projection view; the added badge/`resolveText` behavior is confined to the official selector UI. pi-ai adds `supportsMidConvoEffort: 'withhold'`, which offers no configurable field: gate offer counts remain 19/4/7/1/0 and this plugin's 18 fields remain available. The locale package also adds ja/es/fr/de/ru/pt; this plugin skips an already registered `ja` and still registers dictionaries for its own namespace.
+- 兼容 DSH 0.2.2-alpha.2 的模型选择契约：该版本的 `agent/request` 不再允许改写推理强度。本插件在具备 `agent.model.select()` 的宿主上，会在 `agent/created` 阶段为子 agent 记录配置的默认强度；较早宿主继续使用 `agent/request` 回退路径。Cordis peer 范围也包含 DSH 0.2.2-alpha.2 使用的 `4.0.6-alpha.1`。
+- Adapted to DSH 0.2.2-alpha.2's model-selection contract: `agent/request` can no longer replace reasoning effort. Hosts exposing `agent.model.select()` now record the configured default for subagents during `agent/created`; older hosts retain the `agent/request` fallback. The Cordis peer range also includes `4.0.6-alpha.1`, used by DSH 0.2.2-alpha.2.
+- 说明 pi-ai 将 route-level `defaultContextWindow` 默认值从 262144 提高到 1000000、`defaultMaxTokens` 从 32768 提高到 128000；本插件只编辑模型显式声明的 `contextWindow`，不会把这些路由默认值写回配置。
+- Documented pi-ai's route-level default changes (`defaultContextWindow` 262144 → 1000000 and `defaultMaxTokens` 32768 → 128000). The editor changes only an explicitly declared model `contextWindow`; it does not write these route defaults back to configuration.
+
 ## [0.3.11] - 2026-10-20
 
 ### 修复 / Fixed

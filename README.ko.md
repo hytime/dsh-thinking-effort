@@ -33,7 +33,7 @@
 | `0.1.0-rc.7` | 지원하지 않음 |
 | `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 | schema가 노출하는 경우 지원하지만 `supportsFinishReason` 및 `supportsThinkingTokenBudget`는 없음 |
 | `0.1.2-alpha.1`부터 `<0.1.3-alpha.2`까지 | schema가 노출하는 경우 15개 필드 지원. `thinkingTokenBudgetField`, `vllmPriority`, `supportsMaxOutputTokens`는 아직 제공되지 않음 |
-| `0.1.3-alpha.2`부터 `<0.2.2-0`까지 | schema가 노출하는 경우 18개 필드 모두 지원. 이 범위는 `0.1.7` 설정 재작성과 `0.2.0`/`0.2.1` 라인에 걸쳐 있으며, 모두 편집 가능한 필드 집합이 동일함을 검증했습니다. 상한 이상의 릴리스는 매핑되지 않으며, 플러그인은 계속 동작하면서 실행 중인 호스트가 보고하는 능력을 따릅니다 |
+| `0.1.3-alpha.2`부터 `<0.2.3-0`까지 | schema가 노출하는 경우 18개 필드 모두 지원. 이 범위는 `0.1.7` 설정 재작성과 `0.2.0`부터 `0.2.2`까지의 각 라인에 걸쳐 있으며, 모두 편집 가능한 필드 집합이 동일함을 검증했습니다. 상한 이상의 릴리스는 매핑되지 않으며, 플러그인은 계속 동작하면서 실행 중인 호스트가 보고하는 능력을 따릅니다 |
 
 DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 런타임 schema 노출에 따라 결정됩니다. 위 표는 각 DSH 버전의 최대 필드 집합이며, 라우트의 프로토콜에 따라 더 줄어들 수 있습니다.
 
@@ -86,7 +86,7 @@ profile은 공식 DSH CLI로 관리하세요. 일반 `pnpm install`은 DSH profi
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 특정 버전 설치
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.11
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
 
 # 업데이트
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -214,7 +214,7 @@ DSH 0.1.7은 `settings.yaml`의 이름을 바꾸고 한 번만 가져오는데, 
 
 - **Host:** 시작 및 설정 변경 시 `llm-pi-ai`의 `models`와 `modelOverrides`를 검사하고 `reasoningEfforts`가 없는 경우에만 기본값을 추가합니다. 쓰기는 사용자 레이어에만 적용되므로, 직접 선언한 프로필의 모델만 보완됩니다. 컴포지션 베이스나 스키마 기본값만 제공하는 모델은 쓸 대상 항목이 없어 보완하지 않고, 건너뛴 개수를 Host 로그에 남깁니다. 또한 모델별 OpenCode 세션 설정을 읽고 일치하는 `llm/stream` 요청에만 `opencodeSession.format`에 따라 생성(기본값 `ses-derive`)한 `x-opencode-session`을 주입하며, `opencodeSession.userAgent`로 선택한 모델의 `user-agent`를 다시 씁니다(그 외에는 `llm-pi-ai` adapter의 attribution 헤더가 강제).
 - **Client:** DSH Settings Remote(`ctx.remote.settings`)와 locale service로 설정 페이지를 등록합니다. 모델 편집기는 OpenCode 세션 Header를 전용 namespace에 저장하며 `llm-pi-ai.compat`와 분리합니다. 사전은 `src/locales/ja.json`, `src/locales/ko.json` 등에서 관리하고 게시 전에 클라이언트 bundle로 생성합니다.
-- **Subagent:** `0.1.7` 이상에서는 이 플러그인 자체 설정 섹션에 `subagentEffort`를 저장합니다(`0.1.0-rc.7`부터 `0.1.6`까지는 `llm-pi-ai` 사용자 레이어). Host는 플러그인 자체 섹션을 먼저 읽고 `llm-pi-ai`로 폴백합니다. 후자에 값이 들어가는 것은 `0.1.7` 이전뿐입니다(entry-config의 `llm-pi-ai` 섹션은 `providers`만 선언하므로 그 사용자 레이어가 이 키를 담지 않습니다). `agent/request` waterfall은 설정한 단계를 Subagent 요청에 적용하고 부모 세션에서 상속한 단계를 덮어씁니다. 설정하지 않았거나 사용자 정의 실값을 Subagent 모델에서 해석할 수 없으면 요청을 건드리지 않으므로 Subagent는 부모 세션 단계를 계속 상속합니다.
+- **Subagent:** `0.1.7` 이상에서는 이 플러그인 자체 설정 섹션에 `subagentEffort`를 저장합니다(`0.1.0-rc.7`부터 `0.1.6`까지는 `llm-pi-ai` 사용자 레이어). Host는 플러그인 섹션을 먼저 읽고 `llm-pi-ai`로 폴백합니다. 후자에 값이 들어가는 것은 `0.1.7` 이전뿐입니다(entry-config 섹션은 `providers`만 선언합니다). `agent.model.current()`와 `agent.model.select()`를 제공하는 Host에서는 첫 모델 단계 전에 `agent/created` 중 설정된 단계를 적용하고, 이전 Host에서는 `agent/request` waterfall을 fallback으로 사용합니다. 기본값이 없거나 사용자 정의 값을 대상 모델에서 해석할 수 없으면 현재 선택을 변경하지 않아 Subagent가 부모 세션 단계를 계속 상속합니다.
 - **기본값 없음:** 플러그인은 `off`, `high`, `max`를 자동으로 선택하지 않습니다. 설정한 단계만 적용하며 스스로 단계를 정하지 않습니다.
 
 ## 제한 사항

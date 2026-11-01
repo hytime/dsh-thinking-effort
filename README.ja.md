@@ -33,7 +33,7 @@
 | `0.1.0-rc.7` | 非対応 |
 | `0.1.0-rc.8` から `<0.1.2-alpha.1` | schema が公開する場合は対応。ただし `supportsFinishReason` と `supportsThinkingTokenBudget` はありません |
 | `0.1.2-alpha.1` から `<0.1.3-alpha.2` | schema が公開する場合は 15 フィールドに対応。`thinkingTokenBudgetField`、`vllmPriority`、`supportsMaxOutputTokens` はまだ提供されません |
-| `0.1.3-alpha.2` から `<0.2.2-0` | schema が公開する場合は 18 フィールドすべてに対応。この範囲は `0.1.7` の Settings 書き換えと `0.2.0`／`0.2.1` ラインにまたがり、いずれも編集可能なフィールド集合が同じであることを検証済みです。上限以降のリリースは未マップのまま、実行中のホストが報告する能力に従って動作を継続します |
+| `0.1.3-alpha.2` から `<0.2.3-0` | schema が公開する場合は 18 フィールドすべてに対応。この範囲は `0.1.7` の Settings 書き換えと `0.2.0` から `0.2.2` までの各ラインにまたがり、いずれも編集可能なフィールド集合が同じであることを検証済みです。上限以降のリリースは未マップのまま、実行中のホストが報告する能力に従って動作を継続します |
 
 DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行時 schema の公開内容に従います。上表は各 DSH バージョンで利用できるフィールドの上限であり、ルートのプロトコルによってさらに絞り込まれます。
 
@@ -86,7 +86,7 @@ profile の管理には公式 DSH CLI を使用してください。通常の `p
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 特定バージョンをインストール
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.11
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
 
 # 更新
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -214,7 +214,7 @@ DSH 0.1.7 は `settings.yaml` の名前を変更して一度だけ取り込み�
 
 - **Host：** 起動時と設定変更時に `llm-pi-ai` の `models` と `modelOverrides` を確認し、`reasoningEfforts` がない場合だけ既定値を追加します。書き込みはユーザーレイヤーだけを対象とするため、補完されるのは自身のプロファイルで宣言したモデルです。コンポジションのベースやスキーマ既定値だけが供給するモデルには書き込む先のエントリがないため補完せず、スキップした件数を Host ログに出力します。さらにモデル単位の OpenCode セッション設定を読み、一致する `llm/stream` リクエストにだけ `opencodeSession.format` に従って生成（既定 `ses-derive`）した `x-opencode-session` を注入し、`opencodeSession.userAgent` で選択したモデルの `user-agent` を書き換えます（それ以外は `llm-pi-ai` アダプターの帰属ヘッダーが強制）。
 - **Client：** DSH Settings Remote（`ctx.remote.settings`）と locale service を使って設定ページを登録します。モデル編集では OpenCode セッション Header を専用 namespace に保存し、`llm-pi-ai.compat` とは分離します。辞書は `src/locales/ja.json` と `src/locales/ko.json` などで管理し、公開前にクライアント bundle へ生成します。
-- **Subagent：** `0.1.7` 以降は本プラグイン自身の設定セクションに `subagentEffort` を保存します（`0.1.0-rc.7` から `0.1.6` までは `llm-pi-ai` のユーザーレイヤー）。Host はプラグイン自身のセクションを先に読み、次に `llm-pi-ai` へフォールバックします。後者に値が入るのは `0.1.7` より前だけです（entry-config の `llm-pi-ai` セクションは `providers` しか宣言しないため、そのユーザーレイヤーがこのキーを持つことはありません）。`agent/request` waterfall は設定したレベルを Subagent リクエストに適用し、親セッションから継承したレベルを上書きします。未設定の場合、またはカスタムの実値が Subagent のモデルで解決できない場合は、リクエストに手を加えず、Subagent は親セッションのレベルをそのまま継承します。
+- **Subagent：** `0.1.7` 以降は本プラグイン自身の設定セクションに `subagentEffort` を保存します（`0.1.0-rc.7` から `0.1.6` までは `llm-pi-ai` のユーザーレイヤー）。Host は自身のセクションを先に読み、次に `llm-pi-ai` へフォールバックします。後者に値が入るのは `0.1.7` より前だけです（entry-config セクションは `providers` しか宣言しません）。`agent.model.current()` と `agent.model.select()` を提供する Host では、最初のモデルステップ前に `agent/created` で設定レベルを適用し、旧 Host では `agent/request` waterfall をフォールバックとして使います。既定値が未設定の場合、またはカスタム値を対象モデルで解決できない場合は現在の選択を変更せず、Subagent は親セッションのレベルを継承します。
 - **既定値なし：** プラグインは `off`、`high`、`max` を自動選択しません。設定したレベルだけを適用し、独自にレベルを決めることはありません。
 
 ## 制限事項

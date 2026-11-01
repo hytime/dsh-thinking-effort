@@ -34,7 +34,7 @@ A [DSH (DeepSeek Harness)](https://github.com/deepseek-ai/deepseek-harness) plug
 | `0.1.0-rc.7` | Not available |
 | `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available when exposed by the DSH schema, but without `supportsFinishReason` and `supportsThinkingTokenBudget` |
 | `0.1.2-alpha.1` to `<0.1.3-alpha.2` | 15 fields when exposed by the DSH schema; `thinkingTokenBudgetField`, `vllmPriority`, and `supportsMaxOutputTokens` are not offered yet |
-| `0.1.3-alpha.2` to `<0.2.2-0` | All 18 fields when exposed by the DSH schema. This spans the `0.1.7` settings rewrite and the `0.2.0`/`0.2.1` lines, all verified to keep the same editable field set. Releases at or beyond the newest bound are unmapped: the plugin keeps working and follows the capabilities the running host reports instead |
+| `0.1.3-alpha.2` to `<0.2.3-0` | All 18 fields when exposed by the DSH schema. This spans the `0.1.7` settings rewrite and the `0.2.0` through `0.2.2` lines, all verified to keep the same editable field set. Releases at or beyond the newest bound are unmapped: the plugin keeps working and follows the capabilities the running host reports instead |
 
 From DSH `0.1.0-rc.8` onward, field availability follows the runtime schema. The table shows the maximum field set for each DSH version; the route protocol can further reduce it.
 
@@ -90,7 +90,7 @@ Use the official DSH CLI to manage the plugin profile. A plain `pnpm install` do
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # Install a specific version
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.11
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
 
 # Upgrade
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -226,7 +226,7 @@ See the complete Chinese, English, Japanese, and Korean screenshot gallery in [`
 
 - **Host:** Scans `llm-pi-ai` `models` and `modelOverrides` on startup and settings changes, adding defaults only where `reasoningEfforts` is missing. It writes through the user layer only, so it covers the models your own profile declares: a model a composition base or a schema default supplies has no entry in that layer to write into, so it is left alone and the Host logs how many were skipped. It also observes the model-level OpenCode session setting and injects the generated `x-opencode-session` (default `ses-derive`, configurable per `opencodeSession.format`) only into matching `llm/stream` requests, and rewrites `user-agent` for models opted into `opencodeSession.userAgent` (otherwise forced by the `llm-pi-ai` adapter's attribution header).
 - **Client:** Registers the Settings page through the DSH Settings Remote (`ctx.remote.settings`) and, when the runtime exposes `modelDirectories`, registers the optional Composer `seat` that deliberately shadows the shipped model selector on this single slot (a lower priority wins) plus a host-resolved effort slider. The model editor stores OpenCode session Header settings in the plugin namespace, separately from `llm-pi-ai.compat`. Chinese, English, Japanese, and Korean dictionaries are maintained separately in `src/locales/zh.json`, `src/locales/en.json`, `src/locales/ja.json`, and `src/locales/ko.json`, then generated into the client bundle before publishing.
-- **Subagents:** Stores the default as `subagentEffort` in the plugin's own settings section on `0.1.7`+ (the `llm-pi-ai` user layer on `0.1.0-rc.7` through `0.1.6`). The Host reads the plugin's own section first and falls back to `llm-pi-ai`, where the value can only live on the releases before `0.1.7` — the entry-config `llm-pi-ai` section declares only `providers`, so its user layer never carries the key. The `agent/request` waterfall applies the configured effort to subagent requests, overriding the effort the child inherits from its parent session; an unset default — or a custom wire value the child's model cannot map — leaves the request untouched, so the child keeps inheriting.
+- **Subagents:** Stores the default as `subagentEffort` in the plugin's own settings section on `0.1.7`+ (the `llm-pi-ai` user layer on `0.1.0-rc.7` through `0.1.6`). The Host reads the plugin's own section first and falls back to `llm-pi-ai`, where the value can only live on releases before `0.1.7` because the entry-config section declares only `providers`. On hosts exposing `agent.model.current()` and `agent.model.select()`, the Host applies the configured effort during `agent/created`, before the child's first model step; older hosts use the `agent/request` waterfall fallback. An unset default — or a custom wire value the child's model cannot map — leaves the selection untouched, so the child keeps inheriting.
 - **No configured default:** The plugin does not automatically choose `off`, `high`, or `max`; it applies only the effort you configure and never invents a level.
 
 ## Limitations
