@@ -1,12 +1,13 @@
 import type { InventoryItem, SettingsOp } from '../../client/types.js'
 import { isUnknownRecord } from '../../shared/guards.js'
 import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, type GatewayCompatFieldKey, type GatewayCompatFieldSpec } from './fields.js'
-import type { GatewayCompatEditability, ModelGatewayCompatUpdate, ProviderGatewayCompatUpdate } from './types.js'
+import type { GatewayCompatEditability, ModelGatewayCompatUpdate, PreserveThinkingContext, ProviderGatewayCompatUpdate } from './types.js'
 
 type CompatEditability = Partial<Pick<GatewayCompatEditability, GatewayCompatFieldKey>>
 
-function providerPath(provider: string, field: string): string[] {
-  return ['providers', provider, 'compat', field]
+function providerPath(provider: string, field?: string): string[] {
+  const prefix = ['providers', provider, 'compat']
+  return field === undefined ? prefix : [...prefix, field]
 }
 
 function fieldValue(spec: GatewayCompatFieldSpec, value: unknown): boolean | string | number | undefined {
@@ -30,6 +31,59 @@ function fieldValue(spec: GatewayCompatFieldSpec, value: unknown): boolean | str
   return undefined
 }
 
+const ENABLE_THINKING_TEMPLATE_VALUE = { $var: 'thinking.enabled' } as const
+const REASONING_EFFORT_TEMPLATE_VALUE = { $var: 'thinking.effort', omitWhenOff: true } as const
+
+/** Build a complete atomic kwargs dict while retaining all effective custom values. */
+function preserveTemplateKwargs(context: PreserveThinkingContext, preserved: boolean): Record<string, unknown> {
+  const kwargs = isUnknownRecord(context.chatTemplateKwargs) ? { ...context.chatTemplateKwargs } : {}
+  if (context.thinkingFormat !== 'chat-template') {
+    // Switching away from OpenAI-style effort controls needs equivalent template
+    // mappings, but existing values still win even on an otherwise ignored dict.
+    if (!Object.prototype.hasOwnProperty.call(kwargs, 'enable_thinking')) kwargs.enable_thinking = ENABLE_THINKING_TEMPLATE_VALUE
+    if (!Object.prototype.hasOwnProperty.call(kwargs, 'reasoning_effort')) kwargs.reasoning_effort = REASONING_EFFORT_TEMPLATE_VALUE
+  }
+  kwargs.preserve_thinking = preserved
+  return kwargs
+}
+
+function preserveContextForUpdate(
+  context: PreserveThinkingContext,
+  update: Partial<ProviderGatewayCompatUpdate>,
+): PreserveThinkingContext {
+  if (!Object.prototype.hasOwnProperty.call(update, 'thinkingFormat')) return context
+  return {
+    ...context,
+    // An Auto format cannot be assumed to remain generic after its override is
+    // removed. An explicit preserve selection must therefore install generic.
+    thinkingFormat: update.thinkingFormat === 'auto' ? undefined : update.thinkingFormat,
+  }
+}
+
+/**
+ * preserveThinking is virtual. Generic templates only change the complete
+ * atomic kwargs dict; switching formats also installs missing effort mappings.
+ * Auto removes only the preserve override and never deletes sibling settings.
+ */
+function pushPreserveThinkingOperations(
+  operations: SettingsOp[],
+  compatPath: string[],
+  value: unknown,
+  context: PreserveThinkingContext,
+): void {
+  const preservePath = [...compatPath, 'chatTemplateKwargs', 'preserve_thinking']
+  if (value === 'auto') {
+    operations.push({ op: 'unset', path: preservePath })
+    return
+  }
+  const preserved = fieldValue(GATEWAY_COMPAT_FIELDS.preserveThinking, value)
+  if (typeof preserved !== 'boolean') return
+  if (context.thinkingFormat !== 'chat-template') {
+    operations.push({ op: 'set', path: [...compatPath, 'thinkingFormat'], value: 'chat-template' })
+  }
+  operations.push({ op: 'set', path: [...compatPath, 'chatTemplateKwargs'], value: preserveTemplateKwargs(context, preserved) })
+}
+
 function pushFieldOperation(operations: SettingsOp[], path: string[], spec: GatewayCompatFieldSpec, value: unknown): void {
   const result = fieldValue(spec, value)
   if (result === undefined) {
@@ -48,6 +102,7 @@ export function opsForProviderCompat(
   provider: string,
   update: Partial<ProviderGatewayCompatUpdate>,
   editability?: CompatEditability,
+  preserveContext: PreserveThinkingContext = {},
 ): SettingsOp[] {
   if (provider.trim() === '') return []
 
@@ -62,7 +117,8 @@ export function opsForProviderCompat(
   const operations: SettingsOp[] = []
   GATEWAY_COMPAT_FIELD_KEYS.forEach((key) => {
     if (!Object.prototype.hasOwnProperty.call(update, key)) return
-    pushFieldOperation(operations, providerPath(provider, key), GATEWAY_COMPAT_FIELDS[key], update[key])
+    if (key === 'preserveThinking') pushPreserveThinkingOperations(operations, providerPath(provider), update[key], preserveContextForUpdate(preserveContext, update))
+    else pushFieldOperation(operations, providerPath(provider, key), GATEWAY_COMPAT_FIELDS[key], update[key])
   })
   return operations
 }
@@ -71,6 +127,7 @@ export function opsForModelCompat(
   item: InventoryItem,
   update: Partial<ModelGatewayCompatUpdate>,
   editability?: CompatEditability,
+  preserveContext: PreserveThinkingContext = {},
 ): SettingsOp[] {
   if (item.inOverrides !== true
     || item.modelSourceConflict === true
@@ -91,7 +148,8 @@ export function opsForModelCompat(
   const operations: SettingsOp[] = []
   GATEWAY_COMPAT_FIELD_KEYS.forEach((key) => {
     if (!Object.prototype.hasOwnProperty.call(update, key)) return
-    pushFieldOperation(operations, [...prefix, key], GATEWAY_COMPAT_FIELDS[key], update[key])
+    if (key === 'preserveThinking') pushPreserveThinkingOperations(operations, prefix, update[key], preserveContextForUpdate(preserveContext, update))
+    else pushFieldOperation(operations, [...prefix, key], GATEWAY_COMPAT_FIELDS[key], update[key])
   })
   return operations
 }
@@ -101,6 +159,7 @@ export function opsForModelArrayCompat(
   item: InventoryItem,
   update: Partial<ModelGatewayCompatUpdate>,
   editability?: CompatEditability,
+  preserveContext?: PreserveThinkingContext,
 ): SettingsOp[] {
   if (item.inOverrides !== false
     || item.modelSourceConflict === true
@@ -158,7 +217,24 @@ export function opsForModelArrayCompat(
     GATEWAY_COMPAT_FIELD_KEYS.forEach((key) => {
       if (!Object.prototype.hasOwnProperty.call(update, key)) return
       const value = update[key]
-      if (value === 'auto') delete compat[key]
+      if (key === 'preserveThinking') {
+        const kwargsSource = compat.chatTemplateKwargs
+        const kwargs = isUnknownRecord(kwargsSource) ? { ...kwargsSource } : {}
+        if (value === 'auto') {
+          delete kwargs.preserve_thinking
+          if (Object.keys(kwargs).length === 0) delete compat.chatTemplateKwargs
+          else compat.chatTemplateKwargs = kwargs
+        } else {
+          const preserved = fieldValue(GATEWAY_COMPAT_FIELDS.preserveThinking, value)
+          if (typeof preserved !== 'boolean') return
+          const context = preserveContextForUpdate(
+            preserveContext ?? { thinkingFormat: compat.thinkingFormat, chatTemplateKwargs: compat.chatTemplateKwargs },
+            update,
+          )
+          if (context.thinkingFormat !== 'chat-template') compat.thinkingFormat = 'chat-template'
+          compat.chatTemplateKwargs = preserveTemplateKwargs(context, preserved)
+        }
+      } else if (value === 'auto') delete compat[key]
       else compat[key] = fieldValue(GATEWAY_COMPAT_FIELDS[key], value)
     })
     if (Object.keys(compat).length === 0) delete model.compat

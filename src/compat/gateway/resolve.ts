@@ -16,6 +16,7 @@ import type {
   GatewayCompatSource,
   MaxTokensField,
   ModelGatewayCompatView,
+  PreserveThinkingContext,
   ProviderGatewayCompatView,
 } from './types.js'
 
@@ -56,7 +57,9 @@ function readCompat(value: unknown): GatewayCompat {
     if (!input) continue
     for (const spec of Object.values(GATEWAY_COMPAT_FIELDS)) {
       if (output[spec.key] !== undefined) continue
-      const fieldValue = input[spec.key]
+      const fieldValue = spec.key === 'preserveThinking'
+        ? record(input.chatTemplateKwargs)?.preserve_thinking
+        : input[spec.key]
       if (spec.kind === 'boolean') {
         if (typeof fieldValue === 'boolean') output[spec.key] = fieldValue
       } else if (spec.kind === 'enum') {
@@ -81,16 +84,65 @@ function sourceFor(field: GatewayCompatFieldKey, sources: readonly { value: Gate
   return { value: undefined, source: 'unknown' }
 }
 
-export function resolveGatewayCompat(input: GatewayCompatResolveInput): GatewayCompatResolution {
-  const sources = [
-    { value: readCompat(input.modelCompat), source: 'model' as const },
-    { value: readCompat(input.providerCompat), source: 'provider' as const },
-    { value: readCompat(input.baseCompat), source: 'base' as const },
-    { value: readCompat(input.catalogCompat), source: 'catalog' as const },
-    { value: readCompat(input.protocolDefault), source: 'protocol' as const },
+type RawCompatSource = { readonly value: unknown; readonly source: GatewayCompatSource }
+
+function rawCompatSources(input: GatewayCompatResolveInput): RawCompatSource[] {
+  return [
+    { value: input.modelCompat, source: 'model' },
+    { value: input.providerCompat, source: 'provider' },
+    { value: input.baseCompat, source: 'base' },
+    { value: input.catalogCompat, source: 'catalog' },
+    { value: input.protocolDefault, source: 'protocol' },
   ]
+}
+
+/** DSH replaces chatTemplateKwargs as one compat field; nested keys do not merge. */
+function atomicChatTemplateKwargs(sources: readonly RawCompatSource[]): GatewayCompatFieldResolution<unknown> {
+  for (const source of sources) {
+    const candidates = Array.isArray(source.value) ? source.value : [source.value]
+    for (const candidate of candidates) {
+      const compat = compatRecord(candidate)
+      if (compat && Object.prototype.hasOwnProperty.call(compat, 'chatTemplateKwargs')) {
+        const value = compat.chatTemplateKwargs
+        // configuredCompatEntries in DSH skips empty objects entirely: an
+        // empty dict left by Auto does not mask a lower layer's kwargs.
+        if (isUnknownRecord(value) && Object.keys(value).length === 0) continue
+        return { value, source: source.source }
+      }
+    }
+  }
+  return { value: undefined, source: 'unknown' }
+}
+
+function resolvePreserveThinking(
+  sources: readonly RawCompatSource[],
+  format: GatewayCompatFieldResolution<unknown>,
+): GatewayCompatFieldResolution<unknown> {
+  // pi-ai's Qwen shorthand hardcodes preserve=true and ignores custom kwargs.
+  if (format.value === 'qwen-chat-template') return { value: true, source: format.source }
+  // Other formats never consume chatTemplateKwargs.preserve_thinking.
+  if (format.value !== 'chat-template') return { value: undefined, source: 'unknown' }
+  const kwargs = atomicChatTemplateKwargs(sources)
+  const preserved = record(kwargs.value)?.preserve_thinking
+  return { value: typeof preserved === 'boolean' ? preserved : undefined, source: kwargs.source }
+}
+
+/** Effective raw values needed to change preserve without replacing custom reasoning mappings. */
+export function resolvePreserveThinkingContext(input: GatewayCompatResolveInput): PreserveThinkingContext {
+  const sources = rawCompatSources(input)
+  const readSources = sources.map((source) => ({ value: readCompat(source.value), source: source.source }))
+  return {
+    thinkingFormat: sourceFor('thinkingFormat', readSources).value,
+    chatTemplateKwargs: atomicChatTemplateKwargs(sources).value,
+  }
+}
+
+export function resolveGatewayCompat(input: GatewayCompatResolveInput): GatewayCompatResolution {
+  const rawSources = rawCompatSources(input)
+  const sources = rawSources.map((source) => ({ value: readCompat(source.value), source: source.source }))
   const fields = {} as Record<GatewayCompatFieldKey, GatewayCompatFieldResolution<unknown>>
   for (const key of GATEWAY_COMPAT_FIELD_KEYS) fields[key] = sourceFor(key, sources)
+  fields.preserveThinking = resolvePreserveThinking(rawSources, fields.thinkingFormat)
   return {
     provider: input.provider,
     ...(input.model === undefined ? {} : { model: input.model }),

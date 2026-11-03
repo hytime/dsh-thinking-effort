@@ -208,6 +208,24 @@ Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델
 
 알려진 프로토콜에서는 목록에 없는 필드를 UI에 표시하지 않으며 기록하지도 않습니다. 라우트에 인식 가능한 `api`가 없으면 런타임 schema와 DSH 검증을 최종 기준으로 사용합니다.
 
+### NInfer/Qwen 이전 사고
+
+completions schema가 `thinkingFormat`과 `chatTemplateKwargs`를 제공하면 가상 컨트롤 「이전 사고 유지」는 존재하지 않는 스칼라 compat 필드가 아니라 중첩된 `preserve_thinking`을 편집합니다. 비범용 형식에서 전환할 때 결과는 다음과 같습니다.
+
+```yaml
+compat:
+  thinkingFormat: chat-template
+  chatTemplateKwargs:
+    enable_thinking:
+      $var: thinking.enabled
+    reasoning_effort:
+      $var: thinking.effort
+      omitWhenOff: true
+    preserve_thinking: true # 또는 false
+```
+
+기존 범용 템플릿에서는 `preserve_thinking`만 변경하고 사용자 지정/정적 매핑과 다른 kwargs를 보존합니다. 형식을 전환할 때도 누락된 기본 매핑만 추가합니다. DSH는 `chatTemplateKwargs` 전체를 원자적으로 교체하므로 모델 수준 쓰기는 중첩 키 상속에 의존하지 않고 실제 유효 사전을 복사합니다. `Auto`는 `preserve_thinking`만 unset하며 해석된 표시는 남은 유효 사전을 따릅니다. 이 설정은 후속 프롬프트의 이전 assistant 사고를 제어하며 현재 턴의 사고나 GUI 표시를 제어하지 않습니다.
+
 catalog 모델과 `models[]` 항목 모두 compat 편집을 지원합니다. 전자는 `modelOverrides.<model>.compat`, 후자는 `models[].compat`을 사용합니다.
 
 ```yaml

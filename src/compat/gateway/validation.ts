@@ -105,7 +105,11 @@ function compatProperties(schema: unknown): Record<string, unknown> | undefined 
 
 function schemaAllowsField(schema: unknown, field: GatewayCompatFieldKey): boolean {
   const properties = compatProperties(schema)
-  return properties !== undefined && hasProperty(properties, field)
+  if (properties === undefined) return false
+  // preserveThinking is a virtual UI field backed by these two real DSH
+  // fields; never write a literal compat.preserveThinking key.
+  if (field === 'preserveThinking') return hasProperty(properties, 'thinkingFormat') && hasProperty(properties, 'chatTemplateKwargs')
+  return hasProperty(properties, field)
 }
 
 function runtimeAllowsField(
@@ -114,7 +118,11 @@ function runtimeAllowsField(
 ): boolean {
   if (capabilities === 'modern' || capabilities === 'legacy') return true
   if (capabilities === 'unknown' || capabilities === undefined || capabilities === null || typeof capabilities !== 'object') return false
-  return Array.isArray(capabilities.gatewayCompatFields) && capabilities.gatewayCompatFields.includes(field)
+  // The version map tracks DSH's scalar compat offer. The virtual preserve
+  // control is available on the same releases as thinkingFormat, with the
+  // separate chatTemplateKwargs schema check above supplying the second gate.
+  const runtimeField = field === 'preserveThinking' ? 'thinkingFormat' : field
+  return Array.isArray(capabilities.gatewayCompatFields) && capabilities.gatewayCompatFields.includes(runtimeField)
 }
 
 /**

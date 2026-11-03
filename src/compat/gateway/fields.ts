@@ -101,6 +101,9 @@ export const GATEWAY_COMPAT_FIELDS = {
     { value: 'thinking_budget_tokens', labelKey: 'thinkingTokenBudgetFieldBudgetTokens' },
   ]),
   thinkingFormat: enumField('thinkingFormat', 'format', COMPLETIONS, SUPPORTED_THINKING_FORMATS),
+  // Virtual boolean projected to chatTemplateKwargs.preserve_thinking. It is
+  // deliberately absent from the per-version scalar field arrays below.
+  preserveThinking: booleanField('preserveThinking', 'format', COMPLETIONS),
   maxTokensField: enumField('maxTokensField', 'format', COMPLETIONS, MAX_TOKENS_FIELDS, [
     { value: 'max_tokens', labelKey: 'maxTokensFieldStandard' },
     { value: 'max_completion_tokens', labelKey: 'maxTokensFieldCompletion' },
@@ -159,7 +162,7 @@ export const RC8_COMPAT_FIELDS = [
   'requiresAssistantAfterToolResult', 'requiresThinkingAsText',
   'requiresReasoningContentOnAssistantMessages', 'supportsStrictMode',
   'thinkingFormat', 'cacheControlFormat', 'supportsLongCacheRetention',
-] as const satisfies readonly Omit<GatewayCompatFieldKey, 'supportsFinishReason' | 'supportsThinkingTokenBudget'>[]
+] as const satisfies readonly Omit<GatewayCompatFieldKey, 'supportsFinishReason' | 'supportsThinkingTokenBudget' | 'preserveThinking'>[]
 
 export const ALPHA1_PLUS_COMPAT_FIELDS = [
   ...RC8_COMPAT_FIELDS,

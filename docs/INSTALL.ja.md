@@ -208,6 +208,24 @@ Settings の provider グローバル領域では、その provider 配下のす
 
 認識されたプロトコルでは、一覧にないフィールドは UI に表示されず、書き込まれません。`api` がない、または認識できない場合は、実行時 schema と DSH の検証を最終的な基準にします。
 
+### NInfer/Qwen の過去の思考
+
+completions schema が `thinkingFormat` と `chatTemplateKwargs` を提供する場合、仮想コントロール「過去の思考を保持」は、存在しないスカラー compat フィールドではなく、ネストされた `preserve_thinking` を編集します。非汎用形式から切り替える場合、結果は次の形です。
+
+```yaml
+compat:
+  thinkingFormat: chat-template
+  chatTemplateKwargs:
+    enable_thinking:
+      $var: thinking.enabled
+    reasoning_effort:
+      $var: thinking.effort
+      omitWhenOff: true
+    preserve_thinking: true # または false
+```
+
+既存の汎用テンプレートでは `preserve_thinking` だけを変更し、カスタム/静的マッピングと他の kwargs を保持します。形式を切り替える場合も、不足している既定マッピングだけを補います。DSH は `chatTemplateKwargs` 全体をアトミックに置き換えるため、モデルレベルの書き込みはネストキー継承に頼らず、実効的な辞書をコピーします。`Auto` は `preserve_thinking` だけを unset し、解決表示は残った実効辞書に従います。この設定は後続プロンプト内の過去の assistant 思考を制御するもので、現在のターンの思考や GUI 表示を制御するものではありません。
+
 カタログモデルと `models[]` エントリの両方で compat を編集できます。前者は `modelOverrides.<model>.compat`、後者は `models[].compat` を使用します。
 
 ```yaml

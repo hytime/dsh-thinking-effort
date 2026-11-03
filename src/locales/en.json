@@ -108,6 +108,7 @@
   "supportsStrictMode": "Strict mode",
   "supportsLongCacheRetention": "Long cache retention",
   "thinkingFormat": "Thinking format",
+  "preserveThinking": "Preserve historical thinking (preserve_thinking)",
   "cacheControlFormat": "Cache control format",
   "cacheControlFormatAnthropic": "anthropic",
   "gatewayCompatAuto": "Auto",

@@ -108,6 +108,7 @@
   "supportsStrictMode": "严格模式",
   "supportsLongCacheRetention": "长缓存保留",
   "thinkingFormat": "思考格式",
+  "preserveThinking": "保留历史思考（preserve_thinking）",
   "cacheControlFormat": "缓存控制格式",
   "cacheControlFormatAnthropic": "anthropic",
   "gatewayCompatAuto": "自动",

@@ -208,6 +208,24 @@ Protocol support is an additional limit on top of the DSH version and runtime sc
 
 For a known protocol, fields outside its list are hidden and are not written. If the route has no recognized `api`, the runtime schema and DSH validation remain authoritative.
 
+### NInfer/Qwen historical thinking
+
+When the completions schema offers `thinkingFormat` and `chatTemplateKwargs`, the virtual **Preserve historical thinking** control edits the nested `preserve_thinking` value rather than adding a non-existent scalar compat field. When switching from a non-generic format, the resulting shape is:
+
+```yaml
+compat:
+  thinkingFormat: chat-template
+  chatTemplateKwargs:
+    enable_thinking:
+      $var: thinking.enabled
+    reasoning_effort:
+      $var: thinking.effort
+      omitWhenOff: true
+    preserve_thinking: true # or false
+```
+
+For an existing generic template, only `preserve_thinking` changes; existing custom/static mappings and unrelated kwargs are kept. A format switch fills only missing default mappings. DSH replaces `chatTemplateKwargs` atomically, so model-level writes copy the effective dictionary instead of relying on nested-key inheritance. `Auto` unsets only `preserve_thinking`, and the resolved display follows the remaining effective dictionary. This controls historical assistant reasoning in later prompts, not current-turn reasoning or its GUI display.
+
 Catalog models and `models[]` entries both support compat editing: catalog models use `modelOverrides.<model>.compat`, while `models[]` entries use `models[].compat`.
 
 ```yaml

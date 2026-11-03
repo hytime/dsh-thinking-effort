@@ -14,6 +14,10 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 新增 / Added
+
+- WebUI 新增 NInfer/Qwen「保留历史思考」三态设置，写入嵌套的 `chatTemplateKwargs.preserve_thinking`；显式选择同时保留现有推理档位映射。 / Added an NInfer/Qwen preserve-historical-thinking tri-state control backed by nested `chatTemplateKwargs.preserve_thinking`, while preserving existing reasoning-effort mappings on explicit selections.
+
 ## [0.3.12] - 2026-10-31
 
 ### 兼容性 / Compatibility

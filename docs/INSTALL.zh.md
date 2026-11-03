@@ -214,6 +214,24 @@ dsh-thinking-effort:
 
 对于已识别的协议，列表之外的字段不会显示，也不会写入。如果路由没有可识别的 `api`，最终仍以运行时 schema 和 DSH 校验为准。
 
+### NInfer/Qwen 历史思考
+
+当 completions schema 提供 `thinkingFormat` 与 `chatTemplateKwargs` 时，虚拟控件「保留历史思考」编辑的是嵌套的 `preserve_thinking`，而不是添加一个不存在的标量 compat 字段。从非通用格式切换时，得到的结构如下：
+
+```yaml
+compat:
+  thinkingFormat: chat-template
+  chatTemplateKwargs:
+    enable_thinking:
+      $var: thinking.enabled
+    reasoning_effort:
+      $var: thinking.effort
+      omitWhenOff: true
+    preserve_thinking: true # 或 false
+```
+
+对于已有的通用模板，只修改 `preserve_thinking`，保留现有自定义/静态映射和其他 kwargs；切换格式时也只补充缺失的默认映射。DSH 会原子替换整个 `chatTemplateKwargs`，所以模型级写入会复制实际生效的字典，而不是依赖嵌套 key 继承。「自动」只 unset `preserve_thinking`，解析结果按剩余的实际有效字典显示。此设置控制后续 prompt 中的历史 assistant 思考，不控制本轮思考或 GUI 显示。
+
 catalog 模型和 `models[]` 模型都支持编辑 compat：前者使用 `modelOverrides.<model>.compat`，后者使用 `models[].compat`。
 
 ```yaml
