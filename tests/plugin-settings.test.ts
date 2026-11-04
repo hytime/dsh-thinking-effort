@@ -58,7 +58,7 @@ describe('PLUGIN_SETTINGS_SCHEMA', () => {
   it('resolves a full section without altering it apart from owned field defaults', () => {
     const resolved = PLUGIN_SETTINGS_SCHEMA(section) as { opencodeSession?: Record<string, unknown> }
     const { opencodeSession, ...rest } = resolved
-    expect(rest).toEqual({ ...section, opencodeSession: undefined, subagentEffort: '', legacyMigration: legacyMigrationDefaults })
+    expect(rest).toEqual({ ...section, opencodeSession: undefined, subagentEffort: '', autoFillDefaults: true, legacyMigration: legacyMigrationDefaults })
     expect(opencodeSession).toEqual({
       providers: { p: { models: { m: true } } },
       format: formatDefaults,
@@ -68,7 +68,7 @@ describe('PLUGIN_SETTINGS_SCHEMA', () => {
 
   it('materializes every owned field for an empty section so editors see a stable shape', () => {
     const resolved = PLUGIN_SETTINGS_SCHEMA({ opencodeSession: { providers: {} } }) as unknown as Record<string, unknown>
-    expect(Object.keys(resolved)).toEqual(['opencodeSession', 'subagentEffort', 'legacyMigration', 'profiles', 'autoBackup'])
+    expect(Object.keys(resolved)).toEqual(['opencodeSession', 'subagentEffort', 'autoFillDefaults', 'legacyMigration', 'profiles', 'autoBackup'])
     expect(resolved.subagentEffort).toBe('')
     expect(resolved.profiles).toEqual({})
     expect((resolved.opencodeSession as Record<string, unknown>).format).toEqual(formatDefaults)
@@ -131,6 +131,7 @@ function fieldPaths(schema: { toJSON(): unknown }): readonly string[] {
 const pluginSettingsDefaults = {
   opencodeSession: { providers: {}, format: formatDefaults, userAgent: userAgentDefaults },
   subagentEffort: '',
+  autoFillDefaults: true,
   legacyMigration: legacyMigrationDefaults,
   profiles: {},
   autoBackup: {
@@ -190,6 +191,6 @@ describe('Config', () => {
     const root = schemaNodeAtPath(envelope, [])
     expect(root?.type).toBe('object')
     expect(Object.keys(root?.dict ?? {}).sort())
-      .toEqual(['autoBackup', 'legacyMigration', 'opencodeSession', 'profiles', 'subagentEffort'])
+      .toEqual(['autoBackup', 'autoFillDefaults', 'legacyMigration', 'opencodeSession', 'profiles', 'subagentEffort'])
   })
 })

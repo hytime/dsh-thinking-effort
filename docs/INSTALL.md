@@ -347,10 +347,11 @@ name: dsh-thinking-effort
 Restart DSH, then refresh the Web page. Open **Settings → Model capabilities and effort**.
 
 1. The page language selector offers `中文`, `English`, `日本語`, and `한국어` on DSH `0.1.2-alpha.1` and later.
-2. The **Subagent default effort** card shows the current default and provides **Apply**.
-3. **Quick settings** offers the official DeepSeek and generic batch presets.
-4. The provider/model list supports search, expand/collapse, input-capability badges, context badges, and per-model settings controls.
-5. The bottom-right watermark shows the installed plugin version.
+2. The **Automatically fill default efforts** switch is on by default; turn it off to stop automatic fills on startup and settings changes without deleting existing values.
+3. The **Subagent default effort** card shows the current default and provides **Apply**.
+4. **Quick settings** offers the official DeepSeek and generic batch presets.
+5. The provider/model list supports search, expand/collapse, input-capability badges, context badges, and per-model settings controls.
+6. The bottom-right watermark shows the installed plugin version.
 
 Return to Composer and choose a configured model. When the Web runtime provides `modelDirectories`, the plugin registers an optional Composer `seat` with a discrete reasoning-effort slider. It lists only the host-resolved `reasoning.efforts` for the selected exact `provider/model`. A model without `defaultEffort` also shows **Follow model default**; this clears the session's reasoning-effort override instead of editing plugin Settings. The slider follows the active light or dark theme through host `--dsw-*` tokens.
 

@@ -14,6 +14,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 新增 / Added
+
+- 设置页新增「自动补齐默认档位」开关，默认开启；关闭后停止启动和设置变更时的自动扫描与写入，不删除已有档位，重新开启会立即扫描一次。
+- Added an **Automatically fill default efforts** switch to the settings page, enabled by default. Disabling it stops automatic scans and writes on startup and settings changes without deleting existing values; re-enabling runs a scan immediately.
+
 ## [0.3.12] - 2026-10-31
 
 ### 兼容性 / Compatibility

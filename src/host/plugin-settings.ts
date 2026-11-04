@@ -142,6 +142,8 @@ export interface PluginSettings extends OpenCodeSessionSettings {
    * value is a wire spelling, not necessarily a level key.
    */
   readonly subagentEffort?: string
+  /** Whether the host automatically supplies missing model reasoning efforts. */
+  readonly autoFillDefaults?: boolean
   /** The host-managed legacy-data migration control object. */
   readonly legacyMigration?: LegacyMigrationState
   readonly profiles?: Readonly<Record<string, PluginStoredSnapshot>>
@@ -160,6 +162,7 @@ export interface PluginSettings extends OpenCodeSessionSettings {
 const PLUGIN_SETTINGS_FIELDS = {
   opencodeSession: openCodeSession,
   subagentEffort: z.string().default(''),
+  autoFillDefaults: z.boolean().default(true),
   legacyMigration,
   profiles: z.dict(configSnapshot).default({}),
   autoBackup: configSnapshot,
@@ -176,6 +179,7 @@ const PLUGIN_SETTINGS_FIELDS = {
 const PLUGIN_SETTINGS_DEFAULTS = {
   opencodeSession: { ...OPENCODE_SESSION_DEFAULTS },
   subagentEffort: '',
+  autoFillDefaults: true,
   legacyMigration: {
     pending: false,
     candidates: [],

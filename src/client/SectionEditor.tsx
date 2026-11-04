@@ -16,7 +16,7 @@ import type { ClientLocale, ClientResult, ConfigFormFace, ContextDraft, DraftCel
 import type { Palette } from './theme.js'
 import type { TakeoverRuntimeStore } from './takeover-runtime.js'
 import { iosPalette } from './theme.js'
-import { ActionButton, Icon } from './components/Controls.js'
+import { ActionButton, Icon, SwitchControl } from './components/Controls.js'
 import css from './settings.module.css'
 import { ModelRow } from './components/ModelRow.js'
 import { SubagentSettings } from './components/SubagentSettings.js'
@@ -794,6 +794,20 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     })
   }
 
+  const applyAutoFillDefaults = (enabled: boolean): void => {
+    const section = state.pluginSection
+    if (section === null) return
+    const ops: SettingsOp[] = [{ op: 'set', path: ['autoFillDefaults'], value: enabled }]
+    runOps({
+      ns: section.ns,
+      revision: revisionOf(section),
+      ops,
+      rebuildOps: () => ops,
+      successMessage: t('settingsUpdated'),
+      entrySectionWrite: true,
+    })
+  }
+
   const applyProviderCompat = (route: string): void => {
     const draft = state.providerDrafts[route]
     const current = state.providerViews[route]
@@ -891,6 +905,10 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     <label className={css.controlRowEnd} style={{ fontSize: '12px', marginBottom: '4px' }}>{t('languageLabel')}<select value={snapshot.active} onChange={(event) => locale.setLocale?.(event.currentTarget.value)} style={{ height: '26px', padding: '0 7px', border: `1px solid ${palette.border}`, borderRadius: '7px', backgroundColor: palette.field, color: palette.text, fontSize: '12px' }}>{languageOptions.map(([id, key]) => available.has(id) ? <option key={id} value={id}>{t(key)}</option> : null)}</select></label>
     <h3 style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: '8px', rowGap: '4px', fontSize: '18px', lineHeight: '24px', fontWeight: 700, letterSpacing: 0, margin: '0 0 7px' }}><Icon name="sliders" size={19} /><span>{t('pageTitle')}</span></h3>
     {state.error ? <div role="alert" aria-live="assertive" style={{ fontSize: '12px', lineHeight: '18px', color: palette.danger, backgroundColor: palette.dangerBg, border: `1px solid ${palette.dangerBorder}`, borderRadius: '8px', padding: '6px 8px', margin: '0 0 8px' }}>{state.error}</div> : null}
+    <div data-scope="auto-fill-defaults" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '8px', marginBottom: '8px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.group, boxShadow: palette.shadow }}>
+      <div style={{ display: 'grid', gap: '2px' }}><span style={{ fontSize: '13px', fontWeight: 700 }}>{t('autoFillDefaultsTitle')}</span><span style={{ fontSize: '12px', color: palette.secondary }}>{t('autoFillDefaultsDescription')}</span></div>
+      <SwitchControl checked={state.pluginSection?.value.autoFillDefaults !== false} disabled={state.busy || state.pluginSection === null} label={t('autoFillDefaultsTitle')} palette={palette} onChange={applyAutoFillDefaults} />
+    </div>
     <SubagentSettings effort={state.subagent?.effort ?? null} namespaceFound={state.subagent !== null} draft={state.subagentDraft} custom={state.subagentCustom} busy={state.busy} palette={palette} t={t} onDraftChange={(value) => setState((current) => ({ ...current, notice: null, subagentDraft: value }))} onCustomChange={(value) => setState((current) => ({ ...current, notice: null, subagentCustom: value }))} onSave={applySubagentEffort} />
     <ConfigBackupCard settings={settings} palette={palette} t={t} onApplied={load} />
     <OpenCodeFormatCard settings={settings} palette={palette} t={t} revision={state.openCodeSessionReads} namespace={state.pluginSection?.ns ?? OPENCODE_SESSION_NS} onApplied={load} />

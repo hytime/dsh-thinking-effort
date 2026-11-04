@@ -319,6 +319,7 @@ describe('real Settings-backed OpenCode registration', () => {
       expect(host.ctx.settings.describe().find((entry) => entry.ns === OPENCODE_SESSION_NAMESPACE)?.value).toEqual({
         opencodeSession: { providers: {}, format: openCodeSessionFormatDefaults, userAgent: openCodeSessionUserAgentDefaults },
         subagentEffort: '',
+        autoFillDefaults: true,
         legacyMigration: legacyMigrationDefaults,
         profiles: {},
         autoBackup: snapshotDefaults,
@@ -354,6 +355,7 @@ describe('real Settings-backed OpenCode registration', () => {
           userAgent: openCodeSessionUserAgentDefaults,
         },
         subagentEffort: '',
+        autoFillDefaults: true,
         legacyMigration: legacyMigrationDefaults,
         profiles: {},
         autoBackup: snapshotDefaults,
@@ -599,7 +601,7 @@ describe('Host composition', () => {
     expect(harness.writes).toHaveLength(1)
   })
 
-  it('only responds to llm-pi-ai settings updates', async () => {
+  it('ignores unrelated settings updates', async () => {
     const harness = createHarness({
       section: { providers: { route: { models: [{ id: 'model' }] } } },
     })
@@ -612,6 +614,56 @@ describe('Host composition', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(harness.writes).toHaveLength(1)
+  })
+
+  it('disables automatic fills and resumes when the own-section switch is re-enabled', async () => {
+    const providers = {
+      providers: {
+        route: {
+          models: [
+            { id: 'missing' },
+            { id: 'existing', reasoningEfforts: { low: 'low' } },
+          ],
+        },
+      },
+    }
+    const own = (enabled: boolean) => ({
+      ns: 'thinking-effort',
+      user: { autoFillDefaults: enabled },
+      // Deliberately disagree with the user layer: the explicit user value
+      // must win over both schema defaults and composed values.
+      value: { autoFillDefaults: !enabled },
+    })
+    const harness = createHarness({
+      entryId: 'thinking-effort',
+      section: providers,
+      descriptors: [{ ns: 'llm-pi-ai', user: providers }, own(false)],
+    })
+
+    await runInitial(harness)
+
+    expect(harness.writes).toEqual([])
+    expect(harness.document()).toEqual(providers)
+    expect(harness.scheduled.some((task) => task.delay === 2000)).toBe(false)
+
+    harness.setDescriptors([{ ns: 'llm-pi-ai', user: providers }, own(true)])
+    await harness.listener('settings/updated')?.callback('thinking-effort')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(harness.writes).toHaveLength(1)
+    expect(harness.writes[0]).toEqual({
+      kind: 'mutate',
+      ns: 'llm-pi-ai',
+      ops: [{
+        op: 'set',
+        path: ['providers', 'route', 'models'],
+        value: [
+          { id: 'missing', reasoningEfforts: defaults },
+          { id: 'existing', reasoningEfforts: { low: 'low' } },
+        ],
+      }],
+    })
   })
 
   it('retries after a late namespace becomes available', async () => {
