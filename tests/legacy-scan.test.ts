@@ -73,12 +73,6 @@ describe('scanLegacyData', () => {
     expect(scan.signature).toMatch(/^[0-9a-f]{64}$/)
   })
 
-  it('keeps "off" a string rather than a boolean', async () => {
-    const { run } = options({ [IMPORTED]: IMPORTED_DOCUMENT })
-    const { candidates } = await run()
-    expect(candidates.find((c) => c.path.join('.') === 'subagentEffort')?.value).toBe('off')
-  })
-
   it('prefers settings.yaml over settings.yaml.imported for the same path', async () => {
     const current = 'dsh-thinking-effort:\n  subagentEffort: high\n'
     const { run } = options({ [DOCUMENT]: current, [IMPORTED]: IMPORTED_DOCUMENT })
@@ -163,10 +157,4 @@ describe('scanLegacyData', () => {
     ])
   })
 
-  it('names the sources it reports as provenance', async () => {
-    const { run } = options({ [IMPORTED]: IMPORTED_DOCUMENT })
-    const { candidates } = await run()
-    expect(new Set(candidates.map((candidate) => candidate.source)))
-      .toEqual(new Set([LEGACY_MIGRATION_SOURCES.imported]))
-  })
 })

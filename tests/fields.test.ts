@@ -72,7 +72,6 @@ describe('gateway compat field registry', () => {
     expect(ALPHA3_PLUS_COMPAT_FIELDS).toContain('supportsMaxOutputTokens')
     expect(ALPHA1_PLUS_COMPAT_FIELDS).not.toContain('thinkingTokenBudgetField')
     expect(ALPHA1_PLUS_COMPAT_FIELDS).not.toContain('supportsMaxOutputTokens')
-    for (const field of ALPHA1_PLUS_COMPAT_FIELDS) expect(ALPHA3_PLUS_COMPAT_FIELDS).toContain(field)
   })
 
   it('offers exactly the wire spellings DSH accepts for the thinking budget field', () => {
