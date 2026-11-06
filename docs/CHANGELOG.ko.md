@@ -17,6 +17,7 @@
 - 최신 버전 맵 상한을 `0.2.3-0`으로 확장했습니다. `0.2.1-rc.5`의 플러그인 사용 API는 `0.2.1-rc.4`와 같으며, Chat 추론 본문 Slot에 추가된 `rawText`는 이 플러그인이 사용하지 않습니다. `0.2.2-alpha.2`에서도 설정 컨트롤러, `configForms`, `plugin-compatibility`는 호환됩니다. 플러그인이 사용하는 모델 디렉터리 면(`directoryFor`, store, `load`, `select`, `{ lastUsed, next }` projection)은 유지되고 추가된 badge/`resolveText`는 공식 선택기 UI에만 사용됩니다. pi-ai의 `supportsMidConvoEffort: 'withhold'`는 설정 가능한 필드를 늘리지 않아 각 gate offer 집합은 19/4/7/1/0이며 플러그인의 18개 필드도 계속 사용할 수 있습니다. 로케일에는 ja/es/fr/de/ru/pt가 추가되며 플러그인은 이미 등록된 ja를 중복 등록하지 않습니다.
 - DSH 0.2.2-alpha.2의 모델 선택 계약에 맞췄습니다. `agent/request`에서 추론 강도를 바꿀 수 없으므로 `agent.model.select()`를 제공하는 Host에서는 `agent/created` 중 Subagent 기본 강도를 기록하고, 이전 Host에서는 `agent/request`를 fallback으로 사용합니다. Cordis peer 범위에 DSH 0.2.2-alpha.2가 사용하는 `4.0.6-alpha.1`도 포함했습니다.
 - pi-ai route-level 기본값은 `defaultContextWindow`가 262144에서 1000000으로, `defaultMaxTokens`가 32768에서 128000으로 변경되었습니다. 이 플러그인은 모델에 명시된 `contextWindow`만 편집하며 route 기본값을 설정에 기록하지 않습니다.
+- cordis peer의 전체 커버리지와 `engines.dsh` 값의 이유를 명시했습니다. DSH `0.1.7`부터 `0.2.1-rc.5`는 cordis 4.0.5, `0.2.2-alpha.2`/`0.2.2-alpha.3`은 4.0.6 프리릴리스, `0.2.2-rc.1` 이후는 4.1.0으로 빌드됩니다. peer 범위 `^4.0.1 || ^4.0.6-alpha.1`가 모두를 포괄하므로 패키지는 이 호스트들에 설치할 수 있습니다. 이 플러그인은 cordis를 직접 import하지 않고 자체 선언한 최소 `HostContext`를 통해서만 런타임에 접근하므로, 이 peer는 설치 시점 범위이며 런타임 능력 요구 사항이 아닙니다. `engines.dsh`는 의도적으로 넓은 `>=0.1.0-rc.7` 하한을 유지합니다. DSH 호환성 검사는 이 필드만 읽고 cordis peer를 무시하므로, 좁히면 `0.2.2-alpha.2` 이전의 모든 호스트가 비호환으로 판정되지만 플러그인은 그곳에서도 동작합니다.
 
 ## [0.3.11] - 2026-10-20
 

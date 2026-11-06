@@ -38,6 +38,8 @@
 
 从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。上表表示各 DSH 版本最多可用的字段集合；当前网关协议还可能进一步缩小集合。
 
+`@deepseek-ai/cordis` 的 peer 范围是 `^4.0.1 || ^4.0.6-alpha.1`。`0.2.1-rc.5` 及更早的 DSH 基于 cordis 4.0.5 构建，`0.2.2-alpha.2` 与 `0.2.2-alpha.3` 基于 4.0.6 的预发布版，`0.2.2-rc.1` 及以后基于 4.1.0；该并集覆盖全部，因此本包能在这些宿主上安装。本插件不直接 import 任何 cordis 模块——它只通过自己声明的最小 `HostContext` 接口接触运行时——所以这条 peer 是安装期范围，而不是运行时能力要求。`engines.dsh` 有意保持较宽的 `>=0.1.0-rc.7` 下界：DSH 的兼容性检查只读这个字段并忽略 cordis peer，收紧它会把 `0.2.2-alpha.2` 之前的所有宿主判为不兼容，而插件在这些宿主上本来可用。
+
 实际可配置字段需要同时满足三项条件：DSH 版本支持、运行时 schema 暴露，以及当前路由的 `api` 协议支持。不支持的字段不会显示，也不会写入 Settings。18 个字段中，`openai-completions` 支持除 `supportsMaxOutputTokens` 之外的全部字段；`openai-responses`、`azure-openai-responses` 和 `openai-codex-responses` 只支持 `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention` 和 `supportsMaxOutputTokens`。如果 `api` 缺失或无法识别，最终仍以运行时 schema 和 DSH 校验为准。
 
 DSH `0.1.7` 起改为从 Loader 条目自身的 `Config` schema 派生设置表单（entry-config 模型）；没有导出该 schema 的插件不会出现设置表单。本插件已导出该 schema，因此在 `0.1.7` 及以后，它的设置分区使用 Loader 条目 ID `thinking-effort`；`0.1.0-rc.7` 至 `0.1.6` 仍使用注册的 namespace `dsh-thinking-effort`，客户端会自动解析宿主实际发布的那个 ID。`subagentEffort` 现在存放在本插件自己的分区，且在 `0.1.7` 及以后旧的 `llm-pi-ai` 位置不再是回退读取来源：该分区的 schema 只声明了 `providers`，宿主会拒绝写入其他路径，并从它上报的用户层中丢掉未声明的键。所以升级前存在那里的子 agent 默认值会显示为未设置，需要在插件的设置卡片里重新选择一次。本插件在 `0.1.7` 之前导出的快照仍把该值放在 `llm-pi-ai` 里；导入时插件会把该值迁移到自己的分区——这也正是同一批次里的 providers 能被接受的原因（只要有一个写入路径不是 volatile，宿主就会拒绝整个批次）。`0.1.7` 及以后设置保存在当前 profile 的 `cordis.patch.yml`，而不再是 `~/.dsh/settings.yaml`（`0.1.7` 不再使用该文件）。
