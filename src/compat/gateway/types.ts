@@ -46,6 +46,12 @@ export interface GatewayCompatResolveInput {
   readonly protocolDefault?: unknown
   readonly versionCapabilities?: DshVersionCapabilities
 }
+
+/** Effective format and atomic kwargs used when writing the virtual preserve field. */
+export interface PreserveThinkingContext {
+  readonly thinkingFormat?: unknown
+  readonly chatTemplateKwargs?: unknown
+}
 export type GatewayCompatResolution = {
   readonly provider: string
   readonly model?: string

@@ -1,6 +1,7 @@
 import type { InventoryItem, InputModality, ModelGatewayCompatView, ProviderGatewayCompatView, ReasoningEfforts, SettingsNamespace, CompatibilityProfile } from './types.js'
 import type { TakeoverRuntimeResolution } from './takeover-runtime.js'
-import { resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../compat/gateway/resolve.js'
+import { resolveModelGatewayCompat, resolvePreserveThinkingContext, resolveProviderGatewayCompat } from '../compat/gateway/resolve.js'
+import type { GatewayCompatResolveInput, PreserveThinkingContext } from '../compat/gateway/types.js'
 import { editableProviderCompatFields } from '../compat/gateway/validation.js'
 import { fieldsForApi, GATEWAY_COMPAT_FIELD_KEYS } from '../compat/gateway/fields.js'
 import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '../compat/model-source.js'
@@ -103,17 +104,16 @@ function protocolCompatFrom(
   const projection: Record<string, unknown> = {}
   for (const key of GATEWAY_COMPAT_FIELD_KEYS) {
     const field = record(record(resolution)?.[key])
-    if (field?.source === 'protocol' && field.value !== undefined) projection[key] = field.value
+    if (field?.source !== 'protocol' || field.value === undefined) continue
+    // preserveThinking is a view-only virtual field; resolver inputs must use
+    // the real wire shape just like user/base/catalog compat layers.
+    if (key === 'preserveThinking') projection.chatTemplateKwargs = { preserve_thinking: field.value }
+    else projection[key] = field.value
   }
   return Object.keys(projection).length > 0 ? projection : undefined
 }
 
-export function modelGatewayCompatViewFrom(
-  namespace: SettingsNamespace | unknown,
-  item: InventoryItem,
-  compatibilityProfile: CompatibilityProfile = 'unknown',
-  takeoverRuntime?: TakeoverRuntimeResolution,
-): ModelGatewayCompatView {
+function modelGatewayCompatInput(namespace: SettingsNamespace | unknown, item: InventoryItem, takeoverRuntime?: TakeoverRuntimeResolution): GatewayCompatResolveInput & { readonly model: string } {
   const descriptor = record(namespace)
   const sourceConflict = hasLayeredModelSourceConflict(namespace, item.route)
   const userModel = sourceConflict ? undefined : modelLayerCompat(descriptor?.user, item.route, item.model)
@@ -125,19 +125,31 @@ export function modelGatewayCompatViewFrom(
     ? undefined
     : record(item.raw?.compat) ?? modelLayerCompat(descriptor?.value, item.route, item.model)
   const catalogProvider = layerCompat(descriptor?.value, item.route)
-  const modelSelection = userModel
   const runtimeModel = modelRuntimeCompatFor(takeoverRuntime, item.route, item.model)
-  const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema, routeApi(namespace, item.route))
-  const resolved = resolveModelGatewayCompat({
+  return {
     provider: item.route,
     model: item.model,
-    modelCompat: modelSelection,
+    modelCompat: userModel,
     providerCompat: userProvider,
     baseCompat: [baseModel, baseProvider],
     catalogCompat: [catalogModel, catalogProvider],
     protocolDefault: protocolCompatFrom(runtimeModel),
-  }, editability)
-  return resolved
+  }
+}
+
+export function modelGatewayCompatViewFrom(
+  namespace: SettingsNamespace | unknown,
+  item: InventoryItem,
+  compatibilityProfile: CompatibilityProfile = 'unknown',
+  takeoverRuntime?: TakeoverRuntimeResolution,
+): ModelGatewayCompatView {
+  const descriptor = record(namespace)
+  const editability = editableProviderCompatFields(compatibilityProfile, descriptor?.schema, routeApi(namespace, item.route))
+  return resolveModelGatewayCompat(modelGatewayCompatInput(namespace, item, takeoverRuntime), editability)
+}
+
+export function modelPreserveThinkingContextFrom(namespace: SettingsNamespace | unknown, item: InventoryItem, takeoverRuntime?: TakeoverRuntimeResolution): PreserveThinkingContext {
+  return resolvePreserveThinkingContext(modelGatewayCompatInput(namespace, item, takeoverRuntime))
 }
 
 export function modelCompatKey(route: string, model: string): string {
@@ -186,6 +198,21 @@ export function providerGatewayCompatViewFrom(
     out[`${key}Available`] = editability[key] === true
   }
   return out as unknown as ProviderGatewayCompatView
+}
+
+export function providerPreserveThinkingContextFrom(
+  namespace: SettingsNamespace | unknown,
+  provider: string,
+  takeoverRuntime?: TakeoverRuntimeResolution,
+): PreserveThinkingContext {
+  const descriptor = record(namespace)
+  return resolvePreserveThinkingContext({
+    provider,
+    providerCompat: layerCompat(descriptor?.user, provider),
+    baseCompat: layerCompat(descriptor?.base, provider),
+    catalogCompat: layerCompat(descriptor?.value, provider),
+    protocolDefault: protocolCompatFrom(takeoverCompatFor(takeoverRuntime, provider)),
+  })
 }
 
 export function providerGatewayCompatViewsFrom(

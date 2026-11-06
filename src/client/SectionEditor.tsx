@@ -4,7 +4,7 @@ import { editableProviderCompatFields } from '../compat/gateway/validation.js'
 import { isOpenCodeSessionSectionId } from '../compat/opencode-session.js'
 import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
 import { DEFAULT_LEVELS, INPUT_MODALITIES, LEVEL_LABEL_KEYS, NS, OPENCODE_SESSION_NS, PRESETS, ALL_LEVELS, CONTEXT_1M } from './constants.js'
-import { inventoryFrom, modelCompatKey, modelGatewayCompatViewsFrom, providerGatewayCompatViewsFrom } from './model-inventory.js'
+import { inventoryFrom, modelCompatKey, modelGatewayCompatViewsFrom, modelPreserveThinkingContextFrom, providerGatewayCompatViewsFrom, providerPreserveThinkingContextFrom } from './model-inventory.js'
 import { emptyTakeoverRuntimeResolution } from './takeover-runtime.js'
 import { openCodeSessionOp, openCodeSessionStateFor, isOpenCodeSessionNamespace } from './model-header-ops.js'
 import { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from './model-ops.js'
@@ -646,18 +646,20 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       if (dirty[field] === true && draft[field] !== current[field]) Object.assign(update, { [field]: draft[field] })
     }
     const editability = editableProviderCompatFields(settings.compatibilityProfile, state.namespace?.schema)
+    const preserveContext = modelPreserveThinkingContextFrom(state.namespace, item, takeoverResolution)
     const ops = item.inOverrides
-      ? opsForModelCompat(item, update, editability)
-      : opsForModelArrayCompat(state.inventory, item, update, editability)
-    // An override writes leaf compat paths; a `models[]` entry rewrites the
-    // whole array, so only that branch has to be rebuilt from fresh data.
+      ? opsForModelCompat(item, update, editability, preserveContext)
+      : opsForModelArrayCompat(state.inventory, item, update, editability, preserveContext)
+    // Re-read the effective kwargs as well as the models[] snapshot: DSH treats
+    // the whole dict as atomic, so replaying a stale preserve write could drop
+    // another writer's custom template values.
     const rebuildOps = (fresh: SettingsNamespace): readonly SettingsOp[] => {
       if (!item.inOverrides) {
         const inventory = inventoryFrom(fresh)
         const rebased = rebaseItem(inventory, item)
-        return rebased === undefined ? [] : opsForModelArrayCompat(inventory, rebased, update, editableProviderCompatFields(settings.compatibilityProfile, fresh.schema))
+        return rebased === undefined ? [] : opsForModelArrayCompat(inventory, rebased, update, editableProviderCompatFields(settings.compatibilityProfile, fresh.schema), modelPreserveThinkingContextFrom(fresh, rebased, takeoverResolution))
       }
-      return opsForModelCompat(item, update, editableProviderCompatFields(settings.compatibilityProfile, fresh.schema))
+      return opsForModelCompat(item, update, editableProviderCompatFields(settings.compatibilityProfile, fresh.schema), modelPreserveThinkingContextFrom(fresh, item, takeoverResolution))
     }
     if (ops.length === 0) {
       setState((currentState) => ({ ...currentState, modelCompatDirty: removeDirtyFields(currentState.modelCompatDirty, key, GATEWAY_COMPAT_FIELD_KEYS) }))
@@ -803,7 +805,12 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     for (const field of GATEWAY_COMPAT_FIELD_KEYS) {
       if (dirtyFields?.[field] === true && draft[field] !== current[field]) Object.assign(update, { [field]: draft[field] })
     }
-    const ops = opsForProviderCompat(route, update, editableProviderCompatFields(settings.compatibilityProfile, state.namespace?.schema) as Partial<Pick<GatewayCompatEditability, GatewayCompatFieldKey>>)
+    const ops = opsForProviderCompat(
+      route,
+      update,
+      editableProviderCompatFields(settings.compatibilityProfile, state.namespace?.schema) as Partial<Pick<GatewayCompatEditability, GatewayCompatFieldKey>>,
+      providerPreserveThinkingContextFrom(state.namespace, route, takeoverResolution),
+    )
     const clearProviderDirty = (currentState: EditorState): EditorState => {
       const providerDirty = { ...currentState.providerDirty }
       delete providerDirty[route]
@@ -819,7 +826,12 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       ns: NS,
       revision: state.revision,
       ops,
-      rebuildOps: () => ops,
+      rebuildOps: (fresh) => opsForProviderCompat(
+        route,
+        update,
+        editableProviderCompatFields(settings.compatibilityProfile, fresh.schema),
+        providerPreserveThinkingContextFrom(fresh, route, takeoverResolution),
+      ),
       successMessage: t('gatewayCompatSaved'),
       onSuccess: () => {
         setState((currentState) => clearProviderDirty(currentState))

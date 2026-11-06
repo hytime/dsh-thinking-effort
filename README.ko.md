@@ -143,6 +143,14 @@ Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델
 
 이 compat 값은 제어면 설정입니다. 게이트웨이 transport를 구현하거나 대체하지 않으며 네트워크 요청은 외부 transport가 담당합니다.
 
+### 이전 사고 유지 (NInfer/Qwen)
+
+런타임 schema가 `thinkingFormat`과 `chatTemplateKwargs`를 모두 제공하는 `openai-completions` 라우트에서는 「형식 및 출력」에 「이전 사고 유지」도 표시됩니다. `Auto`는 실제 chat template 동작을 따르고, 지원/미지원은 범용 chat template에서 `compat.chatTemplateKwargs.preserve_thinking`에 각각 `true`/`false`를 기록합니다. `qwen-chat-template`은 설계상 유지하는 것으로 표시됩니다.
+
+기존 범용 템플릿에서는 명시적 선택이 `preserve_thinking`만 변경합니다. 형식 전환이 필요할 때만 `chat-template`을 선택하고 누락된 `enable_thinking` 및 `reasoning_effort` 매핑만 추가하며, 사용자 지정/정적 값과 다른 kwargs는 보존합니다. `Auto`로 되돌리면 `preserve_thinking`만 삭제합니다.
+
+이 설정은 완료된 assistant 사고를 후속 프롬프트에 다시 포함할지 여부를 제어합니다. 현재 턴의 사고 사용 여부나 GUI의 사고 표시 여부를 제어하지는 않습니다. `Auto`에서는 서버 또는 chat template 기본값이 계속 적용됩니다.
+
 ### OpenCode 세션 Header 생성기
 
 모델 편집기에는 별도의 **OpenCode 세션 Header** 스위치가 있습니다. 기본값은 꺼져 있으며 `llm-pi-ai.compat`가 아니라 플러그인 전용 설정 섹션에 저장됩니다. `x-opencode-session`이 필요한 정확한 `provider/model`에만 활성화하세요. 같은 route의 다른 모델(GPT 모델 포함)에는 상속되지 않습니다. 토글하면 즉시 저장되며 별도의 저장 버튼이 없습니다. 모델을 다시 열면 저장된 값이 표시됩니다.

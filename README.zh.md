@@ -214,6 +214,14 @@ providers:
 
 这些 compat 值属于控制面配置。它们不实现或替代网关 transport；网络请求仍由外部 transport 负责。
 
+### 保留历史思考（NInfer/Qwen）
+
+对于运行时 schema 同时提供 `thinkingFormat` 与 `chatTemplateKwargs` 的 `openai-completions` 路由，「格式与输出」组会额外显示「保留历史思考」。「自动」显示实际聊天模板行为；「支持」和「不支持」在通用聊天模板下分别把 `compat.chatTemplateKwargs.preserve_thinking` 写为 `true` 或 `false`。`qwen-chat-template` 会按设计显示为保留。
+
+对于已有的通用模板，显式选择只修改 `preserve_thinking`。需要切换格式时才选择 `chat-template`，并且只补充缺失的 `enable_thinking` 与 `reasoning_effort` 映射，保留自定义/静态值和其他 kwargs。切回「自动」只删除 `preserve_thinking`。
+
+此设置控制已结束的 assistant 思考是否重新进入后续 prompt；它不控制本轮是否思考，也不控制 GUI 是否显示思考。「自动」状态下仍由服务端或聊天模板的默认值决定。
+
 ### OpenCode 会话 Header 生成器
 
 模型编辑器提供独立的「OpenCode 会话 Header」开关。它默认关闭，保存在插件自有的设置分区中，不写入 `llm-pi-ai.compat`。只有确实需要 `x-opencode-session` 的精确 `provider/model` 才应启用；同一路由中的其他模型（包括 GPT 模型）不会继承该设置。拨动开关即立即保存，没有单独的保存按钮；重新打开模型时显示的是已持久化的值。

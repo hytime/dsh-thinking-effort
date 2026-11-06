@@ -63,6 +63,17 @@ const realGatewaySchema = {
   },
 } as const
 
+const preserveGatewaySchema = {
+  ...realGatewaySchema,
+  refs: {
+    ...realGatewaySchema.refs,
+    '2': {
+      ...realGatewaySchema.refs['2'],
+      dict: { ...realGatewaySchema.refs['2'].dict, chatTemplateKwargs: 1 },
+    },
+  },
+} as const
+
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const namespace = (overrides: Partial<SettingsNamespace> = {}): SettingsNamespace => ({
@@ -1210,6 +1221,46 @@ describe('SectionEditor user behavior', () => {
     view.unmount()
   })
 
+  it('saves preserve_thinking through the provider UI without replacing custom reasoning mappings', async () => {
+    const providerNamespace = namespace({
+      value: { providers: { provider: {
+        compat: {
+          thinkingFormat: 'chat-template',
+          chatTemplateKwargs: { enable_thinking: false, reasoning_effort: 'custom', preserve_thinking: false },
+        },
+        models: [{ id: 'model-a' }],
+      } } },
+      schema: preserveGatewaySchema,
+    })
+    let capturedOps: readonly SettingsOp[] | undefined
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      describe: async () => ({ ok: true, value: { namespaces: [providerNamespace] } }),
+      mutate: async (_ns, ops) => {
+        capturedOps = ops
+        return { ok: true as const, value: providerNamespace }
+      },
+    })
+    await settle()
+    act(() => providerButton(view.container).click())
+    const providerControls = view.container.querySelector('[data-scope="provider"]') as HTMLElement
+    act(() => button(providerControls, text('gatewayMoreFields', { count: 14 })).click())
+    const preserve = providerControls.querySelector(`select[aria-label="${text('preserveThinking')}"]`) as HTMLSelectElement
+    expect(preserve.value).toBe('auto')
+    act(() => setValue(preserve, 'supported'))
+    act(() => button(providerControls.parentElement!, text('saveGatewayCompat')).click())
+    await settle()
+
+    expect(capturedOps).toEqual([
+      { op: 'set', path: ['providers', 'provider', 'compat', 'chatTemplateKwargs'], value: {
+        enable_thinking: false,
+        reasoning_effort: 'custom',
+        preserve_thinking: true,
+      } },
+    ])
+    view.unmount()
+  })
+
   it('retains another provider draft when the first provider save succeeds', async () => {
     const providers = {
       providerA: { models: [{ id: 'model-a' }] },
@@ -1722,6 +1773,105 @@ describe('SectionEditor user behavior', () => {
       { op: 'set', path: ['providers', 'provider', 'modelOverrides', 'model-a', 'compat', 'thinkingFormat'], value: 'deepseek' },
       { op: 'set', path: ['providers', 'provider', 'modelOverrides', 'model-a', 'compat', 'supportsStore'], value: false },
     ], 2)
+    view.unmount()
+  })
+
+  it('copies effective provider kwargs when the model UI overrides preserve_thinking', async () => {
+    const modelNamespace = namespace({
+      value: {
+        providers: {
+          provider: {
+            compat: {
+              thinkingFormat: 'chat-template',
+              chatTemplateKwargs: { enable_thinking: false, reasoning_effort: 'provider-custom', preserve_thinking: true },
+            },
+            modelOverrides: {
+              'model-a': { id: 'model-a', name: 'Model A', input: ['text'], compat: { chatTemplateKwargs: {} } },
+            },
+          },
+        },
+      },
+      schema: preserveGatewaySchema,
+    })
+    let capturedOps: readonly SettingsOp[] | undefined
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      describe: async () => ({ ok: true, value: { namespaces: [modelNamespace] } }),
+      mutate: async (_ns, ops) => {
+        capturedOps = ops
+        return { ok: true as const, value: modelNamespace }
+      },
+    })
+    await settle()
+    act(() => providerButton(view.container).click())
+    const modelAButton = [...view.container.querySelectorAll<HTMLButtonElement>(`button[aria-label="${text('openModelSettings')}"]`)]
+      .find((candidate) => candidate.parentElement?.parentElement?.parentElement?.textContent?.includes('model-a'))
+    act(() => modelAButton!.click())
+    const modelControls = view.container.querySelector('[data-scope="model"]') as HTMLElement
+    act(() => button(modelControls, text('gatewayMoreFields', { count: 14 })).click())
+    const preserve = modelControls.querySelector(`select[aria-label="${text('preserveThinking')}"]`) as HTMLSelectElement
+    expect(preserve.value).toBe('auto')
+    act(() => setValue(preserve, 'unsupported'))
+    act(() => button(view.container, text('saveModelGatewayCompat')).click())
+    await settle()
+
+    expect(capturedOps).toEqual([
+      { op: 'set', path: ['providers', 'provider', 'modelOverrides', 'model-a', 'compat', 'chatTemplateKwargs'], value: {
+        enable_thinking: false,
+        reasoning_effort: 'provider-custom',
+        preserve_thinking: false,
+      } },
+    ])
+    view.unmount()
+  })
+
+  it('rebuilds preserve kwargs from the fresh provider after a revision conflict', async () => {
+    const value = (effort: string) => ({
+      providers: {
+        provider: {
+          compat: {
+            thinkingFormat: 'chat-template',
+            chatTemplateKwargs: { enable_thinking: false, reasoning_effort: effort, preserve_thinking: true },
+          },
+          modelOverrides: {
+            'model-a': { id: 'model-a', name: 'Model A', input: ['text'] },
+          },
+        },
+      },
+    })
+    let current = namespace({ value: value('stale-provider'), schema: preserveGatewaySchema })
+    const calls: Array<{ ops: readonly SettingsOp[]; revision: unknown }> = []
+    const view = renderEditor({
+      compatibilityProfile: 'modern',
+      describe: async () => ({ ok: true, value: { namespaces: [current] } }),
+      mutate: async (_ns, ops, revision) => {
+        calls.push({ ops, revision })
+        if (calls.length === 1) {
+          current = namespace({ revision: 3, value: value('fresh-provider'), schema: preserveGatewaySchema })
+          return { ok: false as const, error: { message: 'settings namespace "llm-pi-ai" changed since it was read (expected revision 2, now 3)' } }
+        }
+        return { ok: true as const, value: current }
+      },
+    })
+    await settle()
+    act(() => providerButton(view.container).click())
+    const modelAButton = [...view.container.querySelectorAll<HTMLButtonElement>(`button[aria-label="${text('openModelSettings')}"]`)]
+      .find((candidate) => candidate.parentElement?.parentElement?.parentElement?.textContent?.includes('model-a'))
+    act(() => modelAButton!.click())
+    const modelControls = view.container.querySelector('[data-scope="model"]') as HTMLElement
+    act(() => button(modelControls, text('gatewayMoreFields', { count: 14 })).click())
+    act(() => setValue(modelControls.querySelector(`select[aria-label="${text('preserveThinking')}"]`)!, 'unsupported'))
+    act(() => button(view.container, text('saveModelGatewayCompat')).click())
+    await settle()
+
+    expect(calls.map((call) => call.revision)).toEqual([2, 3])
+    expect(calls[1]?.ops).toEqual([
+      { op: 'set', path: ['providers', 'provider', 'modelOverrides', 'model-a', 'compat', 'chatTemplateKwargs'], value: {
+        enable_thinking: false,
+        reasoning_effort: 'fresh-provider',
+        preserve_thinking: false,
+      } },
+    ])
     view.unmount()
   })
 

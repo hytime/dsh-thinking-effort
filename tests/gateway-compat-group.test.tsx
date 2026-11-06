@@ -82,6 +82,27 @@ describe('GatewayCompatGroup', () => {
     expect(onChange).toHaveBeenCalledWith({ supportsStore: 'supported' })
   })
 
+  it('renders preserve_thinking as a tri-state select and emits its selection', () => {
+    const onChange = vi.fn()
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    act(() => {
+      root!.render(<GatewayCompatGroup groupId="format" view={modelView({ preserveThinking: 'auto', preserveThinkingAvailable: true })} onChange={onChange} />)
+    })
+    const select = container.querySelector(`[aria-label="${label('preserveThinking')}"]`) as HTMLSelectElement
+    expect(select).not.toBeNull()
+    expect([...select.options].map((option) => option.value)).toEqual(['auto', 'supported', 'unsupported'])
+
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set
+      setter?.call(select, 'unsupported')
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    expect(onChange).toHaveBeenCalledWith({ preserveThinking: 'unsupported' })
+  })
+
   it('renders a numeric input for a number field and emits its string selection', () => {
     const onChange = vi.fn()
     container = document.createElement('div')

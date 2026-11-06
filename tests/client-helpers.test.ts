@@ -62,6 +62,8 @@ const realGatewaySchema = {
        supportsLongCacheRetention: 0,
        maxTokensField: 1,
        thinkingFormat: 1,
+       chatTemplateKwargs: 8,
+       chatTemplateArgs: 8,
        cacheControlFormat: 1,
      } },
     '3': { type: 'object', meta: { default: {} }, dict: { compat: 2 } },
@@ -69,6 +71,7 @@ const realGatewaySchema = {
     '5': { type: 'string', meta: {} },
     '6': { type: 'object', meta: { default: {} }, dict: { providers: 4 } },
     '7': { type: 'number', meta: {} },
+    '8': { type: 'object', meta: { default: {} } },
   },
 } as const
 
@@ -1158,6 +1161,31 @@ describe('model inventory and operations', () => {
     })
   })
 
+  it('reprojects protocol preserve defaults as real chat template kwargs', () => {
+    const namespace = {
+      value: { providers: { 'qwen-gateway': { models: [{ id: 'qwen-thinking' }] } } },
+      schema: realGatewaySchema,
+    }
+    const runtime: TakeoverRuntimeResolution = {
+      providers: ['qwen-gateway'],
+      compat: [runtimeCompat({ provider: 'qwen-gateway', model: 'qwen-thinking' }, {
+        thinkingFormat: { value: 'chat-template', source: 'protocol' },
+        preserveThinking: { value: true, source: 'protocol' },
+      })],
+    }
+
+    expect(modelGatewayCompatViewFrom(
+      namespace,
+      item({ route: 'qwen-gateway', model: 'qwen-thinking', raw: { id: 'qwen-thinking' } }),
+      'modern',
+      runtime,
+    )).toMatchObject({
+      preserveThinking: 'auto',
+      preserveThinkingSource: 'protocol',
+      preserveThinkingResolved: true,
+    })
+  })
+
   it('does not crash on a partial takeover runtime resolution and falls back for unprojected fields', () => {
     const namespace = {
       value: { providers: { 'qwen-gateway': { models: [{ id: 'qwen-thinking' }], compat: { supportsStore: false } } } },
@@ -1428,7 +1456,7 @@ describe('model inventory and operations', () => {
   it('keeps aggregate provider availability true for rc8 with alpha-only schema fields excluded', () => {
     const result = validateProviderCompat(capabilitiesForVersion('0.1.0-rc.8'), realGatewaySchema)
     expect(result.available).toBe(true)
-    expect(result.editableFields).toEqual(GATEWAY_COMPAT_FIELD_KEYS.filter((field) => RC8_COMPAT_FIELDS.includes(field as typeof RC8_COMPAT_FIELDS[number])))
+    expect(result.editableFields).toEqual(GATEWAY_COMPAT_FIELD_KEYS.filter((field) => field === 'preserveThinking' || RC8_COMPAT_FIELDS.includes(field as typeof RC8_COMPAT_FIELDS[number])))
     expect(result.supportsFinishReason).toBeUndefined()
     expect(result.supportsThinkingTokenBudget).toBeUndefined()
   })

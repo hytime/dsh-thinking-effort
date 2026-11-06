@@ -10,6 +10,10 @@
 
 ## [Unreleased]
 
+### 追加
+
+- WebUI に NInfer/Qwen の「過去の思考を保持」三態設定を追加しました。ネストされた `chatTemplateKwargs.preserve_thinking` に書き込み、明示的な選択では既存の推論強度マッピングも維持します。
+
 ## [0.3.12] - 2026-10-31
 
 ### 互換性

@@ -155,6 +155,14 @@ The provider area in Settings edits defaults for all models. Both catalog models
 
 These compat values are control plane configuration. They do not implement or replace the gateway transport; an external transport remains responsible for network requests.
 
+### Preserve historical thinking (NInfer/Qwen)
+
+For `openai-completions` routes whose runtime schema offers both `thinkingFormat` and `chatTemplateKwargs`, **Format and output** also includes **Preserve historical thinking**. `Auto` follows the effective chat-template behavior; supported and unsupported write `compat.chatTemplateKwargs.preserve_thinking` as `true` or `false` for the generic chat template. `qwen-chat-template` is shown as preserving by design.
+
+For an existing generic template, an explicit selection changes only `preserve_thinking`. When a format switch is needed, it selects `chat-template` and fills only missing `enable_thinking` and `reasoning_effort` mappings, preserving custom/static values and unrelated kwargs. Returning to `Auto` removes only `preserve_thinking`.
+
+This setting controls whether completed assistant reasoning is sent back in later prompts. It does not enable or disable reasoning for the current turn and does not control whether the GUI displays reasoning. With `Auto`, the server or chat-template default still applies.
+
 ### OpenCode session Header generator
 
 The model editor has a separate **OpenCode session Header** switch, stored in the plugin's own settings section, not in `llm-pi-ai.compat`. Enable it only for the exact `provider/model` that requires `x-opencode-session`; another model on the same route, including a GPT model, does not inherit it. Flipping the switch saves immediately — there is no separate save button — and reopening the model shows the persisted value.

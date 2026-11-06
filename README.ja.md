@@ -143,6 +143,14 @@ Settings の provider グローバル領域では、その provider の全モデ
 
 これらの compat 値はコントロールプレーンの設定です。ゲートウェイの transport を実装または置き換えるものではなく、ネットワーク要求は外部 transport が担当します。
 
+### 過去の思考を保持（NInfer/Qwen）
+
+実行時 schema が `thinkingFormat` と `chatTemplateKwargs` の両方を提供する `openai-completions` ルートでは、「形式と出力」に「過去の思考を保持」も表示されます。`Auto` は実効的な chat template の動作に従い、対応/非対応は汎用 chat template で `compat.chatTemplateKwargs.preserve_thinking` にそれぞれ `true`/`false` を書き込みます。`qwen-chat-template` は設計上、保持するものとして表示されます。
+
+既存の汎用テンプレートでは、明示的な選択で `preserve_thinking` だけを変更します。形式の切り替えが必要な場合だけ `chat-template` を選択し、不足している `enable_thinking` と `reasoning_effort` マッピングだけを補い、カスタム/静的値と他の kwargs を保持します。`Auto` に戻すと `preserve_thinking` だけを削除します。
+
+この設定は、終了した assistant の思考を後続プロンプトへ再度送るかどうかを制御します。現在のターンで思考を有効/無効にする設定でも、GUI の思考表示設定でもありません。`Auto` ではサーバーまたは chat template の既定値が引き続き適用されます。
+
 ### OpenCode セッション Header 生成器
 
 モデル編集には独立した **OpenCode セッション Header** スイッチがあります。既定では無効で、`llm-pi-ai.compat` ではなくプラグイン固有の設定セクションに保存されます。`x-opencode-session` が必要な正確な `provider/model` だけで有効にしてください。同じルートの別モデル（GPT モデルを含む）には継承されません。トグルすると即保存され、別途保存ボタンはありません。モデルを開き直すと永続化された値が表示されます。

@@ -10,6 +10,10 @@
 
 ## [Unreleased]
 
+### 추가
+
+- WebUI에 NInfer/Qwen「이전 사고 유지」3상 설정을 추가했습니다. 중첩된 `chatTemplateKwargs.preserve_thinking`에 기록하며 명시적으로 선택할 때 기존 추론 강도 매핑도 유지합니다.
+
 ## [0.3.12] - 2026-10-31
 
 ### 호환성
