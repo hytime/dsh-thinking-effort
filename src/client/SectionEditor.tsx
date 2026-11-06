@@ -23,6 +23,7 @@ import {
 import { applyNamespaceView, applyPluginSectionView, reapplyCompatViews } from './section-editor/views.js'
 import { subagentEffortOp } from './section-editor/subagent.js'
 import { useSaveQueue, type SaveRequest } from './section-editor/use-save-queue.js'
+import { revisionOf } from './types.js'
 import type { ClientLocale, DraftCell, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelUpdate, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
 import type { Palette } from './theme.js'
 import type { TakeoverRuntimeStore } from './takeover-runtime.js'

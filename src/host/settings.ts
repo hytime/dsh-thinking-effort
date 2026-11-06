@@ -304,17 +304,50 @@ function readSection(settings: HostSettings): unknown {
   return readSettingsSection(settings, SETTINGS_NAMESPACE)
 }
 
+/**
+ * The section this plugin's own switch lives in on the running host.
+ *
+ * `settingsEntryId` answers with the Loader entry id whenever the fiber carries
+ * one, and the `cordis.patch.yml` entry carries the same id on every release —
+ * but that id only *addresses* the plugin's section under the `entry-config`
+ * model. The releases before it register the plugin's own namespace instead,
+ * where the very same settings are published as `dsh-thinking-effort`. An
+ * id-only lookup therefore reads a section those hosts never publish, and the
+ * switch answers "enabled" no matter what the user chose.
+ *
+ * The settings model decides which id addresses the section, because presence
+ * alone cannot: a host can carry a section left behind by the other shape —
+ * `settings.yaml` migrated forward keeps the namespace, and a downgrade keeps
+ * the entry config — and the stale one would otherwise win the read. The
+ * remaining candidate is only a fallback for a host whose model probe answers
+ * nothing, and for one that has not materialized its section yet, where the
+ * missing field keeps the legacy behavior either way.
+ */
+function ownSectionId(settings: HostSettings, ctx: HostContext): string {
+  const entryId = settingsEntryId(ctx, OPENCODE_SESSION_NAMESPACE)
+  const preferred = settingsModelForRuntime({ settings }) === 'namespace'
+    ? OPENCODE_SESSION_NAMESPACE
+    : entryId
+  const fallback = preferred === entryId ? OPENCODE_SESSION_NAMESPACE : entryId
+  if (fallback === preferred) return preferred
+  return readSettingsSectionUser(settings, preferred) === undefined
+    && readSettingsSectionUser(settings, fallback) !== undefined
+    ? fallback
+    : preferred
+}
+
 function autoFillEnabled(settings: HostSettings, ownSection: string): boolean {
   // Only the raw user layer distinguishes an explicit false from the schema's
-  // default true. A missing section or field keeps the legacy behavior.
+  // default true. A section that is missing or unreadable keeps the legacy
+  // behavior, which is also what a host publishing neither id sees.
   const user = record(readSettingsSectionUser(settings, ownSection))
   return user?.autoFillDefaults !== false
 }
 
-async function fillDefaults(settings: HostSettings, ownSection: string): Promise<FillOutcome> {
+async function fillDefaults(settings: HostSettings, ctx: HostContext): Promise<FillOutcome> {
   if (settings.writable !== true) return { filled: 0 }
   // Disabled is a settled verdict, not a retryable unreadable section.
-  if (!autoFillEnabled(settings, ownSection)) return { filled: 0, remaining: 0 }
+  if (!autoFillEnabled(settings, ownSectionId(settings, ctx))) return { filled: 0, remaining: 0 }
   // A section that is not readable yet (the namespace registers late, or the
   // entry-config form has not materialized) is retryable, not settled.
   const notYet: FillOutcome = { filled: 0 }
@@ -361,7 +394,10 @@ export function installSettingsWatcher(ctx: HostContext): void {
     return
   }
 
-  const ownSection = settingsEntryId(ctx, OPENCODE_SESSION_NAMESPACE)
+  // The switch is read per fill rather than once here: a host that materializes
+  // its section late would otherwise pin the id an unreadable read produced,
+  // and the first fill is the one that has to survive that.
+  const watchedSections = new Set([settingsEntryId(ctx, OPENCODE_SESSION_NAMESPACE), OPENCODE_SESSION_NAMESPACE])
 
   ctx.effect(() => {
     let alive = true
@@ -425,7 +461,7 @@ export function installSettingsWatcher(ctx: HostContext): void {
           let passes = 0
           do {
             queued = false
-            outcome = await fillDefaults(settings, ownSection)
+            outcome = await fillDefaults(settings, ctx)
             passes += 1
           } while (alive && queued && passes < MAX_FILL_PASSES)
           if (alive && queued) {
@@ -482,9 +518,13 @@ export function installSettingsWatcher(ctx: HostContext): void {
     const model = settingsModelForRuntime({ settings })
     const listenerDisposers: Array<() => void> = []
     if (model !== undefined) {
+      // Both ids are watched: whichever one this host publishes is the one its
+      // writes report, and the other simply never fires. Watching them as a set
+      // keeps the listener from depending on the same id-only guess the switch
+      // read used to make.
       for (const event of settingsChangeEvents(model)) {
         const disposer = ctx.on(event, (...args: unknown[]) => {
-          if (!alive || (args[0] !== SETTINGS_NAMESPACE && args[0] !== ownSection)) return
+          if (!alive || (args[0] !== SETTINGS_NAMESPACE && !watchedSections.has(String(args[0])))) return
           // See `fillScope`: the event arrives inside the host's own write
           // transaction, so the fill has to run outside the context it was
           // raised in or its write is refused.

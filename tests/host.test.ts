@@ -66,6 +66,12 @@ type HarnessOptions = {
   /** The Loader entry id the plugin's fiber carries; absent means no fiber. */
   entryId?: string
   /**
+   * The settings model the service presents. A host exposing `installSection`
+   * is the `namespace` model (the default here, matching every other fixture);
+   * `entry-config` drops it so the probe answers the other way.
+   */
+  settingsModel?: 'namespace' | 'entry-config'
+  /**
    * The user's own layer when it differs from the resolved section a host
    * reports. Omitted means the two are the same fixture.
    */
@@ -194,10 +200,18 @@ function createHarness(options: HarnessOptions = {}) {
         announceWrite()
       },
       describe,
-      installSection: (_owner: unknown, _namespace: string, _schema: unknown, _entry: unknown, hooks: { setSource: (source: () => unknown) => void; onChange: () => void }) => {
-        hooks.setSource(() => ({}))
-        hooks.onChange()
-      },
+      // A host exposing `installSection` is the `namespace` model; one that only
+      // answers `describe` is `entry-config`. The switch read follows that model,
+      // so a fixture has to choose the shape its scenario runs on rather than
+      // always presenting the legacy one.
+      ...(options.settingsModel === 'entry-config'
+        ? {}
+        : {
+            installSection: (_owner: unknown, _namespace: string, _schema: unknown, _entry: unknown, hooks: { setSource: (source: () => unknown) => void; onChange: () => void }) => {
+              hooks.setSource(() => ({}))
+              hooks.onChange()
+            },
+          }),
     },
     timeout: (callback: () => void, delay: number) => {
       scheduled.push({ callback, delay })
@@ -664,6 +678,90 @@ describe('Host composition', () => {
         ],
       }],
     })
+  })
+
+  it('reads the switch from the registered legacy namespace when the host publishes only that', async () => {
+    // The releases before `0.1.7` register the plugin's own namespace instead of
+    // deriving a section from its Loader entry. The patch entry id is still
+    // `thinking-effort` there, because the entry is what loads the plugin at
+    // all, so an id-only lookup reads a section that host never publishes and
+    // answers "enabled" no matter what the user chose.
+    const providers = {
+      providers: { route: { models: [{ id: 'missing' }] } },
+    }
+    const legacyOwn = (enabled: boolean) => ({
+      ns: 'dsh-thinking-effort',
+      user: { autoFillDefaults: enabled },
+      value: { autoFillDefaults: enabled },
+    })
+    const harness = createHarness({
+      entryId: 'thinking-effort',
+      section: providers,
+      descriptors: [{ ns: 'llm-pi-ai', user: providers }, legacyOwn(false)],
+    })
+
+    await runInitial(harness)
+
+    expect(harness.writes).toEqual([])
+    expect(harness.document()).toEqual(providers)
+    expect(harness.scheduled.some((task) => task.delay === 2000)).toBe(false)
+
+    harness.setDescriptors([{ ns: 'llm-pi-ai', user: providers }, legacyOwn(true)])
+    await harness.listener('settings/updated')?.callback('dsh-thinking-effort')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(harness.writes).toHaveLength(1)
+  })
+
+  it('keeps reading the entry section when a migrated namespace is left behind', async () => {
+    // A profile migrated forward keeps the namespace section it wrote before
+    // `0.1.7`, so an entry-config host can carry both sections at once. The
+    // switch the running host shows is the entry one; the leftover must not
+    // override it, or turning the fill back on would read as off.
+    const providers = {
+      providers: { route: { models: [{ id: 'missing' }] } },
+    }
+    const current = { autoFillDefaults: true }
+    const leftover = { autoFillDefaults: false }
+    const harness = createHarness({
+      entryId: 'thinking-effort',
+      settingsModel: 'entry-config',
+      section: providers,
+      descriptors: [
+        { ns: 'llm-pi-ai', user: providers },
+        { ns: 'thinking-effort', user: current, value: current },
+        { ns: 'dsh-thinking-effort', user: leftover, value: leftover },
+      ],
+    })
+
+    await runInitial(harness)
+
+    expect(harness.writes).toHaveLength(1)
+  })
+
+  it('keeps reading the namespace switch when an entry section is left behind', async () => {
+    // The mirror case: a host that went back to the namespace model still
+    // carries the entry section a newer release wrote. The namespace is the one
+    // its settings page shows, so it decides.
+    const providers = {
+      providers: { route: { models: [{ id: 'missing' }] } },
+    }
+    const current = { autoFillDefaults: false }
+    const leftover = { autoFillDefaults: true }
+    const harness = createHarness({
+      entryId: 'thinking-effort',
+      section: providers,
+      descriptors: [
+        { ns: 'llm-pi-ai', user: providers },
+        { ns: 'thinking-effort', user: leftover, value: leftover },
+        { ns: 'dsh-thinking-effort', user: current, value: current },
+      ],
+    })
+
+    await runInitial(harness)
+
+    expect(harness.writes).toEqual([])
   })
 
   it('retries after a late namespace becomes available', async () => {
