@@ -46,6 +46,8 @@
   "levelSuffix": " 추론 강도",
   "pageTitle": "모델 기능 및 추론 강도",
   "subagentCardTitle": "Subagent 기본 추론 강도",
+  "autoFillDefaultsTitle": "기본 추론 강도 자동 보완",
+  "autoFillDefaultsDescription": "시작 및 모델 설정 변경 시 추론 강도가 없는 모델에 Off / High / Max를 추가합니다. 자동 보완을 중지할 뿐 기존 값은 삭제하지 않습니다.",
   "inputCapabilityMinimum": "입력 기능을 하나 이상 활성화하세요",
   "contextInteger": "컨텍스트 길이는 정수 또는 1024 배를 나타내는 k(예: 64k = 65536)로 입력하세요 (2000-1000000)",
   "contextRange": "컨텍스트 길이는 2000에서 1000000 사이여야 합니다",

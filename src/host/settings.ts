@@ -1,6 +1,7 @@
 import { AsyncResource } from 'node:async_hooks'
 import { hostCapabilities } from '../compat/capabilities.js'
-import { readSettingsSection, readSettingsSectionUser, settingsChangeEvents } from '../compat/settings-model.js'
+import { readSettingsSection, readSettingsSectionUser, settingsChangeEvents, settingsEntryId } from '../compat/settings-model.js'
+import { OPENCODE_SESSION_NAMESPACE } from '../compat/opencode-session.js'
 import { settingsModelForRuntime } from '../compat/version-map.js'
 import { mark } from './marker.js'
 import { DEFAULT_LEVELS as SHARED_DEFAULT_LEVELS, LLM_PI_AI_NS, LOG_PREFIX } from '../shared/constants.js'
@@ -303,8 +304,17 @@ function readSection(settings: HostSettings): unknown {
   return readSettingsSection(settings, SETTINGS_NAMESPACE)
 }
 
-async function fillDefaults(settings: HostSettings): Promise<FillOutcome> {
+function autoFillEnabled(settings: HostSettings, ownSection: string): boolean {
+  // Only the raw user layer distinguishes an explicit false from the schema's
+  // default true. A missing section or field keeps the legacy behavior.
+  const user = record(readSettingsSectionUser(settings, ownSection))
+  return user?.autoFillDefaults !== false
+}
+
+async function fillDefaults(settings: HostSettings, ownSection: string): Promise<FillOutcome> {
   if (settings.writable !== true) return { filled: 0 }
+  // Disabled is a settled verdict, not a retryable unreadable section.
+  if (!autoFillEnabled(settings, ownSection)) return { filled: 0, remaining: 0 }
   // A section that is not readable yet (the namespace registers late, or the
   // entry-config form has not materialized) is retryable, not settled.
   const notYet: FillOutcome = { filled: 0 }
@@ -350,6 +360,8 @@ export function installSettingsWatcher(ctx: HostContext): void {
     log('settings capability unavailable')
     return
   }
+
+  const ownSection = settingsEntryId(ctx, OPENCODE_SESSION_NAMESPACE)
 
   ctx.effect(() => {
     let alive = true
@@ -413,7 +425,7 @@ export function installSettingsWatcher(ctx: HostContext): void {
           let passes = 0
           do {
             queued = false
-            outcome = await fillDefaults(settings)
+            outcome = await fillDefaults(settings, ownSection)
             passes += 1
           } while (alive && queued && passes < MAX_FILL_PASSES)
           if (alive && queued) {
@@ -472,7 +484,7 @@ export function installSettingsWatcher(ctx: HostContext): void {
     if (model !== undefined) {
       for (const event of settingsChangeEvents(model)) {
         const disposer = ctx.on(event, (...args: unknown[]) => {
-          if (!alive || args[0] !== SETTINGS_NAMESPACE) return
+          if (!alive || (args[0] !== SETTINGS_NAMESPACE && args[0] !== ownSection)) return
           // See `fillScope`: the event arrives inside the host's own write
           // transaction, so the fill has to run outside the context it was
           // raised in or its write is refused.

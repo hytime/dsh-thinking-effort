@@ -46,6 +46,8 @@
   "levelSuffix": " の推論強度",
   "pageTitle": "モデルの能力と推論強度",
   "subagentCardTitle": "Subagent の既定の推論強度",
+  "autoFillDefaultsTitle": "既定の推論強度を自動補完",
+  "autoFillDefaultsDescription": "起動時とモデル設定の変更時に、推論強度が未設定のモデルへ Off / High / Max を追加します。無効にしても既存の値は削除されません。",
   "inputCapabilityMinimum": "少なくとも 1 つの入力能力を有効にしてください",
   "contextInteger": "コンテキスト長は整数、または 1024 倍を表す k（例: 64k = 65536）で入力してください（2000-1000000）",
   "contextRange": "コンテキスト長は 2000 から 1000000 の範囲で指定してください",
