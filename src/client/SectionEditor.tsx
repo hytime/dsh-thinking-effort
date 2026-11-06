@@ -1,18 +1,29 @@
 import React from 'react'
 import { GATEWAY_COMPAT_FIELD_KEYS, type GatewayCompatFieldKey } from '../compat/gateway/fields.js'
 import { editableProviderCompatFields } from '../compat/gateway/validation.js'
-import { isOpenCodeSessionSectionId } from '../compat/opencode-session.js'
 import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
-import { DEFAULT_LEVELS, INPUT_MODALITIES, LEVEL_LABEL_KEYS, NS, OPENCODE_SESSION_NS, PRESETS, ALL_LEVELS, CONTEXT_1M } from './constants.js'
-import { inventoryFrom, modelCompatKey, modelGatewayCompatViewsFrom, providerGatewayCompatViewsFrom } from './model-inventory.js'
+import { ALL_LEVELS, CONTEXT_1M, DEFAULT_LEVELS, NS, OPENCODE_SESSION_NS, PRESETS } from './constants.js'
+import { inventoryFrom } from './model-inventory.js'
 import { emptyTakeoverRuntimeResolution } from './takeover-runtime.js'
-import { openCodeSessionOp, openCodeSessionStateFor, isOpenCodeSessionNamespace } from './model-header-ops.js'
+import { openCodeSessionOp, isOpenCodeSessionNamespace } from './model-header-ops.js'
 import { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from './model-ops.js'
 import { isPluginEntrySection, pluginSection, subagentEffortTarget } from './subagent-section.js'
-import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, modelSaveBlockedReason, validateContextWindow, validateLevels } from './validation.js'
-import { revisionOf } from './types.js'
-import { isSettingsConflict } from '../shared/conflict.js'
-import type { ClientLocale, ClientResult, ConfigFormFace, ContextDraft, DraftCell, InputDraft, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ModelUpdate, OpenCodeSessionState, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, ReasoningDraft, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
+import { buildInput, buildLevels, contextDraftFrom, draftFrom, inputDraftFrom, modelSaveBlockedReason, validateContextWindow } from './validation.js'
+import {
+  availableCompatFieldCount,
+  clearModelEditorState,
+  clearOpenCodeSessionState,
+  initialState,
+  keyOf,
+  rebaseItem,
+  rebaseUpdates,
+  removeDirtyFields,
+  type EditorState,
+} from './section-editor/state.js'
+import { applyNamespaceView, applyPluginSectionView, reapplyCompatViews } from './section-editor/views.js'
+import { subagentEffortOp } from './section-editor/subagent.js'
+import { useSaveQueue, type SaveRequest } from './section-editor/use-save-queue.js'
+import type { ClientLocale, DraftCell, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelUpdate, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
 import type { Palette } from './theme.js'
 import type { TakeoverRuntimeStore } from './takeover-runtime.js'
 import { iosPalette } from './theme.js'
@@ -31,96 +42,8 @@ const PLUGIN_VERSION = packageJson.version
 // later save re-shows it and restarts this countdown.
 const NOTICE_DISMISS_MS = 3000
 
-type DirtyFields = { levels?: boolean; context?: boolean; input?: boolean }
-
-interface RunOpsRequest {
-  readonly ns: string
-  readonly revision: number
-  readonly ops: readonly SettingsOp[]
-  /**
-   * Rebuild the ops against a freshly read section, for the conflict retry.
-   *
-   * Supplying this is a claim that the write is safe to replay once another
-   * writer has moved the section, and what makes that true differs by op shape:
-   *
-   * - A LEAF op — `['providers', route, 'compat', field]`, an `opencodeSession`
-   *   model flag, `subagentEffort` — sets exactly one path, so it lands on
-   *   whatever the document now holds. `() => ops` is correct.
-   * - A CONTAINER op carries a whole `models` array or `modelOverrides` dict
-   *   rebuilt from THIS panel's inventory. Replaying it unchanged would write
-   *   that stale container over the document and drop a concurrent edit to a
-   *   sibling model, or a model another writer added. These callers MUST
-   *   rebuild from `fresh`.
-   *
-   * Omitting it makes a conflict report instead of retry, which is the safe
-   * default: an unproven replay is worse than a visible refusal.
-   */
-  readonly rebuildOps?: (fresh: SettingsNamespace) => readonly SettingsOp[]
-  readonly successMessage: string
-  readonly onSuccess?: () => void
-  readonly openCodeSessionSavedKey?: string
-  /**
-   * The write targets the plugin's own entry section, so its response refreshes
-   * the subagent view instead of the `llm-pi-ai` inventory.
-   */
-  readonly entrySectionWrite?: boolean
-}
-interface SubagentState { effort: string | null; revision: number }
-interface EditorState {
-  loading: boolean
-  namespace: SettingsNamespace | null
-  openCodeSessionViews: Record<string, boolean>
-  openCodeSessionDrafts: Record<string, boolean>
-  openCodeSessionDirty: Record<string, boolean>
-  openCodeSessionFound: boolean
-  openCodeSessionAvailable: boolean
-  inventory: InventoryItem[]
-  providerViews: Record<string, ProviderGatewayCompatView>
-  providerDrafts: Record<string, ProviderGatewayCompatView>
-  providerDirty: Record<string, boolean>
-  providerCompatDirty: Record<string, Partial<Record<GatewayCompatFieldKey, boolean>>>
-  providerCompatExpanded: Record<string, boolean>
-  modelCompatViews: Record<string, ModelGatewayCompatView>
-  modelCompatDrafts: Record<string, ModelGatewayCompatView>
-  modelCompatDirty: Record<string, ModelCompatDirtyFields>
-  modelCompatExpanded: Record<string, boolean>
-  revision: number
-  /**
-   * A count of the reads of the shared `dsh-thinking-effort` namespace, handed
-   * to the generator card so it re-reads whenever this editor does. It is not
-   * the namespace revision: the import path can land on one revision twice (the
-   * snapshot writer commits `set`s, and the card's own write bumps it again), so
-   * a value the card compares for equality has to change on every read, not
-   * only when the revision does.
-   */
-  openCodeSessionReads: number
-  expanded: Record<string, boolean>
-  expandedProviders: Record<string, boolean>
-  drafts: Record<string, ReasoningDraft>
-  contextDrafts: Record<string, ContextDraft>
-  inputDrafts: Record<string, InputDraft>
-  dirty: Record<string, DirtyFields>
-  busy: boolean
-  error: string | null
-  notice: string | null
-  query: string
-  nsFound: boolean
-  /**
-   * The plugin's own section under whatever settings model the host publishes:
-   * the Loader entry section on 0.1.7 and later, the registered
-   * `dsh-thinking-effort` namespace before that. Both the OpenCode session
-   * fields and `subagentEffort` live in it, so the editor holds exactly ONE
-   * descriptor for it — a second copy would be refreshed by only the writes
-   * that named it, and because 0.1.7 revisions are per section, the copy left
-   * behind would fence its next write with a stale `expectedRevision` and be
-   * refused as a conflict.
-   */
-  pluginSection: SettingsNamespace | null
-  subagent: SubagentState | null
-  subagentDraft: string
-  subagentCustom: string
-  quickSettingsOpen: boolean
-}
+const noRuntimeSubscribe = (): (() => void) => () => undefined
+const noRuntimeSnapshot = (): typeof emptyTakeoverRuntimeResolution => emptyTakeoverRuntimeResolution
 
 export interface SectionEditorProps {
   readonly settings: SettingsApi
@@ -130,147 +53,11 @@ export interface SectionEditorProps {
   readonly takeoverRuntime?: TakeoverRuntimeStore
 }
 
-const initialState: EditorState = {
-  loading: true, namespace: null, openCodeSessionReads: 0, openCodeSessionViews: {}, openCodeSessionDrafts: {}, openCodeSessionDirty: {}, openCodeSessionFound: false, openCodeSessionAvailable: false, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, pluginSection: null, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
-}
-
+// The OpenCode session helpers and the state shape live in `section-editor/`;
+// they are re-exported from here because that is where callers already import
+// them from, and the split must not move a public entry point.
+export { applyOpenCodeSessionMutation, createOpenCodeSessionState, saveOpenCodeSession } from './section-editor/open-code-session.js'
 export type { OpenCodeSessionState } from './types.js'
-
-export function createOpenCodeSessionState(
-  namespace: SettingsNamespace | undefined,
-  inventory: readonly InventoryItem[],
-  previous?: OpenCodeSessionState,
-): OpenCodeSessionState {
-  return openCodeSessionStateFor(namespace, inventory, previous)
-}
-
-export function applyOpenCodeSessionMutation(
-  state: OpenCodeSessionState,
-  response: ClientResult<SettingsNamespace>,
-  inventory: readonly InventoryItem[],
-  savedKey?: string,
-): OpenCodeSessionState {
-  if (!response.ok || !isOpenCodeSessionNamespace(response.value)) return state
-  const previous: OpenCodeSessionState = {
-    ...state,
-    dirty: { ...state.dirty },
-  }
-  if (savedKey !== undefined) delete previous.dirty[savedKey]
-  return openCodeSessionStateFor(response.value, inventory, previous)
-}
-
-export async function saveOpenCodeSession(
-  settings: Pick<SettingsApi, 'mutate'>,
-  namespace: SettingsNamespace,
-  item: InventoryItem,
-  enabled: boolean,
-): Promise<ClientResult<SettingsNamespace>> {
-  const operation = openCodeSessionOp(item.route, item.model, enabled)
-  if (operation === undefined) {
-    return { ok: false, error: { message: 'OpenCode session settings require a provider and model' } }
-  }
-  // The section the namespace came from, which is the entry id under 0.1.7
-  // rather than the legacy registered namespace.
-  return settings.mutate(namespace.ns, [operation], namespace.revision)
-}
-
-function keyOf(item: InventoryItem): string { return modelCompatKey(item.route, item.model) }
-
-/**
- * Re-point model updates at the same models in a freshly read inventory.
- *
- * The model-level ops carry a whole `models` array (or `modelOverrides` dict)
- * rebuilt from this panel's inventory. Replaying that container unchanged after
- * a conflict would write the stale copy over the document and silently drop
- * whatever another writer did meanwhile — an edit to a sibling model, or a
- * model the Host's own default-levels fill had just added. Rebuilding from the
- * fresh inventory is what makes the retry additive instead of destructive.
- *
- * An update whose model is gone is dropped rather than resurrected: there is
- * nothing left to write to, and re-adding it would undo the deletion.
- */
-function rebaseItem(fresh: readonly InventoryItem[], item: InventoryItem): InventoryItem | undefined {
-  return fresh.find((candidate) => candidate.route === item.route
-    && candidate.model === item.model
-    && candidate.inOverrides === item.inOverrides)
-}
-
-/** Re-point model updates at the same models in a freshly read inventory. */
-function rebaseUpdates(fresh: readonly InventoryItem[], updates: readonly ModelUpdate[]): ModelUpdate[] {
-  return updates.flatMap((update) => {
-    const item = rebaseItem(fresh, update.item)
-    return item === undefined ? [] : [{ ...update, item }]
-  })
-}
-function availableCompatFieldCount(view: ProviderGatewayCompatView | ModelGatewayCompatView): number {
-  const values = view as unknown as Record<string, unknown>
-  return GATEWAY_COMPAT_FIELD_KEYS.filter((key) => key !== 'supportsDeveloperRole' && key !== 'maxTokensField' && values[`${key}Available`] === true).length
-}
-function removeDirtyFields<T extends object>(dirty: Record<string, T>, key: string, fields: readonly (keyof T)[]): Record<string, T> {
-  const next = { ...dirty }
-  const entry = { ...(next[key] ?? {}) }
-  fields.forEach((field) => { delete entry[field] })
-  if (Object.keys(entry).length === 0) delete next[key]
-  else next[key] = entry
-  return next
-}
-
-function clearOpenCodeSessionState(current: EditorState, _key: string): EditorState {
-  // The OpenCode Header toggle saves immediately, so its draft always equals
-  // the persisted namespace value. Collapsing the editor must not clear it;
-  // reopening renders the saved value.
-  return current
-}
-
-function clearModelEditorState(current: EditorState, key: string): EditorState {
-  const next = clearOpenCodeSessionState(current, key)
-  const expanded = { ...next.expanded }; delete expanded[key]
-  const drafts = { ...next.drafts }; delete drafts[key]
-  const contextDrafts = { ...next.contextDrafts }; delete contextDrafts[key]
-  const inputDrafts = { ...next.inputDrafts }; delete inputDrafts[key]
-  const dirty = { ...next.dirty }; delete dirty[key]
-  return { ...next, expanded, drafts, contextDrafts, inputDrafts, dirty }
-}
-
-function subagentView(namespace: SettingsNamespace | null): { subagent: SubagentState | null; draft: string; custom: string; revision: number } {
-  if (!namespace) return { subagent: null, draft: 'default', custom: '', revision: 0 }
-  const revision = revisionOf(namespace)
-  const user = namespace.user ?? {}
-  const effort = typeof user.subagentEffort === 'string' && user.subagentEffort.length > 0 ? user.subagentEffort : null
-  const draft = effort === null ? 'default' : ALL_LEVELS.includes(effort as typeof ALL_LEVELS[number]) ? effort : 'custom'
-  return { subagent: { effort, revision }, draft, custom: draft === 'custom' ? effort ?? '' : '', revision }
-}
-
-const noRuntimeSubscribe = (): (() => void) => () => undefined
-const noRuntimeSnapshot = (): typeof emptyTakeoverRuntimeResolution => emptyTakeoverRuntimeResolution
-
-/**
- * The section whose `user` layer holds `subagentEffort`: the plugin's own entry
- * section when the host publishes one (0.1.7 and later), else the `llm-pi-ai`
- * section the releases before it wrote the value into. `null` while the model
- * registry itself is missing, which is the state the editor already reports as
- * "unconfigured": the setting is only meaningful beside the models it applies
- * to, and `nsFound` hides the rest of the page in exactly that case.
- */
-function subagentSection(
-  pluginSection: SettingsNamespace | null,
-  llmSection: SettingsNamespace | null,
-): SettingsNamespace | null {
-  return isPluginEntrySection(pluginSection) && llmSection !== null ? pluginSection : llmSection
-}
-
-/** The OpenCode session state the editor holds, in the shape its merge helpers take. */
-function openCodeStateOf(current: EditorState): OpenCodeSessionState {
-  return {
-    namespace: isOpenCodeSessionNamespace(current.pluginSection) ? current.pluginSection : null,
-    views: current.openCodeSessionViews,
-    drafts: current.openCodeSessionDrafts,
-    dirty: current.openCodeSessionDirty,
-    found: current.openCodeSessionFound,
-    available: current.openCodeSessionAvailable,
-  }
-}
-
 export function SectionEditor({ settings, locale, t, palette = iosPalette(), takeoverRuntime }: SectionEditorProps): React.ReactElement {
   const [state, setState] = React.useState<EditorState>(initialState)
   const takeoverResolution = React.useSyncExternalStore(
@@ -278,34 +65,6 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     takeoverRuntime?.getSnapshot ?? noRuntimeSnapshot,
     takeoverRuntime?.getSnapshot ?? noRuntimeSnapshot,
   )
-
-  const applyNamespaceView = (current: EditorState, nextNamespace: SettingsNamespace, notice: string | null, pluginSection: SettingsNamespace | null): EditorState => {
-    const view = subagentView(subagentSection(pluginSection, nextNamespace))
-    const nextInventory = inventoryFrom(nextNamespace)
-    const providerViews = providerGatewayCompatViewsFrom(nextNamespace, settings.compatibilityProfile, takeoverResolution)
-    const modelCompatViews = modelGatewayCompatViewsFrom(nextNamespace, nextInventory, settings.compatibilityProfile, takeoverResolution)
-    const modelCompatDrafts = { ...current.modelCompatDrafts }
-    for (const item of nextInventory) {
-      const key = keyOf(item)
-      const draft = modelCompatDrafts[key]
-      const dirty = current.modelCompatDirty[key]
-      const view = modelCompatViews[key]
-      if (view === undefined) continue
-      if (!dirty) modelCompatDrafts[key] = view
-      else if (draft) {
-        const preserved = { ...view }
-        for (const field of GATEWAY_COMPAT_FIELD_KEYS) {
-          if (dirty[field] === true) Object.assign(preserved, { [field]: draft[field] })
-        }
-        modelCompatDrafts[key] = preserved
-      }
-    }
-    const providerDrafts = { ...current.providerDrafts }
-    for (const [provider, providerView] of Object.entries(providerViews)) {
-      if (current.providerDirty[provider] !== true) providerDrafts[provider] = providerView
-    }
-    return { ...current, loading: false, namespace: nextNamespace, busy: false, nsFound: true, pluginSection, inventory: nextInventory, providerViews, providerDrafts, modelCompatViews, modelCompatDrafts, revision: revisionOf(nextNamespace), subagent: view.subagent, subagentDraft: view.draft, subagentCustom: view.custom, notice }
-  }
 
   /**
    * Refresh every view of the plugin's one section from a single descriptor.
@@ -319,29 +78,6 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
    * whose response targets this section lands here; `savedKey` names the
    * OpenCode toggle just persisted, whose draft is no longer dirty.
    */
-  const applyPluginSectionView = (current: EditorState, section: SettingsNamespace | null, notice: string | null, savedKey?: string): EditorState => {
-    const previous = openCodeStateOf(current)
-    const refreshed = section === null
-      ? createOpenCodeSessionState(undefined, current.inventory, previous)
-      : applyOpenCodeSessionMutation(previous, { ok: true, value: section }, current.inventory, savedKey)
-    const view = subagentView(subagentSection(section, current.namespace))
-    return {
-      ...current,
-      busy: false,
-      pluginSection: section,
-      openCodeSessionReads: current.openCodeSessionReads + 1,
-      openCodeSessionViews: refreshed.views,
-      openCodeSessionDrafts: refreshed.drafts,
-      openCodeSessionDirty: refreshed.dirty,
-      openCodeSessionFound: refreshed.found,
-      openCodeSessionAvailable: refreshed.available,
-      subagent: view.subagent,
-      subagentDraft: view.draft,
-      subagentCustom: view.custom,
-      notice,
-    }
-  }
-
   /**
    * Re-read every section this editor renders through one `describe`.
    *
@@ -378,7 +114,11 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
         })
         return
       }
-      setState((current) => applyPluginSectionView(applyNamespaceView(current, found, notice, plugin), plugin, notice))
+      setState((current) => applyPluginSectionView(
+        applyNamespaceView(current, found, notice, plugin, settings.compatibilityProfile, takeoverResolution),
+        plugin,
+        notice,
+      ))
     }).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error)
       setState((current) => ({ ...current, loading: false, busy: false, error: t('readSettingsFailed', { message }) }))
@@ -388,32 +128,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   React.useEffect(() => { load() }, [])
 
   React.useEffect(() => {
-    setState((current) => {
-      if (current.namespace === null) return current
-      const providerViews = providerGatewayCompatViewsFrom(current.namespace, settings.compatibilityProfile, takeoverResolution)
-      const providerDrafts = { ...current.providerDrafts }
-      for (const [provider, view] of Object.entries(providerViews)) {
-        if (current.providerDirty[provider] !== true) providerDrafts[provider] = view
-      }
-      const modelCompatViews = modelGatewayCompatViewsFrom(current.namespace, current.inventory, settings.compatibilityProfile, takeoverResolution)
-      const modelCompatDrafts = { ...current.modelCompatDrafts }
-      for (const item of current.inventory) {
-        const key = keyOf(item)
-        const draft = modelCompatDrafts[key]
-        const dirty = current.modelCompatDirty[key]
-        const view = modelCompatViews[key]
-        if (view === undefined) continue
-        if (!dirty) modelCompatDrafts[key] = view
-        else if (draft) {
-          const preserved = { ...view }
-          for (const field of GATEWAY_COMPAT_FIELD_KEYS) {
-            if (dirty[field] === true) Object.assign(preserved, { [field]: draft[field] })
-          }
-          modelCompatDrafts[key] = preserved
-        }
-      }
-      return { ...current, providerViews, providerDrafts, modelCompatViews, modelCompatDrafts }
-    })
+    setState((current) => reapplyCompatViews(current, settings.compatibilityProfile, takeoverResolution))
   }, [takeoverResolution])
 
   React.useEffect(() => {
@@ -424,173 +139,23 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     return () => clearTimeout(timer)
   }, [state.notice])
 
-  /**
-   * Re-read one section as the document now stands, so a write refused as stale
-   * can be retried against it.
-   *
-   * `undefined` means the section could not be re-read; the caller then reports
-   * the original conflict rather than writing without a revision, because a
-   * write that cannot establish the current state has no business bypassing the
-   * check that exists to protect it.
-   */
-  const latestSection = (target: string): Promise<SettingsNamespace | undefined> =>
-    settings.describe().then((response) => {
-      if (!response.ok) return undefined
-      return response.value.namespaces.find((entry) => entry.ns === target)
-    }).catch(() => undefined)
-
-  /**
-   * The official write queue for one section, when this host publishes one.
-   *
-   * Only a WRITE-CAPABLE form is served. An absent revision would make the
-   * host read the write as unconditional, and a memory-mode form (off-loopback)
-   * answers every mutation with `false` — in both cases the hand-rolled
-   * transport below is the better answer, so those forms are ignored rather
-   * than allowed to swallow a save.
-   *
-   * Resolved per write, not once at mount: the service can activate after this
-   * plugin's `apply` (client entries are created concurrently), and `index.ts`
-   * hands over a live view that re-reads it on every lookup.
-   */
-  const formForWrite = (target: string): ConfigFormFace | undefined => {
-    const form = settings.formFor?.(target)
-    if (form === undefined) return undefined
-    const snapshot = form.getSnapshot()
-    // `undefined` revision would make the host read the write as unconditional,
-    // and a memory-mode form (off-loopback) answers every mutate with `false`.
-    return snapshot.writable === true && typeof snapshot.revision === 'number' ? form : undefined
-  }
-
-  const runOps = ({ ns, revision, ops, rebuildOps, successMessage, onSuccess, openCodeSessionSavedKey, entrySectionWrite }: RunOpsRequest): void => {
-    // The OpenCode-specific copy belongs to the header toggle, whose section id
-    // happens to equal the entry id under the 0.1.7 model. A failed subagent
-    // save targets that same section (`entrySectionWrite`), so the discriminator
-    // is the write kind, not the id: keying on the id alone would report a
-    // subagent failure as an OpenCode session failure.
-    const writeError = (message: string): string => isOpenCodeSessionSectionId(ns) && entrySectionWrite !== true
-      ? t('opencodeSessionSaveFailed', { message })
-      : t('writeError', { message })
-    setState((current) => ({ ...current, busy: true, error: null, notice: null }))
-
-    const succeed = (value: SettingsNamespace): void => {
-      if (!value || typeof value !== 'object') {
-        setState((current) => ({ ...current, busy: false, error: t('saveMissingNamespace') }))
-        return
-      }
-      const savedKey = openCodeSessionSavedKey
-      if (ns !== NS && entrySectionWrite !== true && (savedKey === undefined || !isOpenCodeSessionNamespace(value))) {
-        setState((current) => ({ ...current, busy: false, error: t('saveMissingNamespace') }))
-        return
-      }
-      onSuccess?.()
-      setState((current) => {
-        if (ns === NS) return applyNamespaceView(current, value, successMessage, current.pluginSection)
-        // Every other accepted write targets the plugin's own section, so its
-        // response refreshes the OpenCode view and the subagent view together.
-        if (entrySectionWrite === true) return applyPluginSectionView(current, value, successMessage)
-        return applyPluginSectionView(current, value, successMessage, savedKey)
-      })
-    }
-
-    // A refusal and a thrown transport error are kept apart because the two
-    // transports report differently: the modern Remote answers `ok: false`
-    // while the legacy bridge rejects, and only the refusal carries a message
-    // the caller is expected to render verbatim.
-    type Outcome = { readonly ok: true; readonly value: SettingsNamespace }
-      | { readonly ok: false; readonly message: string; readonly conflict: boolean; readonly threw: boolean }
-    const writeOnce = async (writeOps: readonly SettingsOp[], expectedRevision: number): Promise<Outcome> => {
-      try {
-        const response = await settings.mutate(ns, writeOps, expectedRevision)
-        return response.ok
-          ? { ok: true, value: response.value }
-          : { ok: false, message: response.error.message, conflict: isSettingsConflict(response.error), threw: false }
-      } catch (error: unknown) {
-        return {
-          ok: false,
-          message: error instanceof Error ? error.message : String(error),
-          conflict: isSettingsConflict(error),
-          threw: true,
-        }
-      }
-    }
-
-    const run = async (): Promise<void> => {
-      const form = formForWrite(ns)
-      if (form !== undefined) {
-        // The form owns a serialized write queue, a revision fence and a
-        // post-refusal re-read, so the panel no longer fences the FIRST attempt
-        // itself against its mount-time revision. That fence does not cover the
-        // rebuild-and-retry below, which still runs. The first attempt omits
-        // `expectedRevision` on purpose: the form fences against the revision
-        // IT tracks, not the panel's mount-time copy, which is exactly the
-        // stale value the fence exists to supersede.
-        // Its `mutate` answers with a bare boolean and carries no descriptor, so
-        // success refreshes through `load()` — the same
-        // `applyNamespaceView`/`applyPluginSectionView` projection the legacy
-        // path reaches through `succeed` — rather than projecting an empty
-        // value, which would blank the provider and model views.
-        if (await form.mutate(ops)) { onSuccess?.(); load(successMessage); return }
-        // A refusal is retried ONCE, and only for a caller that supplied
-        // `rebuildOps`: replaying a stale container array would succeed while
-        // discarding the concurrent change that caused the refusal. The rebuild
-        // still needs a FULL descriptor (`value.providers` for the inventory,
-        // `schema` for the editable compat fields), neither of which the form
-        // snapshot carries, so the re-read goes through `describe()`.
-        if (rebuildOps !== undefined) {
-          const fresh = await latestSection(ns)
-          if (fresh !== undefined) {
-            const rebuilt = rebuildOps(fresh)
-            if (rebuilt.length > 0 && await form.mutate(rebuilt, revisionOf(fresh))) {
-              onSuccess?.(); load(successMessage); return
-            }
-          }
-        }
-        // `mutate` returns only a boolean, so there is no host message to
-        // render; the honest report is the generic write failure.
-        setState((current) => ({ ...current, busy: false, error: writeError(t('writeFailed')) }))
-        return
-      }
-      let outcome = await writeOnce(ops, revision)
-      // The panel holds the revision it read at mount, so any write to the same
-      // section meanwhile — another window, the Host's own default-levels fill,
-      // a model switch — fences every later save forever. Re-read the section
-      // and retry ONCE against it.
-      //
-      // The retry only runs for a caller that supplied `rebuildOps`, and for a
-      // container-shaped write that callback rebuilds the array from the FRESH
-      // inventory: replaying the panel's stale array would succeed while
-      // silently discarding the very concurrent change that caused the
-      // conflict. A second conflict is reported rather than retried again, so a
-      // persistently losing writer cannot spin, and a rebuild that yields no
-      // ops (every target model is gone) reports the original conflict instead
-      // of claiming success.
-      if (!outcome.ok && outcome.conflict && rebuildOps !== undefined) {
-        const fresh = await latestSection(ns)
-        if (fresh !== undefined) {
-          const freshRevision = revisionOf(fresh)
-          if (freshRevision !== revision) {
-            const rebuilt = rebuildOps(fresh)
-            if (rebuilt.length > 0) outcome = await writeOnce(rebuilt, freshRevision)
-          }
-        }
-      }
-      if (outcome.ok) { succeed(outcome.value); return }
-      const message = outcome.message
-      setState((current) => ({
-        ...current,
-        busy: false,
-        error: outcome.threw && message.length === 0 ? t('writeFailed') : writeError(message),
-      }))
-    }
-    // `succeed` renders the accepted response and is not expected to throw, but
-    // it used to run inside the transport's `.catch`, so a throw there surfaced
-    // as a reported write failure. Keeping that net means an unexpected error
-    // leaves the button usable and visible instead of only reaching the console.
-    run().catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error)
-      setState((current) => ({ ...current, busy: false, error: message.length > 0 ? writeError(message) : t('writeFailed') }))
-    })
-  }
+  // Every save goes through the write queue in `section-editor/use-save-queue`;
+  // it owns the two transports, the conflict retry and the error split, none of
+  // which belongs in the component that renders rows.
+  const runOps = useSaveQueue({
+    settings,
+    t,
+    onAccepted: (request: SaveRequest, value: SettingsNamespace) => setState((current) => {
+      if (request.ns === NS) return applyNamespaceView(current, value, request.successMessage, current.pluginSection, settings.compatibilityProfile, takeoverResolution)
+      // Every other accepted write targets the plugin's own section, so its
+      // response refreshes the OpenCode view and the subagent view together.
+      if (request.entrySectionWrite === true) return applyPluginSectionView(current, value, request.successMessage)
+      return applyPluginSectionView(current, value, request.successMessage, request.openCodeSessionSavedKey)
+    }),
+    reload: (notice: string) => load(notice),
+    setBusy: () => setState((current) => ({ ...current, busy: true, error: null, notice: null })),
+    setError: (message: string) => setState((current) => ({ ...current, busy: false, error: message })),
+  })
 
   const applyModel = (item: InventoryItem): void => {
     const key = keyOf(item)
@@ -780,9 +345,9 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   }
 
   const applySubagentEffort = (): void => {
-    const value = state.subagentDraft === 'default' ? undefined : state.subagentDraft === 'custom' ? state.subagentCustom.trim() : state.subagentDraft
-    if (state.subagentDraft !== 'default' && !value) { setState((current) => ({ ...current, notice: null, error: t('customEffortRequired') })); return }
-    const ops: SettingsOp[] = state.subagentDraft === 'default' ? [{ op: 'unset', path: ['subagentEffort'] }] : [{ op: 'set', path: ['subagentEffort'], value }]
+    const op = subagentEffortOp(state.subagentDraft, state.subagentCustom)
+    if (op === undefined) { setState((current) => ({ ...current, notice: null, error: t('customEffortRequired') })); return }
+    const ops: SettingsOp[] = [op]
     const target = subagentEffortTarget(isPluginEntrySection(state.pluginSection) ? state.pluginSection : null, state.revision)
     runOps({
       ns: target.ns,
