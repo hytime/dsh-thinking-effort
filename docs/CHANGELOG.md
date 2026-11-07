@@ -14,6 +14,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-07
+
 ### 新增 / Added
 
 - 设置页新增「自动补齐默认档位」开关，默认开启；关闭后停止启动和设置变更时的自动扫描与写入，不删除已有档位，重新开启会立即扫描一次。
