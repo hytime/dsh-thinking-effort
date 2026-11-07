@@ -3,21 +3,21 @@ import {
   isOpenCodeSessionEnabled,
   OPENCODE_SESSION_HEADER,
   OPENCODE_SESSION_NAMESPACE,
-} from '../compat/opencode-session.js'
+} from '@hytime/dsh-plugin-kit'
 import {
   readSettingsSection,
   settingsChangeEvents,
   settingsEntryId,
-} from '../compat/settings-model.js'
+} from '@hytime/dsh-plugin-kit'
 import { OpenCodeSessionFormatter, resolveFormatConfig } from './opencode-session-format.js'
 import { PLUGIN_SETTINGS_SCHEMA } from './plugin-settings.js'
-import { LOG_PREFIX } from '../shared/constants.js'
-import { isUnknownRecord } from '../shared/guards.js'
+import { LOG_PREFIX } from '@hytime/dsh-plugin-kit'
+import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
 import type {
   HostContext,
   SettingsInjectionContext,
   SettingsSectionHooks,
-} from './types.js'
+} from '@hytime/dsh-plugin-kit'
 
 export { PLUGIN_SETTINGS_SCHEMA as OPENCODE_SESSION_SETTINGS_SCHEMA } from './plugin-settings.js'
 

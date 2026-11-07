@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { schemaNodeAtPath } from '../src/compat/gateway/validation.ts'
+import { schemaNodeAtPath } from '@hytime/dsh-plugin-kit'
 import { Config, PLUGIN_SETTINGS_SCHEMA } from '../src/host/plugin-settings.ts'
 
 const section = {

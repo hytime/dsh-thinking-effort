@@ -1,7 +1,7 @@
-import { PLUGIN_ENTRY_ID } from '../compat/settings-model.js'
-import { OPENCODE_SESSION_NAMESPACE } from '../compat/opencode-session.js'
+import { PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
+import { OPENCODE_SESSION_NAMESPACE } from '@hytime/dsh-plugin-kit'
 import { NS } from './constants.js'
-import type { SettingsNamespace } from './types.js'
+import type { SettingsNamespace } from '@hytime/dsh-plugin-kit'
 
 /**
  * The plugin's own settings section when the running host publishes one.

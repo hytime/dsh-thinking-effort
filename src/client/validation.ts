@@ -1,5 +1,5 @@
 import { ALL_LEVELS, CONTEXT_1M, CONTEXT_MAX, CONTEXT_MIN, INPUT_MODALITIES, LEVEL_LABEL_KEYS } from './constants.js'
-import type { ContextDraft, InputDraft, InputModality, InventoryItem, ReasoningDraft, ReasoningEfforts, Translation } from './types.js'
+import type { ContextDraft, InputDraft, InputModality, InventoryItem, ReasoningDraft, ReasoningEfforts, Translation } from '@hytime/dsh-plugin-kit'
 
 export function draftFrom(levels: ReasoningEfforts | null | undefined): ReasoningDraft {
   const draft: ReasoningDraft = {}

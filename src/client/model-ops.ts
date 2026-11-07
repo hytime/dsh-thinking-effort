@@ -1,7 +1,7 @@
-import { isUnknownRecord } from '../shared/guards.js'
-import type { InventoryItem, ModelUpdate, SettingsOp } from './types.js'
+import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
+import type { InventoryItem, ModelUpdate, SettingsOp } from '@hytime/dsh-plugin-kit'
 
-export { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat } from '../compat/gateway/ops.js'
+export { opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat } from '@hytime/dsh-plugin-kit'
 
 function cloneOwned(value: unknown): unknown {
   if (Array.isArray(value)) return value.map((entry) => cloneOwned(entry))

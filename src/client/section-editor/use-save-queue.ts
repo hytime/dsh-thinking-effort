@@ -1,16 +1,16 @@
 import React from 'react'
-import { isOpenCodeSessionSectionId } from '../../compat/opencode-session.js'
+import { isOpenCodeSessionSectionId } from '@hytime/dsh-plugin-kit'
 import { isOpenCodeSessionNamespace } from '../model-header-ops.js'
-import { LLM_PI_AI_NS } from '../../shared/constants.js'
-import { isSettingsConflict } from '../../shared/conflict.js'
-import { revisionOf } from '../types.js'
+import { LLM_PI_AI_NS } from '@hytime/dsh-plugin-kit'
+import { isSettingsConflict } from '@hytime/dsh-plugin-kit'
+import { revisionOf } from '@hytime/dsh-plugin-kit'
 import type {
   ConfigFormFace,
   SettingsApi,
   SettingsNamespace,
   SettingsOp,
   Translation,
-} from '../types.js'
+} from '@hytime/dsh-plugin-kit'
 
 /**
  * One save the panel can perform.

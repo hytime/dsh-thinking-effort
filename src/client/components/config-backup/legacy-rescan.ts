@@ -4,9 +4,9 @@ import {
   LEGACY_RESULT_DISMISSED,
   LEGACY_RESULT_NOTHING_PENDING,
   legacyMigrationOf,
-} from '../../../compat/legacy-migration.js'
+} from '@hytime/dsh-plugin-kit'
 import { isPluginEntrySection } from '../../subagent-section.js'
-import type { SettingsNamespace, Translation } from '../../types.js'
+import type { SettingsNamespace, Translation } from '@hytime/dsh-plugin-kit'
 
 /** What the manual legacy-rescan block reads off the published control object. */
 export interface LegacyRescanView {

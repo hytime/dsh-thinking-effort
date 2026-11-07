@@ -1,7 +1,7 @@
 {
   "name": "@hytime/dsh-thinking-effort",
   "version": "0.4.0",
-  "description": "为 DSH 的 pi-ai 第三方模型补充可配置的思考强度档位，并设置子 agent 默认思考强度。",
+  "description": "\u4e3a DSH \u7684 pi-ai \u7b2c\u4e09\u65b9\u6a21\u578b\u8865\u5145\u53ef\u914d\u7f6e\u7684\u601d\u8003\u5f3a\u5ea6\u6863\u4f4d\uff0c\u5e76\u8bbe\u7f6e\u5b50 agent \u9ed8\u8ba4\u601d\u8003\u5f3a\u5ea6\u3002",
   "private": false,
   "engines": {
     "dsh": ">=0.1.7-alpha.1"
@@ -95,9 +95,10 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-settings": "0.1.1-rc.2",
     "@deepseek-ai/dsh-client-store": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-settings": "0.1.1-rc.2",
+    "@hytime/dsh-plugin-kit": "workspace:*",
     "@types/node": "^22.15.21",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.7",

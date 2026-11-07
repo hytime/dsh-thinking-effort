@@ -8,23 +8,23 @@ import { runInNewContext } from 'node:vm'
 import { settingsBridge } from '../src/client/settings-bridge.js'
 import { inventoryFrom } from '../src/client/model-inventory.js'
 import { opsForModelArrayCompat } from '../src/client/model-ops.js'
-import { editableProviderCompatFields, schemaNodeAtPath } from '../src/compat/gateway/validation.js'
-import { PLUGIN_ENTRY_ID } from '../src/compat/settings-model.js'
-import type { SettingsModel } from '../src/compat/settings-model.js'
-import { capabilitiesForVersion } from '../src/compat/version-map.js'
+import { editableProviderCompatFields, schemaNodeAtPath } from '@hytime/dsh-plugin-kit'
+import { PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
+import type { SettingsModel } from '@hytime/dsh-plugin-kit'
+import { capabilitiesForVersion } from '@hytime/dsh-plugin-kit'
 import {
   identifyTakeoverProviders,
   isCustomOpenAiGateway,
   resolveTakeoverProviders,
   takeoverProvidersOf,
-} from '../src/compat/gateway/takeover.js'
-import { opsForProviderCompat } from '../src/compat/gateway/ops.js'
+} from '@hytime/dsh-plugin-kit'
+import { opsForProviderCompat } from '@hytime/dsh-plugin-kit'
 import {
   LEGACY_RESULT_APPLIED,
   isLegacyMigrationPending,
   legacyCandidatesOf,
   legacyMigrationOf,
-} from '../src/compat/legacy-migration.js'
+} from '@hytime/dsh-plugin-kit'
 import {
   digestTail62 as digestTail62ForLoaderProbe,
   normalizeSessionId as normalizeSessionIdForLoaderProbe,

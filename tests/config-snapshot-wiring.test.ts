@@ -3,7 +3,7 @@ import { adjustIncoming, PROVIDER_WIRING_KEYS, wiringReport } from '../src/clien
 import { planImport } from '../src/client/config-snapshot/plan.js'
 import { LLM_NAMESPACE, PLUGIN_NAMESPACE } from '../src/client/config-snapshot/types.js'
 import type { ConfigSnapshot } from '../src/client/config-snapshot/types.js'
-import type { SettingsNamespace } from '../src/client/types.js'
+import type { SettingsNamespace } from '@hytime/dsh-plugin-kit'
 
 const snapshotOf = (sections: Record<string, Record<string, unknown>>): ConfigSnapshot => ({
   kind: 'dsh-thinking-effort/config-snapshot',

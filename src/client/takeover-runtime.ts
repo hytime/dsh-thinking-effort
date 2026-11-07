@@ -1,22 +1,22 @@
 import {
   resolveTakeoverGatewayCompat,
   resolveTakeoverProviders,
-} from '../compat/gateway/resolve.js'
-import type { GatewayCompatResolution } from '../compat/gateway/types.js'
+} from '@hytime/dsh-plugin-kit'
+import type { GatewayCompatResolution } from '@hytime/dsh-plugin-kit'
 import type {
   PiAiProviderProfile,
   PiAiSection,
   TakeoverSection,
-} from '../compat/gateway/takeover.js'
-import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '../compat/model-source.js'
-import { LLM_PI_AI_NS } from '../shared/constants.js'
-import { isUnknownRecord } from '../shared/guards.js'
+} from '@hytime/dsh-plugin-kit'
+import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '@hytime/dsh-plugin-kit'
+import { LLM_PI_AI_NS } from '@hytime/dsh-plugin-kit'
+import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
 import type {
   ClientResult,
   SettingsApi,
   SettingsDescribeValue,
   SettingsNamespace,
-} from './types.js'
+} from '@hytime/dsh-plugin-kit'
 
 export interface TakeoverRuntimeResolution {
   readonly providers: readonly string[]

@@ -1,6 +1,6 @@
-import { LEGACY_FAILED_PREFIX, LEGACY_RESULT_APPLIED, type LegacyCandidate } from '../compat/legacy-migration.js'
-import { SNAPSHOT_KIND } from '../shared/constants.js'
-import type { HostSettings, SettingsPathOp } from './types.js'
+import { LEGACY_FAILED_PREFIX, LEGACY_RESULT_APPLIED, type LegacyCandidate } from '@hytime/dsh-plugin-kit'
+import { SNAPSHOT_KIND } from '@hytime/dsh-plugin-kit'
+import type { HostSettings, SettingsPathOp } from '@hytime/dsh-plugin-kit'
 
 /**
  * The snapshot version the plugin's own snapshot schema declares.

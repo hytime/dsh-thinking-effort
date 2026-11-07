@@ -3,15 +3,15 @@ import {
   EXPRESSION_HELPER_NAMES,
   parseExpression,
   SESSION_CONTEXT_KEYS,
-} from '../compat/opencode-expression.js'
+} from '@hytime/dsh-plugin-kit'
 import {
   FORMAT_INVALID_POLICIES,
   FORMAT_MODES,
   FORMAT_TIMES,
   OPENCODE_SESSION_NAMESPACE,
-} from '../compat/opencode-session.js'
-import type { SettingsOp } from './types.js'
-import { isUnknownRecord } from '../shared/guards.js'
+} from '@hytime/dsh-plugin-kit'
+import type { SettingsOp } from '@hytime/dsh-plugin-kit'
+import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
 
 /**
  * The section the generator settings live in — the legacy registered namespace.

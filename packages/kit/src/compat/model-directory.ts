@@ -1,8 +1,8 @@
 import { hasMethods } from './capabilities.js'
 import { isUnknownRecord } from '../shared/guards.js'
 import { createSelectionDirectory, type SelectionDirectoryFace, type SelectionProjectionFace } from './model-selection-directory.js'
-import type { ClientContext } from '../client/types.js'
-import type { ModelDirectoryState, ModelSelection } from '../client/thinking-slider/slider.js'
+import type { ClientContext } from '../client-types.js'
+import type { ModelDirectoryState, ModelSelection } from './model-directory-types.js'
 
 /** Runtime generation selected by the DSH remote surface. */
 export type ModelDirectoryGeneration = 'connection' | 'session'

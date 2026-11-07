@@ -7,7 +7,7 @@ import {
   createElement, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore,
 } from 'react'
 import type { ChangeEvent, CSSProperties, KeyboardEvent, ReactNode } from 'react'
-import type { Translation } from '../types.js'
+import type { Translation } from '@hytime/dsh-plugin-kit'
 import css from './slider.module.css'
 
 /**

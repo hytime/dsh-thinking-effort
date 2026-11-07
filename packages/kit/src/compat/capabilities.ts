@@ -1,10 +1,10 @@
 import type {
   CompatibilitySettings,
   DshCompatibilityCapabilities,
-} from '../client/types.js'
+} from '../client-types.js'
 
-export type { CompatibilitySettings, DshCompatibilityCapabilities } from '../client/types.js'
-export type { DshVersionCapabilities, GatewayCompatEditableField, SettingsApi, TakeoverTransport } from './version-map.js'
+export type { CompatibilitySettings, DshCompatibilityCapabilities } from '../client-types.js'
+export type { DshVersionCapabilities, GatewayCompatEditableField, SettingsApiTransport, TakeoverTransport } from './version-map.js'
 export type { SettingsModel } from './settings-model.js'
 export {
   settingsModelForRuntime,

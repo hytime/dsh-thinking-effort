@@ -6,7 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SectionEditor } from '../src/client/SectionEditor.js'
 import { createTakeoverRuntimeStore, type TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
-import { resolveGatewayCompat } from '../src/compat/gateway/resolve.js'
+import { resolveGatewayCompat } from '@hytime/dsh-plugin-kit'
 import { GatewayCompatControls, renderGatewayCompatControls } from '../src/client/components/GatewayCompatControls.js'
 import { ModelEditor } from '../src/client/components/ModelEditor.js'
 import { ConfigBackupCard } from '../src/client/components/ConfigBackupCard.js'
@@ -25,7 +25,7 @@ import type {
   SettingsNamespace,
   SettingsOp,
   Translation,
-} from '../src/client/types.js'
+} from '@hytime/dsh-plugin-kit'
 
 const packageManifest = JSON.parse(readFileSync(resolve(import.meta.dirname, '..', 'package.json'), 'utf8')) as { version: string }
 

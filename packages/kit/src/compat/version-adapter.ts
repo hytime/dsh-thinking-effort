@@ -4,7 +4,7 @@ import type {
   CompatibilityDiagnostic,
   CompatibilityProfile,
   DshCompatibilityCapabilities,
-} from '../client/types.js'
+} from '../client-types.js'
 
 export type {
   CompatibilityDiagnostic,
@@ -12,7 +12,7 @@ export type {
   CompatibilityProfile,
   CompatibilitySettings,
   DshCompatibilityCapabilities,
-} from '../client/types.js'
+} from '../client-types.js'
 
 export interface CompatibilityReport {
   readonly profile: CompatibilityProfile

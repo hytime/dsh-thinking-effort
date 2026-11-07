@@ -1,4 +1,4 @@
-import type { InventoryItem, SettingsOp } from '../../client/types.js'
+import type { InventoryItem, SettingsOp } from '../../client-types.js'
 import { isUnknownRecord } from '../../shared/guards.js'
 import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, type GatewayCompatFieldKey, type GatewayCompatFieldSpec } from './fields.js'
 import type { GatewayCompatEditability, ModelGatewayCompatUpdate, ProviderGatewayCompatUpdate } from './types.js'

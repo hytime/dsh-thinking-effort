@@ -4,7 +4,7 @@ import { installOpenCodeSession } from './host/opencode-session.js'
 import { installLegacyMigration } from './host/legacy-watcher.js'
 import { installCompactionPolicy } from './host/compaction.js'
 import { handleAgentCreated, handleAgentRequest } from './host/subagent.js'
-import type { HostContext } from './host/types.js'
+import type { HostContext } from '@hytime/dsh-plugin-kit'
 
 export const name = '@hytime/dsh-thinking-effort'
 export const inject = ['settings', 'timer', 'llm'] as const

@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { apply, inject, name } from '../src/client/index.js'
 import { LOCALE_NS } from '../src/client/constants.js'
-import { PLUGIN_ENTRY_ID } from '../src/shared/constants.js'
+import { PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
 import { observeTakeoverSettings, resolveTakeoverDescription } from '../src/client/takeover-runtime.js'
 import { providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
-import { resolveTakeoverGatewayCompat, resolveTakeoverProviders, takeoverGatewayCompatInputs } from '../src/compat/gateway/resolve.js'
-import type { ClientContext, SettingsNamespace } from '../src/client/types.js'
+import { resolveTakeoverGatewayCompat, resolveTakeoverProviders, takeoverGatewayCompatInputs } from '@hytime/dsh-plugin-kit'
+import type { ClientContext, SettingsNamespace } from '@hytime/dsh-plugin-kit'
 
 function createHarness(mode: 'modern' | 'legacy') {
   const listeners: Array<(name: string) => void> = []

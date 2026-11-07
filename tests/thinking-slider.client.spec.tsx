@@ -4,8 +4,8 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { Slider } from '../src/client/thinking-slider/slider.js'
-import { createModelDirectoryFaceResolver } from '../src/compat/model-directory.js'
-import type { ClientContext } from '../src/client/types.js'
+import { createModelDirectoryFaceResolver } from '@hytime/dsh-plugin-kit'
+import type { ClientContext } from '@hytime/dsh-plugin-kit'
 import type { ModelDirectoryState, SliderProps } from '../src/client/thinking-slider/slider.js'
 
 const dictionary: Record<string, string> = {

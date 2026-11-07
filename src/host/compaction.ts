@@ -35,12 +35,12 @@
  * changing {@link compactSessionRegion}.
  */
 
-import { LOG_PREFIX, PLUGIN_ENTRY_ID } from '../shared/constants.js'
-import { compactionPolicyFrom, policyForModel, retainTokens, thresholdTokens } from '../shared/compaction.js'
-import type { CompactionPolicySettings } from '../shared/compaction.js'
-import { isUnknownRecord } from '../shared/guards.js'
-import { readSettingsSection, settingsEntryId } from '../compat/settings-model.js'
-import type { HostContext } from './types.js'
+import { LOG_PREFIX, PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
+import { compactionPolicyFrom, policyForModel, retainTokens, thresholdTokens } from '@hytime/dsh-plugin-kit'
+import type { CompactionPolicySettings } from '@hytime/dsh-plugin-kit'
+import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
+import { readSettingsSection, settingsEntryId } from '@hytime/dsh-plugin-kit'
+import type { HostContext } from '@hytime/dsh-plugin-kit'
 
 /** Cordis service names read through `ctx.get()`. */
 const AGENT_PRESETS_SERVICE = 'agentPresets'

@@ -7,9 +7,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { apply } from '../src/index.ts'
 import { installOpenCodeSession } from '../src/host/opencode-session.ts'
 import { readSubagentEffort, readSubagentModel, resolveSubagentEffort } from '../src/host/subagent.ts'
-import type { SettingsPathOp } from '../src/host/types.ts'
-import { OPENCODE_SESSION_NAMESPACE } from '../src/compat/opencode-session.ts'
-import { hasModelSourceConflict } from '../src/compat/model-source.ts'
+import type { SettingsPathOp } from '@hytime/dsh-plugin-kit'
+import { OPENCODE_SESSION_NAMESPACE } from '@hytime/dsh-plugin-kit'
+import { hasModelSourceConflict } from '@hytime/dsh-plugin-kit'
 
 type SettingsSection = Record<string, unknown> | undefined
 

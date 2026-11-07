@@ -1,6 +1,6 @@
 import React from 'react'
 import { ALL_LEVELS } from '../constants.js'
-import type { ContextDraft, DraftCell, InputDraft, InventoryItem, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ReasoningDraft, Translation } from '../types.js'
+import type { ContextDraft, DraftCell, InputDraft, InventoryItem, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelGatewayCompatView, ReasoningDraft, Translation } from '@hytime/dsh-plugin-kit'
 import type { Palette } from '../theme.js'
 import { ActionButton, Icon } from './Controls.js'
 import { ModelEditor, type ModelCompactionControls } from './ModelEditor.js'

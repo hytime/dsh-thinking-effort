@@ -1,18 +1,18 @@
 import {
   GATEWAY_COMPAT_FIELD_KEYS,
   type GatewayCompatFieldKey,
-} from '../../compat/gateway/fields.js'
+} from '@hytime/dsh-plugin-kit'
 import { isPluginEntrySection } from '../subagent-section.js'
 import { modelCompatKey } from '../model-inventory.js'
 import { isOpenCodeSessionNamespace } from '../model-header-ops.js'
 import {
   compactionPolicyFrom,
   formatRatioPercent,
-} from '../../shared/compaction.js'
-import { isUnknownRecord } from '../../shared/guards.js'
+} from '@hytime/dsh-plugin-kit'
+import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
 import type {
   CompactionPolicySettings,
-} from '../../shared/compaction.js'
+} from '@hytime/dsh-plugin-kit'
 import type {
   ContextDraft,
   InputDraft,
@@ -24,7 +24,7 @@ import type {
   ModelUpdate,
   ReasoningDraft,
   SettingsNamespace,
-} from '../types.js'
+} from '@hytime/dsh-plugin-kit'
 
 /** Which of one model's own fields the panel has edited since its last read. */
 export type DirtyFields = { levels?: boolean; context?: boolean; input?: boolean }

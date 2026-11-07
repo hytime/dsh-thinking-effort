@@ -1,4 +1,4 @@
-import type { ReasoningLevel } from './types.js'
+import type { ReasoningLevel } from '@hytime/dsh-plugin-kit'
 import {
   ALL_LEVELS,
   DEFAULT_LEVELS as SHARED_DEFAULT_LEVELS,
@@ -6,7 +6,7 @@ import {
   FORMAT_MODES,
   FORMAT_TIMES,
   LLM_PI_AI_NS,
-} from '../shared/constants.js'
+} from '@hytime/dsh-plugin-kit'
 
 export { ALL_LEVELS, FORMAT_INVALID_POLICIES, FORMAT_MODES, FORMAT_TIMES }
 export const DEFAULT_LEVELS = SHARED_DEFAULT_LEVELS satisfies Partial<Record<ReasoningLevel, string | null>>
@@ -17,7 +17,7 @@ export const PRESETS = [
 ] as const
 
 export const NS = LLM_PI_AI_NS
-export { PLUGIN_NS as OPENCODE_SESSION_NS } from '../shared/constants.js'
+export { PLUGIN_NS as OPENCODE_SESSION_NS } from '@hytime/dsh-plugin-kit'
 export const LOCALE_NS = 'settings.thinkingEffort'
 export const CONTEXT_MIN = 2000
 export const CONTEXT_1M = 1000000

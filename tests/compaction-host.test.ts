@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { compactSessionRegion, installCompactionPolicy } from '../src/host/compaction.ts'
-import type { HostContext } from '../src/host/types.ts'
-import { PLUGIN_ENTRY_ID } from '../src/shared/constants.ts'
+import type { HostContext } from '@hytime/dsh-plugin-kit'
+import { PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
 
 /**
  * The pre-step decision this harness's `next()` resolves to, so a test can also

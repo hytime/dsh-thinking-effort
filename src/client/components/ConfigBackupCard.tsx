@@ -31,8 +31,8 @@ import { applyFailureLines, appliedNamespaces, applyWarnings, previewView } from
 import { legacyRescanView } from './config-backup/legacy-rescan.js'
 import { ActionButton, Icon } from './Controls.js'
 import type { Palette } from '../theme.js'
-import { revisionOf } from '../types.js'
-import type { SettingsApi, SettingsNamespace, Translation } from '../types.js'
+import { revisionOf } from '@hytime/dsh-plugin-kit'
+import type { SettingsApi, SettingsNamespace, Translation } from '@hytime/dsh-plugin-kit'
 
 export type { CardState, PendingImport } from './config-backup/card-state.js'
 

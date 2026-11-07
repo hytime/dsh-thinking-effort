@@ -1,10 +1,10 @@
-import type { InventoryItem, OpenCodeSessionState, SettingsNamespace, SettingsOp } from './types.js'
+import type { InventoryItem, OpenCodeSessionState, SettingsNamespace, SettingsOp } from '@hytime/dsh-plugin-kit'
 import {
   isOpenCodeSessionEnabled,
   isOpenCodeSessionSectionId,
   modelPath,
-} from '../compat/opencode-session.js'
-import { isUnknownRecord } from '../shared/guards.js'
+} from '@hytime/dsh-plugin-kit'
+import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return isUnknownRecord(value) ? value : undefined

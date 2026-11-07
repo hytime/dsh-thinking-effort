@@ -4,12 +4,12 @@ import {
   HostSettings,
   isAgentRequestConfig,
   isUnknownRecord,
-} from './types.js'
+} from '@hytime/dsh-plugin-kit'
 import { SETTINGS_NAMESPACE } from './settings.js'
-import { readSettingsSection, readSettingsSectionUser, settingsEntryId, PLUGIN_ENTRY_ID } from '../compat/settings-model.js'
-import { OPENCODE_SESSION_NAMESPACE } from '../compat/opencode-session.js'
-import { hasModelSourceConflict } from '../compat/model-source.js'
-import { ALL_LEVELS, LOG_PREFIX } from '../shared/constants.js'
+import { readSettingsSection, readSettingsSectionUser, settingsEntryId, PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
+import { OPENCODE_SESSION_NAMESPACE } from '@hytime/dsh-plugin-kit'
+import { hasModelSourceConflict } from '@hytime/dsh-plugin-kit'
+import { ALL_LEVELS, LOG_PREFIX } from '@hytime/dsh-plugin-kit'
 
 export const STANDARD_LEVELS = ALL_LEVELS
 export type StandardLevel = (typeof STANDARD_LEVELS)[number]

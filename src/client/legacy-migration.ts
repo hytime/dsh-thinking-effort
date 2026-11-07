@@ -1,6 +1,6 @@
-import { isLegacyMigrationPending, legacyMigrationOf, type LegacyDecision } from '../compat/legacy-migration.js'
+import { isLegacyMigrationPending, legacyMigrationOf, type LegacyDecision } from '@hytime/dsh-plugin-kit'
 import { pluginSection } from './subagent-section.js'
-import type { SettingsApi, SettingsOp } from './types.js'
+import type { SettingsApi, SettingsOp } from '@hytime/dsh-plugin-kit'
 
 /** The plugin section and the control object it publishes, when either exists. */
 export interface LegacyMigrationRead {

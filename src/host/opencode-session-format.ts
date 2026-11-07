@@ -5,23 +5,23 @@ import {
   EXPRESSION_HELPER_NAMES,
   SESSION_CONTEXT_KEYS,
   tokenize,
-} from '../compat/opencode-expression.js'
-import type { Node } from '../compat/opencode-expression.js'
+} from '@hytime/dsh-plugin-kit'
+import type { Node } from '@hytime/dsh-plugin-kit'
 import { stat } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import {
   FORMAT_INVALID_POLICIES as INVALID_POLICIES,
   FORMAT_MODES,
   FORMAT_TIMES as TIME_SOURCES,
-} from '../compat/opencode-session.js'
+} from '@hytime/dsh-plugin-kit'
 import type {
   OpenCodeSessionFormatMode,
   OpenCodeSessionFormatSettings,
   OpenCodeSessionInvalidPolicy,
   OpenCodeSessionTimeSource,
-} from '../compat/opencode-session.js'
-import { LOG_PREFIX } from '../shared/constants.js'
-import { isUnknownRecord } from '../shared/guards.js'
+} from '@hytime/dsh-plugin-kit'
+import { LOG_PREFIX } from '@hytime/dsh-plugin-kit'
+import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
 
 /**
  * The upstream format enforced by OpenCode Zen free tier, kept as the

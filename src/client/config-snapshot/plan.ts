@@ -3,8 +3,8 @@ import type { ConfigSnapshot, ImportMode, ImportPlan, NamespacePlan, SnapshotSec
 import { userSectionOf, isRecord, isSnapshotLibraryKey, deepEqualJson, pluginSectionKey } from './snapshot.js'
 import { adjustIncoming, mergeWiringReports } from './wiring.js'
 import { pluginSectionId } from '../subagent-section.js'
-import { PLUGIN_ENTRY_ID } from '../../compat/opencode-session.js'
-import type { SettingsNamespace, SettingsOp } from '../types.js'
+import { PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
+import type { SettingsNamespace, SettingsOp } from '@hytime/dsh-plugin-kit'
 
 export { deepEqualJson } from './snapshot.js'
 

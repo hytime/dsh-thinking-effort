@@ -13,7 +13,7 @@ import {
   OPENCODE_SESSION_HEADER,
   OPENCODE_SESSION_NAMESPACE,
   PLUGIN_ENTRY_ID,
-} from '../src/compat/opencode-session.ts'
+} from '@hytime/dsh-plugin-kit'
 import { isOpenCodeSessionNamespace, openCodeSessionOp } from '../src/client/model-header-ops.ts'
 import { createOpenCodeSessionState } from '../src/client/SectionEditor.js'
 

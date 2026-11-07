@@ -1,10 +1,10 @@
-import type { InventoryItem, InputModality, ModelGatewayCompatView, ProviderGatewayCompatView, ReasoningEfforts, SettingsNamespace, CompatibilityProfile } from './types.js'
+import type { InventoryItem, InputModality, ModelGatewayCompatView, ProviderGatewayCompatView, ReasoningEfforts, SettingsNamespace, CompatibilityProfile } from '@hytime/dsh-plugin-kit'
 import type { TakeoverRuntimeResolution } from './takeover-runtime.js'
-import { resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../compat/gateway/resolve.js'
-import { editableProviderCompatFields } from '../compat/gateway/validation.js'
-import { fieldsForApi, GATEWAY_COMPAT_FIELD_KEYS } from '../compat/gateway/fields.js'
-import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '../compat/model-source.js'
-import { isUnknownRecord } from '../shared/guards.js'
+import { resolveModelGatewayCompat, resolveProviderGatewayCompat } from '@hytime/dsh-plugin-kit'
+import { editableProviderCompatFields } from '@hytime/dsh-plugin-kit'
+import { fieldsForApi, GATEWAY_COMPAT_FIELD_KEYS } from '@hytime/dsh-plugin-kit'
+import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '@hytime/dsh-plugin-kit'
+import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return isUnknownRecord(value) ? value : undefined

@@ -1,6 +1,6 @@
 import React from 'react'
 import { ALL_LEVELS, LEVEL_LABEL_KEYS } from '../constants.js'
-import type { SubagentModelDraft, SubagentModelRoute, Translation } from '../types.js'
+import type { SubagentModelDraft, SubagentModelRoute, Translation } from '@hytime/dsh-plugin-kit'
 import type { Palette } from '../theme.js'
 import { ActionButton, Icon } from './Controls.js'
 import css from '../settings.module.css'

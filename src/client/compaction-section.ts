@@ -11,13 +11,13 @@
  * The ratio vocabulary itself lives in `src/shared/compaction.ts`; nothing here
  * restates a limit, a default, or a parse rule.
  */
-import { parseRatioInput, ratioProblem } from '../shared/compaction.js'
+import { parseRatioInput, ratioProblem } from '@hytime/dsh-plugin-kit'
 import type {
   CompactionModelPolicy,
   CompactionPolicySettings,
-} from '../shared/compaction.js'
+} from '@hytime/dsh-plugin-kit'
 import type { CompactionDraft } from './section-editor/state.js'
-import type { SettingsOp, Translation } from './types.js'
+import type { SettingsOp, Translation } from '@hytime/dsh-plugin-kit'
 
 /** What one draft resolves to: a savable override, a clear, or a reason to refuse. */
 export type CompactionDraftCheck =

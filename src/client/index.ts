@@ -6,7 +6,7 @@ import { LOCALE_NS } from './constants.js'
 import { SectionEditor } from './SectionEditor.js'
 import { LegacyMigrationModal } from './components/LegacyMigrationModal.js'
 import { apply as registerComposerSeat } from './thinking-slider/index.js'
-import type { ClientContext, ClientLocale, ClientSlots, ConfigFormsService } from './types.js'
+import type { ClientContext, ClientLocale, ClientSlots, ConfigFormsService } from '@hytime/dsh-plugin-kit'
 
 export const name = '@hytime/dsh-thinking-effort'
 export const inject = ['slots', 'connection', 'locale'] as const
@@ -51,7 +51,7 @@ function configFormsView(context: ClientContext): ConfigFormsService {
 export function apply(context: ClientContext): void {
   const slots = context.get('slots') as ClientSlots | undefined
   if (slots === undefined) return
-  const connection = context.get('connection') as import('./types.js').ClientConnection | undefined
+  const connection = context.get('connection') as import('@hytime/dsh-plugin-kit').ClientConnection | undefined
   const locale = context.get('locale') as ClientLocale
   let mounted = false
 

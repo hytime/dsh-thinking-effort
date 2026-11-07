@@ -1,7 +1,7 @@
-import type { SettingsNamespace, SettingsOp } from '../types.js'
-import { LLM_PI_AI_NS, PLUGIN_NS } from '../../shared/constants.js'
+import type { SettingsNamespace, SettingsOp } from '@hytime/dsh-plugin-kit'
+import { LLM_PI_AI_NS, PLUGIN_NS, SNAPSHOT_KIND } from '@hytime/dsh-plugin-kit'
 
-export { SNAPSHOT_KIND } from '../../shared/constants.js'
+export { SNAPSHOT_KIND }
 export const SNAPSHOT_VERSION = 1
 export const SNAPSHOT_MAX_BYTES = 2 * 1024 * 1024
 export const MAX_PROFILES = 20

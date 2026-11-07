@@ -1,6 +1,6 @@
-import type { ALL_LEVELS } from './constants.js'
-import type { GatewayCompatFieldKey } from '../compat/gateway/fields.js'
-import type { ModelGatewayCompatView as GatewayModelGatewayCompatView } from '../compat/gateway/types.js'
+import type { ALL_LEVELS } from './shared/constants.js'
+import type { GatewayCompatFieldKey } from './compat/gateway/fields.js'
+import type { ModelGatewayCompatView as GatewayModelGatewayCompatView } from './compat/gateway/types.js'
 
 export type {
   GatewayCompat,
@@ -17,10 +17,10 @@ export type {
   ProviderGatewayCompatSource,
   ProviderGatewayCompatUpdate,
   ProviderGatewayCompatView,
-} from '../compat/gateway/types.js'
+} from './compat/gateway/types.js'
 export type {
   OpenCodeSessionSettings,
-} from '../compat/opencode-session.js'
+} from './compat/opencode-session.js'
 export type ModelCompatDirtyFields = Partial<Record<GatewayCompatFieldKey, boolean>>
 
 export type ModelGatewayCompatSelection = Pick<GatewayModelGatewayCompatView, GatewayCompatFieldKey>

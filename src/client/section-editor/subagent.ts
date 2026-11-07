@@ -1,6 +1,6 @@
 import { ALL_LEVELS } from '../constants.js'
-import { revisionOf } from '../types.js'
-import type { SettingsNamespace } from '../types.js'
+import { revisionOf } from '@hytime/dsh-plugin-kit'
+import type { SettingsNamespace } from '@hytime/dsh-plugin-kit'
 import type { SubagentState } from './state.js'
 
 /**

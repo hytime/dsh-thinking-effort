@@ -1,7 +1,7 @@
 import type { ApplyOutcome } from '../../config-snapshot/types.js'
 
 import { isSnapshotLibraryKey, pluginSectionKey } from '../../config-snapshot/snapshot.js'
-import type { Translation } from '../../types.js'
+import type { Translation } from '@hytime/dsh-plugin-kit'
 import type { PendingImport } from './card-state.js'
 
 /** What a snapshot ask resolved to: the payload plus the revision it was built from. */

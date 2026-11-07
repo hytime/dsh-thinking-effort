@@ -1,9 +1,9 @@
 import { LLM_NAMESPACE, PLUGIN_NAMESPACE } from './types.js'
 import { deepEqualJson, isRecord, pluginSectionKey, userSectionOf } from './snapshot.js'
-import { isOpenCodeSessionSectionId } from '../../compat/opencode-session.js'
+import { isOpenCodeSessionSectionId } from '@hytime/dsh-plugin-kit'
 import { pluginSectionId } from '../subagent-section.js'
 import type { ConfigSnapshot, SnapshotSection, WiringEndpoint, WiringReport } from './types.js'
-import type { SettingsNamespace } from '../types.js'
+import type { SettingsNamespace } from '@hytime/dsh-plugin-kit'
 
 /**
  * Provider fields that decide WHERE a request goes and WHICH credential it

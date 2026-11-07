@@ -1,17 +1,17 @@
 import { AsyncResource } from 'node:async_hooks'
-import { hostCapabilities } from '../compat/capabilities.js'
-import { readSettingsSection, readSettingsSectionUser, settingsChangeEvents, settingsEntryId } from '../compat/settings-model.js'
-import { OPENCODE_SESSION_NAMESPACE } from '../compat/opencode-session.js'
-import { settingsModelForRuntime } from '../compat/version-map.js'
+import { hostCapabilities } from '@hytime/dsh-plugin-kit'
+import { readSettingsSection, readSettingsSectionUser, settingsChangeEvents, settingsEntryId } from '@hytime/dsh-plugin-kit'
+import { OPENCODE_SESSION_NAMESPACE } from '@hytime/dsh-plugin-kit'
+import { settingsModelForRuntime } from '@hytime/dsh-plugin-kit'
 import { mark } from './marker.js'
-import { DEFAULT_LEVELS as SHARED_DEFAULT_LEVELS, LLM_PI_AI_NS, LOG_PREFIX } from '../shared/constants.js'
+import { DEFAULT_LEVELS as SHARED_DEFAULT_LEVELS, LLM_PI_AI_NS, LOG_PREFIX } from '@hytime/dsh-plugin-kit'
 import {
   HostContext,
   HostSettings,
   SettingsPathOp,
   isProviderProfile,
   isUnknownRecord,
-} from './types.js'
+} from '@hytime/dsh-plugin-kit'
 
 export const SETTINGS_NAMESPACE = LLM_PI_AI_NS
 // The one definition lives in `src/shared/constants.ts`; this binding keeps the

@@ -5,10 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ConfigBackupCard } from '../src/client/components/ConfigBackupCard.js'
 import { AUTO_BACKUP_PATH } from '../src/client/config-snapshot/library.js'
 import { SNAPSHOT_KIND, SNAPSHOT_VERSION } from '../src/client/config-snapshot/types.js'
-import { LEGACY_RESULT_NOTHING_PENDING } from '../src/compat/legacy-migration.js'
+import { LEGACY_RESULT_NOTHING_PENDING } from '@hytime/dsh-plugin-kit'
 import { zh } from '../src/client/locales.js'
 import { iosPalette } from '../src/client/theme.js'
-import type { ClientResult, SettingsApi, SettingsDescribeValue, SettingsNamespace, SettingsOp, Translation } from '../src/client/types.js'
+import type { ClientResult, SettingsApi, SettingsDescribeValue, SettingsNamespace, SettingsOp, Translation } from '@hytime/dsh-plugin-kit'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

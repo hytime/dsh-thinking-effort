@@ -7,7 +7,7 @@ import { DEFAULT_FORMAT_DRAFT } from '../src/client/opencode-format-validation.j
 import type { FormatDraft } from '../src/client/opencode-format-validation.js'
 import { zh } from '../src/client/locales.js'
 import { iosPalette } from '../src/client/theme.js'
-import type { ClientResult, SettingsApi, SettingsDescribeValue, SettingsNamespace, SettingsOp, Translation } from '../src/client/types.js'
+import type { ClientResult, SettingsApi, SettingsDescribeValue, SettingsNamespace, SettingsOp, Translation } from '@hytime/dsh-plugin-kit'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

@@ -1,15 +1,9 @@
-import {
-  CONFIG_NAMESPACES,
-  PLUGIN_NAMESPACE,
-  PLUGIN_SNAPSHOT_EXCLUDED_KEYS,
-  SNAPSHOT_KIND,
-  SNAPSHOT_VERSION,
-} from './types.js'
+import { CONFIG_NAMESPACES, PLUGIN_NAMESPACE, PLUGIN_SNAPSHOT_EXCLUDED_KEYS, SNAPSHOT_KIND, SNAPSHOT_VERSION } from './types.js'
 import type { ConfigSnapshot, SnapshotMeta, SnapshotSection } from './types.js'
-import { isOpenCodeSessionSectionId, PLUGIN_ENTRY_ID } from '../../compat/opencode-session.js'
+import { isOpenCodeSessionSectionId, PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
 import { pluginSectionId } from '../subagent-section.js'
-import { isUnknownRecord } from '../../shared/guards.js'
-import type { SettingsNamespace } from '../types.js'
+import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
+import type { SettingsNamespace } from '@hytime/dsh-plugin-kit'
 
 // Re-exported under this module's own name: four snapshot siblings import it
 // from here, so the shared predicate is bound locally rather than re-exported

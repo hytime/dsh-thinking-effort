@@ -1,6 +1,6 @@
 import React from 'react'
-import { GATEWAY_COMPAT_FIELD_KEYS, GATEWAY_COMPAT_GROUPS } from '../../compat/gateway/fields.js'
-import type { ModelGatewayCompatUpdate, ModelGatewayCompatView, ProviderGatewayCompatView, Translation } from '../types.js'
+import { GATEWAY_COMPAT_FIELD_KEYS, GATEWAY_COMPAT_GROUPS } from '@hytime/dsh-plugin-kit'
+import type { ModelGatewayCompatUpdate, ModelGatewayCompatView, ProviderGatewayCompatView, Translation } from '@hytime/dsh-plugin-kit'
 import { en } from '../locales.js'
 import type { Palette } from '../theme.js'
 import css from '../settings.module.css'

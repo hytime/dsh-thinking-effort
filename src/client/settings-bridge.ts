@@ -1,6 +1,6 @@
-import { clientCapabilities } from '../compat/capabilities.js'
-import { resolveCompatibility } from '../compat/version-adapter.js'
-import type { ClientConnection, ClientResult, ConfigFormFace, SettingsApi, SettingsDescribeValue, SettingsNamespace, SettingsOp } from './types.js'
+import { clientCapabilities } from '@hytime/dsh-plugin-kit'
+import { resolveCompatibility } from '@hytime/dsh-plugin-kit'
+import type { ClientConnection, ClientResult, ConfigFormFace, SettingsApi, SettingsDescribeValue, SettingsNamespace, SettingsOp } from '@hytime/dsh-plugin-kit'
 
 export function directResult<T>(response: unknown): T {
   if (response !== null && typeof response === 'object' && 'result' in response) {

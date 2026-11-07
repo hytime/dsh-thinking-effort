@@ -1,6 +1,6 @@
 import React from 'react'
-import { GATEWAY_COMPAT_FIELD_KEYS, type GatewayCompatFieldKey } from '../compat/gateway/fields.js'
-import { editableProviderCompatFields } from '../compat/gateway/validation.js'
+import { GATEWAY_COMPAT_FIELD_KEYS, type GatewayCompatFieldKey } from '@hytime/dsh-plugin-kit'
+import { editableProviderCompatFields } from '@hytime/dsh-plugin-kit'
 import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
 import { ALL_LEVELS, CONTEXT_1M, DEFAULT_LEVELS, NS, OPENCODE_SESSION_NS, PRESETS } from './constants.js'
 import { inventoryFrom } from './model-inventory.js'
@@ -23,14 +23,14 @@ import {
 import { applyNamespaceView, applyPluginSectionView, reapplyCompatViews } from './section-editor/views.js'
 import { subagentEffortOp } from './section-editor/subagent.js'
 import { checkCompactionDraft, compactionOps, compactionProblemText } from './compaction-section.js'
-import { formatRatioPercent } from '../shared/compaction.js'
+import { formatRatioPercent } from '@hytime/dsh-plugin-kit'
 import { compactionDraftFrom, compactionPolicyOf, keyOf as keyOfState } from './section-editor/state.js'
 import type { CompactionDraft, SubagentModelRoute } from './section-editor/state.js'
 import type { ModelCompactionControls } from './components/ModelEditor.js'
 import type { SubagentModelPicker } from './components/SubagentSettings.js'
 import { useSaveQueue, type SaveRequest } from './section-editor/use-save-queue.js'
-import { revisionOf } from './types.js'
-import type { ClientLocale, DraftCell, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelUpdate, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
+import { revisionOf } from '@hytime/dsh-plugin-kit'
+import type { ClientLocale, DraftCell, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelUpdate, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, SettingsApi, SettingsNamespace, SettingsOp, Translation } from '@hytime/dsh-plugin-kit'
 import type { Palette } from './theme.js'
 import type { TakeoverRuntimeStore } from './takeover-runtime.js'
 import { iosPalette } from './theme.js'
@@ -64,7 +64,7 @@ export interface SectionEditorProps {
 // they are re-exported from here because that is where callers already import
 // them from, and the split must not move a public entry point.
 export { applyOpenCodeSessionMutation, createOpenCodeSessionState, saveOpenCodeSession } from './section-editor/open-code-session.js'
-export type { OpenCodeSessionState } from './types.js'
+export type { OpenCodeSessionState } from '@hytime/dsh-plugin-kit'
 export function SectionEditor({ settings, locale, t, palette = iosPalette(), takeoverRuntime }: SectionEditorProps): React.ReactElement {
   const [state, setState] = React.useState<EditorState>(initialState)
   const takeoverResolution = React.useSyncExternalStore(

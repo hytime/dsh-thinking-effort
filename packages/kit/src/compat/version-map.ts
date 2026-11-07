@@ -4,12 +4,12 @@ import { settingsModelOf } from './settings-model.js'
 import type { SettingsModel } from './settings-model.js'
 
 export type TakeoverTransport = 'unsupported' | 'optional'
-export type SettingsApi = 'connection.api.settings' | 'remote.settings'
+export type SettingsApiTransport = 'connection.api.settings' | 'remote.settings'
 export type GatewayCompatEditableField = keyof typeof GATEWAY_COMPAT_FIELDS
 
 export interface DshVersionCapabilities {
   settingsTransport: 'legacy' | 'modern'
-  settingsApi: SettingsApi
+  settingsApi: SettingsApiTransport
   /**
    * Which settings architecture the release exposes. `namespace` covers the
    * rc.7 through 0.1.6 lines; `entry-config` starts at the 0.1.7 line, where a

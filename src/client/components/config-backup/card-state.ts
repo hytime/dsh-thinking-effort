@@ -1,6 +1,6 @@
 import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
 import type { ConfigSnapshot, ImportMode, ParseFailure, ProfileNameError, SnapshotMeta } from '../../config-snapshot/types.js'
-import type { CompatibilityProfile, SettingsNamespace } from '../../types.js'
+import type { CompatibilityProfile, SettingsNamespace } from '@hytime/dsh-plugin-kit'
 import { autoBackupFromNamespaces, profilesFromNamespaces } from '../../config-snapshot/library.js'
 
 /** The version stamped into every snapshot this panel writes. */

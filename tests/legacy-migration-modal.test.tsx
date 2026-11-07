@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LegacyMigrationModal } from '../src/client/components/LegacyMigrationModal.js'
 import { zh } from '../src/client/locales.js'
-import type { SettingsApi, SettingsOp } from '../src/client/types.js'
+import type { SettingsApi, SettingsOp } from '@hytime/dsh-plugin-kit'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

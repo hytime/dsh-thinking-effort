@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { applySnapshot, isConflictError } from '../src/client/config-snapshot/apply.js'
 import { AUTO_BACKUP_PATH } from '../src/client/config-snapshot/library.js'
 import type { ConfigSnapshot } from '../src/client/config-snapshot/types.js'
-import type { SettingsNamespace, SettingsOp } from '../src/client/types.js'
+import type { SettingsNamespace, SettingsOp } from '@hytime/dsh-plugin-kit'
 
 const snapshotOf = (sections: Record<string, Record<string, unknown>>): ConfigSnapshot => ({
   kind: 'dsh-thinking-effort/config-snapshot',

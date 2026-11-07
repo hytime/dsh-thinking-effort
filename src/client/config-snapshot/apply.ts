@@ -2,10 +2,10 @@ import { planImport } from './plan.js'
 import { autoBackupOps } from './library.js'
 import { snapshotFromNamespaces } from './snapshot.js'
 import { pluginSectionId } from '../subagent-section.js'
-import { isSettingsConflict } from '../../shared/conflict.js'
-import { revisionOf } from '../types.js'
+import { isSettingsConflict } from '@hytime/dsh-plugin-kit'
+import { revisionOf } from '@hytime/dsh-plugin-kit'
 import type { ApplyOutcome, ApplySettings, ConfigSnapshot, ImportMode, NamespaceOutcome } from './types.js'
-import type { SettingsNamespace } from '../types.js'
+import type { SettingsNamespace } from '@hytime/dsh-plugin-kit'
 
 export interface ApplyRequest {
   readonly snapshot: ConfigSnapshot

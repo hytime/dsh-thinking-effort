@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { parse } from 'yaml'
-import type { LegacyCandidate } from '../compat/legacy-migration.js'
+import type { LegacyCandidate } from '@hytime/dsh-plugin-kit'
 import { LEGACY_LLM_SHAPE, LEGACY_OWN_SHAPE, leavesOf, type LegacyLeaf } from './legacy-shape.js'
-import { LLM_PI_AI_NS, PLUGIN_NS } from '../shared/constants.js'
+import { LLM_PI_AI_NS, PLUGIN_NS } from '@hytime/dsh-plugin-kit'
 
 /** Where one candidate came from, as the prompt reports it. */
 export const LEGACY_MIGRATION_SOURCES = {

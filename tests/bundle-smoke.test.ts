@@ -3,12 +3,12 @@ import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 import vm from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { resolveTakeoverGatewayCompat } from '../src/compat/gateway/resolve.js'
+import { resolveTakeoverGatewayCompat } from '@hytime/dsh-plugin-kit'
 import {
   isCustomOpenAiGateway,
   resolveTakeoverProviders,
   takeoverProvidersOf,
-} from '../src/compat/gateway/takeover.js'
+} from '@hytime/dsh-plugin-kit'
 
 const root = resolve(import.meta.dirname, '..')
 

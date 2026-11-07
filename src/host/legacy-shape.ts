@@ -8,7 +8,7 @@
  * settings document can never become a write into the plugin's own section.
  */
 
-import { isUnknownRecord } from '../shared/guards.js'
+import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
 
 /** One declared node of a legacy section. A scalar declares its own type. */
 export type LegacyShape =

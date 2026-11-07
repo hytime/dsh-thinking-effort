@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { asModelDirectories, createModelDirectoryFaceResolver, modelDirectoryCompatibility } from '../src/compat/model-directory.js'
-import type { ClientContext } from '../src/client/types.js'
+import { asModelDirectories, createModelDirectoryFaceResolver, modelDirectoryCompatibility } from '@hytime/dsh-plugin-kit'
+import type { ClientContext } from '@hytime/dsh-plugin-kit'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { Context } from '@deepseek-ai/cordis'
 import type { ModelDirectoryState } from '../src/client/thinking-slider/slider.js'

@@ -5,7 +5,7 @@ import {
   legacyDecisionOf,
   legacyMigrationOf,
   isLegacyMigrationPending,
-} from '../src/compat/legacy-migration.ts'
+} from '@hytime/dsh-plugin-kit'
 import { Config, PLUGIN_SETTINGS_SCHEMA } from '../src/host/plugin-settings.ts'
 
 const candidate = {

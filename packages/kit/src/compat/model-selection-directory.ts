@@ -1,5 +1,5 @@
 import { isUnknownRecord } from '../shared/guards.js'
-import type { ModelDirectoryState, ModelSelection, SliderDirectory } from '../client/thinking-slider/slider.js'
+import type { ModelDirectoryState, ModelSelection, SliderDirectory } from './model-directory-types.js'
 import type { ModelDirectoriesSeam } from './model-directory.js'
 
 export interface SelectionProjectionFace {

@@ -9,15 +9,15 @@ import {
   legacyDecisionOf,
   legacyMigrationOf,
   type LegacyCandidate,
-} from '../compat/legacy-migration.js'
-import { readSettingsSectionUser, settingsChangeEvents, settingsEntryId, settingsModelForRuntime } from '../compat/capabilities.js'
+} from '@hytime/dsh-plugin-kit'
+import { readSettingsSectionUser, settingsChangeEvents, settingsEntryId, settingsModelForRuntime } from '@hytime/dsh-plugin-kit'
 import { applyLegacyMigration, rollbackSnapshot } from './legacy-apply.js'
 import { scanLegacyData, type LegacyScan } from './legacy-scan.js'
 import { SETTINGS_NAMESPACE } from './settings.js'
-import { PLUGIN_ENTRY_ID } from '../compat/settings-model.js'
-import { LOG_PREFIX } from '../shared/constants.js'
-import { isUnknownRecord } from '../shared/guards.js'
-import type { HostContext, SettingsPathOp } from './types.js'
+import { PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
+import { LOG_PREFIX } from '@hytime/dsh-plugin-kit'
+import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
+import type { HostContext, SettingsPathOp } from '@hytime/dsh-plugin-kit'
 
 /**
  * Most scan/act passes one settings event may run before the chain stops

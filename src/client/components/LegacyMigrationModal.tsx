@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   LEGACY_FAILED_PREFIX,
   legacyCandidatesOf,
-} from '../../compat/legacy-migration.js'
+} from '@hytime/dsh-plugin-kit'
 import {
   lastResultOf,
   pendingMigrationOf,
@@ -11,9 +11,9 @@ import {
   type LegacyMigrationRead,
 } from '../legacy-migration.js'
 import { iosPalette, type Palette } from '../theme.js'
-import { LLM_PI_AI_NS } from '../../shared/constants.js'
+import { LLM_PI_AI_NS } from '@hytime/dsh-plugin-kit'
 import { ActionButton } from './Controls.js'
-import type { SettingsApi, Translation } from '../types.js'
+import type { SettingsApi, Translation } from '@hytime/dsh-plugin-kit'
 
 /** Boot-time reads before the prompt gives up for this page load. */
 const POLL_ATTEMPTS = 15

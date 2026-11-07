@@ -1,6 +1,6 @@
 import React from 'react'
 import { ActionButton, Icon } from './Controls.js'
-import { isUnknownRecord } from '../../shared/guards.js'
+import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
 import {
   DEFAULT_FORMAT_DRAFT,
   draftFromSettings,
@@ -13,11 +13,11 @@ import {
   FORMAT_NAMESPACE,
 } from '../opencode-format-validation.js'
 import type { FormatDraft, FormatField, FormatFieldError } from '../opencode-format-validation.js'
-import type { OpenCodeSessionFormatMode, OpenCodeSessionInvalidPolicy } from '../../compat/opencode-session.js'
+import type { OpenCodeSessionFormatMode, OpenCodeSessionInvalidPolicy } from '@hytime/dsh-plugin-kit'
 import type { Palette } from '../theme.js'
-import { revisionOf } from '../types.js'
-import { isSettingsConflict } from '../../shared/conflict.js'
-import type { SettingsApi, SettingsDescribeValue, SettingsNamespace, Translation } from '../types.js'
+import { revisionOf } from '@hytime/dsh-plugin-kit'
+import { isSettingsConflict } from '@hytime/dsh-plugin-kit'
+import type { SettingsApi, SettingsDescribeValue, SettingsNamespace, Translation } from '@hytime/dsh-plugin-kit'
 import css from '../settings.module.css'
 
 /**

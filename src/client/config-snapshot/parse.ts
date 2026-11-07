@@ -1,14 +1,7 @@
-import {
-  LLM_NAMESPACE,
-  PLUGIN_NAMESPACE,
-  RESERVED_PATH_KEYS,
-  SNAPSHOT_KIND,
-  SNAPSHOT_MAX_BYTES,
-  SNAPSHOT_VERSION,
-} from './types.js'
+import { LLM_NAMESPACE, PLUGIN_NAMESPACE, RESERVED_PATH_KEYS, SNAPSHOT_KIND, SNAPSHOT_MAX_BYTES, SNAPSHOT_VERSION } from './types.js'
 import type { ConfigSnapshot, ParseResult, ParsedSnapshot, SnapshotSection } from './types.js'
 import { isRecord } from './snapshot.js'
-import { isOpenCodeSessionSectionId } from '../../compat/opencode-session.js'
+import { isOpenCodeSessionSectionId } from '@hytime/dsh-plugin-kit'
 
 function byteLength(text: string): number {
   return typeof TextEncoder === 'function' ? new TextEncoder().encode(text).length : text.length

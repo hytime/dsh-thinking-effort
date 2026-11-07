@@ -6,9 +6,9 @@ import type {
   OpenCodeSessionState,
   SettingsApi,
   SettingsNamespace,
-} from '../types.js'
+} from '@hytime/dsh-plugin-kit'
 
-export type { OpenCodeSessionState } from '../types.js'
+export type { OpenCodeSessionState } from '@hytime/dsh-plugin-kit'
 
 /**
  * Project a section descriptor onto the OpenCode session toggle views.

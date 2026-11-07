@@ -1,4 +1,4 @@
-import { GATEWAY_COMPAT_FIELD_KEYS } from '../../compat/gateway/fields.js'
+import { GATEWAY_COMPAT_FIELD_KEYS } from '@hytime/dsh-plugin-kit'
 import {
   inventoryFrom,
   modelGatewayCompatViewsFrom,
@@ -15,12 +15,12 @@ import {
   subagentSection,
   type EditorState,
 } from './state.js'
-import { revisionOf } from '../types.js'
+import { revisionOf } from '@hytime/dsh-plugin-kit'
 import type {
   CompatibilityProfile,
   InventoryItem,
   SettingsNamespace,
-} from '../types.js'
+} from '@hytime/dsh-plugin-kit'
 import type { TakeoverRuntimeResolution } from '../takeover-runtime.js'
 
 /**

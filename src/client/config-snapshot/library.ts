@@ -1,13 +1,8 @@
-import {
-  MAX_PROFILE_NAME,
-  RESERVED_PATH_KEYS,
-  SNAPSHOT_KIND,
-  SNAPSHOT_VERSION,
-} from './types.js'
+import { MAX_PROFILE_NAME, RESERVED_PATH_KEYS, SNAPSHOT_KIND, SNAPSHOT_VERSION } from './types.js'
 import type { ConfigSnapshot, ProfileNameResult } from './types.js'
 import { isRecord, userSectionOf } from './snapshot.js'
 import { pluginSectionId } from '../subagent-section.js'
-import type { SettingsNamespace, SettingsOp } from '../types.js'
+import type { SettingsNamespace, SettingsOp } from '@hytime/dsh-plugin-kit'
 
 export const PROFILES_PATH = ['profiles'] as const
 export const AUTO_BACKUP_PATH = ['autoBackup'] as const

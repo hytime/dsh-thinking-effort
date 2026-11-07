@@ -7,9 +7,9 @@ import {
   LEGACY_RESULT_APPLIED,
   LEGACY_RESULT_DISMISSED,
   LEGACY_RESULT_NOTHING_PENDING,
-} from '../src/compat/legacy-migration.ts'
+} from '@hytime/dsh-plugin-kit'
 import { defaultFiles, installLegacyMigration } from '../src/host/legacy-watcher.ts'
-import type { SettingsPathOp } from '../src/host/types.ts'
+import type { SettingsPathOp } from '@hytime/dsh-plugin-kit'
 
 const NS = 'thinking-effort'
 const IMPORTED = '/home/u/.dsh/settings.yaml.imported'

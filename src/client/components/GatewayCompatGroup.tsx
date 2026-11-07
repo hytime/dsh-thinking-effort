@@ -1,6 +1,6 @@
 import React from 'react'
-import { GATEWAY_COMPAT_GROUPS, fieldsInGroup, type GatewayCompatFieldKey, type GatewayCompatGroupId, type GatewayCompatFieldSpec } from '../../compat/gateway/fields.js'
-import type { ModelGatewayCompatUpdate, ModelGatewayCompatView, ProviderGatewayCompatView, Translation } from '../types.js'
+import { GATEWAY_COMPAT_GROUPS, fieldsInGroup, type GatewayCompatFieldKey, type GatewayCompatGroupId, type GatewayCompatFieldSpec } from '@hytime/dsh-plugin-kit'
+import type { ModelGatewayCompatUpdate, ModelGatewayCompatView, ProviderGatewayCompatView, Translation } from '@hytime/dsh-plugin-kit'
 import { en } from '../locales.js'
 import type { Palette } from '../theme.js'
 import { iosPalette } from '../theme.js'
