@@ -75,7 +75,31 @@
       "types": "./lib/types/src/client/index.d.ts",
       "default": "./lib/client.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./settings": {
+      "types": "./lib/types/src/entries/settings.d.ts",
+      "default": "./lib/entries/settings.js"
+    },
+    "./opencode": {
+      "types": "./lib/types/src/entries/opencode.d.ts",
+      "default": "./lib/entries/opencode.js"
+    },
+    "./compaction": {
+      "types": "./lib/types/src/entries/compaction.d.ts",
+      "default": "./lib/entries/compaction.js"
+    },
+    "./subagent": {
+      "types": "./lib/types/src/entries/subagent.d.ts",
+      "default": "./lib/entries/subagent.js"
+    },
+    "./migration": {
+      "types": "./lib/types/src/entries/migration.d.ts",
+      "default": "./lib/entries/migration.js"
+    },
+    "./composer": {
+      "types": "./lib/types/src/entries/composer.d.ts",
+      "default": "./lib/entries/composer.js"
+    }
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1 || ^4.0.6-alpha.1",

@@ -109,7 +109,15 @@ const cssPlugins = [{
 
 export default defineConfig([
   {
-    entry: { index: 'lib/types/src/index.js' },
+    entry: {
+      index: 'lib/types/src/index.js',
+      'entries/settings': 'lib/types/src/entries/settings.js',
+      'entries/opencode': 'lib/types/src/entries/opencode.js',
+      'entries/compaction': 'lib/types/src/entries/compaction.js',
+      'entries/subagent': 'lib/types/src/entries/subagent.js',
+      'entries/migration': 'lib/types/src/entries/migration.js',
+      'entries/composer': 'lib/types/src/entries/composer.js',
+    },
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',
