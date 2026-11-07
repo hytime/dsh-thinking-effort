@@ -19,7 +19,7 @@ const DOCUMENT = 'dsh-thinking-effort:\n  subagentEffort: off\n'
 type Listeners = Record<string, Array<(...args: unknown[]) => unknown>>
 
 /** One in-memory settings document plus the events a write raises. */
-function harness(options: { entryConfig?: boolean; failMutate?: boolean; modelTransaction?: boolean; profileContext?: unknown; sectionAbsentReads?: number } = {}) {
+function harness(options: { failMutate?: boolean; modelTransaction?: boolean; profileContext?: unknown; sectionAbsentReads?: number } = {}) {
   const listeners: Listeners = {}
   const mutations: Array<{ ns: string; ops: readonly SettingsPathOp[] }> = []
   /**
@@ -98,11 +98,6 @@ function harness(options: { entryConfig?: boolean; failMutate?: boolean; modelTr
     },
     mutate: hostWrite,
   }
-  if (options.entryConfig !== true) {
-    settings.get = () => document
-    settings.register = () => ({ get: () => ({}), watch: () => () => {} })
-  }
-
   const scheduled: Array<() => void> = []
   const context = {
     settings,
@@ -150,29 +145,22 @@ const home = { home: '/home/u/.dsh', read: async (path: string) => {
 
 describe('installLegacyMigration', () => {
   it('arms the prompt on an entry-config host with legacy data', async () => {
-    const test = harness({ entryConfig: true })
+    const test = harness()
     installLegacyMigration(test.context as never, home)
     await test.settle()
     expect(test.user()?.pending).toBe(true)
     expect((test.user()?.candidates as unknown[]).length).toBe(1)
   })
 
-  it('writes nothing on a namespace host, where the legacy section is still live', async () => {
-    const test = harness()
-    installLegacyMigration(test.context as never, home)
-    await test.settle()
-    expect(test.mutations).toEqual([])
-  })
-
   it('writes nothing when there is no legacy data', async () => {
-    const test = harness({ entryConfig: true })
+    const test = harness()
     installLegacyMigration(test.context as never, { home: '/home/u/.dsh', read: async () => { throw new Error('ENOENT') } })
     await test.settle()
     expect(test.mutations).toEqual([])
   })
 
   it('migrates on decision=migrate and clears the prompt', async () => {
-    const test = harness({ entryConfig: true })
+    const test = harness()
     installLegacyMigration(test.context as never, home)
     await test.settle()
     test.document().legacyMigration = { ...(test.user() ?? {}), decision: 'migrate' }
@@ -189,7 +177,7 @@ describe('installLegacyMigration', () => {
     // inherits that transaction. The migration batch must still be accepted,
     // which is what the apply-time `AsyncResource` is for. Without it the batch
     // is refused and this case reports `failed:` instead.
-    const test = harness({ entryConfig: true, modelTransaction: true })
+    const test = harness({ modelTransaction: true })
     installLegacyMigration(test.context as never, home)
     await test.settle()
     expect(test.user()?.pending).toBe(true)
@@ -203,7 +191,7 @@ describe('installLegacyMigration', () => {
   })
 
   it('leaves a rollback snapshot of the settings the migration extended', async () => {
-    const test = harness({ entryConfig: true })
+    const test = harness()
     installLegacyMigration(test.context as never, home)
     await test.settle()
     // A setting the migration does NOT offer, so the snapshot has something it
@@ -229,7 +217,7 @@ describe('installLegacyMigration', () => {
   })
 
   it('clears decision=scan when the rescan finds nothing left to migrate', async () => {
-    const test = harness({ entryConfig: true })
+    const test = harness()
     installLegacyMigration(test.context as never, home)
     await test.settle()
     // The user moved the value in by hand: nothing is left to offer.
@@ -247,7 +235,7 @@ describe('installLegacyMigration', () => {
   })
 
   it('retires a stale offer when the values were set by hand', async () => {
-    const test = harness({ entryConfig: true })
+    const test = harness()
     installLegacyMigration(test.context as never, home)
     await test.settle()
     expect(test.user()?.pending).toBe(true)
@@ -262,7 +250,7 @@ describe('installLegacyMigration', () => {
   })
 
   it('ignores client-supplied candidates and writes only what it scanned itself', async () => {
-    const test = harness({ entryConfig: true })
+    const test = harness()
     installLegacyMigration(test.context as never, home)
     await test.settle()
     // The section is user-writable and volatile, so a tampered control object can
@@ -279,7 +267,7 @@ describe('installLegacyMigration', () => {
   })
 
   it('records a dismissal and never asks again for the same offer', async () => {
-    const test = harness({ entryConfig: true })
+    const test = harness()
     installLegacyMigration(test.context as never, home)
     await test.settle()
     const signature = test.user()?.signature
@@ -299,7 +287,7 @@ describe('installLegacyMigration', () => {
   })
 
   it('re-arms when the legacy data changed after a dismissal', async () => {
-    const test = harness({ entryConfig: true })
+    const test = harness()
     let text = DOCUMENT
     installLegacyMigration(test.context as never, {
       home: '/home/u/.dsh',
@@ -319,7 +307,7 @@ describe('installLegacyMigration', () => {
   })
 
   it('reports a refused write and keeps the prompt for a retry', async () => {
-    const test = harness({ entryConfig: true, failMutate: true })
+    const test = harness({ failMutate: true })
     installLegacyMigration(test.context as never, home)
     await test.settle()
     test.document().legacyMigration = { ...(test.user() ?? {}), decision: 'migrate' }
@@ -337,7 +325,7 @@ describe('installLegacyMigration', () => {
     // real restart armed a spurious four-value offer and retired it a moment
     // later, and a client sitting in `asking` does not poll — so that transient
     // state could strand the prompt on screen over values already migrated.
-    const test = harness({ entryConfig: true, sectionAbsentReads: 8 })
+    const test = harness({ sectionAbsentReads: 8 })
     // The migrated state, exactly as a completed migration leaves it: the one
     // leaf the document states is already set in the plugin's own section, so a
     // scan that can READ that layer finds nothing left to offer.
@@ -355,7 +343,7 @@ describe('installLegacyMigration', () => {
   })
 
   it('honours a forced scan without a dismissal', async () => {
-    const test = harness({ entryConfig: true })
+    const test = harness()
     installLegacyMigration(test.context as never, home)
     await test.settle()
     test.document().legacyMigration = { ...(test.user() ?? {}), decision: 'dismiss' }
@@ -443,7 +431,7 @@ describe('legacy home resolution', () => {
       writeFileSync(join(profileHome, 'settings.yaml.imported'), 'dsh-thinking-effort:\n  subagentEffort: off\n')
       writeFileSync(join(envHome, 'settings.yaml.imported'), 'dsh-thinking-effort:\n  subagentEffort: max\n')
       await withDshHome(envHome, async () => {
-        const test = harness({ entryConfig: true, profileContext: { home: profileHome } })
+        const test = harness({ profileContext: { home: profileHome } })
         installLegacyMigration(test.context as never)
         await test.settle()
         expect(test.user()?.pending).toBe(true)

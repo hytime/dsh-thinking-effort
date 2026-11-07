@@ -27,8 +27,12 @@ function createEntryConfigSettings(options: { readonly value?: unknown } = {}) {
   return { settings, updates }
 }
 
-/** The rc.7 … 0.1.6 service, which registers namespaces and reads them by id. */
-function createNamespaceSettings() {
+/**
+ * A service that still carries the removed namespace APIs. No supported release
+ * exposes these, so it is only useful for proving the plugin does not depend on
+ * them: a live `describe` is what the plugin reads and watches.
+ */
+function createLegacyShapedSettings() {
   const watched: Array<() => void> = []
   const settings = {
     writable: true,
@@ -68,42 +72,54 @@ function createContext(settings: unknown, options: { readonly config?: unknown; 
 
 describe('settings model detection', () => {
   it('reads the model from the live service rather than the version', () => {
-    expect(settingsModelOf(createNamespaceSettings().settings)).toBe('namespace')
     expect(settingsModelOf(createEntryConfigSettings().settings)).toBe('entry-config')
+    expect(settingsModelOf(createLegacyShapedSettings().settings)).toBe('entry-config')
+    // A service exposing neither a recognizable shape nor a `describe` has no
+    // model to report; the plugin keeps its most conservative behaviour.
+    expect(settingsModelOf({ writable: true, register: () => undefined })).toBeUndefined()
     expect(settingsModelOf({ writable: true })).toBeUndefined()
     expect(settingsModelOf(undefined)).toBeUndefined()
   })
 
   it('prefers the live service and falls back to the version map', () => {
+    // The live service wins over the version string in both directions: it
+    // names entry-config even for a version the map does not cover.
     expect(settingsModelForRuntime({ settings: createEntryConfigSettings().settings, version: '0.1.6-alpha.1' }))
       .toBe('entry-config')
-    expect(settingsModelForRuntime({ settings: createNamespaceSettings().settings, version: '0.1.7-alpha.1' }))
-      .toBe('namespace')
+    expect(settingsModelForRuntime({ settings: createEntryConfigSettings().settings, version: '0.2.3-0' }))
+      .toBe('entry-config')
+    expect(settingsModelForRuntime({ settings: createLegacyShapedSettings().settings, version: '0.2.3-0' }))
+      .toBe('entry-config')
+    // With no recognizable service the version map answers.
     expect(settingsModelForRuntime({ settings: { writable: true }, version: '0.1.7-alpha.1' }))
       .toBe('entry-config')
     expect(settingsModelForRuntime({ settings: { writable: true } })).toBeUndefined()
   })
 
   it('subscribes to the event the model actually emits', () => {
-    expect(settingsChangeEvents('namespace')).toEqual(['settings/updated'])
     expect(settingsChangeEvents('entry-config')).toEqual(['settings/document-updated'])
+    // The namespace model's event is not part of the returned set.
+    expect(settingsChangeEvents('entry-config')).not.toContain('settings/updated')
   })
 })
 
 describe('settings section reads', () => {
-  it('reads through get when the service has one', () => {
-    const settings = { get: (ns: string) => ({ read: ns }), describe: () => [] }
-    expect(readSettingsSection(settings, 'llm-pi-ai')).toEqual({ read: 'llm-pi-ai' })
-  })
-
-  it('falls back to describe when get is absent', () => {
+  it('reads the resolved value out of describe', () => {
     const settings = { describe: () => [{ ns: 'llm-pi-ai', value: { providers: { route: {} } } }] }
     expect(readSettingsSection(settings, 'llm-pi-ai')).toEqual({ providers: { route: {} } })
   })
 
-  it('falls back to describe when get throws, and stays undefined when both fail', () => {
-    const throwing = { get: () => { throw new Error('boom') }, describe: () => [{ ns: 'other', value: 1 }] }
-    expect(readSettingsSection(throwing, 'llm-pi-ai')).toBeUndefined()
+  it('never reads through get, and stays undefined when describe cannot answer', () => {
+    let getCalls = 0
+    const withGet = {
+      get: (ns: string) => { getCalls += 1; return { read: ns } },
+      describe: () => [],
+    }
+    // The removed `get` is not a fallback: a service that still carries one is
+    // read through `describe`, and an empty `describe` means no value.
+    expect(readSettingsSection(withGet, 'llm-pi-ai')).toBeUndefined()
+    expect(getCalls).toBe(0)
+
     expect(readSettingsSection({ describe: () => { throw new Error('boom') } }, 'llm-pi-ai')).toBeUndefined()
     expect(readSettingsSection({}, 'llm-pi-ai')).toBeUndefined()
   })
@@ -122,9 +138,12 @@ describe('0.1.7-alpha.1 entry-config settings model', () => {
     expect(settingsModelForVersion('0.1.7-alpha.1')).toBe('entry-config')
   })
 
-  it('keeps the 0.1.6 line on the registered-namespace model', () => {
-    expect(settingsModelForVersion('0.1.6-alpha.1')).toBe('namespace')
-    expect(settingsModelForVersion('0.1.6-alpha.2')).toBe('namespace')
+  it('maps no release below the 0.1.7-alpha.1 floor', () => {
+    // The rc.7 … 0.1.6 lines used the registered-namespace model and are no
+    // longer supported, so the map answers nothing for them.
+    expect(settingsModelForVersion('0.1.6-alpha.1')).toBeUndefined()
+    expect(settingsModelForVersion('0.1.6-alpha.2')).toBeUndefined()
+    expect(settingsModelForVersion('0.1.7-0')).toBeUndefined()
   })
 
   it('installs the session namespace without the removed register API', () => {
@@ -141,8 +160,8 @@ describe('0.1.7-alpha.1 entry-config settings model', () => {
     expect(listeners).not.toContain('settings/updated')
   })
 
-  it('still registers a namespace on the registered-namespace model', () => {
-    const { settings, watched } = createNamespaceSettings()
+  it('still installs a section when a legacy register API is present', () => {
+    const { settings, watched } = createLegacyShapedSettings()
     const { context, listeners } = createContext(settings)
     installOpenCodeSession(context as never)
     // The registered scope owns change delivery, so neither change event is used.
@@ -156,10 +175,13 @@ describe('0.1.7-alpha.1 entry-config settings model', () => {
     expect(entry.listeners).toContain('settings/document-updated')
     expect(entry.listeners).not.toContain('settings/updated')
 
-    const registered = createContext(createNamespaceSettings().settings)
-    installSettingsWatcher(registered.context as never)
-    expect(registered.listeners).toContain('settings/updated')
-    expect(registered.listeners).not.toContain('settings/document-updated')
+    // A service that still carries `register` is watched through the
+    // document-scoped event as well: the namespace branch no longer selects an
+    // event for the filler.
+    const legacyShaped = createContext(createLegacyShapedSettings().settings)
+    installSettingsWatcher(legacyShaped.context as never)
+    expect(legacyShaped.listeners).toContain('settings/document-updated')
+    expect(legacyShaped.listeners).not.toContain('settings/updated')
   })
 
   it('reads its own section from describe and follows the live entry id', () => {

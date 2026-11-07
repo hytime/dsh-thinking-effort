@@ -636,17 +636,13 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
   assert.equal(publish.concurrency?.['cancel-in-progress'], false);
 
   const compatibilityBuild = compatibility.steps.find(
-    (step) => step.name === 'Build five official DSH capability representatives and run integration tests',
+    (step) => step.name === 'Build the official DSH capability representative and run integration tests',
   );
   assert.ok(compatibilityBuild, 'compatibility job must define its build and integration step');
   assert.equal(typeof compatibilityBuild.run, 'string', 'compatibility build step must have a run script');
   for (const required of [
-    'dsh-v0.1.0-rc.7',
-    'dsh-v0.1.1-rc.2',
-    'dsh-v0.1.3-alpha.2',
-    'dsh-v0.1.6-alpha.1',
     'dsh-v0.1.7-alpha.1',
-    'DSH_CLI_ROOTS="$RC7_ROOT,$RC2_ROOT,$ALPHA_ROOT,$NAMESPACE_ROOT,$ENTRY_ROOT"',
+    'DSH_CLI_ROOTS="$ENTRY_ROOT"',
     'pnpm --version',
     'pnpm install --frozen-lockfile',
     'pnpm rebuild --pending fs-ext',
@@ -666,12 +662,9 @@ git merge-base --is-ancestor "$GITHUB_SHA" origin/main
   ]) {
     assert.ok(compatibilityBuild.run.includes(required), `compatibility build step must include ${required}`);
   }
-  assert.match(compatibilityBuild.run, /RC7_ROOT=.*dsh-v0\.1\.0-rc\.7/);
-  assert.match(compatibilityBuild.run, /RC2_ROOT=.*dsh-v0\.1\.1-rc\.2/);
-  assert.match(compatibilityBuild.run, /ALPHA_ROOT=.*dsh-v0\.1\.3-alpha\.2/);
-  assert.match(compatibilityBuild.run, /NAMESPACE_ROOT=.*dsh-v0\.1\.6-alpha\.1/);
+  // One official representative remains: the oldest host the plugin supports.
   assert.match(compatibilityBuild.run, /ENTRY_ROOT=.*dsh-v0\.1\.7-alpha\.1/);
-  assert.equal((compatibilityBuild.run.match(/git clone --depth 1 --branch/g) ?? []).length, 5);
+  assert.equal((compatibilityBuild.run.match(/git clone --depth 1 --branch/g) ?? []).length, 1);
   assert.doesNotMatch(compatibilityBuild.run, /dsh-v0\.1\.2-alpha\.[12]/);
   assert.doesNotMatch(compatibilityBuild.run, /corepack enable/);
   assert.doesNotMatch(compatibilityBuild.run, /\bnpm (?:ci|install|run|test|pack|audit|publish|view|config)\b/);

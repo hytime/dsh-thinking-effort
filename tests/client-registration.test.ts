@@ -673,9 +673,9 @@ describe('client registration', () => {
     }
     const fullSchema = { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } }
 
-    // A mapped version keeps owning its transport, even when the profile could take over.
-    expect(resolveTakeoverProviders({ version: '0.1.0-rc.7', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual([])
-    // The 0.2.0 line is mapped to the same window, so it takes the mapped path too.
+    // Every supported version sits in one mapped window, so it takes the mapped
+    // path rather than the runtime fallback.
+    expect(resolveTakeoverProviders({ version: '0.1.7-alpha.1', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual(['local'])
     expect(resolveTakeoverProviders({ version: '0.2.0-rc.2', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual(['local'])
     // An unmapped newer version falls back to what the host actually reports.
     expect(resolveTakeoverProviders({ version: '0.3.0', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual(['local'])

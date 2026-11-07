@@ -18,7 +18,7 @@
 
 > **호환성 경계:** DSH Runtime compatibility는 Settings transport만 담당합니다. 최신 DSH는 `remote.settings`를 제공하고 이전 DSH는 `connection.api.settings`를 제공합니다. 플러그인은 실제 런타임 capability를 감지하며, 이전 DSH에 Remote provider가 없어도 선택적인 Remote service를 필수로 요구하지 않습니다.
 >
-> Gateway Protocol compatibility는 별도 계층입니다. DSH schema가 제공하는 경우 18개의 일반적인 스칼라 `llm-pi-ai.compat` 필드를 지원합니다. 필드는 역할/추론, 형식/출력, 스트리밍/도구, 저장/캐시의 4개 그룹으로 나뉘며 기본으로 접혀 있습니다. boolean 필드는 `Auto`, 지원, 미지원으로, enum 필드는 `Auto` 또는 구체적인 값으로, number 필드는 정수 또는 `Auto`로 설정합니다. DSH `0.1.0-rc.7`에는 게이트웨이 호환 설정이 없습니다. `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지는 `supportsFinishReason`와 `supportsThinkingTokenBudget`가 없고, DSH `0.1.2-alpha.1`부터 `<0.1.3-alpha.2`까지는 그중 15개 필드를 제공하며, `0.1.3-alpha.2` 이상은 schema가 지원하는 경우 18개 필드를 모두 제공합니다. 선택 사항인 `dsh-llm-openai-completions` transport를 설치하고 활성화하면 조건을 충족하는 사용자 지정 OpenAI 호환 사고 provider를 takeover할 수 있습니다. `Auto`는 현재 계층의 override를 unset하고 상속 체인의 다음 값을 복원합니다.
+> Gateway Protocol compatibility는 별도 계층입니다. DSH schema가 제공하는 경우 18개의 일반적인 스칼라 `llm-pi-ai.compat` 필드를 지원합니다. 필드는 역할/추론, 형식/출력, 스트리밍/도구, 저장/캐시의 4개 그룹으로 나뉘며 기본으로 접혀 있습니다. boolean 필드는 `Auto`, 지원, 미지원으로, enum 필드는 `Auto` 또는 구체적인 값으로, number 필드는 정수 또는 `Auto`로 설정합니다. 지원 범위(`0.1.7-alpha.1`부터 `0.2.2`까지)의 각 릴리스는 schema가 지원하는 경우 18개 필드를 모두 제공합니다. 선택 사항인 `dsh-llm-openai-completions` transport를 설치하고 활성화하면 조건을 충족하는 사용자 지정 OpenAI 호환 사고 provider를 takeover할 수 있습니다. `Auto`는 현재 계층의 override를 unset하고 상속 체인의 다음 값을 복원합니다.
 >
 > DSH `0.1.2-alpha.1` 이상은 `LocaleRuntime`의 language-pack 확장을 지원합니다. 이 플러그인은 `ja`와 `ko`를 동적으로 등록하므로 DSH fork가 필요하지 않습니다. 고정된 내장 locale ID만 허용하는 이전 DSH에서는 `zh`와 `en`만 사용할 수 있습니다.
 >
@@ -30,18 +30,14 @@
 
 | DSH 범위 | 게이트웨이 호환 설정 |
 | --- | --- |
-| `0.1.0-rc.7` | 지원하지 않음 |
-| `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 | schema가 노출하는 경우 지원하지만 `supportsFinishReason` 및 `supportsThinkingTokenBudget`는 없음 |
-| `0.1.2-alpha.1`부터 `<0.1.3-alpha.2`까지 | schema가 노출하는 경우 15개 필드 지원. `thinkingTokenBudgetField`, `vllmPriority`, `supportsMaxOutputTokens`는 아직 제공되지 않음 |
-| `0.1.3-alpha.2`부터 `<0.2.3-0`까지 | schema가 노출하는 경우 18개 필드 모두 지원. 이 범위는 `0.1.7` 설정 재작성과 `0.2.0`부터 `0.2.2`까지의 각 라인에 걸쳐 있으며, 모두 편집 가능한 필드 집합이 동일함을 검증했습니다. 상한 이상의 릴리스는 매핑되지 않으며, 플러그인은 계속 동작하면서 실행 중인 호스트가 보고하는 능력을 따릅니다 |
+| `0.1.7-alpha.1`부터 `<0.2.3-0`까지 | schema가 노출하는 경우 18개 필드 모두를 지원합니다. 이 범위는 `0.1.7`의 Settings 재작성과 `0.2.0`부터 `0.2.2`까지의 각 라인에 걸쳐 있으며, 모두 편집 가능한 필드 집합이 동일함을 검증했습니다. 이 하한보다 낮은 릴리스는 더 이상 지원되지 않습니다. 상한 이상의 릴리스는 매핑되지 않은 채 실행 중인 호스트가 보고하는 능력을 따릅니다 |
+`0.1.7-alpha.1`부터 편집 가능한 필드 집합은 런타임 schema 노출에 따라 결정됩니다. 위 표는 지원 범위의 최대 필드 집합이며, 라우트의 프로토콜에 따라 더 줄어들 수 있습니다.
 
-DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 런타임 schema 노출에 따라 결정됩니다. 위 표는 각 DSH 버전의 최대 필드 집합이며, 라우트의 프로토콜에 따라 더 줄어들 수 있습니다.
-
-`@deepseek-ai/cordis`의 peer 범위는 `^4.0.1 || ^4.0.6-alpha.1`입니다. `0.2.1-rc.5` 이전 DSH는 cordis 4.0.5로 빌드되고, `0.2.2-alpha.2`와 `0.2.2-alpha.3`은 4.0.6 프리릴리스, `0.2.2-rc.1` 이후는 4.1.0으로 빌드됩니다. 이 합집합이 모두를 포괄하므로 이 패키지는 해당 호스트에 설치할 수 있습니다. 이 플러그인은 cordis 모듈을 직접 import하지 않고 자체 선언한 최소 `HostContext` 인터페이스를 통해서만 런타임에 접근하므로, 이 peer는 설치 시점 범위이며 런타임 능력 요구 사항이 아닙니다. `engines.dsh`는 의도적으로 넓은 `>=0.1.0-rc.7` 하한을 유지합니다. DSH 호환성 검사는 이 필드만 읽고 cordis peer를 무시하므로, 좁히면 `0.2.2-alpha.2` 이전의 모든 호스트가 비호환으로 판정되지만 플러그인은 그곳에서도 동작합니다.
+`@deepseek-ai/cordis`의 peer 범위는 `^4.0.1 || ^4.0.6-alpha.1`입니다. `0.2.1-rc.5` 이전 DSH는 cordis 4.0.5로 빌드되고, `0.2.2-alpha.2`와 `0.2.2-alpha.3`은 4.0.6 프리릴리스, `0.2.2-rc.1` 이후는 4.1.0으로 빌드됩니다. 이 합집합이 모두를 포괄하므로 이 패키지는 해당 호스트에 설치할 수 있습니다. 이 플러그인은 cordis 모듈을 직접 import하지 않고 자체 선언한 최소 `HostContext` 인터페이스를 통해서만 런타임에 접근하므로, 이 peer는 설치 시점 범위이며 런타임 능력 요구 사항이 아닙니다. `engines.dsh`는 이제 `>=0.1.7-alpha.1`입니다. 이는 entry-config 설정 모델의 시작점이며 이 플러그인이 지원하는 가장 오래된 호스트입니다. 그보다 낮은 릴리스는 코드에서 제거된 namespace 모델을 사용하므로 더 이상 지원되지 않습니다.
 
 게이트웨이 호환 필드는 DSH 버전, 런타임 schema, 현재 라우트의 `api` 프로토콜이 모두 지원할 때만 설정할 수 있습니다. 지원하지 않는 필드는 UI에 표시되지 않으며 Settings에도 기록되지 않습니다. 이 18개 필드 중 `openai-completions`는 `supportsMaxOutputTokens`를 제외한 모두를 제공하고, `openai-responses`, `azure-openai-responses`, `openai-codex-responses`는 `supportsDeveloperRole`, `supportsStrictMode`, `supportsLongCacheRetention`, `supportsMaxOutputTokens`만 제공합니다. `api`가 없거나 인식되지 않으면 런타임 schema와 DSH 검증을 최종 기준으로 사용합니다.
 
-DSH `0.1.7`부터는 각 Loader 항목 자체의 `Config` schema에서 설정 폼을 도출합니다(entry-config 모델). 이 schema를 내보내지 않는 플러그인에는 설정 폼이 나타나지 않습니다. 이 플러그인은 해당 schema를 내보내므로 `0.1.7` 이상에서 설정 섹션은 Loader 항목 ID인 `thinking-effort`가 됩니다. `0.1.0-rc.7`부터 `0.1.6`까지는 등록된 namespace `dsh-thinking-effort`를 그대로 사용하며, Client는 실행 중인 Host가 게시한 ID를 해석합니다. `subagentEffort`는 이 플러그인 자체 섹션에 저장되며, `0.1.7` 이상에서는 이전 `llm-pi-ai` 위치가 더 이상 폴백이 아닙니다. 그 섹션의 schema는 `providers`만 선언하므로 Host는 다른 경로 쓰기를 거부하고, 게시하는 사용자 계층에서 선언되지 않은 키를 제거합니다. 따라서 이전에 저장한 Subagent 기본값은 설정되지 않은 것으로 표시되며 플러그인 설정 카드에서 다시 선택해야 합니다. `0.1.7` 이전에 이 플러그인이 내보낸 스냅샷은 그 값을 여전히 `llm-pi-ai` 안에 담고 있고, 가져올 때 플러그인 자체 섹션으로 마이그레이션합니다. 같은 배치의 providers까지 함께 가져와지는 것도 이 마이그레이션 덕분입니다(volatile이 아닌 경로가 하나라도 있으면 Host는 배치 전체를 거부합니다). `0.1.7` 이상의 설정은 `~/.dsh/settings.yaml`이 아니라 현재 profile의 `cordis.patch.yml`에 저장됩니다(`0.1.7`은 이 파일을 더 이상 사용하지 않습니다).
+DSH `0.1.7`부터는 각 Loader 항목 자체의 `Config` schema에서 설정 폼을 도출합니다(entry-config 모델). 이 schema를 내보내지 않는 플러그인에는 설정 폼이 나타나지 않습니다. 이 플러그인은 해당 schema를 내보내므로 설정 섹션은 Loader 항목 ID인 `thinking-effort`가 됩니다. `subagentEffort`와 Subagent 기본 모델은 모두 이 섹션에 저장되며, 이전 `llm-pi-ai` 위치는 대체 경로로 사용되지 않습니다. 이 섹션의 schema는 `providers`만 선언하고 있어 Host가 그 밖의 경로 쓰기를 거부하고 공개하는 사용자 계층에서 선언되지 않은 키를 제거하기 때문입니다. 설정은 현재 profile의 `cordis.patch.yml`에 저장되며 `~/.dsh/settings.yaml`은 사용하지 않습니다.
 
 ## 왜 필요한가요?
 
@@ -149,7 +145,7 @@ Settings의 provider 전역 영역에서는 해당 provider 아래 모든 모델
 
 활성화했는데 `format`을 설정하지 않으면 Host는 `ses_` 정규 형태를 가지며 **현재 DSH 세션에서 결정적으로 파생된** 값을 보냅니다. `ses_` + 16진수 12자리(세션마다 한 번 주조되는 48비트 밀리초 타임스탬프) + Base62 14자리(정규화한 DSH 세션 ID의 80비트 SHA-256 다이제스트)입니다. 같은 DSH 세션은 항상 같은 값을 보냅니다. 값은 세션별로 유지되며, 크기가 제한된 값 캐시의 축출은 캐시 값만 버리고 첫 주조는 절대 버리지 않으므로 축출된 세션을 다시 방문해도 값이 바뀌지 않습니다. 16진수 타임스탬프가 다시 주조되는 것은 DSH 재시작 후의 `firstUse` 모드뿐입니다(`time: hash`는 완전히 무상태). 14자리 접미사는 저장 값이 아니라 파생 값이므로 DSH 재시작 후에도 안정적입니다. 다른 세션(각 subagent 실행 포함)은 서로 다른 값을 파생합니다.
 
-생성기 매개변수는 설정 페이지의 **세션 값 생성기** 카드에서 조정하거나 설정 문서에 직접 작성할 수 있습니다. `0.1.7` 이상에서는 현재 profile의 `cordis.patch.yml`에 있는 `opencodeSession.format` 섹션(Loader 항목 ID `thinking-effort`로 지정)이고, `0.1.0-rc.7`부터 `0.1.6`까지는 `dsh-thinking-effort.opencodeSession.format`(예: `~/.dsh/settings.yaml`)입니다. 두 방식은 동일합니다. 상류 형식 변경에 플러그인 재빌드 없이 대응할 수 있는 4가지 모드를 제공합니다.
+생성기 매개변수는 설정 페이지의 **세션 값 생성기** 카드에서 조정하거나 설정 문서에 직접 작성할 수 있습니다. 현재 profile의 `cordis.patch.yml`에 있는 `opencodeSession.format` 섹션이며 Loader 항목 ID `thinking-effort`로 지정합니다. 상류 형식 변경에 플러그인 재빌드 없이 대응할 수 있는 네 가지 모드가 있습니다:
 
 - `ses-derive`(기본값) — 위의 정규 생성기. `time: firstUse`는 세션마다 hex 부분을 한 번 주조하고, `time: hash`는 세션 다이제스트에서 파생해 어떤 머신에서도 값이 완전히 동일합니다.
 - `passthrough` — 이전 동작: 원시 DSH 세션 ID를 보냅니다.
@@ -190,7 +186,7 @@ dsh-thinking-effort:
 
 **설정 백업 및 프로필** 카드는 언어 선택기와 **Subagent default effort** 카드 아래에 있으며, 현재 설정을 내보내고, 이름 있는 프로필을 저장해 전환하며, 이전에 내보낸 파일을 가져올 수 있습니다.
 
-1. **현재 설정 내보내기**를 누르면 `dsh-config-<타임스탬프>.json` 파일이 다운로드됩니다. 파일에는 `llm-pi-ai` 사용자 레이어와 이 플러그인 자체 설정 섹션이 그대로 담깁니다(`0.1.0-rc.7`부터 `0.1.6`까지는 `dsh-thinking-effort`, `0.1.7` 이상에서는 Loader 항목 ID `thinking-effort`가 키입니다). 자격 증명 값은 내보내지 않습니다(provider가 보관하는 것은 키를 담은 환경 변수 이름 `apiKeyEnv`뿐입니다). 다만 이 섹션들의 값은 그대로 기록되므로 provider `headers`에 둔 평문 token도 그대로 남습니다. 파일을 안전하게 보관하세요.
+1. **현재 설정 내보내기**를 누르면 `dsh-config-<타임스탬프>.json` 파일이 다운로드됩니다. 파일에는 `llm-pi-ai` 사용자 계층과 이 플러그인 자체 설정 섹션이 그대로 담기며, 후자는 Loader 항목 ID인 `thinking-effort`를 키로 사용합니다. 자격 증명 값은 내보내지 않지만(provider는 키를 담은 환경 변수 이름 `apiKeyEnv`만 가집니다) 이 계층에 저장된 값은 그대로 기록되므로 provider `headers`에 둔 평문 토큰도 포함됩니다. 안전하게 보관하세요.
 2. **프로필 목록**에서 이름을 입력하고 **현재 설정 저장**을 누르면 현재 설정이 이름 있는 프로필로 저장됩니다. **내보내기**로 파일에 저장하며, **삭제**로 제거할 수 있습니다. 최대 20개까지 보관합니다. **적용**은 가져오기와 같은 미리보기를 열므로 기본값인 **병합**은 파일에 없는 provider를 남겨 둡니다. 완전히 되돌리려면 미리보기에서 **교체**를 선택합니다.
 3. **설정 가져오기**의 **파일 선택…**을 누르면 **가져오기 미리보기**에 추가 / 덮어쓰기 / 삭제 건수가 표시됩니다. 확인하기 전에는 아무것도 기록되지 않습니다.
 4. 가져오기의 기본값은 **병합**(파일에 없는 설정 유지)입니다. **교체**는 직접 선택해야 하며 파일에 없는 provider를 삭제합니다. **가져오기 실행**은 먼저 현재 설정을 **가져오기 전 자동 백업**으로 저장한 뒤 변경을 기록합니다. 되돌릴 때도 같은 미리보기를 사용합니다.
@@ -216,7 +212,7 @@ DSH 0.1.7은 `settings.yaml`의 이름을 바꾸고 한 번만 가져오는데, 
 
 - **Host:** 시작 및 설정 변경 시 `llm-pi-ai`의 `models`와 `modelOverrides`를 검사하고 `reasoningEfforts`가 없는 경우에만 기본값을 추가합니다. 설정 페이지의 「기본 추론 강도 자동 보완」은 기본적으로 켜져 있으며 저장 즉시 적용됩니다. 끄면 자동 검사와 쓰기만 중단하고 기존 값은 삭제하지 않으며, 다시 켜면 즉시 검사합니다. 쓰기는 사용자 레이어에만 적용되므로, 직접 선언한 프로필의 모델만 보완됩니다. 컴포지션 베이스나 스키마 기본값만 제공하는 모델은 쓸 대상 항목이 없어 보완하지 않고, 건너뛴 개수를 Host 로그에 남깁니다. 또한 모델별 OpenCode 세션 설정을 읽고 일치하는 `llm/stream` 요청에만 `opencodeSession.format`에 따라 생성(기본값 `ses-derive`)한 `x-opencode-session`을 주입하며, `opencodeSession.userAgent`로 선택한 모델의 `user-agent`를 다시 씁니다(그 외에는 `llm-pi-ai` adapter의 attribution 헤더가 강제).
 - **Client:** DSH Settings Remote(`ctx.remote.settings`)와 locale service로 설정 페이지를 등록합니다. 모델 편집기는 OpenCode 세션 Header를 전용 namespace에 저장하며 `llm-pi-ai.compat`와 분리합니다. 사전은 `src/locales/ja.json`, `src/locales/ko.json` 등에서 관리하고 게시 전에 클라이언트 bundle로 생성합니다.
-- **Subagent:** `0.1.7` 이상에서는 이 플러그인 자체 설정 섹션에 `subagentEffort`를 저장합니다(`0.1.0-rc.7`부터 `0.1.6`까지는 `llm-pi-ai` 사용자 레이어). Host는 플러그인 섹션을 먼저 읽고 `llm-pi-ai`로 폴백합니다. 후자에 값이 들어가는 것은 `0.1.7` 이전뿐입니다(entry-config 섹션은 `providers`만 선언합니다). `agent.model.current()`와 `agent.model.select()`를 제공하는 Host에서는 첫 모델 단계 전에 `agent/created` 중 설정된 단계를 적용하고, 이전 Host에서는 `agent/request` waterfall을 fallback으로 사용합니다. 기본값이 없거나 사용자 정의 값을 대상 모델에서 해석할 수 없으면 현재 선택을 변경하지 않아 Subagent가 부모 세션 단계를 계속 상속합니다.
+- **Subagent:** 기본 추론 강도는 이 플러그인 자체 설정 섹션의 `subagentEffort`에 저장되며 Subagent 기본 모델도 같은 섹션에 저장됩니다. `agent.model.current()`와 `agent.model.select()`를 제공하는 Host는 첫 모델 단계 전 `agent/created`에서 둘 다 적용합니다. 이 인터페이스를 노출하지 않는 Host는 추론 강도에 대해서만 `agent/request` waterfall을 대체 경로로 사용합니다. 기본값이 설정되지 않았거나 사용자 정의 값이 대상 모델에서 해석되지 않으면 현재 선택을 변경하지 않고 Subagent는 부모 세션의 수준을 상속합니다.
 - **기본값 없음:** 플러그인은 `off`, `high`, `max`를 자동으로 선택하지 않습니다. 설정한 단계만 적용하며 스스로 단계를 정하지 않습니다.
 
 ## 제한 사항
@@ -236,7 +232,7 @@ DSH 0.1.7은 `settings.yaml`의 이름을 바꾸고 한 번만 가져오는데, 
 - 일반 CI workflow는 npm에 게시하지 않습니다. `publish.yml`은 `v<version>` tag에서만 게시를 시작합니다.
 - 릴리스 tag를 만들기 전에 유지 관리자는 `package.json` 버전과 각 언어의 `CHANGELOG`를 업데이트하여 커밋하고 일치하는 `v<version>` tag를 만듭니다. tag가 가리키는 커밋은 `main` 기록에 포함되어야 합니다.
 - npm 패키지에 GitHub Trusted Publisher를 설정해야 합니다. 저장소는 `hytime/dsh-thinking-effort`, workflow는 `publish.yml`입니다. 게시에는 GitHub OIDC provenance가 포함되며 `NPM_TOKEN`이 필요하지 않습니다.
-- 게시 전에 workflow는 rc7 → rc2 → alpha2 → namespace → entry 순서로 다섯 공식 DSH capability representative를 빌드하고 테스트합니다: `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`), `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`), `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`), `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`), `dsh-v0.1.7-alpha.1` (`0.1.7-alpha.1`). 공식 `dsh plugin` 명령으로 설치한 뒤 실제 호환성 테스트를 실행하며, 실제 브라우저 DOM 프로브는 `0.1.6-alpha.1`(namespace 모델)과 `0.1.7-alpha.1`(entry-config 모델) representative 모두에서 수행합니다.
+- 게시 전에 workflow는 공식 DSH 능력 대표 `dsh-v0.1.7-alpha.1`(`0.1.7-alpha.1`, 이 플러그인이 지원하는 가장 오래된 호스트이자 entry-config 모델의 시작점)을 빌드·테스트하고, 공식 `dsh plugin` 명령으로 설치해 실제 호환성 검사를 수행하며, 실제 브라우저 DOM 프로브도 실행합니다.
 - workflow는 버전이나 `CHANGELOG`를 자동으로 변경하지 않습니다. npm에 같은 버전이 이미 있으면 게시도 중단됩니다.
 
 ## 라이선스

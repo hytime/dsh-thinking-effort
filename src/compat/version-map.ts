@@ -1,4 +1,4 @@
-import { ALPHA1_PLUS_COMPAT_FIELDS, ALPHA3_PLUS_COMPAT_FIELDS, GATEWAY_COMPAT_FIELDS, RC8_COMPAT_FIELDS } from './gateway/fields.js'
+import { ALPHA3_PLUS_COMPAT_FIELDS, GATEWAY_COMPAT_FIELDS } from './gateway/fields.js'
 import type { GatewayCompatFieldKey } from './gateway/fields.js'
 import { settingsModelOf } from './settings-model.js'
 import type { SettingsModel } from './settings-model.js'
@@ -38,7 +38,6 @@ interface VersionRange {
 
 const semverPattern = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 
-const legacyBaseModelFields = ['reasoningEfforts'] as const
 const completeBaseModelFields = ['reasoningEfforts', 'input', 'contextWindow'] as const
 
 /**
@@ -90,87 +89,38 @@ const completeBaseModelFields = ['reasoningEfforts', 'input', 'contextWindow'] a
  */
 const versionRanges: readonly VersionRange[] = [
   {
-    minimum: '0.1.0-rc.7',
-    maximumExclusive: '0.1.0-rc.8',
-    capabilities: {
-      settingsTransport: 'legacy',
-      settingsApi: 'connection.api.settings',
-      settingsModel: 'namespace',
-      baseModelFields: legacyBaseModelFields,
-      gatewayCompatFields: [],
-      externalLanguages: false,
-      takeoverTransport: 'unsupported',
-    },
-  },
-  {
-    minimum: '0.1.0-rc.8',
-    maximumExclusive: '0.1.2-alpha.1',
-    capabilities: {
-      settingsTransport: 'legacy',
-      settingsApi: 'connection.api.settings',
-      settingsModel: 'namespace',
-      baseModelFields: completeBaseModelFields,
-      gatewayCompatFields: RC8_COMPAT_FIELDS,
-      externalLanguages: false,
-      takeoverTransport: 'optional',
-    },
-  },
-  {
-    minimum: '0.1.2-alpha.1',
-    maximumExclusive: '0.1.3-alpha.2',
-    capabilities: {
-      settingsTransport: 'modern',
-      settingsApi: 'remote.settings',
-      settingsModel: 'namespace',
-      baseModelFields: completeBaseModelFields,
-      gatewayCompatFields: ALPHA1_PLUS_COMPAT_FIELDS,
-      externalLanguages: true,
-      takeoverTransport: 'optional',
-    },
-  },
-  {
-    // `0.1.3-alpha.2` grew the completions gate by `thinkingTokenBudgetField`
-    // and `vllmPriority` and the Responses gate by `supportsMaxOutputTokens`
-    // (task 7 adds the numeric one). The bound is the prerelease `alpha.2`
-    // itself, so `0.1.3-0` and `0.1.3-alpha.1` stay in the window above.
-    minimum: '0.1.3-alpha.2',
-    maximumExclusive: '0.1.7-0',
-    capabilities: {
-      settingsTransport: 'modern',
-      settingsApi: 'remote.settings',
-      settingsModel: 'namespace',
-      baseModelFields: completeBaseModelFields,
-      gatewayCompatFields: ALPHA3_PLUS_COMPAT_FIELDS,
-      externalLanguages: true,
-      takeoverTransport: 'optional',
-    },
-  },
-  {
-    // Verified through `0.2.2-alpha.2`: the 0.1.7 line's window was extended
-    // rather than split, because no release from 0.2.0 through 0.2.2 changed any
-    // capability it maps. The bound is the first release of the next minor line
-    // (`0.2.3-0`), so `0.2.0`, `0.2.1`, `0.2.2` and their prereleases resolve here.
+    // The 0.1.7 line introduced the entry-config settings model, and it is the
+    // oldest host this plugin supports: the plugin's own section is a Loader
+    // entry `Config`, `register`/`installSection`/`get` no longer exist, and the
+    // namespace model is gone from the codebase rather than merely unused.
     //
-    // Each published 0.2.x prerelease was checked against the API surfaces this
-    // plugin reads: `dsh-settings`, `dsh-client-store` and `dsh-client-ui-slots`
-    // were byte-identical between `0.2.1-alpha.1` and `0.2.1-rc.2`; the
-    // `dsh-client-ui-model-selection` and `dsh-api-session-controller` changes
-    // in that range were confined to their own UI and projection-cache code and
-    // left the directory snapshot fields, the `syncInputs` fallback and the
-    // `modelSelection` projection view unchanged.
+    // Everything from `0.1.7-alpha.1` through `0.2.2` was verified against the
+    // API surfaces this plugin reads, so the line is one window rather than one
+    // per release:
     //
-    // `0.2.2-alpha.2` keeps the mapped settings and gateway capabilities: the
-    // settings controller, `configForms` and `plugin-compatibility` are
-    // unchanged from `0.2.1-rc.4`; the model-directory face this plugin consumes
-    // keeps `directoryFor`, store, `load`, `select` and the `{ lastUsed, next }`
-    // projection view. pi-ai adds `supportsMidConvoEffort: 'withhold'`, so the
-    // offered field sets stay 19/4/7/1/0 and this plugin's 18 fields remain
-    // editable. The locale package adds ja/es/fr/de/ru/pt, while the seat's new
-    // badge resolver is unused by this plugin. Separately, alpha.2 changes the
-    // `agent/request` selection contract; the Host uses `agent.model.select()`
-    // at `agent/created` when available and retains the waterfall fallback on
-    // older hosts.
-    minimum: '0.1.7-0',
+    // - `0.1.7-alpha.1` established the model directly.
+    // - `0.2.0-rc.2` keeps the settings controller, `configForms`,
+    //   `plugin-compatibility`, the locale pack and the model directory
+    //   byte-identical to `0.2.0-rc.1`; the pi-ai `compatProfile` is unchanged
+    //   and the one gate that release adds (`mistral-conversations`) offers no
+    //   field, so the editable set is untouched.
+    // - `0.2.1-alpha.1` is byte-identical on every API this plugin reads
+    //   (settings controller, `configForms`, `plugin-compatibility`, locale
+    //   pack, model directory, the `conversation.input.model` seat contract —
+    //   still `{ locked }` — and the `modelDirectories`/`remote.session` faces).
+    //   pi-ai stays at 0.87.1 with the same offered field sets, and the
+    //   release's breaking changes miss this plugin: it imports no
+    //   `./invariant` entry, registers no input-stats extension, and is
+    //   configured as a package-root specifier rather than a subpath.
+    // - `0.2.1-rc.5` keeps the consumed API faces of `0.2.1-rc.4`; its Chat
+    //   reasoning-body Slot change is unused here.
+    // - `0.2.2-alpha.2` keeps the settings and gateway capabilities but changes
+    //   the AgentLoop selection contract. The Host applies subagent effort and
+    //   route through `agent.model.select()` at `agent/created` when available,
+    //   with the legacy `agent/request` effort fallback for older hosts.
+    //
+    // The bound is `0.2.3-0`, the first release of the next minor line.
+    minimum: '0.1.7-alpha.1',
     maximumExclusive: '0.2.3-0',
     capabilities: {
       settingsTransport: 'modern',

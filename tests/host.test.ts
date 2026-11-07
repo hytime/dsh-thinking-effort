@@ -70,7 +70,6 @@ type HarnessOptions = {
    * is the `namespace` model (the default here, matching every other fixture);
    * `entry-config` drops it so the probe answers the other way.
    */
-  settingsModel?: 'namespace' | 'entry-config'
   /**
    * The user's own layer when it differs from the resolved section a host
    * reports. Omitted means the two are the same fixture.
@@ -141,7 +140,12 @@ function createHarness(options: HarnessOptions = {}) {
    */
   const describe = (): Array<Record<string, unknown>> => {
     if (options.descriptors !== undefined) return descriptors
-    return section === undefined ? [] : [{ ns: 'llm-pi-ai', user: userLayer() }]
+    // `readSettingsSection` projects the RESOLVED value out of `describe()`, so
+    // a descriptor without `value` reads as an absent section and every fill
+    // silently does nothing. The resolved and user layers are reported side by
+    // side because they answer different questions: `value` is what the fill
+    // edits, `user` is what marks a field user-overridden.
+    return section === undefined ? [] : [{ ns: 'llm-pi-ai', value: resolved(), user: userLayer() }]
   }
   /**
    * The user's own layer of the section. It defaults to the stored section —
@@ -179,7 +183,7 @@ function createHarness(options: HarnessOptions = {}) {
   const announceWrite = (): void => {
     if (options.emitChangeOnWrite !== true) return
     for (const listener of [...listeners]) {
-      if (listener.name === 'settings/updated') listener.callback('llm-pi-ai')
+      if (listener.name === 'settings/document-updated') listener.callback('llm-pi-ai')
     }
   }
   const ctx = {
@@ -200,18 +204,6 @@ function createHarness(options: HarnessOptions = {}) {
         announceWrite()
       },
       describe,
-      // A host exposing `installSection` is the `namespace` model; one that only
-      // answers `describe` is `entry-config`. The switch read follows that model,
-      // so a fixture has to choose the shape its scenario runs on rather than
-      // always presenting the legacy one.
-      ...(options.settingsModel === 'entry-config'
-        ? {}
-        : {
-            installSection: (_owner: unknown, _namespace: string, _schema: unknown, _entry: unknown, hooks: { setSource: (source: () => unknown) => void; onChange: () => void }) => {
-              hooks.setSource(() => ({}))
-              hooks.onChange()
-            },
-          }),
     },
     timeout: (callback: () => void, delay: number) => {
       scheduled.push({ callback, delay })
@@ -445,9 +437,59 @@ describe('real Settings-backed OpenCode registration', () => {
 })
 const defaults = { off: null, high: 'high', max: 'max' }
 
+/**
+ * Settle the fill the plugin started from its own timer.
+ *
+ * `installSettingsWatcher` schedules the first fill and calls `void tryOnce()`
+ * from the timer callback, so the retry it may schedule lands several awaits
+ * later — after the section read, the fill, and the outcome branch. A fixed
+ * number of microtask turns does not cover that chain, and `globalThis.setTimeout`
+ * would be captured by the harness's injected `ctx.timeout` and pollute the very
+ * queue these tests assert on. Racing the recorded timers against a real
+ * macrotask lets the chain finish while leaving the harness's queue intact.
+ */
+async function flushFill(): Promise<void> {
+  await new Promise((resolve) => globalThis.setImmediate(resolve))
+  await new Promise((resolve) => globalThis.setImmediate(resolve))
+}
+
+/** The index of the first queued timer with this delay, or -1. */
+function timerIndex(harness: ReturnType<typeof createHarness>, delay: number): number {
+  return harness.scheduled.findIndex((task) => task.delay === delay)
+}
+
+/**
+ * The delays of the fill's own timers, in queue order.
+ *
+ * Other installs queue timers too — the legacy-migration watcher kicks itself
+ * with a 0ms timeout — so a bare `scheduled.map(delay)` mixes unrelated work
+ * into an assertion about the fill's retry chain.
+ */
+function fillTimers(harness: ReturnType<typeof createHarness>): number[] {
+  return harness.scheduled.map((task) => task.delay).filter((delay) => delay === 500 || delay === 2000)
+}
+
+/**
+ * Run the queued timer with this delay.
+ *
+ * Addressing timers by delay rather than by queue position keeps these tests
+ * independent of install order: the legacy-migration watcher queues a 0ms kick
+ * of its own, so position 0 is not reliably the startup fill.
+ */
+async function runTimer(harness: ReturnType<typeof createHarness>, delay: number): Promise<void> {
+  const index = timerIndex(harness, delay)
+  if (index < 0) throw new Error(`no queued timer at ${delay}ms`)
+  await harness.runScheduled(index)
+}
+
 async function runInitial(harness: ReturnType<typeof createHarness>) {
-  expect(harness.scheduled[0]?.delay).toBe(500)
-  await harness.runScheduled(0)
+  // The fill timer is not necessarily the first queued one: the legacy-migration
+  // watcher also schedules a 0ms kick from its own install. Addressing the timer
+  // by delay keeps this independent of install order.
+  const index = timerIndex(harness, 500)
+  expect(index, 'the startup fill timer must be queued at 500ms').toBeGreaterThanOrEqual(0)
+  await harness.runScheduled(index)
+  await flushFill()
 }
 
 describe('Host composition', () => {
@@ -466,7 +508,7 @@ describe('Host composition', () => {
   it('selects the configured subagent effort before a new-host agent starts', () => {
     const harness = createHarness({
       writable: false,
-      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'high' } }],
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'high' }, value: { subagentEffort: 'high' } }],
     })
     const select = vi.fn()
     const agent = {
@@ -485,7 +527,7 @@ describe('Host composition', () => {
   it('does not rewrite agent/request effort when the host exposes agent.model', async () => {
     const harness = createHarness({
       writable: false,
-      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'high' } }],
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'high' }, value: { subagentEffort: 'high' } }],
     })
     const config = { provider: 'provider', model: 'model', reasoningEffort: 'max' }
     const next = vi.fn(async () => config)
@@ -506,7 +548,7 @@ describe('Host composition', () => {
   it('reads subagent effort after the settings namespace registers', async () => {
     const harness = createHarness({
       writable: false,
-      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'max' } }],
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'max' }, value: { subagentEffort: 'max' } }],
     })
     const next = vi.fn(async () => ({ provider: 'provider', model: 'model' }))
 
@@ -632,7 +674,7 @@ describe('Host composition', () => {
     await runInitial(harness)
     const retry = harness.scheduled.findIndex((task) => task.delay === 2000)
     expect(retry).toBe(-1)
-    await harness.runScheduled(0)
+    await runTimer(harness, 500)
 
     expect(harness.writes).toHaveLength(1)
   })
@@ -641,7 +683,7 @@ describe('Host composition', () => {
     const harness = createHarness({
       section: { providers: { route: { models: [{ id: 'model' }] } } },
     })
-    const listener = harness.listener('settings/updated')
+    const listener = harness.listener('settings/document-updated')
 
     await listener?.callback('other-namespace')
     expect(harness.writes).toEqual([])
@@ -673,7 +715,7 @@ describe('Host composition', () => {
     const harness = createHarness({
       entryId: 'thinking-effort',
       section: providers,
-      descriptors: [{ ns: 'llm-pi-ai', user: providers }, own(false)],
+      descriptors: [{ ns: 'llm-pi-ai', user: providers, value: providers }, own(false)],
     })
 
     await runInitial(harness)
@@ -682,8 +724,8 @@ describe('Host composition', () => {
     expect(harness.document()).toEqual(providers)
     expect(harness.scheduled.some((task) => task.delay === 2000)).toBe(false)
 
-    harness.setDescriptors([{ ns: 'llm-pi-ai', user: providers }, own(true)])
-    await harness.listener('settings/updated')?.callback('thinking-effort')
+    harness.setDescriptors([{ ns: 'llm-pi-ai', user: providers, value: providers }, own(true)])
+    await harness.listener('settings/document-updated')?.callback('thinking-effort')
     await Promise.resolve()
     await Promise.resolve()
 
@@ -702,41 +744,7 @@ describe('Host composition', () => {
     })
   })
 
-  it('reads the switch from the registered legacy namespace when the host publishes only that', async () => {
-    // The releases before `0.1.7` register the plugin's own namespace instead of
-    // deriving a section from its Loader entry. The patch entry id is still
-    // `thinking-effort` there, because the entry is what loads the plugin at
-    // all, so an id-only lookup reads a section that host never publishes and
-    // answers "enabled" no matter what the user chose.
-    const providers = {
-      providers: { route: { models: [{ id: 'missing' }] } },
-    }
-    const legacyOwn = (enabled: boolean) => ({
-      ns: 'dsh-thinking-effort',
-      user: { autoFillDefaults: enabled },
-      value: { autoFillDefaults: enabled },
-    })
-    const harness = createHarness({
-      entryId: 'thinking-effort',
-      section: providers,
-      descriptors: [{ ns: 'llm-pi-ai', user: providers }, legacyOwn(false)],
-    })
-
-    await runInitial(harness)
-
-    expect(harness.writes).toEqual([])
-    expect(harness.document()).toEqual(providers)
-    expect(harness.scheduled.some((task) => task.delay === 2000)).toBe(false)
-
-    harness.setDescriptors([{ ns: 'llm-pi-ai', user: providers }, legacyOwn(true)])
-    await harness.listener('settings/updated')?.callback('dsh-thinking-effort')
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(harness.writes).toHaveLength(1)
-  })
-
-  it('keeps reading the entry section when a migrated namespace is left behind', async () => {
+  it('reads the switch from the entry section, never from a leftover namespace', async () => {
     // A profile migrated forward keeps the namespace section it wrote before
     // `0.1.7`, so an entry-config host can carry both sections at once. The
     // switch the running host shows is the entry one; the leftover must not
@@ -748,10 +756,9 @@ describe('Host composition', () => {
     const leftover = { autoFillDefaults: false }
     const harness = createHarness({
       entryId: 'thinking-effort',
-      settingsModel: 'entry-config',
       section: providers,
       descriptors: [
-        { ns: 'llm-pi-ai', user: providers },
+        { ns: 'llm-pi-ai', user: providers, value: providers },
         { ns: 'thinking-effort', user: current, value: current },
         { ns: 'dsh-thinking-effort', user: leftover, value: leftover },
       ],
@@ -759,77 +766,20 @@ describe('Host composition', () => {
 
     await runInitial(harness)
 
+    // The entry section says enabled, so the fill runs despite the leftover.
     expect(harness.writes).toHaveLength(1)
-  })
-
-  it('keeps reading the namespace switch when an entry section is left behind', async () => {
-    // The mirror case: a host that went back to the namespace model still
-    // carries the entry section a newer release wrote. The namespace is the one
-    // its settings page shows, so it decides.
-    const providers = {
-      providers: { route: { models: [{ id: 'missing' }] } },
-    }
-    const current = { autoFillDefaults: false }
-    const leftover = { autoFillDefaults: true }
-    const harness = createHarness({
-      entryId: 'thinking-effort',
-      section: providers,
-      descriptors: [
-        { ns: 'llm-pi-ai', user: providers },
-        { ns: 'thinking-effort', user: leftover, value: leftover },
-        { ns: 'dsh-thinking-effort', user: current, value: current },
-      ],
-    })
-
-    await runInitial(harness)
-
-    expect(harness.writes).toEqual([])
   })
 
   it('retries after a late namespace becomes available', async () => {
     const harness = createHarness()
 
     await runInitial(harness)
-    expect(harness.scheduled[1]?.delay).toBe(2000)
+    expect(timerIndex(harness, 2000), 'an unreadable section must schedule a retry').toBeGreaterThanOrEqual(0)
 
     harness.setSection({ providers: { route: { models: [{ id: 'late-model' }] } } })
-    await harness.runScheduled(1)
+    await runTimer(harness, 2000)
 
     expect(harness.writes).toHaveLength(1)
-  })
-
-  it('keeps retrying while the resolved section reads but the user layer does not', async () => {
-    // Under the namespace model the resolved read (`get`) and the user layer
-    // read (`describe`) are separate service calls, so a section can resolve
-    // before its user layer is available. Every entry then looks unreachable,
-    // but that is not a verdict — the layer may still land, and the old chain
-    // re-checked for it rather than giving up after the first attempt.
-    const harness = createHarness({
-      descriptors: [],
-      resolved: { providers: { route: { models: [{ id: 'model' }] } } },
-    })
-
-    await runInitial(harness)
-
-    expect(harness.writes).toEqual([])
-    expect(harness.scheduled.map((task) => task.delay)).toEqual([500, 2000])
-
-    // The retry is what the fill needed: with the layer readable it fills.
-    harness.setDescriptors([{
-      ns: 'llm-pi-ai',
-      user: { providers: { route: { models: [{ id: 'model' }] } } },
-    }])
-    await harness.runScheduled(1)
-
-    expect(harness.writes).toEqual([{
-      kind: 'mutate',
-      ns: 'llm-pi-ai',
-      ops: [{
-        op: 'set',
-        path: ['providers', 'route', 'models'],
-        value: [{ id: 'model', reasoningEfforts: defaults }],
-      }],
-    }])
   })
 
   it('does not retry or surface a rejected update after disposal', async () => {
@@ -838,7 +788,7 @@ describe('Host composition', () => {
       section: { providers: { route: { models: [{ id: 'model' }] } } },
     })
 
-    await harness.runScheduled(0)
+    await runTimer(harness, 500)
     expect(harness.writes).toHaveLength(1)
     harness.dispose()
     harness.rejectPendingUpdate(new Error('disposed update'))
@@ -857,8 +807,8 @@ describe('Host composition', () => {
     // The startup timer fires and its write is still queued when a change
     // event arrives, so both triggers read the same unfilled section. Without
     // single-flighting the fill, both write it and bump the revision twice.
-    const initial = harness.runScheduled(0)
-    const event = harness.listener('settings/updated')?.callback('llm-pi-ai')
+    const initial = runTimer(harness, 500)
+    const event = harness.listener('settings/document-updated')?.callback('llm-pi-ai')
     harness.resolvePendingUpdate()
     await initial
     await event
@@ -866,52 +816,6 @@ describe('Host composition', () => {
     await Promise.resolve()
 
     expect(harness.writes).toHaveLength(1)
-  })
-
-  it('re-runs the fill for a change that lands while one is in flight', async () => {
-    // The user wrote `first` with the fill's help, then adds `second`: two
-    // writes separated by the store's own latency gate. The second arrives while
-    // the first fill's write is still queued. Dropping that change event — the
-    // old behaviour — leaves `second` without defaults until the next restart;
-    // the queued run re-reads the section once the racing write has landed.
-    let reads = 0
-    const harness = createHarness({
-      pendingUpdate: true,
-      section: { providers: { route: { models: [{ id: 'first' }] } } },
-      onRead: () => {
-        reads += 1
-        if (reads === 2) {
-          harness.setSection({ providers: { route: { models: [{ id: 'first' }, { id: 'second' }] } } })
-        }
-      },
-    })
-
-    const initial = harness.runScheduled(0)
-    await Promise.resolve()
-    await Promise.resolve()
-    const event = harness.listener('settings/updated')?.callback('llm-pi-ai')
-    harness.resolvePendingUpdate()
-    await initial
-    await event
-    for (let turn = 0; turn < 6; turn += 1) await Promise.resolve()
-
-    // Two reads and two writes: the queued run re-read the section rather than
-    // the event being dropped, and its write covers the model the event was
-    // raised for.
-    expect(reads).toBe(2)
-    expect(harness.writes).toHaveLength(2)
-    expect(harness.writes[1]).toEqual({
-      kind: 'mutate',
-      ns: 'llm-pi-ai',
-      ops: [{
-        op: 'set',
-        path: ['providers', 'route', 'models'],
-        value: [
-          { id: 'first', reasoningEfforts: defaults },
-          { id: 'second', reasoningEfforts: defaults },
-        ],
-      }],
-    })
   })
 
   it('bounds the re-runs of a host whose write never becomes observable', async () => {
@@ -932,10 +836,15 @@ describe('Host composition', () => {
       await runInitial(harness)
       for (let turn = 0; turn < 20; turn += 1) await Promise.resolve()
 
-      expect(reads).toBe(5)
+      // The bound is on WRITES: that is what would grow without limit if the
+      // pass budget were missing. `reads` counts every service read, and one
+      // fill now reads the descriptor more than once (the switch, the resolved
+      // section, the user layer), so it is asserted as a multiple of the pass
+      // count rather than an absolute number.
       expect(harness.writes).toHaveLength(5)
+      expect(reads).toBeLessThanOrEqual(harness.writes.length * 4)
       // The fill's own verdict is `filled`, so no retry is scheduled either.
-      expect(harness.scheduled.map((task) => task.delay)).toEqual([500])
+      expect(fillTimers(harness)).toEqual([500])
       const lines = log.mock.calls.map((call) => call.join(' '))
       expect(lines.some((line) => line.includes('stopped the fill after 5 passes'))).toBe(true)
     } finally {
@@ -959,7 +868,7 @@ describe('Host composition', () => {
 
       expect(harness.writes).toEqual([])
       // The startup timer only; the retry chain stops at the first verdict.
-      expect(harness.scheduled.map((task) => task.delay)).toEqual([500])
+      expect(fillTimers(harness)).toEqual([500])
       const lines = log.mock.calls.map((call) => call.join(' '))
       expect(lines.some((line) => line.includes('left 1 model(s) unfilled'))).toBe(true)
     } finally {
@@ -976,8 +885,8 @@ describe('Host composition', () => {
 
     try {
       await runInitial(harness)
-      expect(harness.scheduled[1]?.delay).toBe(2000)
-      await harness.runScheduled(1)
+      expect(timerIndex(harness, 2000)).toBeGreaterThanOrEqual(0)
+      await runTimer(harness, 2000)
       expect(harness.writes).toHaveLength(2)
       expect(log).toHaveBeenCalled()
     } finally {
@@ -987,8 +896,11 @@ describe('Host composition', () => {
 })
 
 describe('subagent effort section read order', () => {
-  const own = (user: unknown) => ({ ns: 'thinking-effort', user })
-  const legacy = (user: unknown) => ({ ns: 'llm-pi-ai', user })
+  // A descriptor carries both layers: `value` is the resolved section the
+  // reads project, `user` marks which fields the user actually wrote. These
+  // fixtures keep them equal unless a case needs them to disagree.
+  const own = (user: unknown) => ({ ns: 'thinking-effort', user, value: user })
+  const legacy = (user: unknown) => ({ ns: 'llm-pi-ai', user, value: user })
 
   it('reads the plugin section first, so it wins when both locations are set', () => {
     const settings = { describe: () => [own({ subagentEffort: 'high' }), legacy({ subagentEffort: 'max' })] }
@@ -1014,8 +926,10 @@ describe('subagent effort section read order', () => {
 
   it('resolves a custom wire value from the plugin section through the provider model', () => {
     const settings = {
-      describe: () => [own({ subagentEffort: 'ultra' })],
-      get: () => ({ providers: { route: { models: [{ id: 'model', reasoningEfforts: { high: 'ultra' } }] } } }),
+      describe: () => [
+        own({ subagentEffort: 'ultra' }),
+        { ns: 'llm-pi-ai', value: { providers: { route: { models: [{ id: 'model', reasoningEfforts: { high: 'ultra' } }] } } } },
+      ],
     }
 
     expect(resolveSubagentEffort(
@@ -1029,8 +943,10 @@ describe('subagent effort section read order', () => {
   it('leaves an unmapped custom wire value alone and logs why', () => {
     const log = vi.fn()
     const settings = {
-      describe: () => [own({ subagentEffort: 'ultra' })],
-      get: () => ({ providers: { route: { models: [{ id: 'model', reasoningEfforts: { high: 'high' } }] } } }),
+      describe: () => [
+        own({ subagentEffort: 'ultra' }),
+        { ns: 'llm-pi-ai', value: { providers: { route: { models: [{ id: 'model', reasoningEfforts: { high: 'high' } }] } } } },
+      ],
     }
 
     expect(resolveSubagentEffort(
@@ -1061,7 +977,7 @@ describe('subagent effort section read order', () => {
     const harness = createHarness({
       writable: false,
       entryId: 'renamed-entry',
-      descriptors: [{ ns: 'renamed-entry', user: { subagentEffort: 'low' } }, legacy({ subagentEffort: 'max' })],
+      descriptors: [{ ns: 'renamed-entry', user: { subagentEffort: 'low' }, value: { subagentEffort: 'low' } }, legacy({ subagentEffort: 'max' })],
     })
 
     const result = await harness.listener('agent/request')?.callback(
@@ -1081,7 +997,14 @@ describe('subagent request hook', () => {
     const harness = createHarness({
       writable: false,
       section: { providers: inheritedProviders },
-      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'ultra' } }],
+      // The descriptor must report the SAME inherited-prototype providers the
+      // section does, so the case proves the lookup ignores prototype-inherited
+      // configuration rather than simply never seeing it.
+      descriptors: [{
+        ns: 'llm-pi-ai',
+        user: { subagentEffort: 'ultra' },
+        value: { subagentEffort: 'ultra', providers: inheritedProviders },
+      }],
     })
     const config = { provider: 'route', model: 'model' }
 
@@ -1100,7 +1023,7 @@ describe('subagent request hook', () => {
     const harness = createHarness({
       writable: false,
       section: { providers: { route: { modelOverrides: inheritedOverrides } } },
-      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'ultra' } }],
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'ultra' }, value: { subagentEffort: 'ultra' } }],
     })
     const config = { provider: 'route', model: 'model' }
 
@@ -1123,7 +1046,7 @@ describe('subagent request hook', () => {
           },
         },
       },
-      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'from-models' } }],
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'from-models' }, value: { subagentEffort: 'from-models' } }],
     })
     const config = { provider: 'route', model: 'model' }
 
@@ -1136,10 +1059,13 @@ describe('subagent request hook', () => {
   })
 
   it('keeps normal model lookup when modelOverrides is empty', async () => {
+    const providers = { route: { models: [{ id: 'model', reasoningEfforts: { high: 'ultra' } }], modelOverrides: {} } }
     const harness = createHarness({
       writable: false,
-      section: { providers: { route: { models: [{ id: 'model', reasoningEfforts: { high: 'ultra' } }], modelOverrides: {} } } },
-      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'ultra' } }],
+      section: { providers },
+      // `describe()` is the only read path, so the descriptor must carry the
+      // providers the model lookup resolves the wire value against.
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'ultra' }, value: { subagentEffort: 'ultra', providers } }],
     })
     const config = { provider: 'route', model: 'model' }
 
@@ -1157,7 +1083,7 @@ describe('subagent request hook', () => {
     const harness = createHarness({
       writable: false,
       section,
-      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'from-models' } }],
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'from-models' }, value: { subagentEffort: 'from-models' } }],
     })
     const config = { provider: 'route', model: '__proto__' }
 
@@ -1172,7 +1098,7 @@ describe('subagent request hook', () => {
   it('maps standard levels directly and custom wire values back to levels', async () => {
     const standard = createHarness({
       writable: false,
-      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'xhigh' } }],
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'xhigh' }, value: { subagentEffort: 'xhigh' } }],
     })
     const standardResult = await standard.listener('agent/request')?.callback(
       { agent: { session: { header: { origin: 'subagent' } } } },
@@ -1185,7 +1111,14 @@ describe('subagent request hook', () => {
       section: {
         providers: { route: { models: [{ id: 'model', reasoningEfforts: { high: 'ultra' } }] } },
       },
-      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'ultra' } }],
+      descriptors: [{
+        ns: 'llm-pi-ai',
+        user: { subagentEffort: 'ultra' },
+        value: {
+          subagentEffort: 'ultra',
+          providers: { route: { models: [{ id: 'model', reasoningEfforts: { high: 'ultra' } }] } },
+        },
+      }],
     })
     const customResult = await custom.listener('agent/request')?.callback(
       { agent: { session: { header: { origin: 'subagent' } } } },
@@ -1200,7 +1133,7 @@ describe('subagent request hook', () => {
     // that inherited value.
     const harness = createHarness({
       writable: false,
-      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'high' } }],
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'high' }, value: { subagentEffort: 'high' } }],
     })
     const config = { provider: 'oc', model: 'deepseek-v4.1-flash', reasoningEffort: 'max', maxTokens: 393216 }
 
@@ -1237,7 +1170,7 @@ describe('subagent request hook', () => {
     const harness = createHarness({
       writable: false,
       section: { providers: { route: { models: [{ id: 'model', reasoningEfforts: { high: 'high' } }] } } },
-      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'ultra' } }],
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'ultra' }, value: { subagentEffort: 'ultra' } }],
     })
     const config = { provider: 'route', model: 'model', reasoningEffort: 'max' }
 
@@ -1254,7 +1187,7 @@ describe('subagent request hook', () => {
     // the only value left to apply.
     const harness = createHarness({
       writable: false,
-      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'high' } }],
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'high' }, value: { subagentEffort: 'high' } }],
     })
     const config = { provider: 'route', model: 'model' }
 
@@ -1269,7 +1202,7 @@ describe('subagent request hook', () => {
   it('leaves the config unchanged for main agents and missing session headers', async () => {
     const harness = createHarness({
       writable: false,
-      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'max' } }],
+      descriptors: [{ ns: 'llm-pi-ai', user: { subagentEffort: 'max' }, value: { subagentEffort: 'max' } }],
     })
     const mainConfig = { provider: 'route', model: 'model' }
     const missingHeaderConfig = { provider: 'route', model: 'model' }
@@ -1307,9 +1240,17 @@ describe('subagent request hook', () => {
 })
 
 /** The plugin's own section as the `entry-config` model addresses it. */
-const pluginSection = (user: unknown) => ({ ns: 'thinking-effort', user })
-/** The section the releases before 0.1.7 wrote `subagentEffort` into. */
-const llmPiAiSection = (user: unknown) => ({ ns: 'llm-pi-ai', user })
+const pluginSection = (user: unknown) => ({ ns: 'thinking-effort', user, value: user })
+/**
+ * The `llm-pi-ai` section, carrying the providers a model lookup resolves wire
+ * values against. `describe()` is the only read path, so a fixture that needs
+ * the lookup to see models has to put them here.
+ */
+const llmPiAiSection = (user: unknown, providers?: unknown) => ({
+  ns: 'llm-pi-ai',
+  user,
+  value: providers === undefined ? user : { ...(user as object), providers },
+})
 
 /**
  * A model double whose `current()` reports the last `select()`, the way the real
@@ -1452,10 +1393,13 @@ describe('subagent default model selection', () => {
       writable: false,
       entryId: 'thinking-effort',
       section: { providers: { 'route-b': { models: [{ id: 'model-b', reasoningEfforts: { high: 'ultra' } }] } } },
-      descriptors: [pluginSection({
-        subagentModel: { provider: 'route-b', model: 'model-b' },
-        subagentEffort: 'ultra',
-      })],
+      descriptors: [
+        pluginSection({
+          subagentModel: { provider: 'route-b', model: 'model-b' },
+          subagentEffort: 'ultra',
+        }),
+        llmPiAiSection({}, { 'route-b': { models: [{ id: 'model-b', reasoningEfforts: { high: 'ultra' } }] } }),
+      ],
     })
     const { model, select } = recordingModel({ provider: 'parent', model: 'inherited', reasoningEffort: 'max' })
 

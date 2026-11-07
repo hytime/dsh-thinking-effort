@@ -99,13 +99,14 @@ function readOfficialDshVersion(cliRoot: string): string {
   return manifest.version
 }
 
-const expectedOfficialDshVersions = [
-  '0.1.0-rc.7',
-  '0.1.1-rc.2',
-  '0.1.3-alpha.2',
-  '0.1.6-alpha.1',
-  '0.1.7-alpha.1',
-] as const
+/**
+ * The official representative the integration suite builds.
+ *
+ * The plugin supports `0.1.7-alpha.1` and later only, so the pre-entry-config
+ * hosts (rc.7, rc.2, alpha.2, 0.1.6) are no longer built or verified: the
+ * namespace-model path they exercised no longer exists in the plugin.
+ */
+const expectedOfficialDshVersions = ['0.1.7-alpha.1'] as const
 
 /**
  * Poll `read` until it answers something other than `undefined`, then return
@@ -189,7 +190,12 @@ function officialRootsOf(roots: readonly string[]): OfficialRoot[] {
  * asserted in the cases below, so an added root cannot silently join neither.
  */
 const officialRoots = integrationEnabled ? officialRootsOf(cliRoots) : []
-const namespaceRoots = officialRoots.filter(({ settingsModel }) => settingsModel === 'namespace')
+/**
+ * Roots still on the namespace model. Empty by construction now that the floor
+ * is `0.1.7-alpha.1`: kept so the entry-config case below stays the only body
+ * that runs, rather than folding a second loop into it.
+ */
+const namespaceRoots: readonly OfficialRoot[] = []
 const entryConfigRoots = officialRoots.filter(({ settingsModel }) => settingsModel === 'entry-config')
 
 function readPackage(): PackageManifest {
@@ -1161,8 +1167,12 @@ describe('compatibility documentation and root validation', () => {
     { name: 'models[] settings behavior', pattern: /models\[\][^\n]*(?:complete|完整|全体|全体|전체)[^\n]*(?:array set|数组 set|配列 set|배열 set)/i },
     { name: 'schema rejects model source conflict', pattern: /(?=[^\n]*(?:official schema|官方 schema|公式 schema|공식 schema))(?=[^\n]*models\[\])[^\n]*(?:rejects|拒绝|拒否|거부)[^\n]*(?:fails? closed|异常数据|異常なデータ|비정상 데이터)/i },
     { name: 'control plane and transport boundary', pattern: /(?:control plane|控制面|コントロールプレーン|제어면)[^\n]*(?:transport|传输|トランスポート|전송)/i },
-    { name: 'rc7 capability boundary', pattern: /0\.1\.0-rc\.7/ },
-    { name: 'rc8 and later capability boundary', pattern: /0\.1\.0-rc\.8[^\n]*(?:later|后续|以降|이후)/i },
+    // The supported window's lower and upper bounds. The pre-0.1.7 hosts the
+    // contract used to pin (rc.7, rc.8) are no longer supported, so the
+    // documented boundary is the floor the plugin installs on and the exclusive
+    // bound past which the map stops answering.
+    { name: 'supported capability floor', pattern: /0\.1\.7-alpha\.1/ },
+    { name: 'capability upper bound', pattern: /0\.2\.3-0/ },
     { name: 'Auto reset semantics', pattern: /Auto[^\n]*(?:unset|取消|恢复|復元|복원)/i },
     {
       name: 'optional takeover semantics',
@@ -1235,13 +1245,7 @@ describe('compatibility documentation and root validation', () => {
 
   it('keeps publish workflow roots aligned with loader verification order', () => {
     const workflow = readFileSync(join(root, '.github/workflows/publish.yml'), 'utf8')
-    const roots = [
-      '"rc7:$RC7_ROOT:$RUN_ROOT/homes/rc7"',
-      '"rc2:$RC2_ROOT:$RUN_ROOT/homes/rc2"',
-      '"alpha:$ALPHA_ROOT:$RUN_ROOT/homes/alpha"',
-      '"namespace:$NAMESPACE_ROOT:$RUN_ROOT/homes/namespace"',
-      '"entry:$ENTRY_ROOT:$RUN_ROOT/homes/entry"',
-    ]
+    const roots = ['"entry:$ENTRY_ROOT:$RUN_ROOT/homes/entry"']
     const rootSpecStart = workflow.indexOf('for spec in')
     expect(rootSpecStart).toBeGreaterThanOrEqual(0)
     let previous = rootSpecStart
@@ -1250,8 +1254,8 @@ describe('compatibility documentation and root validation', () => {
       expect(position, `publish workflow missing ordered root ${rootSpec}`).toBeGreaterThan(previous)
       previous = position
     }
-    expect(workflow).toContain('DSH_CLI_ROOTS="$RC7_ROOT,$RC2_ROOT,$ALPHA_ROOT,$NAMESPACE_ROOT,$ENTRY_ROOT"')
-    expect(expectedOfficialDshVersions).toEqual(['0.1.0-rc.7', '0.1.1-rc.2', '0.1.3-alpha.2', '0.1.6-alpha.1', '0.1.7-alpha.1'])
+    expect(workflow).toContain('DSH_CLI_ROOTS="$ENTRY_ROOT"')
+    expect(expectedOfficialDshVersions).toEqual(['0.1.7-alpha.1'])
   })
 
   it('rejects duplicate normalized DSH CLI roots', () => {
@@ -1286,7 +1290,7 @@ describe('optional openai-completions takeover contract', () => {
           models: [{ id: 'model', reasoningEfforts: { high: 'high' } }],
         },
       },
-    }, capabilitiesForVersion('0.1.1-rc.2'))).toEqual(['local'])
+    }, capabilitiesForVersion('0.1.7-alpha.1'))).toEqual(['local'])
     expect(identifyTakeoverProviders({
       providers: {
         local: {
@@ -1295,7 +1299,7 @@ describe('optional openai-completions takeover contract', () => {
           models: [{ id: 'model', reasoningEfforts: { high: 'high' } }],
         },
       },
-    }, capabilitiesForVersion('0.1.0-rc.7'))).toEqual([])
+    })).toEqual([])
     expect(identifyTakeoverProviders({
       providers: {
         local: { api: 'openai-completions', baseURL: 'http://gateway.test/v1', models: [{ id: 'model', reasoningEfforts: { high: 'high' } }] },
@@ -1387,13 +1391,14 @@ describe('loader seed schema contract', () => {
 
 integrationDescribe('official DSH loader composition', () => {
   it('requires and verifies the four namespace-model hosts independently', { timeout: 300000 }, async () => {
-    expect(cliRoots).toHaveLength(5)
+    expect(cliRoots).toHaveLength(1)
     expect(cliRoots.every((cliRoot) => cliRoot === resolve(cliRoot))).toBe(true)
-    expect(new Set(cliRoots).size).toBe(5)
     expect(officialRoots.map(({ version }) => version)).toEqual(expectedOfficialDshVersions)
-    expect(namespaceRoots).toHaveLength(4)
+    expect(namespaceRoots).toHaveLength(0)
     expect(entryConfigRoots).toHaveLength(1)
 
+    // No supported host is on the namespace model any more, so this loop is
+    // empty; the entry-config case below carries the whole integration surface.
     for (const { cliRoot, version } of namespaceRoots) {
       const home = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-loader-'))
       const packDestination = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-pack-'))
