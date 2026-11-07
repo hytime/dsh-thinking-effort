@@ -66,6 +66,55 @@ export function readSubagentEffort(
   return effortFromUserLayer(settings, SETTINGS_NAMESPACE)
 }
 
+/** A configured child route: both halves are present by construction. */
+export interface SubagentModelRoute {
+  readonly provider: string
+  readonly model: string
+}
+
+/**
+ * One namespace's user layer read as a route, or `undefined` when it names no
+ * complete route. Both halves are required: a provider without a model names no
+ * route, and the panel clears both when the user picks "inherit", so a partial
+ * pair is stale data rather than a choice.
+ */
+function routeFromUserLayer(settings: HostSettings, namespace: string): SubagentModelRoute | undefined {
+  const user = readSettingsSectionUser(settings, namespace)
+  if (!isUnknownRecord(user)) return undefined
+  const route = user.subagentModel
+  if (!isUnknownRecord(route)) return undefined
+  const provider = route.provider
+  const model = route.model
+  if (typeof provider !== 'string' || provider.length === 0) return undefined
+  if (typeof model !== 'string' || model.length === 0) return undefined
+  return { provider, model }
+}
+
+/**
+ * Read the configured subagent default route.
+ *
+ * Only the user layer can express "unset": the resolved section always carries
+ * the schema's empty-string defaults, which would otherwise pin a route the
+ * user never chose and silently stop inheritance.
+ *
+ * The plugin's own section is read first, under both settings models. Under
+ * `entry-config` that section is addressed by the Loader entry id, which
+ * `settingsEntryId` supplies; under `namespace` it is addressed by the
+ * namespace the plugin registers. `llm-pi-ai` is deliberately NOT a fallback:
+ * the releases up to 0.1.6 wrote `subagentEffort` there, but `subagentModel`
+ * never existed then, so nothing can be stored for it at that location.
+ */
+export function readSubagentModel(
+  settings: HostSettings | undefined,
+  ownSectionId: string = PLUGIN_ENTRY_ID,
+): SubagentModelRoute | undefined {
+  if (settings === undefined) return undefined
+  const own = routeFromUserLayer(settings, ownSectionId)
+  if (own !== undefined) return own
+  if (ownSectionId === OPENCODE_SESSION_NAMESPACE) return undefined
+  return routeFromUserLayer(settings, OPENCODE_SESSION_NAMESPACE)
+}
+
 function findModel(settings: HostSettings, config: AgentRequestConfig): unknown {
   const section = readSettingsSection(settings, SETTINGS_NAMESPACE)
   if (!isUnknownRecord(section) || !isUnknownRecord(section.providers)) return undefined
@@ -127,35 +176,108 @@ function hasAgentModelSelection(agent: Record<string, unknown> | undefined): boo
   return isUnknownRecord(model) && typeof model.current === 'function' && typeof model.select === 'function'
 }
 
-/** Select a new-host subagent's configured effort before its first model step. */
+/**
+ * Record the agents already told that their configured route was not applied.
+ *
+ * `agent/request` fires once per step, so an unguarded log would repeat for the
+ * whole life of a child on an older host. A WeakSet keys that "already logged"
+ * fact on the agent itself, so it neither outlives the agent nor leaks.
+ */
+const unappliedRouteWarned = new WeakSet<object>()
+
+/**
+ * Select the configured default route, if any, before the child's first step.
+ *
+ * This must run before the effort selection: the effort is resolved against
+ * the model actually in use, and a custom wire value is only meaningful for the
+ * provider/model pair that declares it. Selecting the route first makes the
+ * subsequent `current()` read report the new route.
+ *
+ * No `reasoningEffort` is passed on purpose. Choosing a default model is not a
+ * choice of thinking effort: the model's own default applies unless the user
+ * configured a separate subagent effort, which the caller applies afterwards.
+ */
+function applySubagentRoute(
+  ctx: Pick<HostContext, 'settings' | 'fiber'>,
+  model: Record<string, unknown>,
+): void {
+  const select = model.select
+  if (typeof select !== 'function') return
+  const route = readSubagentModel(ctx.settings, settingsEntryId(ctx, PLUGIN_ENTRY_ID))
+  if (route === undefined) return
+  Reflect.apply(select, model, [{ provider: route.provider, model: route.model }])
+}
+
+/** Select the configured effort against the model selection now in force. */
+function applySubagentEffort(
+  ctx: Pick<HostContext, 'settings' | 'fiber'>,
+  model: Record<string, unknown>,
+): void {
+  const current = model.current
+  const select = model.select
+  if (typeof current !== 'function' || typeof select !== 'function') return
+  const selection: unknown = Reflect.apply(current, model, [])
+  if (!isAgentRequestConfig(selection)
+    || typeof selection.provider !== 'string'
+    || typeof selection.model !== 'string') return
+  const effort = resolveSubagentEffort(
+    ctx.settings,
+    selection,
+    log,
+    settingsEntryId(ctx, OPENCODE_SESSION_NAMESPACE),
+  )
+  if (effort === undefined || effort === selection.reasoningEffort) return
+  Reflect.apply(select, model, [{
+    provider: selection.provider,
+    model: selection.model,
+    reasoningEffort: effort,
+  }])
+}
+
+/** Select a new-host subagent's configured route and effort before its first model step. */
 export function handleAgentCreated(ctx: Pick<HostContext, 'settings' | 'fiber'>, payload: unknown): void {
   const agent = subagentAgentOf(payload)
   if (agent === undefined) return
   const model = isUnknownRecord(agent.model) ? agent.model : undefined
-  const current = model?.current
-  const select = model?.select
-  if (model === undefined || typeof current !== 'function' || typeof select !== 'function') return
+  if (model === undefined) return
 
   try {
-    const selection: unknown = Reflect.apply(current, model, [])
-    if (!isAgentRequestConfig(selection)
-      || typeof selection.provider !== 'string'
-      || typeof selection.model !== 'string') return
-    const effort = resolveSubagentEffort(
-      ctx.settings,
-      selection,
-      log,
-      settingsEntryId(ctx, OPENCODE_SESSION_NAMESPACE),
-    )
-    if (effort === undefined || effort === selection.reasoningEffort) return
-    Reflect.apply(select, model, [{
-      provider: selection.provider,
-      model: selection.model,
-      reasoningEffort: effort,
-    }])
+    // Order matters: the route moves the selection, and the effort is then read
+    // back from that new selection. Reversing the two would resolve a custom
+    // effort against the parent's route, where the model does not declare it.
+    applySubagentRoute(ctx, model)
+    applySubagentEffort(ctx, model)
   } catch (error) {
     log('subagent model selection error:', error instanceof Error ? error.message : String(error))
   }
+}
+
+/**
+ * Report, once per agent, that a configured default route never reached the
+ * request.
+ *
+ * `agent/request` cannot fix this: the agent loop rejects a waterfall result
+ * whose provider/model differ from the selection fixed during step preparation,
+ * and directs callers to `agent.model.select()` before that point instead. All
+ * this hook may do is name the misconfiguration; silently ignoring it would
+ * leave the user believing the panel setting works.
+ */
+function noteUnappliedRoute(
+  ctx: Pick<HostContext, 'settings' | 'fiber'>,
+  agent: Record<string, unknown>,
+  config: AgentRequestConfig,
+): void {
+  if (unappliedRouteWarned.has(agent)) return
+  const route = readSubagentModel(ctx.settings, settingsEntryId(ctx, PLUGIN_ENTRY_ID))
+  if (route === undefined) return
+  if (config.provider === route.provider && config.model === route.model) return
+  unappliedRouteWarned.add(agent)
+  log(
+    'configured subagent model was not applied:',
+    `${route.provider}/${route.model}`,
+    'request uses',
+    `${String(config.provider)}/${String(config.model)}`,
+  )
 }
 
 export async function handleAgentRequest(
@@ -166,7 +288,11 @@ export async function handleAgentRequest(
   const config = await next()
   try {
     const agent = subagentAgentOf(payload)
-    if (agent === undefined || !isAgentRequestConfig(config) || hasAgentModelSelection(agent)) return config
+    if (agent === undefined || !isAgentRequestConfig(config)) return config
+    // The route is applied at `agent/created`, and the request phase may not
+    // change it, so a mismatch is only ever observable here.
+    noteUnappliedRoute(ctx, agent, config)
+    if (hasAgentModelSelection(agent)) return config
     const effort = resolveSubagentEffort(
       ctx.settings,
       config,
