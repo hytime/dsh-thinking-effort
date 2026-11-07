@@ -15,6 +15,8 @@
     "test:policy": "node --test scripts/pr-policy.test.mjs",
     "test:conventions": "node scripts/check-conventions.mjs",
     "test:watch": "vitest",
+    "check": "pnpm run test:conventions && node scripts/check-locales.mjs",
+    "verify": "pnpm run check && pnpm run build && pnpm run typecheck && pnpm run typecheck:test && pnpm run test && pnpm run test:release && pnpm run test:policy",
     "prepublishOnly": "pnpm run build"
   },
   "type": "module",
@@ -139,6 +141,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tsdown": "^0.22.14",
+    "turbo": "2.11.10",
     "typescript": "^5.9.3",
     "vitest": "^4.1.12"
   },

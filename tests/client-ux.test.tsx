@@ -722,12 +722,9 @@ describe('OpenCode session Client namespace state', () => {
 
   it('provides OpenCode-specific copy for every supported locale without GPT or generic gateway wording', () => {
     const locales: readonly [string, Record<string, string>][] = [['en', en], ['zh', zh], ['ja', ja], ['ko', ko]]
-    const keys = ['opencodeSessionHeaderTitle', 'opencodeSessionHeaderDescription', 'opencodeSessionSaved', 'opencodeSessionSaveFailed']
+    // Key presence is `scripts/check-locales.mjs`'s job; the wording constraints
+    // below are what that check cannot see.
     for (const [locale, dictionary] of locales) {
-      for (const key of keys) {
-        expect(dictionary[key], `${locale} missing ${key}`).toBeTruthy()
-        expect(dictionary[key], `${locale} fell back to ${key}`).not.toBe(key)
-      }
       expect(dictionary.opencodeSessionHeaderDescription).toContain('x-opencode-session')
       expect(dictionary.opencodeSessionHeaderDescription.toLowerCase()).not.toContain('gpt')
       expect(dictionary.opencodeSessionHeaderDescription.toLowerCase()).not.toContain('gateway compatibility')
@@ -867,11 +864,9 @@ describe('SectionEditor user behavior', () => {
       supportsDeveloperRoleAvailable: true,
       maxTokensFieldAvailable: true,
     })
+    // Key parity lives in `scripts/check-locales.mjs`; these cases prove the
+    // component renders from each dictionary rather than falling back to raw keys.
     for (const [locale, dictionary] of locales) {
-      for (const key of keys) {
-        expect(dictionary[key], `${locale} missing ${key}`).toBeTruthy()
-        expect(dictionary[key], `${locale} fell back to ${key}`).not.toBe(key)
-      }
       const container = document.createElement('div')
       document.body.append(container)
       const root = createRoot(container)
@@ -3022,17 +3017,14 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     view.unmount()
   })
 
-  it('provides compaction and subagent-model copy in all four locales', () => {
-    const locales: readonly [string, Record<string, string>][] = [['en', en], ['zh', zh], ['ja', ja], ['ko', ko]]
-    const keys = ['compactionSectionTitle', 'compactionThreshold', 'compactionThresholdHint', 'compactionRetain', 'compactionRetainHint', 'compactionFollowGlobal', 'compactionSave', 'compactionInvalidThreshold', 'compactionInvalidRetain', 'compactionRetainNotBelow', 'compactionSaved', 'compactionEnable', 'compactionDisabledHint', 'subagentModelTitle', 'subagentModelInherit', 'subagentModelProvider', 'subagentModelModel', 'subagentModelUnavailable', 'subagentModelSave', 'subagentModelHint', 'subagentModelSaved']
-    for (const [locale, dictionary] of locales) {
-      for (const key of keys) {
-        expect(dictionary[key], `${locale} missing ${key}`).toBeTruthy()
-        expect(dictionary[key], `${locale} fell back to ${key}`).not.toBe(key)
-      }
-    }
-    // The Chinese copy is the reference wording, so it is pinned rather than
-    // left to a translation that could drift back to a literal rendering.
+  it('keeps the Chinese compaction copy as the reference wording', () => {
+    // Key presence and cross-locale parity are `scripts/check-locales.mjs`'s
+    // job — it compares every dictionary's key set against zh and runs as the
+    // first step of `pnpm run build`. Re-asserting 21 keys across 4 locales
+    // here duplicated that check without covering anything it misses.
+    //
+    // What this file can still catch is the wording itself: a translation that
+    // drifts back to a literal rendering would pass the key check.
     expect(zh.compactionThreshold).toBe('压缩阈值')
     expect(zh.compactionRetain).toBe('保留最近上下文')
   })
