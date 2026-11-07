@@ -3,7 +3,7 @@ import { hostCapabilities } from '@hytime/dsh-plugin-kit'
 import { readSettingsSection, readSettingsSectionUser, settingsChangeEvents, settingsEntryId } from '@hytime/dsh-plugin-kit'
 import { OPENCODE_SESSION_NAMESPACE } from '@hytime/dsh-plugin-kit'
 import { settingsModelForRuntime } from '@hytime/dsh-plugin-kit'
-import { mark } from './marker.js'
+import { mark } from '@hytime/dsh-plugin-kit'
 import { DEFAULT_LEVELS as SHARED_DEFAULT_LEVELS, LLM_PI_AI_NS, LOG_PREFIX } from '@hytime/dsh-plugin-kit'
 import {
   HostContext,
@@ -14,7 +14,7 @@ import {
 } from '@hytime/dsh-plugin-kit'
 
 export const SETTINGS_NAMESPACE = LLM_PI_AI_NS
-// The one definition lives in `src/shared/constants.ts`; this binding keeps the
+// The one definition lives in the kit's `shared/constants.ts`; this binding keeps the
 // existing export name and the two call sites below unchanged.
 export const DEFAULT_LEVELS = SHARED_DEFAULT_LEVELS
 

@@ -41,6 +41,21 @@ importers:
       '@deepseek-ai/dsh-settings':
         specifier: 0.1.1-rc.2
         version: 0.1.1-rc.2(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-brand@0.1.7-rc.2(@deepseek-ai/cordis@4.0.1))(@deepseek-ai/dsh-invariants@0.1.7-rc.2(@deepseek-ai/cordis@4.0.5))(@deepseek-ai/schemastery@3.18.3)
+      '@hytime/dsh-feature-compaction':
+        specifier: workspace:*
+        version: link:packages/compaction
+      '@hytime/dsh-feature-levels':
+        specifier: workspace:*
+        version: link:packages/levels
+      '@hytime/dsh-feature-migration':
+        specifier: workspace:*
+        version: link:packages/migration
+      '@hytime/dsh-feature-opencode':
+        specifier: workspace:*
+        version: link:packages/opencode
+      '@hytime/dsh-feature-subagent':
+        specifier: workspace:*
+        version: link:packages/subagent
       '@hytime/dsh-plugin-kit':
         specifier: workspace:*
         version: link:packages/kit
@@ -75,7 +90,17 @@ importers:
         specifier: ^4.1.12
         version: 4.1.12(@opentelemetry/api@1.9.1)(@types/node@22.20.1)(jsdom@29.1.1)(vite@7.3.7(@types/node@22.20.1)(lightningcss@1.32.0)(yaml@2.9.0))
 
+  packages/compaction: {}
+
   packages/kit: {}
+
+  packages/levels: {}
+
+  packages/migration: {}
+
+  packages/opencode: {}
+
+  packages/subagent: {}
 
 packages:
 

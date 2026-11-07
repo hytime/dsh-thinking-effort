@@ -1,9 +1,9 @@
 import z from '@deepseek-ai/schemastery'
-import type { OpenCodeSessionSettings } from '@hytime/dsh-plugin-kit'
-import type { LegacyMigrationState } from '@hytime/dsh-plugin-kit'
-import { SNAPSHOT_KIND } from '@hytime/dsh-plugin-kit'
-import { DEFAULT_RETAIN_RATIO, DEFAULT_THRESHOLD_RATIO } from '@hytime/dsh-plugin-kit'
-import type { CompactionPolicySettings } from '@hytime/dsh-plugin-kit'
+import type { OpenCodeSessionSettings } from './compat/opencode-session.js'
+import type { LegacyMigrationState } from './compat/legacy-migration.js'
+import { SNAPSHOT_KIND } from './shared/constants.js'
+import { DEFAULT_RETAIN_RATIO, DEFAULT_THRESHOLD_RATIO } from './shared/compaction.js'
+import type { CompactionPolicySettings } from './shared/compaction.js'
 
 /**
  * One stored configuration snapshot. Fields carry defaults so a section

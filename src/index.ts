@@ -1,9 +1,9 @@
-import { mark } from './host/marker.js'
-import { installSettingsWatcher } from './host/settings.js'
-import { installOpenCodeSession } from './host/opencode-session.js'
-import { installLegacyMigration } from './host/legacy-watcher.js'
-import { installCompactionPolicy } from './host/compaction.js'
-import { handleAgentCreated, handleAgentRequest } from './host/subagent.js'
+import { mark } from '@hytime/dsh-plugin-kit'
+import { installSettingsWatcher } from '@hytime/dsh-feature-levels'
+import { installOpenCodeSession } from '@hytime/dsh-feature-opencode'
+import { installLegacyMigration } from '@hytime/dsh-feature-migration'
+import { installCompactionPolicy } from '@hytime/dsh-feature-compaction'
+import { handleAgentCreated, handleAgentRequest } from '@hytime/dsh-feature-subagent'
 import type { HostContext } from '@hytime/dsh-plugin-kit'
 
 export const name = '@hytime/dsh-thinking-effort'
@@ -13,7 +13,7 @@ export const inject = ['settings', 'timer', 'llm'] as const
  * The Loader entry's config schema. DSH 0.1.7 derives the settings form from
  * it, so it must stay exported from the package entry.
  */
-export { Config } from './host/plugin-settings.js'
+export { Config } from '@hytime/dsh-feature-levels'
 
 export function apply(ctx: HostContext): void {
   mark('apply')

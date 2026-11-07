@@ -9,8 +9,8 @@ import {
   settingsChangeEvents,
   settingsEntryId,
 } from '@hytime/dsh-plugin-kit'
-import { OpenCodeSessionFormatter, resolveFormatConfig } from './opencode-session-format.js'
-import { PLUGIN_SETTINGS_SCHEMA } from './plugin-settings.js'
+import { OpenCodeSessionFormatter, resolveFormatConfig } from './format.js'
+import { PLUGIN_SETTINGS_SCHEMA } from '@hytime/dsh-plugin-kit'
 import { LOG_PREFIX } from '@hytime/dsh-plugin-kit'
 import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
 import type {
@@ -19,7 +19,7 @@ import type {
   SettingsSectionHooks,
 } from '@hytime/dsh-plugin-kit'
 
-export { PLUGIN_SETTINGS_SCHEMA as OPENCODE_SESSION_SETTINGS_SCHEMA } from './plugin-settings.js'
+export { PLUGIN_SETTINGS_SCHEMA as OPENCODE_SESSION_SETTINGS_SCHEMA } from '@hytime/dsh-plugin-kit'
 
 type OpenCodeSessionRequest = {
   readonly provider: string

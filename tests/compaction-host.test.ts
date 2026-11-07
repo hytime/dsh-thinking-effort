@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { compactSessionRegion, installCompactionPolicy } from '../src/host/compaction.ts'
+import { compactSessionRegion, installCompactionPolicy } from '@hytime/dsh-feature-compaction'
 import type { HostContext } from '@hytime/dsh-plugin-kit'
 import { PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
 

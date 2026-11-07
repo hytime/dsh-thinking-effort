@@ -28,7 +28,7 @@ import {
 import {
   digestTail62 as digestTail62ForLoaderProbe,
   normalizeSessionId as normalizeSessionIdForLoaderProbe,
-} from '../src/host/opencode-session-format.js'
+} from '@hytime/dsh-feature-opencode'
 import { afterAll, describe, expect, it } from 'vitest'
 
 type PackageManifest = {

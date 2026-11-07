@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { SETTINGS_NAMESPACE, installSettingsWatcher } from '../src/host/settings.ts'
+import { SETTINGS_NAMESPACE, installSettingsWatcher } from '@hytime/dsh-feature-levels'
 import type { SettingsPathOp } from '@hytime/dsh-plugin-kit'
 
 type Json = Record<string, unknown>

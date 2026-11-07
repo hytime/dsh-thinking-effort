@@ -5,8 +5,10 @@ import {
   isAgentRequestConfig,
   isUnknownRecord,
 } from '@hytime/dsh-plugin-kit'
-import { SETTINGS_NAMESPACE } from './settings.js'
-import { readSettingsSection, readSettingsSectionUser, settingsEntryId, PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
+import { readSettingsSection, readSettingsSectionUser, settingsEntryId, LLM_PI_AI_NS, PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
+
+/** The `llm-pi-ai` section id, the alias `levels` exports for it. */
+const SETTINGS_NAMESPACE = LLM_PI_AI_NS
 import { OPENCODE_SESSION_NAMESPACE } from '@hytime/dsh-plugin-kit'
 import { hasModelSourceConflict } from '@hytime/dsh-plugin-kit'
 import { ALL_LEVELS, LOG_PREFIX } from '@hytime/dsh-plugin-kit'

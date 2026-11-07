@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { installOpenCodeSession } from '../src/host/opencode-session.ts'
-import { installSettingsWatcher } from '../src/host/settings.ts'
-import { resolveSubagentEffort } from '../src/host/subagent.ts'
+import { installOpenCodeSession } from '@hytime/dsh-feature-opencode'
+import { installSettingsWatcher } from '@hytime/dsh-feature-levels'
+import { resolveSubagentEffort } from '@hytime/dsh-feature-subagent'
 import { capabilitiesForVersion, settingsModelForRuntime, settingsModelForVersion } from '@hytime/dsh-plugin-kit'
 import { readSettingsSection, settingsChangeEvents, settingsEntryId, settingsModelOf } from '@hytime/dsh-plugin-kit'
 import type { SettingsPathOp } from '@hytime/dsh-plugin-kit'

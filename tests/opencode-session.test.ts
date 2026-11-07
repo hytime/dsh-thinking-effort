@@ -5,7 +5,7 @@ const settingsStub = {
   onChange: undefined as (() => void) | undefined,
 }
 
-import { installOpenCodeSession, OPENCODE_SESSION_SETTINGS_SCHEMA, resolveUserAgentValue } from '../src/host/opencode-session.ts'
+import { installOpenCodeSession, OPENCODE_SESSION_SETTINGS_SCHEMA, resolveUserAgentValue } from '@hytime/dsh-feature-opencode'
 import {
   isOpenCodeSessionEnabled,
   isOpenCodeSessionSectionId,

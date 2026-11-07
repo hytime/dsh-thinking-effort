@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { schemaNodeAtPath } from '@hytime/dsh-plugin-kit'
-import { Config, PLUGIN_SETTINGS_SCHEMA } from '../src/host/plugin-settings.ts'
+import { Config, PLUGIN_SETTINGS_SCHEMA } from '@hytime/dsh-plugin-kit'
 
 const section = {
   opencodeSession: { providers: { p: { models: { m: true } } } },
