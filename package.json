@@ -7,7 +7,7 @@
     "dsh": ">=0.1.7-alpha.1"
   },
   "scripts": {
-    "build": "node scripts/check-locales.mjs && tsc -p tsconfig.json && tsdown -c tsdown.config.ts",
+    "build": "node scripts/check-locales.mjs && tsc -p tsconfig.json && node scripts/rewrite-dts-specifiers.mjs && tsdown -c tsdown.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
@@ -52,7 +52,8 @@
     "lib/client.js",
     "lib/entries/",
     "lib/index.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "types/"
   ],
   "dsh": {
     "bundle": {
