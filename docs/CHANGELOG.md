@@ -14,6 +14,22 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-07
+
+### 新增 / Added
+
+- 设置页新增「自动补齐默认档位」开关，默认开启；关闭后停止启动和设置变更时的自动扫描与写入，不删除已有档位，重新开启会立即扫描一次。
+- Added an **Automatically fill default efforts** switch to the settings page, enabled by default. Disabling it stops automatic scans and writes on startup and settings changes without deleting existing values; re-enabling runs a scan immediately.
+- 新增按模型的上下文压缩阈值：在设置页为每个模型设置「压缩阈值」与「保留最近上下文」两个百分比，插件在每步开始前用 `ctx.tokenMeter` 测量压力、用 `ctx.llm.resolveModelInfo()` 取模型容量，超过阈值时自行选一段工具调用配对的表面范围并调用官方 `compactRegion()`。未配置的模型跟随全局比例（默认 60%）。插件不挂载自己的压缩后端，也不写 `compaction-basic` 的 `modelPolicies`：Web profile 里该后端位于每个 agent preset 的隔离域内，宿主侧只能通过 `ctx.get('agentPresets').serviceFor(agent, 'compaction')` 取到实际实例。默认 60% 低于官方 80%，两者嵌套而非竞争——插件先压缩，官方自动策略随后测到的表面已低于其自身阈值。
+- Added a per-model context-compaction threshold: the settings page now exposes a trigger percentage and a retained-context percentage for each model. Before every step the plugin measures pressure with `ctx.tokenMeter` and model capacity with `ctx.llm.resolveModelInfo()`, then above its threshold selects a tool-pairing-balanced surface range and calls the official `compactRegion()`. Models without an override follow the global ratio, 60% by default. The plugin mounts no backend of its own and does not write `compaction-basic`'s `modelPolicies`: in the Web profile that backend lives inside each agent preset's isolate realm, so the host plane can only reach the live instance through `ctx.get('agentPresets').serviceFor(agent, 'compaction')`. The default 60% sits below the official 80%, so the two nest instead of competing — the plugin condenses first, and the official automatic pass then measures a surface already under its own threshold.
+- 新增子 agent 默认模型：在「子 agent」卡片里选择 provider/model，插件在 `agent/created` 阶段通过官方 `agent.model.select()` 应用，且不带 `reasoningEffort`，让所选模型使用自己的默认思考强度；随后既有的 `subagentEffort` 逻辑基于新路由重新解析自定义档位映射。未选择时继续继承父会话路由。`agent/request` 阶段不改 provider/model（官方契约禁止），只按 agent 去重地报告一次「配置的路由未生效」。
+- Added a subagent default model: choose a provider/model in the Subagent card and the plugin applies it through the official `agent.model.select()` during `agent/created`, without a `reasoningEffort` so the chosen model uses its own default effort; the existing `subagentEffort` pass then re-resolves a custom wire mapping against the new route. With no selection the child keeps inheriting the parent session's route. The `agent/request` phase never changes provider/model (the official contract forbids it) and only reports a once-per-agent warning when the configured route did not take effect.
+
+### 说明 / Notes
+
+- 这两个功能都不引入对 `@deepseek-ai/dsh-*` 包的静态依赖：插件 workspace 里这些包无法解析，type-only import 同样会让 `pnpm run build` 失败。压缩服务、token meter、LLM 容量查询与工具配对平衡检查全部通过 `ctx.get()` 鸭子类型读取，或在本仓库内重新实现。
+- Neither feature adds a static dependency on any `@deepseek-ai/dsh-*` package: those packages do not resolve inside this plugin's workspace, and a type-only import would break `pnpm run build` just the same. The compaction service, token meter, LLM capacity lookup, and tool-pairing balance check are all reached through `ctx.get()` duck typing or reimplemented in this repository.
+
 ## [0.3.12] - 2026-10-31
 
 ### 兼容性 / Compatibility
@@ -24,6 +40,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 - Adapted to DSH 0.2.2-alpha.2's model-selection contract: `agent/request` can no longer replace reasoning effort. Hosts exposing `agent.model.select()` now record the configured default for subagents during `agent/created`; older hosts retain the `agent/request` fallback. The Cordis peer range also includes `4.0.6-alpha.1`, used by DSH 0.2.2-alpha.2.
 - 说明 pi-ai 将 route-level `defaultContextWindow` 默认值从 262144 提高到 1000000、`defaultMaxTokens` 从 32768 提高到 128000；本插件只编辑模型显式声明的 `contextWindow`，不会把这些路由默认值写回配置。
 - Documented pi-ai's route-level default changes (`defaultContextWindow` 262144 → 1000000 and `defaultMaxTokens` 32768 → 128000). The editor changes only an explicitly declared model `contextWindow`; it does not write these route defaults back to configuration.
+- 说明 cordis peer 的完整覆盖与 `engines.dsh` 的取值理由。DSH `0.1.7` 至 `0.2.1-rc.5` 基于 cordis 4.0.5 构建，`0.2.2-alpha.2`/`0.2.2-alpha.3` 基于 4.0.6 预发布，`0.2.2-rc.1` 及以后基于 4.1.0；peer 范围 `^4.0.1 || ^4.0.6-alpha.1` 覆盖全部，因此包可在这些宿主上安装。本插件不直接 import cordis，只通过自声明的最小 `HostContext` 接触运行时，所以这条 peer 是安装期范围而非运行时能力要求。`engines.dsh` 有意保持 `>=0.1.0-rc.7` 的宽下界：DSH 的兼容性检查只读该字段并忽略 cordis peer，收紧它会把 `0.2.2-alpha.2` 之前的宿主全部判为不兼容，而插件在这些版本上可用。
+- Documented the cordis peer's full coverage and why `engines.dsh` keeps its wide floor. DSH `0.1.7` through `0.2.1-rc.5` build against cordis 4.0.5, `0.2.2-alpha.2`/`0.2.2-alpha.3` against 4.0.6 prereleases, and `0.2.2-rc.1` and later against 4.1.0; the peer range `^4.0.1 || ^4.0.6-alpha.1` covers them all, so the package installs against each of these hosts. This plugin imports no cordis module directly — it reaches the runtime only through the minimal `HostContext` face it declares — so the peer is an install-time range, not a runtime capability requirement. `engines.dsh` deliberately keeps its wide `>=0.1.0-rc.7` floor: the DSH compatibility check reads only that field and ignores cordis peers, so narrowing it would mark every host before `0.2.2-alpha.2` incompatible even though the plugin works on them.
 
 ## [0.3.11] - 2026-10-20
 

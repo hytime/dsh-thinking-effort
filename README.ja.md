@@ -37,6 +37,8 @@
 
 DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行時 schema の公開内容に従います。上表は各 DSH バージョンで利用できるフィールドの上限であり、ルートのプロトコルによってさらに絞り込まれます。
 
+`@deepseek-ai/cordis` の peer 範囲は `^4.0.1 || ^4.0.6-alpha.1` です。`0.2.1-rc.5` 以前の DSH は cordis 4.0.5 で構築され、`0.2.2-alpha.2` と `0.2.2-alpha.3` は 4.0.6 のプレリリース、`0.2.2-rc.1` 以降は 4.1.0 で構築されています。この和集合がすべてを覆うため、本パッケージはこれらのホストにインストールできます。本プラグインは cordis モジュールを直接 import せず、自身が宣言する最小の `HostContext` インターフェース経由でのみランタイムに触れるため、この peer はインストール時の範囲であり、実行時の能力要件ではありません。`engines.dsh` は意図的に広い `>=0.1.0-rc.7` の下限を保っています。DSH の互換性チェックはこのフィールドだけを読み cordis peer を無視するため、狭めると `0.2.2-alpha.2` より前のすべてのホストが非互換と判定されますが、プラグインはそれらでも動作します。
+
 ゲートウェイ互換フィールドを設定できるのは、DSH のバージョン、実行時 schema、ルートの `api` プロトコルのすべてが対応している場合だけです。対応しないフィールドは UI に表示されず、Settings にも書き込まれません。この 18 フィールドでは `openai-completions` が `supportsMaxOutputTokens` 以外のすべてを提供し、`openai-responses`、`azure-openai-responses`、`openai-codex-responses` は `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention`、`supportsMaxOutputTokens` だけを提供します。`api` がない、または認識できない場合は、実行時 schema と DSH の検証を最終的な基準にします。
 
 DSH `0.1.7` 以降は、各 Loader エントリ自身の `Config` schema から設定フォームを導出します（entry-config モデル）。この schema を公開しないプラグインには設定フォームが表示されません。本プラグインはこれを公開しているため、`0.1.7` 以降の設定セクションは Loader エントリ ID の `thinking-effort` になります。`0.1.0-rc.7` から `0.1.6` までは登録済み namespace の `dsh-thinking-effort` のままで、Client は実行中の Host が公開している方の ID を解決します。`subagentEffort` は本プラグイン自身のセクションに移り、`0.1.7` 以降は旧 `llm-pi-ai` の場所がフォールバックになりません。このセクションの schema は `providers` しか宣言しておらず、Host はそれ以外のパスへの書き込みを拒否し、公開するユーザーレイヤーから未宣言のキーを落とすためです。したがって以前に設定した Subagent の既定値は未設定として表示され、プラグインの設定カードで選び直す必要があります。`0.1.7` より前に本プラグインが書き出したスナップショットは今もこの値を `llm-pi-ai` の中に持っており、インポート時にプラグイン自身のセクションへ移行します。同じバッチの providers が取り込めるのはこの移行のおかげです（volatile でないパスが 1 つでもあると Host はバッチ全体を拒否します）。`0.1.7` 以降の設定は `~/.dsh/settings.yaml` ではなく現在の profile の `cordis.patch.yml` に保存されます（`0.1.7` はこのファイルを使用しません）。
@@ -86,7 +88,7 @@ profile の管理には公式 DSH CLI を使用してください。通常の `p
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 特定バージョンをインストール
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
 
 # 更新
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -212,7 +214,7 @@ DSH 0.1.7 は `settings.yaml` の名前を変更して一度だけ取り込み�
 
 ## 仕組み
 
-- **Host：** 起動時と設定変更時に `llm-pi-ai` の `models` と `modelOverrides` を確認し、`reasoningEfforts` がない場合だけ既定値を追加します。書き込みはユーザーレイヤーだけを対象とするため、補完されるのは自身のプロファイルで宣言したモデルです。コンポジションのベースやスキーマ既定値だけが供給するモデルには書き込む先のエントリがないため補完せず、スキップした件数を Host ログに出力します。さらにモデル単位の OpenCode セッション設定を読み、一致する `llm/stream` リクエストにだけ `opencodeSession.format` に従って生成（既定 `ses-derive`）した `x-opencode-session` を注入し、`opencodeSession.userAgent` で選択したモデルの `user-agent` を書き換えます（それ以外は `llm-pi-ai` アダプターの帰属ヘッダーが強制）。
+- **Host：** 起動時と設定変更時に `llm-pi-ai` の `models` と `modelOverrides` を確認し、`reasoningEfforts` がない場合だけ既定値を追加します。設定ページの「既定の推論強度を自動補完」は既定で有効になり、保存後すぐに反映されます。無効にしても自動スキャンと書き込みを停止するだけで既存の値は削除せず、再度有効にすると即時にスキャンします。書き込みはユーザーレイヤーだけを対象とするため、補完されるのは自身のプロファイルで宣言したモデルです。コンポジションのベースやスキーマ既定値だけが供給するモデルには書き込む先のエントリがないため補完せず、スキップした件数を Host ログに出力します。さらにモデル単位の OpenCode セッション設定を読み、一致する `llm/stream` リクエストにだけ `opencodeSession.format` に従って生成（既定 `ses-derive`）した `x-opencode-session` を注入し、`opencodeSession.userAgent` で選択したモデルの `user-agent` を書き換えます（それ以外は `llm-pi-ai` アダプターの帰属ヘッダーが強制）。
 - **Client：** DSH Settings Remote（`ctx.remote.settings`）と locale service を使って設定ページを登録します。モデル編集では OpenCode セッション Header を専用 namespace に保存し、`llm-pi-ai.compat` とは分離します。辞書は `src/locales/ja.json` と `src/locales/ko.json` などで管理し、公開前にクライアント bundle へ生成します。
 - **Subagent：** `0.1.7` 以降は本プラグイン自身の設定セクションに `subagentEffort` を保存します（`0.1.0-rc.7` から `0.1.6` までは `llm-pi-ai` のユーザーレイヤー）。Host は自身のセクションを先に読み、次に `llm-pi-ai` へフォールバックします。後者に値が入るのは `0.1.7` より前だけです（entry-config セクションは `providers` しか宣言しません）。`agent.model.current()` と `agent.model.select()` を提供する Host では、最初のモデルステップ前に `agent/created` で設定レベルを適用し、旧 Host では `agent/request` waterfall をフォールバックとして使います。既定値が未設定の場合、またはカスタム値を対象モデルで解決できない場合は現在の選択を変更せず、Subagent は親セッションのレベルを継承します。
 - **既定値なし：** プラグインは `off`、`high`、`max` を自動選択しません。設定したレベルだけを適用し、独自にレベルを決めることはありません。

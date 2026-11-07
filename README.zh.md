@@ -38,6 +38,8 @@
 
 从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。上表表示各 DSH 版本最多可用的字段集合；当前网关协议还可能进一步缩小集合。
 
+`@deepseek-ai/cordis` 的 peer 范围是 `^4.0.1 || ^4.0.6-alpha.1`。`0.2.1-rc.5` 及更早的 DSH 基于 cordis 4.0.5 构建，`0.2.2-alpha.2` 与 `0.2.2-alpha.3` 基于 4.0.6 的预发布版，`0.2.2-rc.1` 及以后基于 4.1.0；该并集覆盖全部，因此本包能在这些宿主上安装。本插件不直接 import 任何 cordis 模块——它只通过自己声明的最小 `HostContext` 接口接触运行时——所以这条 peer 是安装期范围，而不是运行时能力要求。`engines.dsh` 有意保持较宽的 `>=0.1.0-rc.7` 下界：DSH 的兼容性检查只读这个字段并忽略 cordis peer，收紧它会把 `0.2.2-alpha.2` 之前的所有宿主判为不兼容，而插件在这些宿主上本来可用。
+
 实际可配置字段需要同时满足三项条件：DSH 版本支持、运行时 schema 暴露，以及当前路由的 `api` 协议支持。不支持的字段不会显示，也不会写入 Settings。18 个字段中，`openai-completions` 支持除 `supportsMaxOutputTokens` 之外的全部字段；`openai-responses`、`azure-openai-responses` 和 `openai-codex-responses` 只支持 `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention` 和 `supportsMaxOutputTokens`。如果 `api` 缺失或无法识别，最终仍以运行时 schema 和 DSH 校验为准。
 
 DSH `0.1.7` 起改为从 Loader 条目自身的 `Config` schema 派生设置表单（entry-config 模型）；没有导出该 schema 的插件不会出现设置表单。本插件已导出该 schema，因此在 `0.1.7` 及以后，它的设置分区使用 Loader 条目 ID `thinking-effort`；`0.1.0-rc.7` 至 `0.1.6` 仍使用注册的 namespace `dsh-thinking-effort`，客户端会自动解析宿主实际发布的那个 ID。`subagentEffort` 现在存放在本插件自己的分区，且在 `0.1.7` 及以后旧的 `llm-pi-ai` 位置不再是回退读取来源：该分区的 schema 只声明了 `providers`，宿主会拒绝写入其他路径，并从它上报的用户层中丢掉未声明的键。所以升级前存在那里的子 agent 默认值会显示为未设置，需要在插件的设置卡片里重新选择一次。本插件在 `0.1.7` 之前导出的快照仍把该值放在 `llm-pi-ai` 里；导入时插件会把该值迁移到自己的分区——这也正是同一批次里的 providers 能被接受的原因（只要有一个写入路径不是 volatile，宿主就会拒绝整个批次）。`0.1.7` 及以后设置保存在当前 profile 的 `cordis.patch.yml`，而不再是 `~/.dsh/settings.yaml`（`0.1.7` 不再使用该文件）。
@@ -52,6 +54,8 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 - 在设置页按模型自定义档位，并把 `high` 映射为网关需要的任意字符串，例如 `ultra`；
 - 为子 agent 设置统一的默认思考强度，并用它覆盖子 agent 从父会话继承来的档位（包括你在 Composer 里为父会话选定的档位）；
 - 子 agent 的自定义线上值会按实际模型的 `reasoningEfforts` 映射回标准档位，找不到映射时按未配置默认档位处理、不改动请求；
+- 为子 agent 指定默认模型，未指定时继续继承父会话的模型路由；
+- 按模型设置上下文压缩阈值（占模型上下文窗口的百分比），比官方默认更早触发压缩，避免长会话在接近上限时才一次性压缩；
 - 不修改已经存在的用户自定义档位，避免覆盖现有配置。
 
 ## 适合谁？
@@ -86,6 +90,8 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 | 网关值映射 | 例如 DSH 选择 `high` 时，实际向网关发送 `ultra` |
 | 配置备份与方案 | 把当前配置导出成 JSON 文件用于跨机器迁移；在本机保存多份命名方案并可在其中切换；导入前可选择「合并」或「替换」并预览影响范围 |
 | 子 agent 默认值 | 把配置的档位应用到子 agent 请求，覆盖子 agent 从父会话继承来的档位；未配置时不动请求，子 agent 继续继承父会话档位 |
+| 子 agent 默认模型 | 为子 agent 指定 provider/model，在 `agent/created` 阶段通过官方 `agent.model.select()` 应用；未指定时继续继承父会话路由 |
+| 上下文压缩阈值 | 按模型设置压缩触发百分比与保留比例，插件在每步开始前自行测量并在超阈值时调用官方 `compactRegion()`；未配置的模型跟随全局比例，默认 60% |
 | 快捷预设 | 一键应用官方 DeepSeek 风格或通用档位组合 |
 | Composer 分档滑块 | 运行时提供 `modelDirectories` 服务时，注册 Composer 的可选 `seat`，显示当前 `provider/model` 的宿主已解析推理档位 |
 | 多语言设置 | 已包含中文、English、日本語和한국어字典；日语/韩语切换使用 DSH 的语言包支持 |
@@ -113,7 +119,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 安装指定版本：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
 ```
 
 官方 CLI 会同时更新 profile 依赖、锁文件和 `dsh.profile.bundles`，无需手工追加 YAML。
@@ -148,7 +154,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
 ```
 
 如果旧依赖已经被其他工具移除，但 profile 的 bundle 列表仍残留旧名称，先从旧 profile 的 `pnpm-lock.yaml` 找到旧 GitHub commit，再使用官方命令恢复并移除：
@@ -156,7 +162,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
 ```
 
 不要把 `dsh-thinking-effort` 添加到新的 `dsh.profile.bundles` 中。
@@ -283,9 +289,10 @@ DSH 0.1.7 会把 `settings.yaml` 重命名并只导入一次，而更早版本�
 
 ## 工作方式
 
-- **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位。补齐只写入用户层，因此覆盖的是你自己 profile 声明的模型：由组合 base 或 schema 默认值提供的模型在该层没有可写入的条目，插件不会为其补全，并在宿主日志中说明跳过了多少个。插件同时读取模型级 OpenCode 会话设置，只在匹配的 `llm/stream` 请求中注入按 `opencodeSession.format` 生成（默认 `ses-derive`）的 `x-opencode-session`，并为 `opencodeSession.userAgent` 命中的模型改写 `user-agent`（否则会被 `llm-pi-ai` 适配器的归因头强制覆盖）。
+- **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位。设置页的「自动补齐默认档位」开关默认开启、保存后立即生效；关闭只停止自动扫描和写入，不删除已有档位，重新开启会立即扫描一次。补齐只写入用户层，因此覆盖的是你自己 profile 声明的模型：由组合 base 或 schema 默认值提供的模型在该层没有可写入的条目，插件不会为其补全，并在宿主日志中说明跳过了多少个。插件同时读取模型级 OpenCode 会话设置，只在匹配的 `llm/stream` 请求中注入按 `opencodeSession.format` 生成（默认 `ses-derive`）的 `x-opencode-session`，并为 `opencodeSession.userAgent` 命中的模型改写 `user-agent`（否则会被 `llm-pi-ai` 适配器的归因头强制覆盖）。
 - **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页；运行时提供 `modelDirectories` 服务时，为可选 Composer `seat` 注册有意压过官方模型选择器的实现（该槽为单占位槽，优先级越低越胜出），并显示宿主已解析的推理档位滑块。模型编辑器把 OpenCode 会话 Header 设置保存在插件自有 namespace，与 `llm-pi-ai.compat` 分开。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
 - **子 agent：** `0.1.7` 及以后默认值存储在本插件自有设置分区的 `subagentEffort`（`0.1.0-rc.7` 至 `0.1.6` 为 `llm-pi-ai` 用户层）。宿主优先读取插件自有分区，再回退 `llm-pi-ai`；只有 `0.1.7` 之前的版本会把值放在后者，因为 entry-config 分区只声明 `providers`。具备 `agent.model.current()` 和 `agent.model.select()` 的宿主会在 `agent/created` 阶段、子 agent 首个模型步骤前应用配置档位；较早宿主继续使用 `agent/request` waterfall 回退。未配置默认值或自定义线上值无法在目标模型上解析时，插件不改动当前选择，子 agent 继续继承父会话档位。
+- **上下文压缩：** 插件不挂载自己的压缩后端，只持有百分比策略。Web profile 里官方 `compaction-basic` 位于每个 agent preset 的隔离域内，宿主侧 `ctx.get('compaction')` 为 `undefined`，因此插件通过 `ctx.get('agentPresets').serviceFor(agent, 'compaction')` 取到该 agent 实际使用的实例。`agent/pre-step` 监听器用 `ctx.tokenMeter` 测量当前压力、用 `ctx.llm.resolveModelInfo()` 取模型容量，超过策略阈值时选一段工具调用配对的表面范围并调用官方 `compactRegion()`。策略默认 60%，低于官方默认的 80%，因此两者嵌套而非竞争：插件先压缩，官方自动策略随后测到的表面已低于其自身阈值。该功能默认关闭，需在设置页压缩区块的「启用上下文压缩」开关打开后才会生效。
 - **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.14`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
 
 ## 安装验证

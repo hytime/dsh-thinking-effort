@@ -2,6 +2,8 @@ import z from '@deepseek-ai/schemastery'
 import type { OpenCodeSessionSettings } from '../compat/opencode-session.js'
 import type { LegacyMigrationState } from '../compat/legacy-migration.js'
 import { SNAPSHOT_KIND } from '../shared/constants.js'
+import { DEFAULT_RETAIN_RATIO, DEFAULT_THRESHOLD_RATIO } from '../shared/compaction.js'
+import type { CompactionPolicySettings } from '../shared/compaction.js'
 
 /**
  * One stored configuration snapshot. Fields carry defaults so a section
@@ -79,6 +81,52 @@ const openCodeSession = z.object({
 }).default({ ...OPENCODE_SESSION_DEFAULTS })
 
 /**
+ * One per-model compaction override. Both fields are optional and default to
+ * absent so a row can carry only the ratio the user actually edited — a written
+ * default would pin the global value into the override and make a later global
+ * change invisible to that model.
+ */
+const compactionModelPolicy = z.object({
+  thresholdRatio: z.number(),
+  retainRatio: z.number(),
+})
+
+/**
+ * The plugin's own compaction policy section.
+ *
+ * `models` is a two-level dict rather than an array of `{ provider, model }`
+ * records because the panel already addresses a model by that exact pair (the
+ * same shape `modelOverrides` uses), and a dict cannot express a duplicate
+ * target — the official backend rejects duplicates at load, so the storage
+ * shape removes the failure instead of validating it.
+ */
+const compactionPolicy = z.object({
+  enabled: z.boolean().default(false),
+  thresholdRatio: z.number().default(DEFAULT_THRESHOLD_RATIO),
+  retainRatio: z.number().default(DEFAULT_RETAIN_RATIO),
+  models: z.dict(z.dict(compactionModelPolicy)).default({}),
+}).default({
+  enabled: false,
+  thresholdRatio: DEFAULT_THRESHOLD_RATIO,
+  retainRatio: DEFAULT_RETAIN_RATIO,
+  models: {},
+})
+
+/**
+ * The subagent default route.
+ *
+ * Empty strings mean "unset", which is what keeps the current inheritance
+ * behavior: a child that inherits its parent's route is the shipped default, and
+ * the plugin must not pin a route the user never chose. The two fields are
+ * written together — a provider without a model names no route — so the panel
+ * clears both in one op batch.
+ */
+const subagentModel = z.object({
+  provider: z.string().default(''),
+  model: z.string().default(''),
+}).default({ provider: '', model: '' })
+
+/**
  * One legacy leaf offered for migration. Declared here because the entry-config
  * model derives the plugin's settings form from this schema, and a field the
  * schema does not declare is neither publishable nor writable — the host would
@@ -142,6 +190,16 @@ export interface PluginSettings extends OpenCodeSessionSettings {
    * value is a wire spelling, not necessarily a level key.
    */
   readonly subagentEffort?: string
+  /** Whether the host automatically supplies missing model reasoning efforts. */
+  readonly autoFillDefaults?: boolean
+  /**
+   * The subagent default provider/model pair. Both empty means "inherit the
+   * parent route", which is the shipped behavior; a provider without a model
+   * names no route and is treated as unset.
+   */
+  readonly subagentModel?: { readonly provider?: string; readonly model?: string }
+  /** The plugin's own context-compaction policy. */
+  readonly compaction?: CompactionPolicySettings
   /** The host-managed legacy-data migration control object. */
   readonly legacyMigration?: LegacyMigrationState
   readonly profiles?: Readonly<Record<string, PluginStoredSnapshot>>
@@ -160,6 +218,21 @@ export interface PluginSettings extends OpenCodeSessionSettings {
 const PLUGIN_SETTINGS_FIELDS = {
   opencodeSession: openCodeSession,
   subagentEffort: z.string().default(''),
+  autoFillDefaults: z.boolean().default(true),
+  /**
+   * The subagent default provider/model pair the plugin selects before a child's
+   * first step. Empty means inherit the parent route, which is the shipped
+   * behavior and the reason both fields default to an empty string rather than
+   * being required.
+   */
+  subagentModel,
+  /**
+   * The plugin's own context-compaction policy. It is deliberately NOT a
+   * `compaction-basic` config write: that backend is a Loader row inside each
+   * preset's isolate realm, so the plugin owns its own percentages here and
+   * applies them through the official `compactRegion()` seam.
+   */
+  compaction: compactionPolicy,
   legacyMigration,
   profiles: z.dict(configSnapshot).default({}),
   autoBackup: configSnapshot,
@@ -176,6 +249,14 @@ const PLUGIN_SETTINGS_FIELDS = {
 const PLUGIN_SETTINGS_DEFAULTS = {
   opencodeSession: { ...OPENCODE_SESSION_DEFAULTS },
   subagentEffort: '',
+  autoFillDefaults: true,
+  subagentModel: { provider: '', model: '' },
+  compaction: {
+    enabled: false,
+    thresholdRatio: DEFAULT_THRESHOLD_RATIO,
+    retainRatio: DEFAULT_RETAIN_RATIO,
+    models: {},
+  },
   legacyMigration: {
     pending: false,
     candidates: [],

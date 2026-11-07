@@ -37,6 +37,8 @@
 
 DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 런타임 schema 노출에 따라 결정됩니다. 위 표는 각 DSH 버전의 최대 필드 집합이며, 라우트의 프로토콜에 따라 더 줄어들 수 있습니다.
 
+`@deepseek-ai/cordis`의 peer 범위는 `^4.0.1 || ^4.0.6-alpha.1`입니다. `0.2.1-rc.5` 이전 DSH는 cordis 4.0.5로 빌드되고, `0.2.2-alpha.2`와 `0.2.2-alpha.3`은 4.0.6 프리릴리스, `0.2.2-rc.1` 이후는 4.1.0으로 빌드됩니다. 이 합집합이 모두를 포괄하므로 이 패키지는 해당 호스트에 설치할 수 있습니다. 이 플러그인은 cordis 모듈을 직접 import하지 않고 자체 선언한 최소 `HostContext` 인터페이스를 통해서만 런타임에 접근하므로, 이 peer는 설치 시점 범위이며 런타임 능력 요구 사항이 아닙니다. `engines.dsh`는 의도적으로 넓은 `>=0.1.0-rc.7` 하한을 유지합니다. DSH 호환성 검사는 이 필드만 읽고 cordis peer를 무시하므로, 좁히면 `0.2.2-alpha.2` 이전의 모든 호스트가 비호환으로 판정되지만 플러그인은 그곳에서도 동작합니다.
+
 게이트웨이 호환 필드는 DSH 버전, 런타임 schema, 현재 라우트의 `api` 프로토콜이 모두 지원할 때만 설정할 수 있습니다. 지원하지 않는 필드는 UI에 표시되지 않으며 Settings에도 기록되지 않습니다. 이 18개 필드 중 `openai-completions`는 `supportsMaxOutputTokens`를 제외한 모두를 제공하고, `openai-responses`, `azure-openai-responses`, `openai-codex-responses`는 `supportsDeveloperRole`, `supportsStrictMode`, `supportsLongCacheRetention`, `supportsMaxOutputTokens`만 제공합니다. `api`가 없거나 인식되지 않으면 런타임 schema와 DSH 검증을 최종 기준으로 사용합니다.
 
 DSH `0.1.7`부터는 각 Loader 항목 자체의 `Config` schema에서 설정 폼을 도출합니다(entry-config 모델). 이 schema를 내보내지 않는 플러그인에는 설정 폼이 나타나지 않습니다. 이 플러그인은 해당 schema를 내보내므로 `0.1.7` 이상에서 설정 섹션은 Loader 항목 ID인 `thinking-effort`가 됩니다. `0.1.0-rc.7`부터 `0.1.6`까지는 등록된 namespace `dsh-thinking-effort`를 그대로 사용하며, Client는 실행 중인 Host가 게시한 ID를 해석합니다. `subagentEffort`는 이 플러그인 자체 섹션에 저장되며, `0.1.7` 이상에서는 이전 `llm-pi-ai` 위치가 더 이상 폴백이 아닙니다. 그 섹션의 schema는 `providers`만 선언하므로 Host는 다른 경로 쓰기를 거부하고, 게시하는 사용자 계층에서 선언되지 않은 키를 제거합니다. 따라서 이전에 저장한 Subagent 기본값은 설정되지 않은 것으로 표시되며 플러그인 설정 카드에서 다시 선택해야 합니다. `0.1.7` 이전에 이 플러그인이 내보낸 스냅샷은 그 값을 여전히 `llm-pi-ai` 안에 담고 있고, 가져올 때 플러그인 자체 섹션으로 마이그레이션합니다. 같은 배치의 providers까지 함께 가져와지는 것도 이 마이그레이션 덕분입니다(volatile이 아닌 경로가 하나라도 있으면 Host는 배치 전체를 거부합니다). `0.1.7` 이상의 설정은 `~/.dsh/settings.yaml`이 아니라 현재 profile의 `cordis.patch.yml`에 저장됩니다(`0.1.7`은 이 파일을 더 이상 사용하지 않습니다).
@@ -86,7 +88,7 @@ profile은 공식 DSH CLI로 관리하세요. 일반 `pnpm install`은 DSH profi
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # 특정 버전 설치
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
 
 # 업데이트
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
@@ -212,7 +214,7 @@ DSH 0.1.7은 `settings.yaml`의 이름을 바꾸고 한 번만 가져오는데, 
 
 ## 작동 방식
 
-- **Host:** 시작 및 설정 변경 시 `llm-pi-ai`의 `models`와 `modelOverrides`를 검사하고 `reasoningEfforts`가 없는 경우에만 기본값을 추가합니다. 쓰기는 사용자 레이어에만 적용되므로, 직접 선언한 프로필의 모델만 보완됩니다. 컴포지션 베이스나 스키마 기본값만 제공하는 모델은 쓸 대상 항목이 없어 보완하지 않고, 건너뛴 개수를 Host 로그에 남깁니다. 또한 모델별 OpenCode 세션 설정을 읽고 일치하는 `llm/stream` 요청에만 `opencodeSession.format`에 따라 생성(기본값 `ses-derive`)한 `x-opencode-session`을 주입하며, `opencodeSession.userAgent`로 선택한 모델의 `user-agent`를 다시 씁니다(그 외에는 `llm-pi-ai` adapter의 attribution 헤더가 강제).
+- **Host:** 시작 및 설정 변경 시 `llm-pi-ai`의 `models`와 `modelOverrides`를 검사하고 `reasoningEfforts`가 없는 경우에만 기본값을 추가합니다. 설정 페이지의 「기본 추론 강도 자동 보완」은 기본적으로 켜져 있으며 저장 즉시 적용됩니다. 끄면 자동 검사와 쓰기만 중단하고 기존 값은 삭제하지 않으며, 다시 켜면 즉시 검사합니다. 쓰기는 사용자 레이어에만 적용되므로, 직접 선언한 프로필의 모델만 보완됩니다. 컴포지션 베이스나 스키마 기본값만 제공하는 모델은 쓸 대상 항목이 없어 보완하지 않고, 건너뛴 개수를 Host 로그에 남깁니다. 또한 모델별 OpenCode 세션 설정을 읽고 일치하는 `llm/stream` 요청에만 `opencodeSession.format`에 따라 생성(기본값 `ses-derive`)한 `x-opencode-session`을 주입하며, `opencodeSession.userAgent`로 선택한 모델의 `user-agent`를 다시 씁니다(그 외에는 `llm-pi-ai` adapter의 attribution 헤더가 강제).
 - **Client:** DSH Settings Remote(`ctx.remote.settings`)와 locale service로 설정 페이지를 등록합니다. 모델 편집기는 OpenCode 세션 Header를 전용 namespace에 저장하며 `llm-pi-ai.compat`와 분리합니다. 사전은 `src/locales/ja.json`, `src/locales/ko.json` 등에서 관리하고 게시 전에 클라이언트 bundle로 생성합니다.
 - **Subagent:** `0.1.7` 이상에서는 이 플러그인 자체 설정 섹션에 `subagentEffort`를 저장합니다(`0.1.0-rc.7`부터 `0.1.6`까지는 `llm-pi-ai` 사용자 레이어). Host는 플러그인 섹션을 먼저 읽고 `llm-pi-ai`로 폴백합니다. 후자에 값이 들어가는 것은 `0.1.7` 이전뿐입니다(entry-config 섹션은 `providers`만 선언합니다). `agent.model.current()`와 `agent.model.select()`를 제공하는 Host에서는 첫 모델 단계 전에 `agent/created` 중 설정된 단계를 적용하고, 이전 Host에서는 `agent/request` waterfall을 fallback으로 사용합니다. 기본값이 없거나 사용자 정의 값을 대상 모델에서 해석할 수 없으면 현재 선택을 변경하지 않아 Subagent가 부모 세션 단계를 계속 상속합니다.
 - **기본값 없음:** 플러그인은 `off`, `high`, `max`를 자동으로 선택하지 않습니다. 설정한 단계만 적용하며 스스로 단계를 정하지 않습니다.

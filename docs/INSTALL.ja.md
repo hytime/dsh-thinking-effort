@@ -254,7 +254,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 今回のリリースを明示してインストールします。
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
 ```
 
 公式 CLI は profile の依存関係、lockfile、`dsh.profile.bundles` を自動的に更新します。YAML の行を手動で追加しないでください。
@@ -270,7 +270,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 特定バージョンへ更新する場合：
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
 ```
 
 Host の変更には DSH を再起動し、Client の変更には Web ページを更新してください。
@@ -288,7 +288,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
 ```
 
 依存関係は別のツールで削除済みですが、古い bundle が残っている場合は次で composition を確認します。
@@ -302,7 +302,7 @@ dsh --profile <profile> --dump-default-config
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
 ```
 
 新しい bundle リストに旧パッケージ名を追加しないでください。
@@ -317,7 +317,7 @@ grep -n "@hytime/dsh-thinking-effort" \
 node -p "require('${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/node_modules/@hytime/dsh-thinking-effort/package.json').version"
 ```
 
-このリリースではバージョンが `0.3.12` である必要があります。
+このリリースではバージョンが `0.4.0` である必要があります。
 
 ## 日本語と韓国語の対応状況
 
@@ -348,10 +348,11 @@ name: dsh-thinking-effort
 DSH を再起動し、Web ページを更新してから **Settings → Model capabilities and effort** を開きます。
 
 1. DSH `0.1.2-alpha.1` 以降では、言語セレクターに `中文`、`English`、`日本語`、`한국어` が表示されます。組み込み locale ID だけを受け付ける古い DSH では `中文` と `English` のみ使用できます。
-2. **Subagent default effort** カードに現在の既定値と **Apply** が表示されます。
-3. **Quick settings** から公式 DeepSeek 形式または汎用プリセットを一括適用できます。
-4. プロバイダー/モデル一覧では検索、展開/折りたたみ、入力能力、コンテキスト長、モデル設定ボタンを確認できます。
-5. 右下のバージョン表示に、インストール済みプラグインのバージョンが表示されます。
+2. **既定の推論強度を自動補完** スイッチは既定で有効です。無効にすると起動時および設定変更時の自動補完を停止し、既存の値は削除されません。
+3. **Subagent default effort** カードに現在の既定値と **Apply** が表示されます。
+4. **Quick settings** から公式 DeepSeek 形式または汎用プリセットを一括適用できます。
+5. プロバイダー/モデル一覧では検索、展開/折りたたみ、入力能力、コンテキスト長、モデル設定ボタンを確認できます。
+6. 右下のバージョン表示に、インストール済みプラグインのバージョンが表示されます。
 
 Host のロードマーカーは次で確認できます。
 

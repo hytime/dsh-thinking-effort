@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { apply } from '../src/index.ts'
 import { installOpenCodeSession } from '../src/host/opencode-session.ts'
-import { readSubagentEffort, resolveSubagentEffort } from '../src/host/subagent.ts'
+import { readSubagentEffort, readSubagentModel, resolveSubagentEffort } from '../src/host/subagent.ts'
 import type { SettingsPathOp } from '../src/host/types.ts'
 import { OPENCODE_SESSION_NAMESPACE } from '../src/compat/opencode-session.ts'
 import { hasModelSourceConflict } from '../src/compat/model-source.ts'
@@ -65,6 +65,12 @@ type HarnessOptions = {
   pendingUpdate?: boolean
   /** The Loader entry id the plugin's fiber carries; absent means no fiber. */
   entryId?: string
+  /**
+   * The settings model the service presents. A host exposing `installSection`
+   * is the `namespace` model (the default here, matching every other fixture);
+   * `entry-config` drops it so the probe answers the other way.
+   */
+  settingsModel?: 'namespace' | 'entry-config'
   /**
    * The user's own layer when it differs from the resolved section a host
    * reports. Omitted means the two are the same fixture.
@@ -194,10 +200,18 @@ function createHarness(options: HarnessOptions = {}) {
         announceWrite()
       },
       describe,
-      installSection: (_owner: unknown, _namespace: string, _schema: unknown, _entry: unknown, hooks: { setSource: (source: () => unknown) => void; onChange: () => void }) => {
-        hooks.setSource(() => ({}))
-        hooks.onChange()
-      },
+      // A host exposing `installSection` is the `namespace` model; one that only
+      // answers `describe` is `entry-config`. The switch read follows that model,
+      // so a fixture has to choose the shape its scenario runs on rather than
+      // always presenting the legacy one.
+      ...(options.settingsModel === 'entry-config'
+        ? {}
+        : {
+            installSection: (_owner: unknown, _namespace: string, _schema: unknown, _entry: unknown, hooks: { setSource: (source: () => unknown) => void; onChange: () => void }) => {
+              hooks.setSource(() => ({}))
+              hooks.onChange()
+            },
+          }),
     },
     timeout: (callback: () => void, delay: number) => {
       scheduled.push({ callback, delay })
@@ -295,6 +309,24 @@ const openCodeSessionFormatDefaults = {
 
 const openCodeSessionUserAgentDefaults = { value: '', providers: {} }
 
+/**
+ * The resolved `compaction` section of a never-written document.
+ *
+ * These two assertions compare the WHOLE resolved namespace, so every schema
+ * field has to appear here — a new field is a legitimate shape change, not a
+ * test to loosen. The values mirror `PLUGIN_SETTINGS_DEFAULTS`; keeping them as
+ * literals (rather than importing the schema's defaults) is what makes this
+ * test fail when a default moves.
+ */
+const compactionDefaults = {
+  enabled: false,
+  thresholdRatio: 0.6,
+  retainRatio: 0.16,
+  models: {},
+}
+
+const subagentModelDefaults = { provider: '', model: '' }
+
 const legacyMigrationDefaults = {
   pending: false,
   candidates: [],
@@ -319,6 +351,9 @@ describe('real Settings-backed OpenCode registration', () => {
       expect(host.ctx.settings.describe().find((entry) => entry.ns === OPENCODE_SESSION_NAMESPACE)?.value).toEqual({
         opencodeSession: { providers: {}, format: openCodeSessionFormatDefaults, userAgent: openCodeSessionUserAgentDefaults },
         subagentEffort: '',
+        autoFillDefaults: true,
+        subagentModel: subagentModelDefaults,
+        compaction: compactionDefaults,
         legacyMigration: legacyMigrationDefaults,
         profiles: {},
         autoBackup: snapshotDefaults,
@@ -354,6 +389,9 @@ describe('real Settings-backed OpenCode registration', () => {
           userAgent: openCodeSessionUserAgentDefaults,
         },
         subagentEffort: '',
+        autoFillDefaults: true,
+        subagentModel: subagentModelDefaults,
+        compaction: compactionDefaults,
         legacyMigration: legacyMigrationDefaults,
         profiles: {},
         autoBackup: snapshotDefaults,
@@ -599,7 +637,7 @@ describe('Host composition', () => {
     expect(harness.writes).toHaveLength(1)
   })
 
-  it('only responds to llm-pi-ai settings updates', async () => {
+  it('ignores unrelated settings updates', async () => {
     const harness = createHarness({
       section: { providers: { route: { models: [{ id: 'model' }] } } },
     })
@@ -612,6 +650,140 @@ describe('Host composition', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(harness.writes).toHaveLength(1)
+  })
+
+  it('disables automatic fills and resumes when the own-section switch is re-enabled', async () => {
+    const providers = {
+      providers: {
+        route: {
+          models: [
+            { id: 'missing' },
+            { id: 'existing', reasoningEfforts: { low: 'low' } },
+          ],
+        },
+      },
+    }
+    const own = (enabled: boolean) => ({
+      ns: 'thinking-effort',
+      user: { autoFillDefaults: enabled },
+      // Deliberately disagree with the user layer: the explicit user value
+      // must win over both schema defaults and composed values.
+      value: { autoFillDefaults: !enabled },
+    })
+    const harness = createHarness({
+      entryId: 'thinking-effort',
+      section: providers,
+      descriptors: [{ ns: 'llm-pi-ai', user: providers }, own(false)],
+    })
+
+    await runInitial(harness)
+
+    expect(harness.writes).toEqual([])
+    expect(harness.document()).toEqual(providers)
+    expect(harness.scheduled.some((task) => task.delay === 2000)).toBe(false)
+
+    harness.setDescriptors([{ ns: 'llm-pi-ai', user: providers }, own(true)])
+    await harness.listener('settings/updated')?.callback('thinking-effort')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(harness.writes).toHaveLength(1)
+    expect(harness.writes[0]).toEqual({
+      kind: 'mutate',
+      ns: 'llm-pi-ai',
+      ops: [{
+        op: 'set',
+        path: ['providers', 'route', 'models'],
+        value: [
+          { id: 'missing', reasoningEfforts: defaults },
+          { id: 'existing', reasoningEfforts: { low: 'low' } },
+        ],
+      }],
+    })
+  })
+
+  it('reads the switch from the registered legacy namespace when the host publishes only that', async () => {
+    // The releases before `0.1.7` register the plugin's own namespace instead of
+    // deriving a section from its Loader entry. The patch entry id is still
+    // `thinking-effort` there, because the entry is what loads the plugin at
+    // all, so an id-only lookup reads a section that host never publishes and
+    // answers "enabled" no matter what the user chose.
+    const providers = {
+      providers: { route: { models: [{ id: 'missing' }] } },
+    }
+    const legacyOwn = (enabled: boolean) => ({
+      ns: 'dsh-thinking-effort',
+      user: { autoFillDefaults: enabled },
+      value: { autoFillDefaults: enabled },
+    })
+    const harness = createHarness({
+      entryId: 'thinking-effort',
+      section: providers,
+      descriptors: [{ ns: 'llm-pi-ai', user: providers }, legacyOwn(false)],
+    })
+
+    await runInitial(harness)
+
+    expect(harness.writes).toEqual([])
+    expect(harness.document()).toEqual(providers)
+    expect(harness.scheduled.some((task) => task.delay === 2000)).toBe(false)
+
+    harness.setDescriptors([{ ns: 'llm-pi-ai', user: providers }, legacyOwn(true)])
+    await harness.listener('settings/updated')?.callback('dsh-thinking-effort')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(harness.writes).toHaveLength(1)
+  })
+
+  it('keeps reading the entry section when a migrated namespace is left behind', async () => {
+    // A profile migrated forward keeps the namespace section it wrote before
+    // `0.1.7`, so an entry-config host can carry both sections at once. The
+    // switch the running host shows is the entry one; the leftover must not
+    // override it, or turning the fill back on would read as off.
+    const providers = {
+      providers: { route: { models: [{ id: 'missing' }] } },
+    }
+    const current = { autoFillDefaults: true }
+    const leftover = { autoFillDefaults: false }
+    const harness = createHarness({
+      entryId: 'thinking-effort',
+      settingsModel: 'entry-config',
+      section: providers,
+      descriptors: [
+        { ns: 'llm-pi-ai', user: providers },
+        { ns: 'thinking-effort', user: current, value: current },
+        { ns: 'dsh-thinking-effort', user: leftover, value: leftover },
+      ],
+    })
+
+    await runInitial(harness)
+
+    expect(harness.writes).toHaveLength(1)
+  })
+
+  it('keeps reading the namespace switch when an entry section is left behind', async () => {
+    // The mirror case: a host that went back to the namespace model still
+    // carries the entry section a newer release wrote. The namespace is the one
+    // its settings page shows, so it decides.
+    const providers = {
+      providers: { route: { models: [{ id: 'missing' }] } },
+    }
+    const current = { autoFillDefaults: false }
+    const leftover = { autoFillDefaults: true }
+    const harness = createHarness({
+      entryId: 'thinking-effort',
+      section: providers,
+      descriptors: [
+        { ns: 'llm-pi-ai', user: providers },
+        { ns: 'thinking-effort', user: leftover, value: leftover },
+        { ns: 'dsh-thinking-effort', user: current, value: current },
+      ],
+    })
+
+    await runInitial(harness)
+
+    expect(harness.writes).toEqual([])
   })
 
   it('retries after a late namespace becomes available', async () => {
@@ -1131,5 +1303,272 @@ describe('subagent request hook', () => {
     await expect(listener?.callback({}, async () => {
       throw error
     })).rejects.toBe(error)
+  })
+})
+
+/** The plugin's own section as the `entry-config` model addresses it. */
+const pluginSection = (user: unknown) => ({ ns: 'thinking-effort', user })
+/** The section the releases before 0.1.7 wrote `subagentEffort` into. */
+const llmPiAiSection = (user: unknown) => ({ ns: 'llm-pi-ai', user })
+
+/**
+ * A model double whose `current()` reports the last `select()`, the way the real
+ * `AgentModel` folds a recorded selection. A plain `vi.fn()` could not show that
+ * the effort pass reads the route the first pass just wrote.
+ */
+function recordingModel(initial: Record<string, unknown>) {
+  let selection: Record<string, unknown> | undefined = { ...initial }
+  const select = vi.fn((next: Record<string, unknown>) => {
+    selection = next
+  })
+  return {
+    model: { current: () => selection, select },
+    select,
+  }
+}
+
+const subagentCreated = (model: Record<string, unknown>) => ({
+  agent: { session: { header: { origin: 'subagent' } }, model },
+})
+
+describe('subagent default model read', () => {
+  it('accepts a route only when both halves are non-empty', () => {
+    const settings = (user: Record<string, unknown>) => ({ describe: () => [pluginSection(user)] })
+
+    expect(readSubagentModel(settings({ subagentModel: { provider: 'route', model: 'model' } }) as never, 'thinking-effort'))
+      .toEqual({ provider: 'route', model: 'model' })
+    // A provider without a model names no route, so there is no choice to apply.
+    expect(readSubagentModel(settings({ subagentModel: { provider: 'route', model: '' } }) as never, 'thinking-effort'))
+      .toBeUndefined()
+    expect(readSubagentModel(settings({ subagentModel: { provider: '', model: 'model' } }) as never, 'thinking-effort'))
+      .toBeUndefined()
+    expect(readSubagentModel(settings({ subagentModel: { provider: '', model: '' } }) as never, 'thinking-effort'))
+      .toBeUndefined()
+    expect(readSubagentModel(settings({}) as never, 'thinking-effort')).toBeUndefined()
+    expect(readSubagentModel(undefined)).toBeUndefined()
+  })
+
+  it('reads the plugin section only, following a renamed Loader entry id', () => {
+    // `subagentModel` never existed under `llm-pi-ai`, so unlike `subagentEffort`
+    // there is no legacy location to fall back to: a value there is not a route
+    // this feature wrote.
+    const renamed = {
+      describe: () => [
+        llmPiAiSection({ subagentModel: { provider: 'legacy', model: 'legacy-model' } }),
+        { ns: 'renamed-entry', user: { subagentModel: { provider: 'route', model: 'model' } } },
+      ],
+    }
+
+    expect(readSubagentModel(renamed as never, 'renamed-entry')).toEqual({ provider: 'route', model: 'model' })
+  })
+})
+
+describe('subagent default model selection', () => {
+  it('selects the configured route for a subagent without pinning an effort', () => {
+    const harness = createHarness({
+      writable: false,
+      entryId: 'thinking-effort',
+      descriptors: [pluginSection({ subagentModel: { provider: 'route-b', model: 'model-b' } })],
+    })
+    const { model, select } = recordingModel({ provider: 'parent', model: 'inherited', reasoningEffort: 'max' })
+
+    harness.listener('agent/created')?.callback(subagentCreated(model))
+
+    expect(select).toHaveBeenCalledOnce()
+    // No `reasoningEffort` key at all: the model's own default must decide, and
+    // an explicit `undefined` would still name the effort as chosen.
+    expect(select.mock.calls[0]?.[0]).toEqual({ provider: 'route-b', model: 'model-b' })
+    expect(Object.keys(select.mock.calls[0]?.[0] ?? {})).toEqual(['provider', 'model'])
+  })
+
+  it('leaves the selection alone when no default route is configured', () => {
+    const harness = createHarness({
+      writable: false,
+      entryId: 'thinking-effort',
+      descriptors: [pluginSection({})],
+    })
+    const { model, select } = recordingModel({ provider: 'parent', model: 'inherited' })
+
+    harness.listener('agent/created')?.callback(subagentCreated(model))
+
+    // Neither a route nor an effort is configured, so the child inherits the
+    // parent route untouched — the shipped behavior, byte for byte.
+    expect(select).not.toHaveBeenCalled()
+  })
+
+  it('applies only the effort when a default route is configured but no effort is', () => {
+    const harness = createHarness({
+      writable: false,
+      entryId: 'thinking-effort',
+      descriptors: [pluginSection({ subagentEffort: 'high' })],
+    })
+    const { model, select } = recordingModel({ provider: 'parent', model: 'inherited', reasoningEffort: 'max' })
+
+    harness.listener('agent/created')?.callback(subagentCreated(model))
+
+    // The effort pass still runs, but it stays on the inherited route: an unset
+    // default model must not move the child's route by itself.
+    expect(select).toHaveBeenCalledOnce()
+    expect(select.mock.calls[0]?.[0]).toEqual({
+      provider: 'parent',
+      model: 'inherited',
+      reasoningEffort: 'high',
+    })
+  })
+
+  it('treats a half-configured route as unset', () => {
+    const harness = createHarness({
+      writable: false,
+      entryId: 'thinking-effort',
+      descriptors: [pluginSection({ subagentModel: { provider: 'route-b', model: '' } })],
+    })
+    const { model, select } = recordingModel({ provider: 'parent', model: 'inherited' })
+
+    harness.listener('agent/created')?.callback(subagentCreated(model))
+
+    expect(select).not.toHaveBeenCalled()
+  })
+
+  it('does not touch main agents', () => {
+    const harness = createHarness({
+      writable: false,
+      entryId: 'thinking-effort',
+      descriptors: [pluginSection({ subagentModel: { provider: 'route-b', model: 'model-b' } })],
+    })
+    const { model, select } = recordingModel({ provider: 'parent', model: 'inherited' })
+
+    harness.listener('agent/created')?.callback({
+      agent: { session: { header: { origin: 'main' } }, model },
+    })
+
+    expect(select).not.toHaveBeenCalled()
+  })
+
+  it('applies the route before the effort, so a custom effort resolves against the new model', () => {
+    // The custom wire value is declared only by `route-b/model-b`. Resolving it
+    // before the route moves would look it up under the parent's route, find no
+    // mapping, and silently leave the inherited effort in place.
+    const harness = createHarness({
+      writable: false,
+      entryId: 'thinking-effort',
+      section: { providers: { 'route-b': { models: [{ id: 'model-b', reasoningEfforts: { high: 'ultra' } }] } } },
+      descriptors: [pluginSection({
+        subagentModel: { provider: 'route-b', model: 'model-b' },
+        subagentEffort: 'ultra',
+      })],
+    })
+    const { model, select } = recordingModel({ provider: 'parent', model: 'inherited', reasoningEffort: 'max' })
+
+    harness.listener('agent/created')?.callback(subagentCreated(model))
+
+    expect(select).toHaveBeenCalledTimes(2)
+    expect(select.mock.calls[0]?.[0]).toEqual({ provider: 'route-b', model: 'model-b' })
+    expect(select.mock.calls[1]?.[0]).toEqual({
+      provider: 'route-b',
+      model: 'model-b',
+      reasoningEffort: 'high',
+    })
+  })
+
+  it('keeps a standard effort level when a route is also configured', () => {
+    const harness = createHarness({
+      writable: false,
+      entryId: 'thinking-effort',
+      descriptors: [pluginSection({
+        subagentModel: { provider: 'route-b', model: 'model-b' },
+        subagentEffort: 'xhigh',
+      })],
+    })
+    const { model, select } = recordingModel({ provider: 'parent', model: 'inherited', reasoningEffort: 'max' })
+
+    harness.listener('agent/created')?.callback(subagentCreated(model))
+
+    expect(select).toHaveBeenCalledTimes(2)
+    expect(select.mock.calls[1]?.[0]).toEqual({
+      provider: 'route-b',
+      model: 'model-b',
+      reasoningEffort: 'xhigh',
+    })
+  })
+
+  it('skips route selection on a host whose model lacks the selection methods', () => {
+    const harness = createHarness({
+      writable: false,
+      entryId: 'thinking-effort',
+      descriptors: [pluginSection({ subagentModel: { provider: 'route-b', model: 'model-b' } })],
+    })
+    const listener = harness.listener('agent/created')
+
+    expect(() => listener?.callback(subagentCreated({}))).not.toThrow()
+    expect(() => listener?.callback(subagentCreated({ current: () => ({}) }))).not.toThrow()
+  })
+})
+
+describe('subagent request phase route handling', () => {
+  it('never rewrites provider or model, only the effort', async () => {
+    // The agent loop rejects a request whose route differs from the selection
+    // fixed during step preparation, so this hook must pass the route through
+    // exactly as the caller produced it.
+    const harness = createHarness({
+      writable: false,
+      entryId: 'thinking-effort',
+      descriptors: [pluginSection({
+        subagentModel: { provider: 'route-b', model: 'model-b' },
+        subagentEffort: 'high',
+      })],
+    })
+    const config = { provider: 'parent', model: 'inherited', reasoningEffort: 'max', maxTokens: 4096 }
+
+    const result = await harness.listener('agent/request')?.callback(
+      { agent: { session: { header: { origin: 'subagent' } } } },
+      async () => config,
+    )
+
+    expect(result).toEqual({ provider: 'parent', model: 'inherited', reasoningEffort: 'high', maxTokens: 4096 })
+  })
+
+  it('logs a route the request phase could not apply, once per agent', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const harness = createHarness({
+      writable: false,
+      entryId: 'thinking-effort',
+      descriptors: [pluginSection({ subagentModel: { provider: 'route-b', model: 'model-b' } })],
+    })
+    const agent = { session: { header: { origin: 'subagent' } } }
+    const listener = harness.listener('agent/request')
+
+    try {
+      await listener?.callback({ agent }, async () => ({ provider: 'parent', model: 'inherited' }))
+      await listener?.callback({ agent }, async () => ({ provider: 'parent', model: 'inherited' }))
+
+      const lines = log.mock.calls.map((call) => call.join(' '))
+      const warnings = lines.filter((line) => line.includes('configured subagent model was not applied'))
+      expect(warnings).toHaveLength(1)
+      expect(warnings[0]).toContain('route-b/model-b')
+      expect(warnings[0]).toContain('parent/inherited')
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it('does not warn when the request already uses the configured route', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const harness = createHarness({
+      writable: false,
+      entryId: 'thinking-effort',
+      descriptors: [pluginSection({ subagentModel: { provider: 'route-b', model: 'model-b' } })],
+    })
+
+    try {
+      await harness.listener('agent/request')?.callback(
+        { agent: { session: { header: { origin: 'subagent' } } } },
+        async () => ({ provider: 'route-b', model: 'model-b' }),
+      )
+
+      const lines = log.mock.calls.map((call) => call.join(' '))
+      expect(lines.some((line) => line.includes('configured subagent model was not applied'))).toBe(false)
+    } finally {
+      log.mockRestore()
+    }
   })
 })

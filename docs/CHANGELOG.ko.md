@@ -10,6 +10,18 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-07
+
+### 추가
+
+- 설정 페이지에 **기본 추론 강도 자동 보완** 스위치를 추가했습니다. 기본적으로 켜져 있습니다. 끄면 시작 및 설정 변경 시 자동 검사와 쓰기를 중단하지만 기존 값은 삭제하지 않으며, 다시 켜면 즉시 검사합니다.
+- 모델별 컨텍스트 압축 임계값을 추가했습니다. 설정 페이지에서 각 모델에 "압축 임계값"과 "최근 컨텍스트 유지" 두 가지 비율을 설정할 수 있습니다. 플러그인은 각 단계 시작 전에 `ctx.tokenMeter`로 압력을 측정하고 `ctx.llm.resolveModelInfo()`로 모델 용량을 조회하며, 임계값을 넘으면 도구 호출 짝이 맞는 표면 범위를 선택해 공식 `compactRegion()`을 호출합니다. 재정의가 없는 모델은 전역 비율(기본 60%)을 따릅니다. 플러그인은 자체 압축 백엔드를 마운트하지 않고 `compaction-basic`의 `modelPolicies`도 쓰지 않습니다. Web 프로필에서 이 백엔드는 각 agent preset의 isolate 렐름 안에 있으므로 호스트 측은 `ctx.get('agentPresets').serviceFor(agent, 'compaction')`을 통해서만 실제 인스턴스에 접근할 수 있습니다. 기본 60%는 공식 80%보다 낮아 둘이 경쟁하지 않고 중첩됩니다. 플러그인이 먼저 압축하고, 공식 자동 정책이 그다음 측정하는 표면은 이미 자체 임계값 아래입니다.
+- 서브에이전트 기본 모델을 추가했습니다. "서브에이전트" 카드에서 provider/model을 선택하면 플러그인이 `agent/created` 단계에서 공식 `agent.model.select()`를 통해 적용하며, 이때 `reasoningEffort`를 전달하지 않아 선택한 모델이 자체 기본 사고 강도를 사용합니다. 이어서 기존 `subagentEffort` 로직이 새 라우트에 대해 사용자 정의 와이어 값 매핑을 다시 해석합니다. 선택하지 않으면 부모 세션의 라우트를 계속 상속합니다. `agent/request` 단계에서는 provider/model을 변경하지 않으며(공식 계약이 금지합니다), 설정된 라우트가 적용되지 않은 경우 에이전트당 한 번만 경고를 기록합니다.
+
+### 참고 / Notes
+
+- 두 기능 모두 `@deepseek-ai/dsh-*` 패키지에 대한 정적 의존성을 추가하지 않습니다. 이 플러그인의 워크스페이스에서는 해당 패키지를 해석할 수 없으며, 타입 전용 import도 `pnpm run build`를 실패시킵니다. 압축 서비스, 토큰 미터, LLM 용량 조회, 도구 페어링 균형 검사는 모두 `ctx.get()` 덕 타이핑으로 읽거나 이 저장소 안에서 다시 구현했습니다.
+
 ## [0.3.12] - 2026-10-31
 
 ### 호환성
@@ -17,6 +29,7 @@
 - 최신 버전 맵 상한을 `0.2.3-0`으로 확장했습니다. `0.2.1-rc.5`의 플러그인 사용 API는 `0.2.1-rc.4`와 같으며, Chat 추론 본문 Slot에 추가된 `rawText`는 이 플러그인이 사용하지 않습니다. `0.2.2-alpha.2`에서도 설정 컨트롤러, `configForms`, `plugin-compatibility`는 호환됩니다. 플러그인이 사용하는 모델 디렉터리 면(`directoryFor`, store, `load`, `select`, `{ lastUsed, next }` projection)은 유지되고 추가된 badge/`resolveText`는 공식 선택기 UI에만 사용됩니다. pi-ai의 `supportsMidConvoEffort: 'withhold'`는 설정 가능한 필드를 늘리지 않아 각 gate offer 집합은 19/4/7/1/0이며 플러그인의 18개 필드도 계속 사용할 수 있습니다. 로케일에는 ja/es/fr/de/ru/pt가 추가되며 플러그인은 이미 등록된 ja를 중복 등록하지 않습니다.
 - DSH 0.2.2-alpha.2의 모델 선택 계약에 맞췄습니다. `agent/request`에서 추론 강도를 바꿀 수 없으므로 `agent.model.select()`를 제공하는 Host에서는 `agent/created` 중 Subagent 기본 강도를 기록하고, 이전 Host에서는 `agent/request`를 fallback으로 사용합니다. Cordis peer 범위에 DSH 0.2.2-alpha.2가 사용하는 `4.0.6-alpha.1`도 포함했습니다.
 - pi-ai route-level 기본값은 `defaultContextWindow`가 262144에서 1000000으로, `defaultMaxTokens`가 32768에서 128000으로 변경되었습니다. 이 플러그인은 모델에 명시된 `contextWindow`만 편집하며 route 기본값을 설정에 기록하지 않습니다.
+- cordis peer의 전체 커버리지와 `engines.dsh` 값의 이유를 명시했습니다. DSH `0.1.7`부터 `0.2.1-rc.5`는 cordis 4.0.5, `0.2.2-alpha.2`/`0.2.2-alpha.3`은 4.0.6 프리릴리스, `0.2.2-rc.1` 이후는 4.1.0으로 빌드됩니다. peer 범위 `^4.0.1 || ^4.0.6-alpha.1`가 모두를 포괄하므로 패키지는 이 호스트들에 설치할 수 있습니다. 이 플러그인은 cordis를 직접 import하지 않고 자체 선언한 최소 `HostContext`를 통해서만 런타임에 접근하므로, 이 peer는 설치 시점 범위이며 런타임 능력 요구 사항이 아닙니다. `engines.dsh`는 의도적으로 넓은 `>=0.1.0-rc.7` 하한을 유지합니다. DSH 호환성 검사는 이 필드만 읽고 cordis peer를 무시하므로, 좁히면 `0.2.2-alpha.2` 이전의 모든 호스트가 비호환으로 판정되지만 플러그인은 그곳에서도 동작합니다.
 
 ## [0.3.11] - 2026-10-20
 

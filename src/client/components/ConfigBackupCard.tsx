@@ -1,60 +1,40 @@
 import React from 'react'
-import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
-import {
-  LEGACY_FAILED_PREFIX,
-  LEGACY_RESULT_APPLIED,
-  LEGACY_RESULT_DISMISSED,
-  LEGACY_RESULT_NOTHING_PENDING,
-  legacyMigrationOf,
-} from '../../compat/legacy-migration.js'
 import { downloadJson as browserDownloadJson, type DownloadJson } from '../browser-download.js'
 import { applySnapshot } from '../config-snapshot/apply.js'
 import {
   autoBackupFromNamespaces,
   deleteProfileOps,
-  profilesFromNamespaces,
   saveProfileOps,
   validateProfileName,
 } from '../config-snapshot/library.js'
 import { parseSnapshot, serializeSnapshot } from '../config-snapshot/parse.js'
 import { planImport } from '../config-snapshot/plan.js'
+import { pluginSection, pluginSectionId } from '../subagent-section.js'
 import { isSnapshotLibraryKey, pluginSectionKey, snapshotFileName, snapshotFromNamespaces } from '../config-snapshot/snapshot.js'
-import { isPluginEntrySection, pluginSection, pluginSectionId } from '../subagent-section.js'
 import {
   MAX_PROFILES,
   MAX_PROFILE_NAME,
-  type ApplyOutcome,
   type ConfigSnapshot,
   type ImportMode,
-  type ParseFailure,
-  type ProfileNameError,
-  type SnapshotMeta,
 } from '../config-snapshot/types.js'
+import {
+  NAME_ERROR_KEYS,
+  PARSE_ERROR_KEYS,
+  PLUGIN_VERSION,
+  initialState,
+  snapshotMeta,
+  withNamespaces,
+  type CardState,
+  type FreshSettings,
+} from './config-backup/card-state.js'
+import { applyFailureLines, appliedNamespaces, applyWarnings, previewView } from './config-backup/derive.js'
+import { legacyRescanView } from './config-backup/legacy-rescan.js'
 import { ActionButton, Icon } from './Controls.js'
 import type { Palette } from '../theme.js'
 import { revisionOf } from '../types.js'
-import type { SettingsApi, SettingsDescribeValue, SettingsNamespace, Translation } from '../types.js'
+import type { SettingsApi, SettingsNamespace, Translation } from '../types.js'
 
-const PLUGIN_VERSION = packageJson.version
-
-const PARSE_ERROR_KEYS: Record<ParseFailure['code'], string> = {
-  tooLarge: 'backupParseTooLarge',
-  invalidJson: 'backupParseInvalidJson',
-  notObject: 'backupParseNotObject',
-  kindMismatch: 'backupParseKindMismatch',
-  unsupportedVersion: 'backupParseVersion',
-  missingSections: 'backupParseSections',
-  invalidSection: 'backupParseSection',
-  reservedKey: 'backupParseReserved',
-}
-
-const NAME_ERROR_KEYS: Record<ProfileNameError, string> = {
-  required: 'backupNameRequired',
-  tooLong: 'backupNameTooLong',
-  reserved: 'backupNameReserved',
-  invalid: 'backupNameInvalid',
-  taken: 'backupNameTaken',
-}
+export type { CardState, PendingImport } from './config-backup/card-state.js'
 
 export interface ConfigBackupCardProps {
   readonly settings: SettingsApi
@@ -63,43 +43,6 @@ export interface ConfigBackupCardProps {
   readonly onApplied: () => void
   readonly download?: DownloadJson
   readonly now?: () => Date
-}
-
-interface PendingImport {
-  readonly snapshot: ConfigSnapshot
-  readonly label: string
-  readonly ignored: readonly string[]
-}
-
-interface FreshSettings {
-  readonly snapshot: ConfigSnapshot
-  /** The plugin namespace's revision in the same read, so a write is guarded with the data it was built from. */
-  readonly revision: number
-}
-
-interface CardState {
-  open: boolean
-  namespaces: readonly SettingsNamespace[]
-  writable: boolean
-  profiles: Record<string, ConfigSnapshot>
-  profileNames: readonly string[]
-  autoBackupAt: string | null
-  nameDraft: string
-  pendingDelete: string | null
-  preview: PendingImport | null
-  mode: ImportMode
-  /** Opt-in to importing endpoint / credential / script wiring. Never sticky. */
-  importWiring: boolean
-  busy: boolean
-  error: string | null
-  /** Lines shown in the status block: the apply result, plus any warning that came with it. */
-  notice: readonly string[]
-}
-
-const initialState: CardState = {
-  open: false, namespaces: [], writable: true, profiles: {}, profileNames: [],
-  autoBackupAt: null, nameDraft: '', pendingDelete: null, preview: null, mode: 'merge', importWiring: false,
-  busy: false, error: null, notice: [],
 }
 
 export function ConfigBackupCard({ settings, palette, t, onApplied, download = browserDownloadJson, now }: ConfigBackupCardProps): React.ReactElement {
@@ -113,25 +56,6 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
    */
   const readToken = React.useRef(0)
   const clock = (): Date => (now ?? (() => new Date()))()
-
-  // One describe answer is the whole registry, and three consumers read it —
-  // the profile library, the export snapshot and the import summary — so they
-  // all take it through this mapping and cannot disagree about what the
-  // settings hold. The library readers resolve the plugin section's id from
-  // this same read, so under the 0.1.7 entry-config model they key on the
-  // Loader entry rather than the legacy registered namespace.
-  const withNamespaces = (current: CardState, value: SettingsDescribeValue): CardState => {
-    const namespaces = value.namespaces
-    const profiles = profilesFromNamespaces(namespaces)
-    return {
-      ...current,
-      namespaces,
-      writable: value.writable !== false,
-      profiles,
-      profileNames: Object.keys(profiles).sort(),
-      autoBackupAt: autoBackupFromNamespaces(namespaces)?.createdAt ?? null,
-    }
-  }
 
   /**
    * Re-read the registry into the card. The refresh writes only the fields it
@@ -166,12 +90,6 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   // other than the file the user just chose.
   const failImport = (message: string): void => setState((current) => ({ ...current, busy: false, notice: [], error: message, preview: null }))
 
-  const snapshotMeta = (): SnapshotMeta => ({
-    createdAt: clock().toISOString(),
-    pluginVersion: PLUGIN_VERSION,
-    sourceProfile: settings.compatibilityProfile,
-  })
-
   // An editor-side save elsewhere on the page changes the namespaces without
   // remounting this card, so every snapshot the user asks for is described
   // again: the mount-time copy is only a view of the profile library. The
@@ -189,7 +107,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
       }
       const namespaces = response.value.namespaces
       const fresh: FreshSettings = {
-        snapshot: snapshotFromNamespaces(namespaces, snapshotMeta(), pluginId(namespaces)),
+        snapshot: snapshotFromNamespaces(namespaces, snapshotMeta(clock, settings.compatibilityProfile), pluginId(namespaces)),
         revision: revisionOf(namespaces, pluginId(namespaces)),
       }
       setState((current) => ({ ...current, busy: false }))
@@ -292,40 +210,11 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
    * card, so there is no second read path to keep in step.
    */
   const ownSection = pluginSection(state.namespaces)
-  const legacyState = legacyMigrationOf(ownSection?.user)
-  const legacyResult = typeof legacyState?.lastResult === 'string' ? legacyState.lastResult : ''
-  /**
-   * A refused write is not a result to celebrate. The host keeps `pending` with
-   * its candidates in that case, so the nothing-pending sentence would state the
-   * opposite of what the section holds; the reason is what has to be read.
-   */
-  const legacyFailed = legacyResult.startsWith(LEGACY_FAILED_PREFIX)
-  /**
-   * The result sentence, or `null` when the section publishes no result.
-   *
-   * The mapping is explicit rather than a catch-all: an unrecognized value — a
-   * hand-edited section, or a result a later Host adds — is reported as nothing
-   * rather than mislabelled as "nothing pending". A completed rescan that found
-   * nothing is the Host's own `nothing-pending`, which is the one sentence this
-   * manual entry point exists to show.
-   */
-  const legacyResultMessage = ((): string | null => {
-    if (legacyResult === '') return null
-    if (legacyFailed) return t('legacyMigrationFailed', { reason: legacyResult.slice(LEGACY_FAILED_PREFIX.length).trim() })
-    if (legacyResult === LEGACY_RESULT_APPLIED) return t('legacyMigrationApplied')
-    if (legacyResult === LEGACY_RESULT_DISMISSED) return t('legacyMigrationDismissed')
-    if (legacyResult === LEGACY_RESULT_NOTHING_PENDING) return t('legacyMigrationNothingPending')
-    return null
-  })()
+  const legacy = legacyRescanView(ownSection, t)
+  // Whether this host publishes the plugin's own Loader entry section, which is
+  // the only one `installLegacyMigration` subscribes to.
+  const legacyRescanAvailable = legacy.available
   const [legacyBusy, setLegacyBusy] = React.useState(false)
-  /**
-   * Whether this host publishes the plugin's own Loader entry section, which is
-   * the only one `installLegacyMigration` subscribes to. On a host that does
-   * not, the button would write a `decision` nobody will ever consume or clear
-   * into the user's settings document, so the whole block is withheld.
-   */
-  const legacyRescanAvailable = isPluginEntrySection(ownSection)
-
   const rescanLegacyData = async (): Promise<void> => {
     if (!legacyRescanAvailable) return
     // The revision is described again instead of reusing the mount-time one: the
@@ -397,24 +286,6 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
     }).finally(() => { input.value = '' })
   }
 
-  const appliedNamespaces = (outcome: ApplyOutcome): readonly string[] =>
-    outcome.outcomes.filter((entry) => entry.ok).map((entry) => entry.ns)
-
-  /**
-   * The outcomes of the writes themselves, reported beside the apply result
-   * rather than inside it: a copy that could not be written is not a failed
-   * write, and a namespace that needs a restart is not a failure either. These
-   * are true of every apply that reached the writes, so a half-applied plan
-   * reports them too — a namespace that failed does not unsay a namespace that
-   * landed.
-   */
-  const applyWarnings = (outcome: ApplyOutcome): string[] => {
-    const warnings: string[] = []
-    if (outcome.restartRequired.length > 0) warnings.push(t('backupRestartRequired', { namespaces: outcome.restartRequired.join(', ') }))
-    if (outcome.autoBackupError !== undefined) warnings.push(t('backupAutoBackupFailed', { message: outcome.autoBackupError }))
-    return warnings
-  }
-
   const confirmImport = (): void => {
     const pending = state.preview
     if (pending === null) return
@@ -442,7 +313,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
         const applied = appliedNamespaces(outcome)
         const notice = [
           ...applied.length === 0 ? [] : [t('backupAppliedPartial', { detail: applied.join(', ') })],
-          ...applyWarnings(outcome),
+          ...applyWarnings(outcome, t),
         ]
         setState((current) => ({ ...current, busy: false, preview: null, notice, error: conflicted ? `${t('backupConflict')} — ${partial}` : partial }))
         load()
@@ -452,7 +323,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
       // rather than the error block: a copy that could not be written is not a
       // failed write, and a namespace that needs a restart is not a failure
       // either. Both are reported from the outcome, after the writes ran.
-      const notice = [t('backupApplied'), ...applyWarnings(outcome)]
+      const notice = [t('backupApplied'), ...applyWarnings(outcome, t)]
       setState((current) => ({ ...current, busy: false, preview: null, notice }))
       onApplied()
       load()
@@ -613,20 +484,20 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
       <div style={sectionTitle}>{t('legacyMigrationRescan')}</div>
       <div style={{ ...muted, margin: '3px 0 8px' }}>{t('legacyMigrationRescanHint')}</div>
       <ActionButton text={t('legacyMigrationRescan')} onClick={() => { void rescanLegacyData() }} disabled={legacyBusy} palette={palette} icon="restore" testId="legacy-rescan" />
-      {legacyResultMessage === null ? null : (
+      {legacy.message === null ? null : (
         <div
           role="status"
           style={{
             ...muted,
             marginTop: '8px',
-            color: legacyFailed ? palette.danger : legacyResult === LEGACY_RESULT_APPLIED ? palette.accent : palette.secondary,
+            color: legacy.failed ? palette.danger : legacy.result === 'applied' ? palette.accent : palette.secondary,
           }}
         >
           {/* No count: the Host clears `candidates` in the same write that records
               `applied`, so any count read here would always be 0. Making the
               number real needs a Host-side field for it, which the Client cannot
               supply. */}
-          {legacyResultMessage}
+          {legacy.message}
         </div>
       )}
     </div> : null}

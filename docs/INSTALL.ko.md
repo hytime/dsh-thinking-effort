@@ -254,7 +254,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 현재 릴리스 버전을 명시하여 설치합니다.
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
 ```
 
 공식 CLI가 profile 의존성, lockfile 및 `dsh.profile.bundles`를 자동으로 업데이트합니다. YAML 행을 수동으로 추가하지 마세요.
@@ -270,7 +270,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 특정 버전으로 업데이트하려면 다음을 사용합니다.
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
 ```
 
 Host 변경에는 DSH를 재시작하고 Client 변경에는 Web 페이지를 새로 고치세요.
@@ -288,7 +288,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
 ```
 
 다른 도구로 의존성을 제거했지만 이전 bundle이 남아 있으면 composition을 확인합니다.
@@ -302,7 +302,7 @@ dsh --profile <profile> --dump-default-config
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.3.12
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
 ```
 
 새 bundle 목록에 이전 패키지 이름을 추가하지 마세요.
@@ -317,7 +317,7 @@ grep -n "@hytime/dsh-thinking-effort" \
 node -p "require('${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/node_modules/@hytime/dsh-thinking-effort/package.json').version"
 ```
 
-이 릴리스의 버전은 `0.3.12`이어야 합니다.
+이 릴리스의 버전은 `0.4.0`이어야 합니다.
 
 ## 일본어 및 한국어 지원 상태
 
@@ -348,10 +348,11 @@ name: dsh-thinking-effort
 DSH를 재시작하고 Web 페이지를 새로 고친 다음 **Settings → Model capabilities and effort**를 엽니다.
 
 1. DSH `0.1.2-alpha.1` 이상에서는 언어 선택기에 `中文`, `English`, `日本語`, `한국어`가 표시됩니다. 고정된 내장 locale ID만 허용하는 이전 DSH에서는 `中文`과 `English`만 사용할 수 있습니다.
-2. **Subagent default effort** 카드에 현재 기본값과 **Apply**가 표시됩니다.
-3. **Quick settings**에서 공식 DeepSeek 방식 또는 일반 프리셋을 일괄 적용할 수 있습니다.
-4. 제공자/모델 목록에서 검색, 펼치기/접기, 입력 기능, 컨텍스트 길이 및 모델 설정 버튼을 확인할 수 있습니다.
-5. 오른쪽 아래 버전 표시에 설치된 플러그인 버전이 표시됩니다.
+2. **기본 추론 강도 자동 보완** 스위치는 기본적으로 켜져 있습니다. 끄면 시작 및 설정 변경 시 자동 보완을 중단하며 기존 값은 삭제되지 않습니다.
+3. **Subagent default effort** 카드에 현재 기본값과 **Apply**가 표시됩니다.
+4. **Quick settings**에서 공식 DeepSeek 방식 또는 일반 프리셋을 일괄 적용할 수 있습니다.
+5. 제공자/모델 목록에서 검색, 펼치기/접기, 입력 기능, 컨텍스트 길이 및 모델 설정 버튼을 확인할 수 있습니다.
+6. 오른쪽 아래 버전 표시에 설치된 플러그인 버전이 표시됩니다.
 
 Host 로드 마커는 다음 명령으로 확인할 수 있습니다.
 

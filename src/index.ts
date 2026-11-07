@@ -2,6 +2,7 @@ import { mark } from './host/marker.js'
 import { installSettingsWatcher } from './host/settings.js'
 import { installOpenCodeSession } from './host/opencode-session.js'
 import { installLegacyMigration } from './host/legacy-watcher.js'
+import { installCompactionPolicy } from './host/compaction.js'
 import { handleAgentCreated, handleAgentRequest } from './host/subagent.js'
 import type { HostContext } from './host/types.js'
 
@@ -19,6 +20,11 @@ export function apply(ctx: HostContext): void {
   installSettingsWatcher(ctx)
   installOpenCodeSession(ctx)
   installLegacyMigration(ctx)
+  // The plugin's own compaction policy. It reaches the official backend through
+  // `ctx.get()` rather than an injection, because that backend lives inside each
+  // agent preset's isolate realm and a static dependency would park this fiber on
+  // every deployment that composes neither the preset registry nor a backend.
+  installCompactionPolicy(ctx)
   ctx.on('agent/created', (...args: unknown[]) => {
     handleAgentCreated(ctx, args[0])
   }, { global: true })
