@@ -1948,7 +1948,7 @@ integrationDescribe('official DSH loader composition', () => {
         const own = namespaces.find(({ ns }) => ns === PLUGIN_ENTRY_ID)
         expect(own, `0.1.7 must publish the ${PLUGIN_ENTRY_ID} settings section`).toBeDefined()
         expect(entryFormFields(own?.schema))
-          .toEqual(['autoBackup', 'autoFillDefaults', 'legacyMigration', 'opencodeSession', 'profiles', 'subagentEffort'])
+          .toEqual(['autoBackup', 'autoFillDefaults', 'compaction', 'legacyMigration', 'opencodeSession', 'profiles', 'subagentEffort', 'subagentModel'])
         expect(own?.value).toMatchObject({
           opencodeSession: expect.any(Object),
           subagentEffort: expect.any(String),
