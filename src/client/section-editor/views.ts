@@ -7,8 +7,11 @@ import {
 import { createOpenCodeSessionState, applyOpenCodeSessionMutation } from './open-code-session.js'
 import { subagentView } from './subagent.js'
 import {
+  compactionDraftsFor,
+  compactionPolicyOf,
   keyOf,
   openCodeStateOf,
+  subagentModelDraftFor,
   subagentSection,
   type EditorState,
 } from './state.js'
@@ -86,6 +89,10 @@ export function applyNamespaceView(
   const view = subagentView(subagentSection(pluginSection, nextNamespace))
   const nextInventory = inventoryFrom(nextNamespace)
   const compat = compatViewsOf(nextNamespace, nextInventory, profile, takeoverResolution, current)
+  // The compaction policy and the subagent route live in the plugin's OWN
+  // section, which this call receives separately: the inventory re-read may
+  // arrive before that section does on the first load.
+  const ownSection = pluginSection ?? current.pluginSection
   return {
     ...current,
     loading: false,
@@ -95,10 +102,12 @@ export function applyNamespaceView(
     pluginSection,
     inventory: nextInventory,
     ...compat,
+    compactionDrafts: compactionDraftsFor(current, compactionPolicyOf(ownSection), nextInventory),
     revision: revisionOf(nextNamespace),
     subagent: view.subagent,
     subagentDraft: view.draft,
     subagentCustom: view.custom,
+    subagentModelDraft: subagentModelDraftFor(current, ownSection),
     notice,
   }
 }
@@ -125,6 +134,7 @@ export function applyPluginSectionView(
   const refreshed = section === null
     ? createOpenCodeSessionState(undefined, current.inventory, previous)
     : applyOpenCodeSessionMutation(previous, { ok: true, value: section }, current.inventory, savedKey)
+  const ownSection = section ?? current.pluginSection
   const view = subagentView(subagentSection(section, current.namespace))
   return {
     ...current,
@@ -136,9 +146,11 @@ export function applyPluginSectionView(
     openCodeSessionDirty: refreshed.dirty,
     openCodeSessionFound: refreshed.found,
     openCodeSessionAvailable: refreshed.available,
+    compactionDrafts: compactionDraftsFor(current, compactionPolicyOf(ownSection), current.inventory),
     subagent: view.subagent,
     subagentDraft: view.draft,
     subagentCustom: view.custom,
+    subagentModelDraft: subagentModelDraftFor(current, ownSection),
     notice,
   }
 }

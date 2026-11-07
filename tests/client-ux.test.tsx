@@ -1134,7 +1134,12 @@ describe('SectionEditor user behavior', () => {
     await settle()
     act(() => providerButton(view.container).click())
     expect(view.container.textContent).toContain(text('gatewayCompatTitle'))
-    const selects = [...view.container.querySelectorAll('select')].slice(2) as HTMLSelectElement[]
+    // The subagent card now owns two selects of its own, so the compat selects
+    // are addressed by exclusion rather than by a fixed offset: an offset would
+    // silently point at a different control every time a card gains one.
+    const compatSelects = [...view.container.querySelectorAll('select')]
+      .filter((element) => element.closest('[data-scope="subagent-model"]') === null)
+    const selects = compatSelects.slice(2) as HTMLSelectElement[]
     expect(selects[0]?.value).toBe('unsupported')
     act(() => setValue(selects[1]!, 'max_completion_tokens'))
     act(() => button(view.container, text('saveGatewayCompat')).click())
@@ -1350,7 +1355,12 @@ describe('SectionEditor user behavior', () => {
     await settle()
     act(() => providerButton(view.container).click())
 
-    const selects = [...view.container.querySelectorAll('select')].slice(2) as HTMLSelectElement[]
+    // The subagent card now owns two selects of its own, so the compat selects
+    // are addressed by exclusion rather than by a fixed offset: an offset would
+    // silently point at a different control every time a card gains one.
+    const compatSelects = [...view.container.querySelectorAll('select')]
+      .filter((element) => element.closest('[data-scope="subagent-model"]') === null)
+    const selects = compatSelects.slice(2) as HTMLSelectElement[]
     expect(selects[0]?.value).toBe('auto')
     expect(selects[1]?.value).toBe('auto')
     view.unmount()
@@ -2679,5 +2689,351 @@ describe('SectionEditor configForms write path', () => {
     expect(view.container.textContent).toContain(text('modelSettingsSaved'))
     expect(view.container.querySelector('[role="alert"]')).toBeNull()
     view.unmount()
+  })
+})
+
+/**
+ * The plugin's own compaction policy and subagent default route.
+ *
+ * Both are leaves of the plugin's entry section — not of the `providers[].models`
+ * container the rest of the editor rewrites — so these cases exist to pin that
+ * they take their own mutation and never ride `setOps`.
+ */
+describe('SectionEditor compaction policy and subagent default route', () => {
+  const withPluginSection = (overrides: Partial<SettingsNamespace> = {}): SettingsNamespace => entryConfigNamespace({
+    value: {
+      opencodeSession: { providers: {} },
+      subagentEffort: 'medium',
+      compaction: { enabled: false, thresholdRatio: 0.6, retainRatio: 0.16, models: {} },
+      subagentModel: { provider: '', model: '' },
+      profiles: {},
+      autoBackup: { kind: 'dsh-thinking-effort/config-snapshot', version: 1, createdAt: '', pluginVersion: '', sourceProfile: 'unknown', sections: {} },
+      ...overrides.value,
+    },
+    ...overrides,
+    ...(overrides.value === undefined ? {} : {}),
+  })
+
+  const renderWithPluginSection = (overrides: Partial<Parameters<typeof renderEditor>[0]> = {}): ReturnType<typeof renderEditor> => renderEditor({
+    namespaces: [withPluginSection()],
+    describe: async () => ({ ok: true, value: { namespaces: [namespace(), withPluginSection()] } }),
+    ...overrides,
+  })
+
+  const compactionScope = (container: HTMLElement): HTMLElement => container.querySelector('[data-scope="compaction"]') as HTMLElement
+  const compactionInput = (container: HTMLElement, label: string): HTMLInputElement => container.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement
+
+  it('renders the global ratios as placeholders instead of pinning them into the fields', async () => {
+    const view = renderWithPluginSection()
+    await settle()
+    openFirstModel(view.container)
+
+    const scope = compactionScope(view.container)
+    expect(scope).not.toBeNull()
+    expect(scope.textContent).toContain(text('compactionSectionTitle'))
+    const threshold = compactionInput(scope, text('compactionThreshold'))
+    const retain = compactionInput(scope, text('compactionRetain'))
+    // An unset override renders EMPTY: the inherited number belongs in the
+    // placeholder, because a value in the input would be saved as an override.
+    expect(threshold.value).toBe('')
+    expect(retain.value).toBe('')
+    expect(threshold.placeholder).toBe(text('compactionFollowGlobal', { percent: '60' }))
+    expect(retain.placeholder).toBe(text('compactionFollowGlobal', { percent: '16' }))
+    // Nothing is pending, so the save button is inert until the user edits.
+    expect(button(scope, text('compactionSave')).disabled).toBe(true)
+    view.unmount()
+  })
+
+  it('shows a stored per-model override as editable percentages', async () => {
+    const plugin = withPluginSection({
+      value: { compaction: { enabled: true, thresholdRatio: 0.6, retainRatio: 0.16, models: { provider: { 'model-a': { thresholdRatio: 0.4, retainRatio: 0.1 } } } } } as unknown as SettingsNamespace['value'],
+    })
+    const view = renderEditor({
+      namespaces: [plugin],
+      describe: async () => ({ ok: true, value: { namespaces: [namespace(), plugin] } }),
+    })
+    await settle()
+    openFirstModel(view.container)
+
+    const scope = compactionScope(view.container)
+    expect(compactionInput(scope, text('compactionThreshold')).value).toBe('40')
+    expect(compactionInput(scope, text('compactionRetain')).value).toBe('10')
+    view.unmount()
+  })
+
+  it('writes the override as one leaf op and never rewrites the models array', async () => {
+    let captured: readonly SettingsOp[] | undefined
+    const mutating = vi.fn<SettingsApi['mutate']>(async (ns, ops) => {
+      captured = ops
+      return { ok: true as const, value: withPluginSection({ revision: 10 }) }
+    })
+    const view = renderWithPluginSection({ mutate: mutating })
+    await settle()
+    openFirstModel(view.container)
+
+    const scope = compactionScope(view.container)
+    act(() => setValue(compactionInput(scope, text('compactionThreshold')), '45'))
+    act(() => setValue(compactionInput(scope, text('compactionRetain')), '12'))
+    act(() => button(scope, text('compactionSave')).click())
+    await settle()
+
+    expect(mutating).toHaveBeenCalledTimes(1)
+    const [ns, ops, revision] = mutating.mock.calls[0]!
+    expect(ns).toBe('thinking-effort')
+    // The section's own revision, not the llm-pi-ai one.
+    expect(revision).toBe(9)
+    expect(ops).toEqual([{ op: 'set', path: ['compaction', 'models', 'provider', 'model-a'], value: { thresholdRatio: 0.45, retainRatio: 0.12 } }])
+    expect(captured).toEqual(ops)
+    // A compaction save must not touch the provider model container.
+    expect(ops.some((op) => op.path[0] === 'providers')).toBe(false)
+    expect(view.container.textContent).toContain(text('compactionSaved'))
+    view.unmount()
+  })
+
+  it('refuses a retention at or above the threshold and disables save', async () => {
+    const mutating = vi.fn<SettingsApi['mutate']>(async () => ({ ok: true as const, value: withPluginSection() }))
+    const view = renderWithPluginSection({ mutate: mutating })
+    await settle()
+    openFirstModel(view.container)
+
+    const scope = compactionScope(view.container)
+    act(() => setValue(compactionInput(scope, text('compactionThreshold')), '40'))
+    act(() => setValue(compactionInput(scope, text('compactionRetain')), '40'))
+
+    // The official backend refuses such a pair at LOAD time, which would break
+    // the preset rather than just the setting, so the panel must never write it.
+    expect(scope.textContent).toContain(text('compactionRetainNotBelow'))
+    expect(button(scope, text('compactionSave')).disabled).toBe(true)
+
+    act(() => button(scope, text('compactionSave')).click())
+    await settle()
+    expect(mutating).not.toHaveBeenCalled()
+    view.unmount()
+  })
+
+  it('rejects an unparseable or out-of-range threshold', async () => {
+    const view = renderWithPluginSection()
+    await settle()
+    openFirstModel(view.container)
+
+    const scope = compactionScope(view.container)
+    act(() => setValue(compactionInput(scope, text('compactionThreshold')), 'abc'))
+    expect(scope.textContent).toContain(text('compactionInvalidThreshold'))
+    expect(button(scope, text('compactionSave')).disabled).toBe(true)
+
+    act(() => setValue(compactionInput(scope, text('compactionThreshold')), '99'))
+    expect(scope.textContent).toContain(text('compactionInvalidThreshold'))
+
+    act(() => setValue(compactionInput(scope, text('compactionThreshold')), '60'))
+    act(() => setValue(compactionInput(scope, text('compactionRetain')), '0'))
+    expect(scope.textContent).toContain(text('compactionInvalidRetain'))
+    view.unmount()
+  })
+
+  /**
+   * The plugin's compaction pass ships DISABLED. Without a switch in the panel
+   * the only way to turn it on would be editing the Loader config by hand, so
+   * the flag is part of the same block the ratios live in.
+   */
+  const compactionSwitch = (container: HTMLElement): HTMLButtonElement => container.querySelector(
+    `[data-scope="compaction"] button[role="switch"][aria-label="${text('compactionEnable')}"]`,
+  ) as HTMLButtonElement
+
+  it('reflects the stored compaction flag and explains the disabled state', async () => {
+    const view = renderWithPluginSection()
+    await settle()
+    openFirstModel(view.container)
+
+    const scope = compactionScope(view.container)
+    const toggle = compactionSwitch(view.container)
+    expect(toggle).not.toBeNull()
+    // The shipped default is off, so the switch must render off...
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    // ...and say that nothing fires yet, while leaving the ratios editable so a
+    // user can set them first and enable the pass afterwards.
+    expect(scope.textContent).toContain(text('compactionDisabledHint'))
+    expect(compactionInput(scope, text('compactionThreshold')).disabled).toBe(false)
+    view.unmount()
+  })
+
+  it('saves the compaction switch immediately as a leaf op and clears the hint', async () => {
+    const enabledPlugin = withPluginSection({
+      value: { compaction: { enabled: true, thresholdRatio: 0.6, retainRatio: 0.16, models: {} } } as unknown as SettingsNamespace['value'],
+    })
+    const mutating = vi.fn<SettingsApi['mutate']>(async () => ({ ok: true as const, value: enabledPlugin }))
+    const view = renderEditor({
+      namespaces: [withPluginSection()],
+      describe: async () => ({ ok: true, value: { namespaces: [namespace(), withPluginSection()] } }),
+      mutate: mutating,
+    })
+    await settle()
+    openFirstModel(view.container)
+
+    act(() => compactionSwitch(view.container).click())
+    await settle()
+
+    // Immediate save — no trip through the ratios' Save button.
+    expect(mutating).toHaveBeenCalledTimes(1)
+    const [ns, ops, revision] = mutating.mock.calls[0]!
+    expect(ns).toBe('thinking-effort')
+    expect(revision).toBe(9)
+    expect(ops).toEqual([{ op: 'set', path: ['compaction', 'enabled'], value: true }])
+    // A flag write must never carry the per-model override container.
+    expect(ops.some((op) => op.path.includes('models'))).toBe(false)
+    expect(view.container.textContent).toContain(text('compactionSaved'))
+    // The accepted response reports the new flag, so the hint goes away.
+    expect(compactionSwitch(view.container).getAttribute('aria-checked')).toBe('true')
+    expect(compactionScope(view.container).textContent).not.toContain(text('compactionDisabledHint'))
+    view.unmount()
+  })
+
+  it('clears the override with an unset when both fields are emptied', async () => {
+    const plugin = withPluginSection({
+      value: { compaction: { enabled: true, thresholdRatio: 0.6, retainRatio: 0.16, models: { provider: { 'model-a': { thresholdRatio: 0.4, retainRatio: 0.1 } } } } } as unknown as SettingsNamespace['value'],
+    })
+    const mutating = vi.fn<SettingsApi['mutate']>(async () => ({ ok: true as const, value: plugin }))
+    const view = renderEditor({
+      namespaces: [plugin],
+      describe: async () => ({ ok: true, value: { namespaces: [namespace(), plugin] } }),
+      mutate: mutating,
+    })
+    await settle()
+    openFirstModel(view.container)
+
+    const scope = compactionScope(view.container)
+    act(() => setValue(compactionInput(scope, text('compactionThreshold')), ''))
+    act(() => setValue(compactionInput(scope, text('compactionRetain')), ''))
+    act(() => button(scope, text('compactionSave')).click())
+    await settle()
+
+    // Empty means "inherit the global ratio", and the stored shape cannot say
+    // that with a value, so the whole override is removed.
+    expect(mutating.mock.calls[0]?.[1]).toEqual([{ op: 'unset', path: ['compaction', 'models', 'provider', 'model-a'] }])
+    view.unmount()
+  })
+
+  it('offers no compaction editor when the host publishes no plugin section', async () => {
+    const view = renderEditor()
+    await settle()
+    openFirstModel(view.container)
+    expect(view.container.querySelector('[data-scope="compaction"]')).toBeNull()
+    view.unmount()
+  })
+
+  it('lists the inventory routes in the subagent default-model picker', async () => {
+    const view = renderWithPluginSection()
+    await settle()
+
+    const scope = view.container.querySelector('[data-scope="subagent-model"]') as HTMLElement
+    expect(scope).not.toBeNull()
+    expect(scope.textContent).toContain(text('subagentModelTitle'))
+    const providerSelect = scope.querySelector(`select[aria-label="${text('subagentModelProvider')}"]`) as HTMLSelectElement
+    // The first option is the shipped inheritance default, which is the empty
+    // provider id rather than a route.
+    expect([...providerSelect.options].map((option) => option.value)).toEqual(['', 'provider'])
+    expect([...providerSelect.options][0]!.textContent).toBe(text('subagentModelInherit'))
+    expect(providerSelect.value).toBe('')
+
+    // Choosing a provider reveals its models; the model select stays disabled
+    // while the parent session is being inherited, because that names no route.
+    const modelSelect = scope.querySelector(`select[aria-label="${text('subagentModelModel')}"]`) as HTMLSelectElement
+    expect(modelSelect.disabled).toBe(true)
+    act(() => setValue(providerSelect, 'provider'))
+    // Both `models[]` entries and `modelOverrides` entries are selectable: they
+    // are distinct models of the same route, which is exactly what the picker
+    // addresses.
+    expect([...modelSelect.options].map((option) => option.value)).toEqual(['model-a', 'model-b', 'override-a'])
+    expect(modelSelect.disabled).toBe(false)
+    view.unmount()
+  })
+
+  it('shows the stored route and saves both halves in one mutation', async () => {
+    const plugin = withPluginSection({
+      value: { subagentModel: { provider: 'provider', model: 'model-b' } } as unknown as SettingsNamespace['value'],
+    })
+    const mutating = vi.fn<SettingsApi['mutate']>(async () => ({ ok: true as const, value: plugin }))
+    const view = renderEditor({
+      namespaces: [plugin],
+      describe: async () => ({ ok: true, value: { namespaces: [namespace(), plugin] } }),
+      mutate: mutating,
+    })
+    await settle()
+
+    const scope = view.container.querySelector('[data-scope="subagent-model"]') as HTMLElement
+    const providerSelect = scope.querySelector(`select[aria-label="${text('subagentModelProvider')}"]`) as HTMLSelectElement
+    const modelSelect = scope.querySelector(`select[aria-label="${text('subagentModelModel')}"]`) as HTMLSelectElement
+    expect(providerSelect.value).toBe('provider')
+    expect(modelSelect.value).toBe('model-b')
+
+    act(() => setValue(modelSelect, 'model-a'))
+    act(() => button(scope, text('subagentModelSave')).click())
+    await settle()
+
+    expect(mutating.mock.calls[0]?.[0]).toBe('thinking-effort')
+    expect(mutating.mock.calls[0]?.[1]).toEqual([
+      { op: 'set', path: ['subagentModel', 'provider'], value: 'provider' },
+      { op: 'set', path: ['subagentModel', 'model'], value: 'model-a' },
+    ])
+    expect(view.container.textContent).toContain(text('subagentModelSaved'))
+    view.unmount()
+  })
+
+  it('clears the route with unsets when inheritance is chosen again', async () => {
+    const plugin = withPluginSection({
+      value: { subagentModel: { provider: 'provider', model: 'model-a' } } as unknown as SettingsNamespace['value'],
+    })
+    const mutating = vi.fn<SettingsApi['mutate']>(async () => ({ ok: true as const, value: plugin }))
+    const view = renderEditor({
+      namespaces: [plugin],
+      describe: async () => ({ ok: true, value: { namespaces: [namespace(), plugin] } }),
+      mutate: mutating,
+    })
+    await settle()
+
+    const scope = view.container.querySelector('[data-scope="subagent-model"]') as HTMLElement
+    act(() => setValue(scope.querySelector(`select[aria-label="${text('subagentModelProvider')}"]`) as HTMLSelectElement, ''))
+    act(() => button(scope, text('subagentModelSave')).click())
+    await settle()
+
+    expect(mutating.mock.calls[0]?.[1]).toEqual([
+      { op: 'unset', path: ['subagentModel', 'provider'] },
+      { op: 'unset', path: ['subagentModel', 'model'] },
+    ])
+    view.unmount()
+  })
+
+  it('keeps a route the inventory dropped visible and offers to clear it', async () => {
+    const plugin = withPluginSection({
+      value: { subagentModel: { provider: 'gone', model: 'retired' } } as unknown as SettingsNamespace['value'],
+    })
+    const view = renderEditor({
+      namespaces: [plugin],
+      describe: async () => ({ ok: true, value: { namespaces: [namespace(), plugin] } }),
+    })
+    await settle()
+
+    const scope = view.container.querySelector('[data-scope="subagent-model"]') as HTMLElement
+    const providerSelect = scope.querySelector(`select[aria-label="${text('subagentModelProvider')}"]`) as HTMLSelectElement
+    const modelSelect = scope.querySelector(`select[aria-label="${text('subagentModelModel')}"]`) as HTMLSelectElement
+    // The saved value must not disappear from the control that owns it.
+    expect(providerSelect.value).toBe('gone')
+    expect(modelSelect.value).toBe('retired')
+    expect(scope.textContent).toContain(text('subagentModelUnavailable', { route: 'gone' }))
+    view.unmount()
+  })
+
+  it('provides compaction and subagent-model copy in all four locales', () => {
+    const locales: readonly [string, Record<string, string>][] = [['en', en], ['zh', zh], ['ja', ja], ['ko', ko]]
+    const keys = ['compactionSectionTitle', 'compactionThreshold', 'compactionThresholdHint', 'compactionRetain', 'compactionRetainHint', 'compactionFollowGlobal', 'compactionSave', 'compactionInvalidThreshold', 'compactionInvalidRetain', 'compactionRetainNotBelow', 'compactionSaved', 'compactionEnable', 'compactionDisabledHint', 'subagentModelTitle', 'subagentModelInherit', 'subagentModelProvider', 'subagentModelModel', 'subagentModelUnavailable', 'subagentModelSave', 'subagentModelHint', 'subagentModelSaved']
+    for (const [locale, dictionary] of locales) {
+      for (const key of keys) {
+        expect(dictionary[key], `${locale} missing ${key}`).toBeTruthy()
+        expect(dictionary[key], `${locale} fell back to ${key}`).not.toBe(key)
+      }
+    }
+    // The Chinese copy is the reference wording, so it is pinned rather than
+    // left to a translation that could drift back to a literal rendering.
+    expect(zh.compactionThreshold).toBe('压缩阈值')
+    expect(zh.compactionRetain).toBe('保留最近上下文')
   })
 })

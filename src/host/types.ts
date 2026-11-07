@@ -96,6 +96,18 @@ export interface HostContext {
   readonly fiber?: {
     readonly entry?: { readonly options?: { readonly id?: unknown } }
   }
+  /**
+   * Read one Cordis service without declaring it as an injection.
+   *
+   * Optional services that only SOME profiles provide must be read this way: a
+   * name in the static `inject` array parks the whole fiber until that service
+   * appears, so a plugin that works on a headless profile — which has no
+   * `agentPresets`, no `compaction`, and no `tokenMeter` of its own — would never
+   * activate there if it declared them. Every caller therefore treats
+   * `undefined` as "this deployment does not compose that capability" rather
+   * than as an error.
+   */
+  readonly get?: (name: string) => unknown
   readonly inject?: (
     dependencies: readonly string[],
     callback: (scope: SettingsInjectionContext) => void,

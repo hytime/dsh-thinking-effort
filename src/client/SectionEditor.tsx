@@ -22,6 +22,12 @@ import {
 } from './section-editor/state.js'
 import { applyNamespaceView, applyPluginSectionView, reapplyCompatViews } from './section-editor/views.js'
 import { subagentEffortOp } from './section-editor/subagent.js'
+import { checkCompactionDraft, compactionOps, compactionProblemText } from './compaction-section.js'
+import { formatRatioPercent } from '../shared/compaction.js'
+import { compactionDraftFrom, compactionPolicyOf, keyOf as keyOfState } from './section-editor/state.js'
+import type { CompactionDraft, SubagentModelRoute } from './section-editor/state.js'
+import type { ModelCompactionControls } from './components/ModelEditor.js'
+import type { SubagentModelPicker } from './components/SubagentSettings.js'
 import { useSaveQueue, type SaveRequest } from './section-editor/use-save-queue.js'
 import { revisionOf } from './types.js'
 import type { ClientLocale, DraftCell, InventoryItem, GatewayCompatEditability, ModelCompatDirtyFields, ModelGatewayCompatUpdate, ModelUpdate, ProviderGatewayCompatUpdate, ProviderGatewayCompatView, SettingsApi, SettingsNamespace, SettingsOp, Translation } from './types.js'
@@ -137,7 +143,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     const timer = setTimeout(() => {
       setState((current) => (current.notice === null ? current : { ...current, notice: null }))
     }, NOTICE_DISMISS_MS)
-    return () => clearTimeout(timer)
+  return () => clearTimeout(timer)
   }, [state.notice])
 
   // Every save goes through the write queue in `section-editor/use-save-queue`;
@@ -374,6 +380,112 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     })
   }
 
+  /**
+   * Persist one model's compaction override.
+   *
+   * The policy leaf is a DIFFERENT settings path from the model array the rest
+   * of this editor rewrites, so it takes its own mutation rather than riding
+   * `setOps`: rebuilding `providers[route].models` from this panel's inventory
+   * to change a ratio would write a stale container. A leaf write replays
+   * verbatim, which is what `rebuildOps: () => ops` claims.
+   */
+  const applyModelCompaction = (item: InventoryItem): void => {
+    const section = state.pluginSection
+    if (section === null) return
+    const key = keyOf(item)
+    const policy = compactionPolicyOf(section)
+    const draft = state.compactionDrafts[key] ?? compactionDraftFrom(policy, item.route, item.model)
+    const check = checkCompactionDraft(policy, item.route, item.model, draft)
+    if (!check.ok) {
+      setState((current) => ({ ...current, notice: null, error: compactionProblemText(check.problem, t) }))
+      return
+    }
+    const ops = compactionOps(item.route, item.model, check)
+    runOps({
+      ns: section.ns,
+      revision: revisionOf(section),
+      ops,
+      rebuildOps: () => ops,
+      successMessage: t('compactionSaved'),
+      entrySectionWrite: true,
+      onSuccess: () => {
+        setState((current) => ({ ...current, compactionDrafts: { ...current.compactionDrafts, [key]: { ...draft, touched: false } } }))
+      },
+    })
+  }
+
+  /**
+   * Turn the plugin's own compaction pass on or off.
+   *
+   * The switch saves immediately rather than joining the ratios' Save button:
+   * the flag is plugin-wide while the ratios are per-model, so folding them into
+   * one write would make every model's Save toggle a global setting — and a user
+   * flipping the switch would have to notice a second button to make it stick.
+   * The write is a leaf, so it replays verbatim after a conflict.
+   */
+  const applyCompactionEnabled = (enabled: boolean): void => {
+    const section = state.pluginSection
+    if (section === null) return
+    const ops: SettingsOp[] = [{ op: 'set', path: ['compaction', 'enabled'], value: enabled }]
+    runOps({
+      ns: section.ns,
+      revision: revisionOf(section),
+      ops,
+      rebuildOps: () => ops,
+      successMessage: t('compactionSaved'),
+      entrySectionWrite: true,
+    })
+  }
+
+  const patchCompactionDraft = (item: InventoryItem, patch: Partial<Pick<CompactionDraft, 'threshold' | 'retain'>>): void => {
+    const key = keyOf(item)
+    setState((current) => {
+      const policy = compactionPolicyOf(current.pluginSection)
+      const draft = current.compactionDrafts[key] ?? compactionDraftFrom(policy, item.route, item.model)
+      return { ...current, notice: null, compactionDrafts: { ...current.compactionDrafts, [key]: { ...draft, ...patch, touched: true } } }
+    })
+  }
+
+  /**
+   * Persist the subagent default route.
+   *
+   * Both halves are written in ONE batch because a provider without a model
+   * names no route: persisting them separately would leave a half-configured
+   * pair visible to the Host in between. Clearing unsets both fields rather
+   * than writing empty strings — the schema treats `''` as unset either way, but
+   * an `unset` leaves no residue in the user document, which is what lets the
+   * shipped inheritance default own the value.
+   */
+  const applySubagentModel = (): void => {
+    const draft = state.subagentModelDraft
+    const provider = draft.provider.trim()
+    const model = draft.model.trim()
+    const clearing = provider.length === 0 || model.length === 0
+    const ops: SettingsOp[] = clearing
+      ? [{ op: 'unset', path: ['subagentModel', 'provider'] }, { op: 'unset', path: ['subagentModel', 'model'] }]
+      : [{ op: 'set', path: ['subagentModel', 'provider'], value: provider }, { op: 'set', path: ['subagentModel', 'model'], value: model }]
+    const section = state.pluginSection
+    if (section === null) return
+    runOps({
+      ns: section.ns,
+      revision: revisionOf(section),
+      ops,
+      // Two leaf writes that name their exact paths, so replaying them lands on
+      // whatever the document now holds.
+      rebuildOps: () => ops,
+      successMessage: t('subagentModelSaved'),
+      entrySectionWrite: true,
+      onSuccess: () => {
+        setState((current) => ({
+          ...current,
+          subagentModelDraft: clearing
+            ? { provider: '', model: '', touched: false }
+            : { provider, model, touched: false },
+        }))
+      },
+    })
+  }
+
   const applyProviderCompat = (route: string): void => {
     const draft = state.providerDrafts[route]
     const current = state.providerViews[route]
@@ -466,6 +578,56 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   const available = new Set(snapshot.locales?.map((entry) => entry.id).filter((id): id is string => typeof id === 'string') ?? ['zh', 'en', 'ja', 'ko'])
   const languageOptions: Array<[string, string]> = [['zh', 'languageChinese'], ['en', 'languageEnglish'], ['ja', 'languageJapanese'], ['ko', 'languageKorean']]
 
+    // The plugin's own section is the only place a compaction override or a
+  // subagent route can live, so both blocks disappear while it is unread.
+  const compactionPolicy = compactionPolicyOf(state.pluginSection)
+  const compactionPlaceholders = {
+    threshold: t('compactionFollowGlobal', { percent: formatRatioPercent(compactionPolicy.thresholdRatio) }),
+    retain: t('compactionFollowGlobal', { percent: formatRatioPercent(compactionPolicy.retainRatio) }),
+  }
+  const compactionControlsFor = (item: InventoryItem): ModelCompactionControls | undefined => {
+    if (state.pluginSection === null) return undefined
+    const key = keyOf(item)
+    const draft = state.compactionDrafts[key] ?? compactionDraftFrom(compactionPolicy, item.route, item.model)
+    const check = checkCompactionDraft(compactionPolicy, item.route, item.model, draft)
+    return {
+      enabled: compactionPolicy.enabled,
+      onEnabledChange: applyCompactionEnabled,
+      draft,
+      thresholdPlaceholder: compactionPlaceholders.threshold,
+      retainPlaceholder: compactionPlaceholders.retain,
+      problem: check.ok ? null : compactionProblemText(check.problem, t),
+      dirty: draft.touched,
+      onThresholdChange: (value) => patchCompactionDraft(item, { threshold: value }),
+      onRetainChange: (value) => patchCompactionDraft(item, { retain: value }),
+      onSave: () => applyModelCompaction(item),
+    }
+  }
+
+  const subagentModelRoutes: SubagentModelRoute[] = React.useMemo(() => {
+    const byProvider = new Map<string, string[]>()
+    for (const item of state.inventory) {
+      const models = byProvider.get(item.route)
+      if (models === undefined) byProvider.set(item.route, [item.model])
+      else if (!models.includes(item.model)) models.push(item.model)
+    }
+    return [...byProvider].map(([provider, models]) => ({ provider, models })).sort((a, b) => a.provider.localeCompare(b.provider))
+  }, [state.inventory])
+
+  const subagentModelPicker: SubagentModelPicker = {
+    draft: state.subagentModelDraft,
+    routes: subagentModelRoutes,
+    // The saved pair is unavailable when the inventory no longer carries it —
+    // the model was renamed or removed. The control still shows it so the panel
+    // never claims "inherit" for a route the Host would actually apply.
+    savedUnavailable: state.subagentModelDraft.provider.length > 0
+      && state.subagentModelDraft.model.length > 0
+      && !subagentModelRoutes.some((route) => route.provider === state.subagentModelDraft.provider && route.models.includes(state.subagentModelDraft.model)),
+    onProviderChange: (provider) => setState((current) => ({ ...current, notice: null, subagentModelDraft: { ...current.subagentModelDraft, provider, touched: true } })),
+    onModelChange: (model) => setState((current) => ({ ...current, notice: null, subagentModelDraft: { ...current.subagentModelDraft, model, touched: true } })),
+    onSave: applySubagentModel,
+  }
+
   return <div className={css.settingsRoot} style={{ color: palette.text, fontFamily: '-apple-system, BlinkMacSystemFont, SF Pro Text, Segoe UI, sans-serif' }}>
     {state.notice ? <div style={{ position: 'sticky', top: '8px', zIndex: 20, height: 0, pointerEvents: 'none' }}><div role="status" aria-live="polite" style={{ position: 'absolute', right: '8px', top: 0, pointerEvents: 'auto', display: 'inline-flex', alignItems: 'center', gap: '5px', maxWidth: 'calc(100% - 16px)', padding: '6px 10px', border: `1px solid ${palette.accentBorder}`, borderRadius: '8px', color: palette.accent, backgroundColor: palette.accentSoft, boxShadow: palette.shadow, fontSize: '12px', lineHeight: '16px', fontWeight: 650 }}><Icon name="check" size={13} />{state.notice}</div></div> : null}
     <label className={css.controlRowEnd} style={{ fontSize: '12px', marginBottom: '4px' }}>{t('languageLabel')}<select value={snapshot.active} onChange={(event) => locale.setLocale?.(event.currentTarget.value)} style={{ height: '26px', padding: '0 7px', border: `1px solid ${palette.border}`, borderRadius: '7px', backgroundColor: palette.field, color: palette.text, fontSize: '12px' }}>{languageOptions.map(([id, key]) => available.has(id) ? <option key={id} value={id}>{t(key)}</option> : null)}</select></label>
@@ -475,7 +637,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       <div style={{ display: 'grid', gap: '2px' }}><span style={{ fontSize: '13px', fontWeight: 700 }}>{t('autoFillDefaultsTitle')}</span><span style={{ fontSize: '12px', color: palette.secondary }}>{t('autoFillDefaultsDescription')}</span></div>
       <SwitchControl checked={state.pluginSection?.value.autoFillDefaults !== false} disabled={state.busy || state.pluginSection === null} label={t('autoFillDefaultsTitle')} palette={palette} onChange={applyAutoFillDefaults} />
     </div>
-    <SubagentSettings effort={state.subagent?.effort ?? null} namespaceFound={state.subagent !== null} draft={state.subagentDraft} custom={state.subagentCustom} busy={state.busy} palette={palette} t={t} onDraftChange={(value) => setState((current) => ({ ...current, notice: null, subagentDraft: value }))} onCustomChange={(value) => setState((current) => ({ ...current, notice: null, subagentCustom: value }))} onSave={applySubagentEffort} />
+    <SubagentSettings effort={state.subagent?.effort ?? null} namespaceFound={state.subagent !== null} draft={state.subagentDraft} custom={state.subagentCustom} busy={state.busy} palette={palette} t={t} onDraftChange={(value) => setState((current) => ({ ...current, notice: null, subagentDraft: value }))} onCustomChange={(value) => setState((current) => ({ ...current, notice: null, subagentCustom: value }))} onSave={applySubagentEffort} modelPicker={subagentModelPicker} />
     <ConfigBackupCard settings={settings} palette={palette} t={t} onApplied={load} />
     <OpenCodeFormatCard settings={settings} palette={palette} t={t} revision={state.openCodeSessionReads} namespace={state.pluginSection?.ns ?? OPENCODE_SESSION_NS} onApplied={load} />
     {state.nsFound === false ? <p style={{ fontSize: '12px', opacity: 0.75 }}>{t('noNamespace')}</p> : <div>
@@ -487,7 +649,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
                          compatView={compatAvailable ? state.modelCompatDrafts[key] : undefined}
                           compatExpanded={state.modelCompatExpanded[key] === true}
                           onToggleCompatExpanded={compatAvailable ? () => toggleModelCompatExpanded(key) : undefined}
-                          compatDirty={state.modelCompatDirty[key]} onCompatChange={compatAvailable ? (next) => patchModelCompat(item, next) : undefined} onSaveCompat={compatAvailable ? () => applyModelCompat(item) : undefined} openCodeSession={state.openCodeSessionDrafts[key]} openCodeSessionAvailable={openCodeSessionEditable} onOpenCodeSessionChange={(enabled) => patchOpenCodeSession(item, enabled)} /> }) : null}</div> })}
+                          compatDirty={state.modelCompatDirty[key]} onCompatChange={compatAvailable ? (next) => patchModelCompat(item, next) : undefined} onSaveCompat={compatAvailable ? () => applyModelCompat(item) : undefined} openCodeSession={state.openCodeSessionDrafts[key]} openCodeSessionAvailable={openCodeSessionEditable} onOpenCodeSessionChange={(enabled) => patchOpenCodeSession(item, enabled)} compaction={compactionControlsFor(item)} /> }) : null}</div> })}
       {expandedCount > 0 ? <div style={{ fontSize: '12px', color: palette.secondary, margin: '4px 2px 0' }}>{t('expandedSettings', { count: expandedCount })}</div> : null}
     </div>}
     <span aria-label={t('versionLabel')} style={{ position: 'absolute', right: '12px', bottom: '8px', fontSize: '10px', lineHeight: '14px', opacity: 0.45, pointerEvents: 'none', userSelect: 'none' }}>v{PLUGIN_VERSION}</span>

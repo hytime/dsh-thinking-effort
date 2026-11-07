@@ -5,6 +5,14 @@ import {
 import { isPluginEntrySection } from '../subagent-section.js'
 import { modelCompatKey } from '../model-inventory.js'
 import { isOpenCodeSessionNamespace } from '../model-header-ops.js'
+import {
+  compactionPolicyFrom,
+  formatRatioPercent,
+} from '../../shared/compaction.js'
+import { isUnknownRecord } from '../../shared/guards.js'
+import type {
+  CompactionPolicySettings,
+} from '../../shared/compaction.js'
 import type {
   ContextDraft,
   InputDraft,
@@ -20,6 +28,41 @@ import type {
 
 /** Which of one model's own fields the panel has edited since its last read. */
 export type DirtyFields = { levels?: boolean; context?: boolean; input?: boolean }
+
+/**
+ * What the model editor holds for one model's compaction override.
+ *
+ * The two fields keep the PERCENT text the user typed rather than a fraction:
+ * the panel shows and edits percentages, and an empty field is meaningful — it
+ * means "follow the global ratio", which cannot be written into the input
+ * because a typed number and an inherited number would then look identical.
+ * `touched` separates the two: a draft nobody edited is rebuilt from the
+ * persisted section on every re-read, while an edited one survives it.
+ */
+export interface CompactionDraft {
+  /** Percent text for this model's `thresholdRatio`; empty follows the global value. */
+  threshold: string
+  /** Percent text for this model's `retainRatio`; empty follows the global value. */
+  retain: string
+  /** Whether either field was edited since the draft was last built from settings. */
+  touched: boolean
+}
+
+/** The subagent default route the picker holds before it is saved. */
+export interface SubagentModelDraft {
+  /** Provider id, or an empty string for "inherit the parent session's route". */
+  provider: string
+  /** Exact model id, or an empty string for "inherit". */
+  model: string
+  /** Whether the user changed the pair since it was last read from settings. */
+  touched: boolean
+}
+
+/** One provider row of the subagent default-model picker, with its selectable models. */
+export interface SubagentModelRoute {
+  readonly provider: string
+  readonly models: readonly string[]
+}
 
 /** One resolved `subagentEffort` read: the wire value, and the section revision it came from. */
 export interface SubagentState { effort: string | null; revision: number }
@@ -73,6 +116,13 @@ export interface EditorState {
   drafts: Record<string, ReasoningDraft>
   contextDrafts: Record<string, ContextDraft>
   inputDrafts: Record<string, InputDraft>
+  /**
+   * Per-model compaction overrides, keyed like every other per-model draft.
+   * They live beside `contextDrafts` rather than inside it because they are NOT
+   * part of the `providers[].models` container: their persistence path is
+   * `compaction.models[route][model]`, a leaf of the plugin's own section.
+   */
+  compactionDrafts: Record<string, CompactionDraft>
   dirty: Record<string, DirtyFields>
   busy: boolean
   error: string | null
@@ -93,16 +143,97 @@ export interface EditorState {
   subagent: SubagentState | null
   subagentDraft: string
   subagentCustom: string
+  /** The subagent default-route picker's unsaved state. */
+  subagentModelDraft: SubagentModelDraft
   quickSettingsOpen: boolean
 }
 
 export const initialState: EditorState = {
-  loading: true, namespace: null, openCodeSessionReads: 0, openCodeSessionViews: {}, openCodeSessionDrafts: {}, openCodeSessionDirty: {}, openCodeSessionFound: false, openCodeSessionAvailable: false, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, pluginSection: null, subagent: null, subagentDraft: 'default', subagentCustom: '', quickSettingsOpen: false,
+  loading: true, namespace: null, openCodeSessionReads: 0, openCodeSessionViews: {}, openCodeSessionDrafts: {}, openCodeSessionDirty: {}, openCodeSessionFound: false, openCodeSessionAvailable: false, inventory: [], providerViews: {}, providerDrafts: {}, providerDirty: {}, providerCompatDirty: {}, providerCompatExpanded: {}, modelCompatViews: {}, modelCompatDrafts: {}, modelCompatDirty: {}, modelCompatExpanded: {}, revision: 0, expanded: {}, expandedProviders: {}, drafts: {}, contextDrafts: {}, inputDrafts: {}, compactionDrafts: {}, dirty: {}, busy: false, error: null, notice: null, query: '', nsFound: true, pluginSection: null, subagent: null, subagentDraft: 'default', subagentCustom: '', subagentModelDraft: { provider: '', model: '', touched: false }, quickSettingsOpen: false,
 }
 
 /** One model's row key: the same identity the inventory and the ops use. */
 export function keyOf(item: InventoryItem): string {
   return modelCompatKey(item.route, item.model)
+}
+
+/**
+ * The plugin's compaction policy as the panel edits it.
+ *
+ * The resolved `value` layer is authoritative when the host publishes it — it is
+ * the schema defaults merged with the user document, so it already reflects every
+ * write this panel makes. A section carrying no `compaction` there is the
+ * legacy/unresolved case, where the raw user layer is the only source.
+ */
+export function compactionPolicyOf(section: SettingsNamespace | null): CompactionPolicySettings {
+  const resolved = compactionPolicyFrom(section?.value?.compaction)
+  if (isUnknownRecord(section?.value?.compaction)) return resolved
+  return compactionPolicyFrom(section?.user?.compaction)
+}
+
+/**
+ * The percent text the model editor shows for one route.
+ *
+ * An unset override renders as an EMPTY field rather than as the inherited
+ * number: writing the inherited value into the input would silently convert
+ * "follow the global setting" into a pinned per-model override the moment the
+ * user saved an unrelated field.
+ */
+export function compactionDraftFrom(
+  policy: CompactionPolicySettings,
+  route: string,
+  model: string,
+): CompactionDraft {
+  const override = policy.models[route]?.[model]
+  return {
+    threshold: override?.thresholdRatio === undefined ? '' : formatRatioPercent(override.thresholdRatio),
+    retain: override?.retainRatio === undefined ? '' : formatRatioPercent(override.retainRatio),
+    touched: false,
+  }
+}
+
+/**
+ * Rebuild the per-model compaction drafts from a freshly read section.
+ *
+ * An untouched draft is replaced outright so a re-read shows what the document
+ * now holds; a touched one is kept, because it is the user's unsaved edit and a
+ * refresh (a sibling save, another window's write) must not silently discard it.
+ * Drafts for models that left the inventory are dropped: their key addresses a
+ * route the panel can no longer render, and keeping it would resurrect the row's
+ * pending state if the same model ever came back under different settings.
+ */
+export function compactionDraftsFor(
+  current: EditorState,
+  policy: CompactionPolicySettings,
+  inventory: readonly InventoryItem[],
+): Record<string, CompactionDraft> {
+  const next: Record<string, CompactionDraft> = {}
+  for (const item of inventory) {
+    const key = keyOf(item)
+    const existing = current.compactionDrafts[key]
+    next[key] = existing !== undefined && existing.touched ? existing : compactionDraftFrom(policy, item.route, item.model)
+  }
+  return next
+}
+
+/**
+ * Read the stored subagent default route into the picker's draft.
+ *
+ * An untouched draft follows the document; a touched one survives the re-read.
+ * A cleared pair arrives as either absent fields or empty strings — the schema
+ * defaults both to `''` — so both spell "inherit".
+ */
+export function subagentModelDraftFor(current: EditorState, namespace: SettingsNamespace | null): SubagentModelDraft {
+  if (current.subagentModelDraft.touched) return current.subagentModelDraft
+  // The resolved `value` layer is authoritative when the host publishes it (it
+  // merges the user document with the schema defaults); the user layer is the
+  // fallback for a host that has no resolved shape yet.
+  const stored = isUnknownRecord(namespace?.value?.subagentModel)
+    ? namespace.value.subagentModel
+    : namespace?.user?.subagentModel
+  const provider = isUnknownRecord(stored) && typeof stored.provider === 'string' ? stored.provider : ''
+  const model = isUnknownRecord(stored) && typeof stored.model === 'string' ? stored.model : ''
+  return { provider, model, touched: false }
 }
 
 /**

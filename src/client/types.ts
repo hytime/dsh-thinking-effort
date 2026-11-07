@@ -65,6 +65,41 @@ export interface InputDraft {
   touched: boolean
 }
 
+/**
+ * What the model editor holds for one model's compaction override.
+ *
+ * The two fields keep the PERCENT text the user typed rather than a fraction:
+ * the panel shows and edits percentages, and an empty field is meaningful — it
+ * means "follow the global ratio", which cannot be written into the input
+ * because a typed number and an inherited number would then look identical.
+ * `touched` separates the two: a draft nobody edited is rebuilt from the
+ * persisted section on every re-read, while an edited one survives it.
+ */
+export interface CompactionDraft {
+  /** Percent text for this model's `thresholdRatio`; empty follows the global value. */
+  threshold: string
+  /** Percent text for this model's `retainRatio`; empty follows the global value. */
+  retain: string
+  /** Whether either field was edited since the draft was last built from settings. */
+  touched: boolean
+}
+
+/** The subagent default route the picker holds before it is saved. */
+export interface SubagentModelDraft {
+  /** Provider id, or an empty string for "inherit the parent session's route". */
+  provider: string
+  /** Exact model id, or an empty string for "inherit". */
+  model: string
+  /** Whether the user changed the pair since it was last read from settings. */
+  touched: boolean
+}
+
+/** One provider row of the subagent default-model picker, with its selectable models. */
+export interface SubagentModelRoute {
+  readonly provider: string
+  readonly models: readonly string[]
+}
+
 export interface SettingsOp {
   readonly op: 'set' | 'unset'
   readonly path: readonly string[]
