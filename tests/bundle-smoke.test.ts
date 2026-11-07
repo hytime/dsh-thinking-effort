@@ -264,10 +264,10 @@ describe('build artifacts', () => {
       },
     }
 
-    expect(resolveTakeoverProviders({ version: '0.1.1-rc.2', piAi })).toEqual(['local'])
-    expect(resolveTakeoverProviders({ version: '0.1.0-rc.7', piAi })).toEqual([])
+    expect(resolveTakeoverProviders({ version: '0.1.7-alpha.1', piAi })).toEqual(['local'])
+    expect(resolveTakeoverProviders({ version: '0.2.2-alpha.2', piAi })).toEqual(['local'])
     expect(resolveTakeoverGatewayCompat({
-      version: '0.1.1-rc.2',
+      version: '0.1.7-alpha.1',
       piAi,
       provider: 'local',
       model: 'model',
@@ -276,7 +276,7 @@ describe('build artifacts', () => {
       supportsReasoningEffort: { value: false, source: 'model' },
     })
     expect(resolveTakeoverGatewayCompat({
-      version: '0.1.1-rc.2',
+      version: '0.1.7-alpha.1',
       piAi: overridePiAi,
       provider: 'local',
       model: 'override',
@@ -285,7 +285,7 @@ describe('build artifacts', () => {
       supportsReasoningEffort: { value: true, source: 'model' },
     })
     expect(resolveTakeoverGatewayCompat({
-      version: '0.1.1-rc.2',
+      version: '0.1.7-alpha.1',
       piAi: overridePiAi,
       provider: 'local',
       model: 'missing',
@@ -294,7 +294,7 @@ describe('build artifacts', () => {
       supportsReasoningEffort: { value: true, source: 'provider' },
     })
     expect(resolveTakeoverGatewayCompat({
-      version: '0.1.1-rc.2',
+      version: '0.1.7-alpha.1',
       piAi,
       provider: 'local',
       model: 'model',

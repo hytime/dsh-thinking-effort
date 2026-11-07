@@ -10,6 +10,13 @@
 
 ## [Unreleased]
 
+### 变更 / Changed
+
+- 最低支持的 DSH 版本从 `0.1.0-rc.7` 提高到 `0.1.7-alpha.1`，`engines.dsh` 与 `@deepseek-ai/dsh` peer 范围同步收紧。`0.1.7` 是 entry-config 设置模型的起点，也是本插件现在支持的最旧宿主。
+- Raised the minimum supported DSH version from `0.1.0-rc.7` to `0.1.7-alpha.1`, tightening both `engines.dsh` and the `@deepseek-ai/dsh` peer range. `0.1.7` is where the entry-config settings model begins and is now the oldest host this plugin supports.
+- 移除了只服务于旧版本的兼容层：版本映射表中 rc.7 / rc.8 / 0.1.2 / 0.1.3 / 0.1.6 五段能力窗口合并为一段，`namespace` 设置模型（`register` / `installSection` / `get` / `settings/updated` 事件）从代码中删除，`readSettingsSection` 只从 `describe()` 投影。发布 workflow 的兼容矩阵也由五个官方代表缩减为一个（`0.1.7-alpha.1`）。
+- Removed the compatibility layer that only served the older releases: the version map's five capability windows (rc.7, rc.8, 0.1.2, 0.1.3, 0.1.6) collapsed into one, the `namespace` settings model (`register` / `installSection` / `get` and the `settings/updated` event) is gone from the code, and `readSettingsSection` projects from `describe()` alone. The release workflow's compatibility matrix shrank from five official representatives to one (`0.1.7-alpha.1`).
+
 ## [0.4.0] - 2026-11-07
 
 ### 추가

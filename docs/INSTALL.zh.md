@@ -45,16 +45,13 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 - **DSH Runtime：** Settings 传输在新版 DSH 中使用 `remote.settings`，在旧版 DSH 中使用 `connection.api.settings`。插件按运行时实际能力进行探测，旧版回退路径保持可选。
 - **Gateway Protocol：** DSH schema 提供时，插件使用官方 `llm-pi-ai.compat` 字段。安装并启用可选的 `dsh-llm-openai-completions` transport 后，插件可以接管符合条件的自定义 OpenAI 兼容思考模型供应商。
-- **Settings 模型：** DSH `0.1.7` 起从各 Loader 条目自身的 `Config` schema 派生设置表单（`entry-config`），设置文档保存在当前 profile 的 `cordis.patch.yml`；DSH `0.1.0-rc.7` 至 `0.1.6` 改为注册 namespace，并把设置存放在 DSH 设置文档（例如 `~/.dsh/settings.yaml`）中。插件同时支持两种模型，客户端会解析宿主实际发布的分区 ID——`entry-config` 下是 `thinking-effort`，namespace 模型下是 `dsh-thinking-effort`。
+- **Settings 模型：** DSH 从各 Loader 条目自身的 `Config` schema 派生设置表单（`entry-config`），设置文档保存在当前 profile 的 `cordis.patch.yml`。本插件的分区由 Loader 条目 ID `thinking-effort` 定位，这也是插件唯一支持的设置模型：`0.1.7-alpha.1` 是它可安装的最旧宿主。
 
 version-map 按以下规则判断网关能力：
 
 | DSH 范围 | Gateway compat 字段 | Takeover transport |
 | --- | --- | --- |
-| `0.1.0-rc.7` | 不支持 | 不支持 |
-| `0.1.0-rc.8` 至 `<0.1.2-alpha.1` | schema 暴露时可用，但没有 `supportsFinishReason` 和 `supportsThinkingTokenBudget` | 可选 |
-| `0.1.2-alpha.1` 至 `<0.1.3-alpha.2` | schema 暴露时支持 15 个字段；`thinkingTokenBudgetField`、`vllmPriority` 与 `supportsMaxOutputTokens` 尚未提供 | 可选 |
-| `0.1.3-alpha.2` 及后续受支持范围 | schema 暴露时支持全部 18 个字段 | 可选 |
+| `0.1.7-alpha.1` 至 `<0.2.3-0` | schema 暴露时支持全部 18 个字段 | 可选 |
 
 从 DSH `0.1.0-rc.8` 起，后续支持范围均以运行时 schema 暴露为准。
 运行时 schema 没有暴露的字段不会在界面中显示。可选 transport 未安装或未启用时，不会执行 takeover。
@@ -82,7 +79,7 @@ OpenCode 会话 Header 是模型编辑器中的模型级设置，不是 provider
 
 ### 配置生成器
 
-生成器的位置取决于 DSH 版本：`0.1.7` 及以后是当前 profile 的 `cordis.patch.yml` 中的 `opencodeSession.format` 分区（由 Loader 条目 ID `thinking-effort` 定位）；`0.1.0-rc.7` 至 `0.1.6` 是 DSH 设置文档（例如 `~/.dsh/settings.yaml`）中的 `dsh-thinking-effort.opencodeSession.format`。两种位置都由设置页代写。下面的 YAML 展示 `0.1.7` 之前版本读取的 namespace 形态：
+生成器的位置是当前 profile 的 `cordis.patch.yml` 中的 `opencodeSession.format` 分区，由 Loader 条目 ID `thinking-effort` 定位。设置页会代写该位置。下面的 YAML 展示其形态：
 
 ```yaml
 dsh-thinking-effort:
@@ -436,7 +433,7 @@ curl -s http://127.0.0.1:3080/ \
 1. **语言选择：** 在 DSH `0.1.2-alpha.1` 及更高版本中，设置页顶部可以选择中文、English、日本語和한국어。旧版只支持固定内置 locale ID 时仍只能选择中文和 English。默认优先使用 DSH 已保存的语言，其次使用浏览器语言，最后回退 English。
 2. **宿主自动补齐：** 「自动补齐默认档位」默认开启；手工声明模型缺少 `reasoningEfforts` 时，设置中应出现 `off: null / high: high / max: max`。关闭后不再自动写入，已有档位保留；重新开启应立即补一次。
 3. **设置页：** Web 界面 → 设置 → 「模型能力与档位」。页面包含顶部语言选择器、「自动补齐默认档位」开关、「子 agent 默认档位」卡片、「一键设置」、模型搜索、供应商/模型列表、输入能力/上下文标识和单模型设置按钮，可以编辑模型档位和线上值。
-4. **子 agent 思考强度：** 设置页配置后，`subagentEffort` 出现在本插件自己的设置分区（`0.1.7` 及以后为 Loader 条目 `thinking-effort`；`0.1.0-rc.7` 至 `0.1.6` 为 `llm-pi-ai` 用户层），配置的档位会应用到子 agent 请求并覆盖子 agent 从父会话继承来的档位；未配置、或自定义线上值无法在子 agent 的模型上解析时，请求保持原样。
+4. **子 agent 思考强度：** 设置页配置后，`subagentEffort` 出现在本插件自己的设置分区（Loader 条目 `thinking-effort`），配置的档位会应用到子 agent 请求并覆盖子 agent 从父会话继承来的档位；未配置、或自定义线上值无法在子 agent 的模型上解析时，请求保持原样。
 5. **未设置默认值：** 插件不会自动选择 `off`、`high` 或 `max`；请求保持原样，子 agent 继续继承父会话的档位。
 6. **Composer：** Web 运行时提供 `modelDirectories` 服务时，会注册 Composer 的可选 `seat` 并显示推理档位滑块。
 
@@ -463,13 +460,9 @@ Composer `seat` 是可选能力。`modelDirectories` 服务不可用时不会注
 
 请为 npm 包配置 GitHub Trusted Publisher：仓库为 `hytime/dsh-thinking-effort`，workflow 为 `publish.yml`。发布使用 GitHub OIDC 和 provenance，命令为 `pnpm publish --provenance --access public --skip-manifest-obfuscation`，不使用 `NPM_TOKEN` 或长期 token。`--skip-manifest-obfuscation` 是必需的：pnpm 默认会把 `packageManager` 从发布清单里剥掉，而官方 DSH CLI 在向 profile 安装插件时会因缺这个字段拒绝该插件。如果 npm 中已存在相同版本，发布会被阻止。
 
-发布前 workflow 会按 rc7 → rc2 → alpha2 → namespace → entry 顺序创建五个临时官方 DSH 能力代表 checkout，使用官方 `dsh plugin` 命令安装当前 tarball，再运行真实兼容测试：
+发布前 workflow 会创建一个临时官方 DSH 能力代表 checkout，使用官方 `dsh plugin` 命令安装当前 tarball，再运行真实兼容测试：
 
-- `dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）——rc7 能力代表
-- `dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）——rc2 能力代表
-- `dsh-v0.1.3-alpha.2`（`0.1.3-alpha.2`）——alpha2 能力代表
-- `dsh-v0.1.6-alpha.1`（`0.1.6-alpha.1`）——最新的 namespace 模型能力代表（执行真实浏览器 DOM 探针）
-- `dsh-v0.1.7-alpha.1`（`0.1.7-alpha.1`）——entry-config 能力代表（设置表单由各 Loader 条目自己的 `Config` 推导；同样执行真实浏览器 DOM 探针）
+- `dsh-v0.1.7-alpha.1`（`0.1.7-alpha.1`）——本插件支持的最旧宿主，也是 entry-config 模型的起点（设置表单由各 Loader 条目自己的 `Config` 推导）；同时执行真实浏览器 DOM 探针
 
 普通 CI 仍然只做测试，会在 Pull Request 和推送到 `main` 时运行。它使用 `pnpm install --frozen-lockfile`，依赖变更时请保持 `pnpm-lock.yaml` 已提交。
 

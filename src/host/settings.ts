@@ -307,33 +307,13 @@ function readSection(settings: HostSettings): unknown {
 /**
  * The section this plugin's own switch lives in on the running host.
  *
- * `settingsEntryId` answers with the Loader entry id whenever the fiber carries
- * one, and the `cordis.patch.yml` entry carries the same id on every release —
- * but that id only *addresses* the plugin's section under the `entry-config`
- * model. The releases before it register the plugin's own namespace instead,
- * where the very same settings are published as `dsh-thinking-effort`. An
- * id-only lookup therefore reads a section those hosts never publish, and the
- * switch answers "enabled" no matter what the user chose.
- *
- * The settings model decides which id addresses the section, because presence
- * alone cannot: a host can carry a section left behind by the other shape —
- * `settings.yaml` migrated forward keeps the namespace, and a downgrade keeps
- * the entry config — and the stale one would otherwise win the read. The
- * remaining candidate is only a fallback for a host whose model probe answers
- * nothing, and for one that has not materialized its section yet, where the
- * missing field keeps the legacy behavior either way.
+ * A section is addressed by its Loader entry id, which `settingsEntryId`
+ * reads from the fiber and which `cordis.patch.yml` declares on every supported
+ * release. The pre-0.1.7 lines registered a namespace instead and are no longer
+ * supported, so there is no second candidate to probe.
  */
-function ownSectionId(settings: HostSettings, ctx: HostContext): string {
-  const entryId = settingsEntryId(ctx, OPENCODE_SESSION_NAMESPACE)
-  const preferred = settingsModelForRuntime({ settings }) === 'namespace'
-    ? OPENCODE_SESSION_NAMESPACE
-    : entryId
-  const fallback = preferred === entryId ? OPENCODE_SESSION_NAMESPACE : entryId
-  if (fallback === preferred) return preferred
-  return readSettingsSectionUser(settings, preferred) === undefined
-    && readSettingsSectionUser(settings, fallback) !== undefined
-    ? fallback
-    : preferred
+function ownSectionId(ctx: HostContext): string {
+  return settingsEntryId(ctx, OPENCODE_SESSION_NAMESPACE)
 }
 
 function autoFillEnabled(settings: HostSettings, ownSection: string): boolean {
@@ -347,7 +327,7 @@ function autoFillEnabled(settings: HostSettings, ownSection: string): boolean {
 async function fillDefaults(settings: HostSettings, ctx: HostContext): Promise<FillOutcome> {
   if (settings.writable !== true) return { filled: 0 }
   // Disabled is a settled verdict, not a retryable unreadable section.
-  if (!autoFillEnabled(settings, ownSectionId(settings, ctx))) return { filled: 0, remaining: 0 }
+  if (!autoFillEnabled(settings, ownSectionId(ctx))) return { filled: 0, remaining: 0 }
   // A section that is not readable yet (the namespace registers late, or the
   // entry-config form has not materialized) is retryable, not settled.
   const notYet: FillOutcome = { filled: 0 }
@@ -513,8 +493,9 @@ export function installSettingsWatcher(ctx: HostContext): void {
 
     schedule(500)
 
-    // The 0.1.7 line removed `settings/updated` in favour of the
-    // document-scoped event, so the subscription follows the live model.
+    // Every supported host reports section changes through the document-scoped
+    // event; the legacy `settings/updated` one belonged to the namespace model,
+    // which no supported release exposes.
     const model = settingsModelForRuntime({ settings })
     const listenerDisposers: Array<() => void> = []
     if (model !== undefined) {

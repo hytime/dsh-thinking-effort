@@ -39,18 +39,15 @@ These are separate compatibility layers:
 
 - **DSH Runtime:** the Settings transport is `remote.settings` on modern DSH and `connection.api.settings` on legacy DSH. The plugin detects the available runtime capability and keeps the legacy fallback optional.
 - **Gateway Protocol:** the plugin uses the official `llm-pi-ai.compat` fields when the DSH schema exposes them. The optional `dsh-llm-openai-completions` transport can take over eligible custom OpenAI-compatible thinking providers when installed and enabled.
-- **Settings model:** DSH `0.1.7` and later derive each settings form from its Loader entry's own `Config` schema (`entry-config`) and keep the document in the active profile's `cordis.patch.yml`; DSH `0.1.0-rc.7` through `0.1.6` register a namespace instead and store it in the DSH settings document, for example `~/.dsh/settings.yaml`. The plugin supports both, and the Client resolves the section id the running Host publishes — `thinking-effort` under `entry-config`, `dsh-thinking-effort` under the namespace model.
+- **Settings model:** DSH derives each settings form from its Loader entry's own `Config` schema (`entry-config`) and keeps the document in the active profile's `cordis.patch.yml`. The plugin's section is addressed by the Loader entry id `thinking-effort`. This is the only settings model the plugin supports: `0.1.7-alpha.1` is the oldest host it installs on.
 
 The version map applies these gateway capability rules:
 
 | DSH range | Gateway compat fields | Takeover transport |
 | --- | --- | --- |
-| `0.1.0-rc.7` | Not available | Unsupported |
-| `0.1.0-rc.8` to `<0.1.2-alpha.1` | Available when exposed by the DSH schema, but without `supportsFinishReason` and `supportsThinkingTokenBudget` | Optional |
-| `0.1.2-alpha.1` to `<0.1.3-alpha.2` | 15 fields when exposed by the DSH schema; `thinkingTokenBudgetField`, `vllmPriority`, and `supportsMaxOutputTokens` are not offered yet | Optional |
-| `0.1.3-alpha.2` and later supported ranges | All 18 fields when exposed by the DSH schema | Optional |
+| `0.1.7-alpha.1` to `<0.2.3-0` | All 18 fields when exposed by the DSH schema | Optional |
 
-From DSH `0.1.0-rc.8` onward, field availability follows the runtime schema.
+From `0.1.7-alpha.1` onward, field availability follows the runtime schema.
 DSH `0.1.0-rc.8` and later supported ranges follow the field availability shown above. The UI does not show fields that the runtime schema does not expose. If the optional transport is absent or disabled, no takeover is applied.
 
 ## OpenCode session Header
@@ -76,18 +73,20 @@ The guarantees this provides:
 
 ### Configuring the generator
 
-Where the generator lives depends on the DSH line: on `0.1.7`+ it is the `opencodeSession.format` section of the active profile's `cordis.patch.yml` (addressed by the Loader entry id `thinking-effort`); on `0.1.0-rc.7` through `0.1.6` it is `dsh-thinking-effort.opencodeSession.format` in the DSH settings document, for example `~/.dsh/settings.yaml`. The settings page writes either location for you. The YAML below shows the namespace shape the releases before `0.1.7` read:
+The generator lives in the `opencodeSession.format` section of the active profile's `cordis.patch.yml`, addressed by the Loader entry id `thinking-effort`. The settings page writes that location for you. The YAML below shows the shape:
 
 ```yaml
-dsh-thinking-effort:
-  opencodeSession:
-    providers:
-      opencode-go:
-        models:
-          deepseek-v4-flash: true
-    format:
-      mode: ses-derive
-      time: firstUse
+- id: thinking-effort
+  name: "@hytime/dsh-thinking-effort"
+  config:
+    opencodeSession:
+      providers:
+        opencode-go:
+          models:
+            deepseek-v4-flash: true
+      format:
+        mode: ses-derive
+        time: firstUse
 ```
 
 Fields:
@@ -383,13 +382,9 @@ Maintainers update the `package.json` version and all applicable `CHANGELOG` fil
 
 Configure npm GitHub Trusted Publishing for repository `hytime/dsh-thinking-effort` and workflow `publish.yml`. Publishing uses GitHub OIDC and provenance with `pnpm publish --provenance --access public --skip-manifest-obfuscation`; no `NPM_TOKEN` or long-lived token is used. `--skip-manifest-obfuscation` is required because pnpm otherwise strips `packageManager` from the published manifest, and the official DSH CLI rejects the plugin during profile installation when that field is missing. A version that already exists in npm blocks the release.
 
-Before publishing, the workflow builds five temporary official DSH capability representatives in rc7 → rc2 → alpha2 → namespace → entry order and runs the real compatibility suite after installing the current tarball with the official `dsh plugin` command:
+Before publishing, the workflow builds one temporary official DSH capability representative and runs the real compatibility suite after installing the current tarball with the official `dsh plugin` command:
 
-- `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`) — rc7 capability representative
-- `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`) — rc2 capability representative
-- `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`) — alpha2 capability representative
-- `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`) — newest namespace-model representative (runs the real-browser DOM probe)
-- `dsh-v0.1.7-alpha.1` (`0.1.7-alpha.1`) — entry-config representative (settings forms are derived from each Loader entry's own `Config`; also runs the real-browser DOM probe)
+- `dsh-v0.1.7-alpha.1` (`0.1.7-alpha.1`) — the oldest supported host and where the entry-config model begins (settings forms are derived from each Loader entry's own `Config`); also runs the real-browser DOM probe
 
 The ordinary CI workflow remains test-only and runs on pull requests and `main` pushes. Keep `pnpm-lock.yaml` committed for its `pnpm install --frozen-lockfile` installation.
 

@@ -1396,7 +1396,7 @@ describe('model inventory and operations', () => {
         },
       },
     }
-    const complete = editableProviderCompatFields(capabilitiesForVersion('0.1.0-rc.8'), schema)
+    const complete = editableProviderCompatFields(capabilitiesForVersion('0.1.7-alpha.1'), schema)
     expect(complete).toEqual({
       supportsDeveloperRole: true,
       maxTokensField: true,
@@ -1406,7 +1406,7 @@ describe('model inventory and operations', () => {
       editableFields: [],
       available: false,
     })
-    expect(validateProviderCompat(capabilitiesForVersion('0.1.0-rc.8'), {})).toMatchObject({
+    expect(validateProviderCompat(capabilitiesForVersion('0.1.7-alpha.1'), {})).toMatchObject({
       editableFields: [],
       available: false,
     })
@@ -1421,16 +1421,21 @@ describe('model inventory and operations', () => {
         },
       },
     }
-    expect(editableProviderCompatFields(capabilitiesForVersion('0.1.0-rc.8'), rc8Schema).editableFields)
+    // The schema decides which of the window's fields are editable: one that
+    // declares only the older set yields only that set, even though every
+    // supported host offers the full set.
+    expect(editableProviderCompatFields(capabilitiesForVersion('0.1.7-alpha.1'), rc8Schema).editableFields)
       .toEqual(GATEWAY_COMPAT_FIELD_KEYS.filter((field) => RC8_COMPAT_FIELDS.includes(field as typeof RC8_COMPAT_FIELDS[number])))
   })
 
-  it('keeps aggregate provider availability true for rc8 with alpha-only schema fields excluded', () => {
-    const result = validateProviderCompat(capabilitiesForVersion('0.1.0-rc.8'), realGatewaySchema)
+  it('keeps aggregate provider availability true and reports every field the schema offers', () => {
+    const result = validateProviderCompat(capabilitiesForVersion('0.1.7-alpha.1'), realGatewaySchema)
     expect(result.available).toBe(true)
-    expect(result.editableFields).toEqual(GATEWAY_COMPAT_FIELD_KEYS.filter((field) => RC8_COMPAT_FIELDS.includes(field as typeof RC8_COMPAT_FIELDS[number])))
-    expect(result.supportsFinishReason).toBeUndefined()
-    expect(result.supportsThinkingTokenBudget).toBeUndefined()
+    // Every supported host is in one window, so the aggregate covers the full
+    // editable set rather than a per-release subset.
+    expect(result.editableFields).toEqual([...GATEWAY_COMPAT_FIELD_KEYS])
+    expect(result.supportsFinishReason).toBe(true)
+    expect(result.supportsThinkingTokenBudget).toBe(true)
   })
 
   it('refuses provider compat writes when editability is missing or unclear', () => {
@@ -1576,7 +1581,7 @@ describe('model inventory and operations', () => {
 
   it('checks each schema field independently', () => {
     const schema = { properties: { maxTokensField: {} } }
-    const result = editableProviderCompatFields(capabilitiesForVersion('0.1.0-rc.8'), schema)
+    const result = editableProviderCompatFields(capabilitiesForVersion('0.1.7-alpha.1'), schema)
     expect(result).toEqual({
       maxTokensField: true,
       editableFields: ['maxTokensField'],
