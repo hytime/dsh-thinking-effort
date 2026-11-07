@@ -5,9 +5,9 @@ import { basename, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
-import { settingsBridge } from '../src/client/settings-bridge.js'
-import { inventoryFrom } from '../src/client/model-inventory.js'
-import { opsForModelArrayCompat } from '../src/client/model-ops.js'
+import { settingsBridge } from '../packages/settings-ui/src/client/settings-bridge.js'
+import { inventoryFrom } from '../packages/settings-ui/src/client/model-inventory.js'
+import { opsForModelArrayCompat } from '../packages/settings-ui/src/client/model-ops.js'
 import { editableProviderCompatFields, schemaNodeAtPath } from '@hytime/dsh-plugin-kit'
 import { PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
 import type { SettingsModel } from '@hytime/dsh-plugin-kit'
@@ -1323,13 +1323,16 @@ describe('published package composition', () => {
     expect(manifest.version).toBe('0.4.0')
     expect(manifest.packageManager).toBe('pnpm@11.7.0')
     expect(manifest.main).toBe('./lib/index.js')
-    expect(manifest.types).toBe('./lib/types/index.d.ts')
+    // `rootDir` is the repository root so that `packages/*` emit declarations
+    // too, which mirrors `src/` under `lib/types/src/`. The published type
+    // entry follows the emitted layout rather than the pre-workspace one.
+    expect(manifest.types).toBe('./lib/types/src/index.d.ts')
     expect(manifest.exports['.']).toEqual({
-      types: './lib/types/index.d.ts',
+      types: './lib/types/src/index.d.ts',
       default: './lib/index.js',
     })
     expect(manifest.exports['./client']).toEqual({
-      types: './lib/types/client/index.d.ts',
+      types: './lib/types/src/client/index.d.ts',
       default: './lib/client.js',
     })
     expect(manifest.dsh?.client).toEqual({
@@ -1479,11 +1482,11 @@ integrationDescribe('official DSH loader composition', () => {
         const settings = legacyRpc
           ? settingsBridge({ api: { settings: {
             describe: () => liveResult(describeEndpoint, {}),
-            mutate: (args: { ns: string; ops: readonly import('../src/client/types.js').SettingsOp[]; expectedRevision: number }) => liveResult(mutateEndpoint, args),
+            mutate: (args: { ns: string; ops: readonly import('@hytime/dsh-plugin-kit').SettingsOp[]; expectedRevision: number }) => liveResult(mutateEndpoint, args),
           } } })
           : settingsBridge(undefined, {
             describe: () => liveResult(describeEndpoint, {}),
-            mutate: (ns: string, ops: readonly import('../src/client/types.js').SettingsOp[], expectedRevision: number) => liveResult(mutateEndpoint, { ns, ops, expectedRevision }),
+            mutate: (ns: string, ops: readonly import('@hytime/dsh-plugin-kit').SettingsOp[], expectedRevision: number) => liveResult(mutateEndpoint, { ns, ops, expectedRevision }),
            })
 
         expect(settings).toBeDefined()

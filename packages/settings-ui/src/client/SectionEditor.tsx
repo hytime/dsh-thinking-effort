@@ -1,7 +1,6 @@
 import React from 'react'
 import { GATEWAY_COMPAT_FIELD_KEYS, type GatewayCompatFieldKey } from '@hytime/dsh-plugin-kit'
 import { editableProviderCompatFields } from '@hytime/dsh-plugin-kit'
-import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
 import { ALL_LEVELS, CONTEXT_1M, DEFAULT_LEVELS, NS, OPENCODE_SESSION_NS, PRESETS } from './constants.js'
 import { inventoryFrom } from './model-inventory.js'
 import { emptyTakeoverRuntimeResolution } from './takeover-runtime.js'
@@ -25,6 +24,7 @@ import { subagentEffortOp } from './section-editor/subagent.js'
 import { checkCompactionDraft, compactionOps, compactionProblemText } from './compaction-section.js'
 import { formatRatioPercent } from '@hytime/dsh-plugin-kit'
 import { compactionDraftFrom, compactionPolicyOf, keyOf as keyOfState } from './section-editor/state.js'
+import { PLUGIN_VERSION } from '@hytime/dsh-plugin-kit'
 import type { CompactionDraft, SubagentModelRoute } from './section-editor/state.js'
 import type { ModelCompactionControls } from './components/ModelEditor.js'
 import type { SubagentModelPicker } from './components/SubagentSettings.js'
@@ -42,7 +42,7 @@ import { ConfigBackupCard } from './components/ConfigBackupCard.js'
 import { OpenCodeFormatCard } from './components/OpenCodeFormatCard.js'
 import { renderGatewayCompatControls } from './components/GatewayCompatControls.js'
 
-const PLUGIN_VERSION = packageJson.version
+
 
 // How long the success badge floats in the panel's top-right before it fades
 // on its own. Every field edit clears the notice (they set notice: null), so a

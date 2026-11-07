@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { parseSnapshot, serializeSnapshot } from '../src/client/config-snapshot/parse.js'
-import { pluginSectionOf, snapshotFileName, snapshotFromNamespaces, userSectionOf } from '../src/client/config-snapshot/snapshot.js'
-import { SNAPSHOT_KIND, SNAPSHOT_VERSION } from '../src/client/config-snapshot/types.js'
+import { parseSnapshot, serializeSnapshot } from '../packages/settings-ui/src/client/config-snapshot/parse.js'
+import { pluginSectionOf, snapshotFileName, snapshotFromNamespaces, userSectionOf } from '../packages/settings-ui/src/client/config-snapshot/snapshot.js'
+import { SNAPSHOT_KIND, SNAPSHOT_VERSION } from '../packages/settings-ui/src/client/config-snapshot/types.js'
 import type { SettingsNamespace } from '@hytime/dsh-plugin-kit'
 
 const llm = (user?: Record<string, unknown>): SettingsNamespace => ({

@@ -19,7 +19,7 @@
   },
   "type": "module",
   "main": "./lib/index.js",
-  "types": "./lib/types/index.d.ts",
+  "types": "./lib/types/src/index.d.ts",
   "homepage": "https://github.com/hytime/dsh-thinking-effort#readme",
   "repository": {
     "type": "git",
@@ -32,24 +32,25 @@
     "access": "public"
   },
   "files": [
-    "lib/index.js",
-    "lib/client.js",
-    "lib/types/**/*.d.ts",
-    "cordis.patch.yml",
-    "README.md",
-    "README.zh.md",
+    "LICENSE",
     "README.ja.md",
     "README.ko.md",
-    "docs/INSTALL.md",
-    "docs/INSTALL.zh.md",
-    "docs/INSTALL.ja.md",
-    "docs/INSTALL.ko.md",
-    "docs/SCREENSHOTS.md",
-    "docs/CHANGELOG.md",
+    "README.md",
+    "README.zh.md",
+    "cordis.patch.yml",
     "docs/CHANGELOG.ja.md",
     "docs/CHANGELOG.ko.md",
+    "docs/CHANGELOG.md",
+    "docs/INSTALL.ja.md",
+    "docs/INSTALL.ko.md",
+    "docs/INSTALL.md",
+    "docs/INSTALL.zh.md",
+    "docs/SCREENSHOTS.md",
     "docs/assets/",
-    "LICENSE"
+    "lib/client.js",
+    "lib/entries/",
+    "lib/index.js",
+    "lib/types/**/*.d.ts"
   ],
   "dsh": {
     "bundle": {
@@ -67,11 +68,11 @@
   },
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
+      "types": "./lib/types/src/index.d.ts",
       "default": "./lib/index.js"
     },
     "./client": {
-      "types": "./lib/types/client/index.d.ts",
+      "types": "./lib/types/src/client/index.d.ts",
       "default": "./lib/client.js"
     },
     "./package.json": "./package.json"
@@ -99,9 +100,11 @@
     "@deepseek-ai/dsh-client-ui-slots": "0.1.2-rc.1",
     "@deepseek-ai/dsh-settings": "0.1.1-rc.2",
     "@hytime/dsh-feature-compaction": "workspace:*",
+    "@hytime/dsh-feature-composer": "workspace:*",
     "@hytime/dsh-feature-levels": "workspace:*",
     "@hytime/dsh-feature-migration": "workspace:*",
     "@hytime/dsh-feature-opencode": "workspace:*",
+    "@hytime/dsh-feature-settings-ui": "workspace:*",
     "@hytime/dsh-feature-subagent": "workspace:*",
     "@hytime/dsh-plugin-kit": "workspace:*",
     "@types/node": "^22.15.21",

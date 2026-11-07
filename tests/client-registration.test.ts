@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { apply, inject, name } from '../src/client/index.js'
-import { LOCALE_NS } from '../src/client/constants.js'
+import { apply, inject, name } from '../packages/settings-ui/src/client/index.js'
+import { LOCALE_NS } from '../packages/settings-ui/src/client/constants.js'
 import { PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
-import { observeTakeoverSettings, resolveTakeoverDescription } from '../src/client/takeover-runtime.js'
-import { providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
+import { observeTakeoverSettings, resolveTakeoverDescription } from '../packages/settings-ui/src/client/takeover-runtime.js'
+import { providerGatewayCompatViewFrom } from '../packages/settings-ui/src/client/model-inventory.js'
 import { resolveTakeoverGatewayCompat, resolveTakeoverProviders, takeoverGatewayCompatInputs } from '@hytime/dsh-plugin-kit'
 import type { ClientContext, SettingsNamespace } from '@hytime/dsh-plugin-kit'
 

@@ -14,8 +14,8 @@ import {
   OPENCODE_SESSION_NAMESPACE,
   PLUGIN_ENTRY_ID,
 } from '@hytime/dsh-plugin-kit'
-import { isOpenCodeSessionNamespace, openCodeSessionOp } from '../src/client/model-header-ops.ts'
-import { createOpenCodeSessionState } from '../src/client/SectionEditor.js'
+import { isOpenCodeSessionNamespace, openCodeSessionOp } from '../packages/settings-ui/src/client/model-header-ops.ts'
+import { createOpenCodeSessionState } from '../packages/settings-ui/src/client/SectionEditor.js'
 
 const baseFetch = globalThis.fetch
 

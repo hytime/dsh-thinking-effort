@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { adjustIncoming, PROVIDER_WIRING_KEYS, wiringReport } from '../src/client/config-snapshot/wiring.js'
-import { planImport } from '../src/client/config-snapshot/plan.js'
-import { LLM_NAMESPACE, PLUGIN_NAMESPACE } from '../src/client/config-snapshot/types.js'
-import type { ConfigSnapshot } from '../src/client/config-snapshot/types.js'
+import { adjustIncoming, PROVIDER_WIRING_KEYS, wiringReport } from '../packages/settings-ui/src/client/config-snapshot/wiring.js'
+import { planImport } from '../packages/settings-ui/src/client/config-snapshot/plan.js'
+import { LLM_NAMESPACE, PLUGIN_NAMESPACE } from '../packages/settings-ui/src/client/config-snapshot/types.js'
+import type { ConfigSnapshot } from '../packages/settings-ui/src/client/config-snapshot/types.js'
 import type { SettingsNamespace } from '@hytime/dsh-plugin-kit'
 
 const snapshotOf = (sections: Record<string, Record<string, unknown>>): ConfigSnapshot => ({

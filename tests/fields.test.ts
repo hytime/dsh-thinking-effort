@@ -3,7 +3,7 @@ import { ALPHA1_PLUS_COMPAT_FIELDS, ALPHA3_PLUS_COMPAT_FIELDS, GATEWAY_COMPAT_FI
 import { resolveGatewayCompat, resolveModelGatewayCompat } from '@hytime/dsh-plugin-kit'
 import { opsForProviderCompat } from '@hytime/dsh-plugin-kit'
 import type { GatewayCompatEditability } from '@hytime/dsh-plugin-kit'
-import { LOCALE_DATA } from '../src/client/locales.js'
+import { LOCALE_DATA } from '../packages/settings-ui/src/client/locales.js'
 
 describe('gateway compat field registry', () => {
   it('keeps every field key unique and non-empty', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isPluginEntrySection, pluginEntrySection, pluginSection, pluginSectionId, subagentEffortTarget } from '../src/client/subagent-section.ts'
+import { isPluginEntrySection, pluginEntrySection, pluginSection, pluginSectionId, subagentEffortTarget } from '../packages/settings-ui/src/client/subagent-section.ts'
 import type { SettingsNamespace } from '@hytime/dsh-plugin-kit'
 
 const llmNamespace = (): SettingsNamespace => ({

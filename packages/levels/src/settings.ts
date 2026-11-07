@@ -3,7 +3,7 @@ import { hostCapabilities } from '@hytime/dsh-plugin-kit'
 import { readSettingsSection, readSettingsSectionUser, settingsChangeEvents, settingsEntryId } from '@hytime/dsh-plugin-kit'
 import { OPENCODE_SESSION_NAMESPACE } from '@hytime/dsh-plugin-kit'
 import { settingsModelForRuntime } from '@hytime/dsh-plugin-kit'
-import { mark } from '@hytime/dsh-plugin-kit'
+import { mark } from '@hytime/dsh-plugin-kit/host'
 import { DEFAULT_LEVELS as SHARED_DEFAULT_LEVELS, LLM_PI_AI_NS, LOG_PREFIX } from '@hytime/dsh-plugin-kit'
 import {
   HostContext,

@@ -4,5 +4,15 @@
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
-  "types": "./src/index.ts"
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./host": {
+      "types": "./src/host/marker.ts",
+      "default": "./src/host/marker.ts"
+    }
+  }
 }

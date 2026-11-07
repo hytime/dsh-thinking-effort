@@ -2,12 +2,12 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ConfigBackupCard } from '../src/client/components/ConfigBackupCard.js'
-import { AUTO_BACKUP_PATH } from '../src/client/config-snapshot/library.js'
-import { SNAPSHOT_KIND, SNAPSHOT_VERSION } from '../src/client/config-snapshot/types.js'
+import { ConfigBackupCard } from '../packages/settings-ui/src/client/components/ConfigBackupCard.js'
+import { AUTO_BACKUP_PATH } from '../packages/settings-ui/src/client/config-snapshot/library.js'
+import { SNAPSHOT_KIND, SNAPSHOT_VERSION } from '../packages/settings-ui/src/client/config-snapshot/types.js'
 import { LEGACY_RESULT_NOTHING_PENDING } from '@hytime/dsh-plugin-kit'
-import { zh } from '../src/client/locales.js'
-import { iosPalette } from '../src/client/theme.js'
+import { zh } from '../packages/settings-ui/src/client/locales.js'
+import { iosPalette } from '../packages/settings-ui/src/client/theme.js'
 import type { ClientResult, SettingsApi, SettingsDescribeValue, SettingsNamespace, SettingsOp, Translation } from '@hytime/dsh-plugin-kit'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true

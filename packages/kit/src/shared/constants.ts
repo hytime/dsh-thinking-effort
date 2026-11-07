@@ -26,3 +26,23 @@ export const DEFAULT_LEVELS = { off: null, high: 'high', max: 'max' } as const
 export const FORMAT_MODES = ['ses-derive', 'passthrough', 'template', 'expression', 'script'] as const
 export const FORMAT_TIMES = ['firstUse', 'hash'] as const
 export const FORMAT_INVALID_POLICIES = ['warn', 'drop', 'send'] as const
+
+/**
+ * The locale namespace both client packages register dictionaries under.
+ *
+ * It lives in kit because two separate client packages bind it: the settings
+ * panel and the Composer seat. Duplicating the literal would let the two drift
+ * and one of them silently fall back to raw keys.
+ */
+export const LOCALE_NS = 'settings.thinkingEffort'
+
+/**
+ * The plugin version the settings panel shows.
+ *
+ * It is injected at build time from the root manifest (`tsdown`'s `define`)
+ * rather than imported: the client packages must not import the root package,
+ * because the root package imports them. A compile-time constant keeps the
+ * version a single source — the root `package.json` — without the cycle.
+ */
+declare const __PLUGIN_VERSION__: string
+export const PLUGIN_VERSION: string = typeof __PLUGIN_VERSION__ === 'string' ? __PLUGIN_VERSION__ : '0.0.0-dev'

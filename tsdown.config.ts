@@ -3,6 +3,17 @@ import { existsSync } from 'node:fs'
 import { basename, dirname, resolve as resolvePath, sep } from 'node:path'
 import { defineConfig } from 'tsdown'
 import { transform } from 'lightningcss'
+import { readFileSync } from 'node:fs'
+
+/**
+ * The version the settings panel renders.
+ *
+ * It is a `define` rather than an import because the client packages must not
+ * import the root manifest: the root package imports them, so that edge would
+ * be a cycle. `vitest.config.ts` injects the same constant for tests.
+ */
+const PLUGIN_VERSION = (JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }).version
+const versionDefine = { __PLUGIN_VERSION__: JSON.stringify(PLUGIN_VERSION) }
 
 const isReactPlatform = (specifier: string): boolean => (
   specifier === 'react' || specifier === 'react/jsx-runtime'
@@ -17,8 +28,17 @@ const isReactPlatform = (specifier: string): boolean => (
 const CSS_VIRTUAL_PREFIX = '\0dsh-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
 
-/** Path segment tsc emits under (`/lib/types/`), re-rooted onto `src/`. */
-const TYPES_MARKER = `${sep}lib${sep}types${sep}`
+/** Path segment tsc emits under, re-rooted onto the source tree.
+ *
+ * `rootDir` is the repository root so that `packages/*` emit declarations too,
+ * which means tsc mirrors the whole tree: `src/client/x.ts` becomes
+ * `lib/types/src/client/x.js`. The marker therefore includes `src`; stripping
+ * only `/lib/types/` would look for `src/client/x.ts` at the wrong depth once
+ * a file lives under `packages/`.
+ */
+const TYPES_MARKER = `${sep}lib${sep}types${sep}src${sep}`
+/** The same marker for a file emitted from `packages/*`. */
+const PACKAGES_MARKER = `${sep}lib${sep}types${sep}packages${sep}`
 
 /** Emit one plugin-owned style injector and an optional CSS Modules export. */
 function styleInjectionModule(
@@ -46,9 +66,17 @@ function styleInjectionModule(
 function sourceAssetPath(source: string, importer: string): string {
   const emitted = resolvePath(dirname(importer), source)
   if (existsSync(emitted)) return emitted
-  const boundary = emitted.indexOf(TYPES_MARKER)
-  if (boundary < 0) return emitted
-  return resolvePath(emitted.slice(0, boundary), 'src', emitted.slice(boundary + TYPES_MARKER.length))
+  // `src/**` and `packages/*/src/**` both emit under `lib/types/`, so either
+  // marker can appear depending on which package the importing module came from.
+  const srcBoundary = emitted.indexOf(TYPES_MARKER)
+  if (srcBoundary >= 0) {
+    return resolvePath(emitted.slice(0, srcBoundary), 'src', emitted.slice(srcBoundary + TYPES_MARKER.length))
+  }
+  const pkgBoundary = emitted.indexOf(PACKAGES_MARKER)
+  if (pkgBoundary >= 0) {
+    return resolvePath(emitted.slice(0, pkgBoundary), 'packages', emitted.slice(pkgBoundary + PACKAGES_MARKER.length))
+  }
+  return emitted
 }
 
 /** CSS handling plugins for the browser client bundle (official clientConfig). */
@@ -81,15 +109,16 @@ const cssPlugins = [{
 
 export default defineConfig([
   {
-    entry: { index: 'lib/types/index.js' },
+    entry: { index: 'lib/types/src/index.js' },
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',
     fixedExtension: false,
     clean: false,
+    define: versionDefine,
   },
   {
-    entry: { client: 'lib/types/client/index.js' },
+    entry: { client: 'lib/types/src/client/index.js' },
     outDir: 'lib',
     format: ['cjs'],
     platform: 'browser',
@@ -98,6 +127,7 @@ export default defineConfig([
       neverBundle: isReactPlatform,
       alwaysBundle: (specifier) => !isReactPlatform(specifier),
     },
+    define: versionDefine,
     inputOptions: {
       plugins: cssPlugins,
     },

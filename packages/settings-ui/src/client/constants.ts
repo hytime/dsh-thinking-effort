@@ -18,7 +18,7 @@ export const PRESETS = [
 
 export const NS = LLM_PI_AI_NS
 export { PLUGIN_NS as OPENCODE_SESSION_NS } from '@hytime/dsh-plugin-kit'
-export const LOCALE_NS = 'settings.thinkingEffort'
+export { LOCALE_NS } from '@hytime/dsh-plugin-kit'
 export const CONTEXT_MIN = 2000
 export const CONTEXT_1M = 1000000
 export const CONTEXT_MAX = CONTEXT_1M

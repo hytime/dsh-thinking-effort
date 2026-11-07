@@ -1,10 +1,10 @@
-import packageJson from '@hytime/dsh-thinking-effort/package.json' with { type: 'json' }
+import { PLUGIN_VERSION } from '@hytime/dsh-plugin-kit'
+
+export { PLUGIN_VERSION }
+
 import type { ConfigSnapshot, ImportMode, ParseFailure, ProfileNameError, SnapshotMeta } from '../../config-snapshot/types.js'
 import type { CompatibilityProfile, SettingsNamespace } from '@hytime/dsh-plugin-kit'
 import { autoBackupFromNamespaces, profilesFromNamespaces } from '../../config-snapshot/library.js'
-
-/** The version stamped into every snapshot this panel writes. */
-export const PLUGIN_VERSION = packageJson.version
 
 /**
  * The parser failure codes the card can display, mapped to their copy.

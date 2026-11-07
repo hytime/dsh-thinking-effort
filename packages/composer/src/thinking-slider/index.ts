@@ -18,8 +18,7 @@
  * inject-free read face).
  */
 import { createElement } from 'react'
-import { LOCALE_NS } from '../constants.js'
-import { asModelDirectories, createModelDirectoryFaceResolver, hasSessionRemote, modelDirectoryCompatibility } from '@hytime/dsh-plugin-kit'
+import { LOCALE_NS, asModelDirectories, createModelDirectoryFaceResolver, hasSessionRemote, modelDirectoryCompatibility } from '@hytime/dsh-plugin-kit'
 import type { ClientContext, ClientLocale, ClientSlots, Translation } from '@hytime/dsh-plugin-kit'
 import { Slider } from './slider.js'
 import type { ModelDirectoryState, ModelSelection } from './slider.js'

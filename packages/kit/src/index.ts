@@ -30,8 +30,10 @@ export {
   OPENCODE_SESSION_HEADER,
   OPENCODE_SESSION_NAMESPACE,
   isOpenCodeSessionEnabled,
-  modelPath,
   isOpenCodeSessionSectionId,
+  modelPath,
+} from './compat/opencode-session.js'
+export type {
   OpenCodeSessionFormatMode,
   OpenCodeSessionFormatSettings,
   OpenCodeSessionInvalidPolicy,
@@ -43,5 +45,4 @@ export * from './compat/version-adapter.js'
 export * from './compat/version-map.js'
 export * from './client-types.js'
 export * from './plugin-settings.js'
-export * from './host/marker.js'
 export * from './host/types.js'

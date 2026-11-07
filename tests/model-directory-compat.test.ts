@@ -3,7 +3,7 @@ import { asModelDirectories, createModelDirectoryFaceResolver, modelDirectoryCom
 import type { ClientContext } from '@hytime/dsh-plugin-kit'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { Context } from '@deepseek-ai/cordis'
-import type { ModelDirectoryState } from '../src/client/thinking-slider/slider.js'
+import type { ModelDirectoryState } from '../packages/composer/src/thinking-slider/slider.js'
 
 function contextWith(services: Record<string, unknown>): ClientContext {
   return { get: vi.fn((name: string) => services[name]) } as unknown as ClientContext

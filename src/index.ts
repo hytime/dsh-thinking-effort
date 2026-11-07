@@ -1,4 +1,4 @@
-import { mark } from '@hytime/dsh-plugin-kit'
+import { mark } from '@hytime/dsh-plugin-kit/host'
 import { installSettingsWatcher } from '@hytime/dsh-feature-levels'
 import { installOpenCodeSession } from '@hytime/dsh-feature-opencode'
 import { installLegacyMigration } from '@hytime/dsh-feature-migration'

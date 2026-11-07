@@ -10,11 +10,11 @@ import {
   LOCALE_NS,
   NS,
   PRESETS,
-} from '../src/client/constants.js'
-import { directResult, settingsBridge } from '../src/client/settings-bridge.js'
-import { LOCALE_DATA, LOCALE_CODES } from '../src/client/locales.js'
-import { inventoryFrom, modelCompatKey, modelGatewayCompatViewFrom, modelGatewayCompatViewsFrom, providerGatewayCompatViewFrom, routeApi } from '../src/client/model-inventory.js'
-import { mergeModelUpdate, opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from '../src/client/model-ops.js'
+} from '../packages/settings-ui/src/client/constants.js'
+import { directResult, settingsBridge } from '../packages/settings-ui/src/client/settings-bridge.js'
+import { LOCALE_DATA, LOCALE_CODES } from '../packages/settings-ui/src/client/locales.js'
+import { inventoryFrom, modelCompatKey, modelGatewayCompatViewFrom, modelGatewayCompatViewsFrom, providerGatewayCompatViewFrom, routeApi } from '../packages/settings-ui/src/client/model-inventory.js'
+import { mergeModelUpdate, opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from '../packages/settings-ui/src/client/model-ops.js'
 import {
   buildInput,
   buildLevels,
@@ -23,8 +23,8 @@ import {
   inputDraftFrom,
   validateContextWindow,
   validateLevels,
-} from '../src/client/validation.js'
-import { iosPalette } from '../src/client/theme.js'
+} from '../packages/settings-ui/src/client/validation.js'
+import { iosPalette } from '../packages/settings-ui/src/client/theme.js'
 import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '@hytime/dsh-plugin-kit'
 import { resolveGatewayCompat, resolveModelGatewayCompat, resolveProviderGatewayCompat } from '@hytime/dsh-plugin-kit'
 import { editableProviderCompatFields, validateProviderCompat } from '@hytime/dsh-plugin-kit'
@@ -35,7 +35,7 @@ import type { InventoryItem, ModelGatewayCompatUpdate, Translation } from '@hyti
 import { revisionOf } from '@hytime/dsh-plugin-kit'
 import { hasSessionRemote } from '@hytime/dsh-plugin-kit'
 import { isSettingsConflict } from '@hytime/dsh-plugin-kit'
-import type { TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
+import type { TakeoverRuntimeResolution } from '../packages/settings-ui/src/client/takeover-runtime.js'
 
 const translate: Translation = (key, params) => `${key}${params?.level ? `:${params.level}` : ''}`
 

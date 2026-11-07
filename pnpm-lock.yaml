@@ -44,6 +44,9 @@ importers:
       '@hytime/dsh-feature-compaction':
         specifier: workspace:*
         version: link:packages/compaction
+      '@hytime/dsh-feature-composer':
+        specifier: workspace:*
+        version: link:packages/composer
       '@hytime/dsh-feature-levels':
         specifier: workspace:*
         version: link:packages/levels
@@ -53,6 +56,9 @@ importers:
       '@hytime/dsh-feature-opencode':
         specifier: workspace:*
         version: link:packages/opencode
+      '@hytime/dsh-feature-settings-ui':
+        specifier: workspace:*
+        version: link:packages/settings-ui
       '@hytime/dsh-feature-subagent':
         specifier: workspace:*
         version: link:packages/subagent
@@ -92,6 +98,8 @@ importers:
 
   packages/compaction: {}
 
+  packages/composer: {}
+
   packages/kit: {}
 
   packages/levels: {}
@@ -99,6 +107,8 @@ importers:
   packages/migration: {}
 
   packages/opencode: {}
+
+  packages/settings-ui: {}
 
   packages/subagent: {}
 
