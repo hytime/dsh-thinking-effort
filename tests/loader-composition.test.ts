@@ -37,6 +37,7 @@ type PackageManifest = {
   readonly packageManager?: string
   readonly main?: string
   readonly types?: string
+  readonly icon?: string
   readonly exports: Record<string, string | { readonly types?: string; readonly default?: string }>
   readonly files: readonly string[]
   readonly engines?: { readonly dsh?: string }
@@ -1361,6 +1362,12 @@ describe('published package composition', () => {
     expect(manifest.files).not.toContain('CHANGELOG.ja.md')
     expect(manifest.files).not.toContain('CHANGELOG.ko.md')
     expect(manifest.files).toContain('docs/assets/')
+    // `icon` is the only display field a package-root plugin declares in its
+    // manifest; the Plugin Manager reads it through the exported
+    // `./package.json` and turns the file into a data URL, so the image must be
+    // inside `files` or the card silently falls back to the default artwork.
+    expect(manifest.icon).toBe('./icon.svg')
+    expect(manifest.files).toContain('icon.svg')
   })
 
   it('declares its DSH version requirement the way the runtime reads it', () => {

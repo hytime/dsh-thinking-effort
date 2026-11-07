@@ -10,6 +10,11 @@
 
 ## [Unreleased]
 
+### 추가
+
+- 플러그인 아이콘을 추가했습니다. `package.json`이 `icon: "./icon.svg"`를 선언하며, 플러그인 카드, 상세 페이지, 컴포넌트 행에 이 아이콘이 표시되고 기본 도형으로 대체되지 않습니다. 아이콘은 36×36 자체 포함 SVG(그라디언트 트랙과 링 모양 손잡이, 플러그인의 사고 강도 단계에 대응)로, `rect`와 `circle` 도형만으로 구성하며 스크립트, 외부 참조, 폰트, 애니메이션이 없어 `<img>` 안에서 렌더링되고 밝은/어두운 테마 모두에서 잘 보입니다.
+- Added a plugin icon: `package.json` declares `icon: "./icon.svg"`, and the Plugins page shows it on the bundle card, its detail page, and its component rows instead of falling back to the default artwork. The image is a self-contained 36×36 SVG (a gradient track with a ring thumb, matching the plugin's thinking-effort levels) built from `rect` and `circle` geometry alone, with no scripts, external references, fonts, or animation, so it renders inside an `<img>` and reads in both themes.
+
 ### 变更 / Changed
 
 - 最低支持的 DSH 版本从 `0.1.0-rc.7` 提高到 `0.1.7-alpha.1`，`engines.dsh` 与 `@deepseek-ai/dsh` peer 范围同步收紧。`0.1.7` 是 entry-config 设置模型的起点，也是本插件现在支持的最旧宿主。

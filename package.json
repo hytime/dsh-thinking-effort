@@ -2,6 +2,7 @@
   "name": "@hytime/dsh-thinking-effort",
   "version": "0.4.0",
   "description": "\u4e3a DSH \u7684 pi-ai \u7b2c\u4e09\u65b9\u6a21\u578b\u8865\u5145\u53ef\u914d\u7f6e\u7684\u601d\u8003\u5f3a\u5ea6\u6863\u4f4d\uff0c\u5e76\u8bbe\u7f6e\u5b50 agent \u9ed8\u8ba4\u601d\u8003\u5f3a\u5ea6\u3002",
+  "icon": "./icon.svg",
   "private": false,
   "engines": {
     "dsh": ">=0.1.7-alpha.1"
@@ -49,6 +50,7 @@
     "docs/INSTALL.zh.md",
     "docs/SCREENSHOTS.md",
     "docs/assets/",
+    "icon.svg",
     "lib/client.js",
     "lib/entries/",
     "lib/index.js",

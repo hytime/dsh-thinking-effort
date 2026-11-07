@@ -14,6 +14,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### 新增 / Added
+
+- 新增插件图标：`package.json` 声明 `icon: "./icon.svg"`，插件页的插件卡片、详情页与组件行都显示这个图标，不再回退到默认图形。图标是 36×36 的自包含 SVG（渐变轨道加圆环滑块，对应插件的思考强度档位），几何只用 `rect` 与 `circle`，没有脚本、外链、字体或动画，因此在 `<img>` 里渲染即可，深浅两种主题都可见。
+- Added a plugin icon: `package.json` declares `icon: "./icon.svg"`, and the Plugins page shows it on the bundle card, its detail page, and its component rows instead of falling back to the default artwork. The image is a self-contained 36×36 SVG (a gradient track with a ring thumb, matching the plugin's thinking-effort levels) built from `rect` and `circle` geometry alone, with no scripts, external references, fonts, or animation, so it renders inside an `<img>` and reads in both themes.
+
 ### 变更 / Changed
 
 - 最低支持的 DSH 版本从 `0.1.0-rc.7` 提高到 `0.1.7-alpha.1`，`engines.dsh` 与 `@deepseek-ai/dsh` peer 范围同步收紧。`0.1.7` 是 entry-config 设置模型的起点，也是本插件现在支持的最旧宿主。
