@@ -1,14 +1,14 @@
 {
   "name": "@hytime/dsh-thinking-effort",
-  "version": "0.4.0",
-  "description": "\u4e3a DSH \u7684 pi-ai \u7b2c\u4e09\u65b9\u6a21\u578b\u8865\u5145\u53ef\u914d\u7f6e\u7684\u601d\u8003\u5f3a\u5ea6\u6863\u4f4d\uff0c\u5e76\u8bbe\u7f6e\u5b50 agent \u9ed8\u8ba4\u601d\u8003\u5f3a\u5ea6\u3002",
+  "version": "0.4.1",
+  "description": "为 DSH 的 pi-ai 第三方模型补充可配置的思考强度档位，并设置子 agent 默认思考强度。",
   "icon": "./icon.svg",
   "private": false,
   "engines": {
     "dsh": ">=0.1.7-alpha.1"
   },
   "scripts": {
-    "build": "node scripts/check-locales.mjs && tsc -p tsconfig.json && node scripts/rewrite-dts-specifiers.mjs && tsdown -c tsdown.config.ts",
+    "build": "node scripts/check-locales.mjs && node scripts/clean-build.mjs && tsc -p tsconfig.json && node scripts/rewrite-dts-specifiers.mjs && tsdown -c tsdown.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
@@ -18,7 +18,8 @@
     "test:watch": "vitest",
     "check": "pnpm run test:conventions && node scripts/check-locales.mjs",
     "verify": "pnpm run check && pnpm run build && pnpm run typecheck && pnpm run typecheck:test && pnpm run test && pnpm run test:release && pnpm run test:policy",
-    "prepublishOnly": "pnpm run build"
+    "prepublishOnly": "pnpm run build",
+    "check:entries": "node scripts/check-entries.mjs"
   },
   "type": "module",
   "main": "./lib/index.js",

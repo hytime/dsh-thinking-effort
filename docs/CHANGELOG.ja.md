@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-09
+
 ### 追加
 
 - プラグインアイコンを追加しました。`package.json` が `icon: "./icon.svg"` を宣言し、プラグインのカード、詳細ページ、コンポーネント行にこのアイコンが表示され、既定の図形へのフォールバックがなくなります。アイコンは 36×36 の自己完結型 SVG（グラデーションのトラックとリング状のつまみ。プラグインの推論強度の段階に対応）で、`rect` と `circle` の図形だけで構成し、スクリプト、外部参照、フォント、アニメーションを含まないため `<img>` 内で描画でき、明暗どちらのテーマでも視認できます。
@@ -19,16 +21,20 @@
 
 ### 修复 / Fixed
 
-- 上下文压缩去掉「启用」开关：百分比本身就是配置，留空跟随全局比例（默认 60%）。原先的开关文案会被读成「关掉就关闭上下文压缩」，但 DSH 官方的自动压缩不受本插件影响，仍按它自己的阈值运行——本插件只提供「更早压缩」这一层，不提供「完全不压缩」。已写入 `compaction.enabled` 的旧文档照常加载，该字段被忽略。
+- コンテキスト圧縮の「有効」スイッチを削除しました。割合そのものが設定であり、空欄は全体の割合（既定 60%）に従います。従来のスイッチは「オフにするとコンテキスト圧縮が止まる」と読めましたが、DSH 公式の自動圧縮はこのプラグインの影響を受けず独自のしきい値で動作します。このプラグインが提供するのは「より早い圧縮」の一層だけで、「圧縮しない」ではありません。`compaction.enabled` を保存済みの文書はそのまま読み込まれ、このフィールドは無視されます。
 - Removed the Context compaction on/off switch: the percentages ARE the configuration, and empty fields follow the global ratio (60% by default). The old switch read as "turn context compaction off", but DSH's own automatic compaction is unaffected by this plugin and keeps running at its own threshold — this plugin only offers an EARLIER pass, never "no compaction". Documents that already stored `compaction.enabled` still load; the field is ignored.
-- 压缩阈值与保留比例、子 agent 默认模型改为输入即保存，去掉了各自的保存按钮。两个百分比在输入停顿后作为一次写入提交，非法组合保留输入内容并就地说明原因，不会写入后再回滚；子 agent 供应商与模型在配对完整后一次写入，选择「继承父会话」则以 unset 清空。
+- 圧縮しきい値と保持割合、およびサブエージェントの既定モデルを入力時の自動保存に変更し、それぞれの保存ボタンを削除しました。2 つの割合は入力が止まった時点で 1 回の書き込みとして送信され、不正な組み合わせ（保持割合がしきい値以上、数値として解釈できない値）は入力を保持したまま理由をその場に表示し、書き込んでから戻すことはありません。サブエージェントのプロバイダーとモデルは組が揃った時点で 1 回書き込み、「親セッションを継承」を選ぶと unset で消去します。
 - The compaction ratios and the subagent default model now save as you type, and their Save buttons are gone. The two percentages commit as one write once typing pauses; an invalid pair keeps its text and explains itself in place rather than being written and rolled back. The subagent provider/model pair commits once complete, and choosing **Inherit parent session** clears it with an unset.
+- コンポーネントスイッチが設定ページを実際に制御するようになりました。7 つのコンポーネントは 1 つのクライアントバンドルを共有するため、無効化しても設定カードが描画され続け、変更も反映されませんでした。クライアントはホストが報告する有効状態に従って各面を描画し、ホストの `plugin-manager/changed` を購読するため、プラグインページでスイッチを切り替えるとページを再読み込みせずにカードが現れたり消えたりします。依存関係も反映されます。ルートをオフにすると依存するすべてのコンポーネントが連動し、設定パネルをオフにするとそれが提供する OpenCode・圧縮・サブエージェント・移行の設定が連動します。Composer のシートはこのプラグインのホスト側に依存しないため独立したままです。
+- Component switches now actually control the settings page: the seven components share one client bundle, so a disabled component used to keep rendering its card while its settings did nothing. The client now renders each surface from the enablement the Host reports and subscribes to `plugin-manager/changed`, so toggling a row in the plugin page adds or removes its card without a page refresh. Dependencies apply too: turning off the root component takes every component that depends on it, and turning off the settings panel takes the OpenCode, compaction, subagent and migration configuration it hosts; the Composer seat stays independent because it does not depend on this plugin's host half.
+- 公開パッケージに前回ビルドの残骸が混入しなくなりました。ビルド前に `lib/` を空にするため、古い共有チャンクが `files` の glob で tarball に含まれることはありません。CI の構文検査は 2 つの旧パスのみではなく、`package.json` の `exports` が宣言するすべてのエントリを対象にします。
+- The published package no longer carries leftovers from a previous build: `lib/` is cleared before compiling, so a stale shared chunk cannot be swept into the tarball by the `files` glob. The CI syntax check now covers every entry the manifest's `exports` declares instead of the two legacy paths only.
 
 ### 变更 / Changed
 
-- 最低支持的 DSH 版本从 `0.1.0-rc.7` 提高到 `0.1.7-alpha.1`，`engines.dsh` 与 `@deepseek-ai/dsh` peer 范围同步收紧。`0.1.7` 是 entry-config 设置模型的起点，也是本插件现在支持的最旧宿主。
+- サポートする最小の DSH バージョンを `0.1.0-rc.7` から `0.1.7-alpha.1` に引き上げ、`engines.dsh` と `@deepseek-ai/dsh` の peer 範囲も同時に絞り込みました。`0.1.7` は entry-config 設定モデルの起点であり、このプラグインが現在サポートする最も古いホストです。
 - Raised the minimum supported DSH version from `0.1.0-rc.7` to `0.1.7-alpha.1`, tightening both `engines.dsh` and the `@deepseek-ai/dsh` peer range. `0.1.7` is where the entry-config settings model begins and is now the oldest host this plugin supports.
-- 移除了只服务于旧版本的兼容层：版本映射表中 rc.7 / rc.8 / 0.1.2 / 0.1.3 / 0.1.6 五段能力窗口合并为一段，`namespace` 设置模型（`register` / `installSection` / `get` / `settings/updated` 事件）从代码中删除，`readSettingsSection` 只从 `describe()` 投影。发布 workflow 的兼容矩阵也由五个官方代表缩减为一个（`0.1.7-alpha.1`）。
+- 旧バージョンのみを対象とした互換レイヤーを削除しました。バージョン対応表の rc.7 / rc.8 / 0.1.2 / 0.1.3 / 0.1.6 という 5 つの機能ウィンドウを 1 つに統合し、`namespace` 設定モデル（`register` / `installSection` / `get` / `settings/updated` イベント）をコードから削除し、`readSettingsSection` は `describe()` のみから投影します。リリース workflow の互換マトリクスも 5 つの公式代表から 1 つ（`0.1.7-alpha.1`）に縮小しました。
 - Removed the compatibility layer that only served the older releases: the version map's five capability windows (rc.7, rc.8, 0.1.2, 0.1.3, 0.1.6) collapsed into one, the `namespace` settings model (`register` / `installSection` / `get` and the `settings/updated` event) is gone from the code, and `readSettingsSection` projects from `describe()` alone. The release workflow's compatibility matrix shrank from five official representatives to one (`0.1.7-alpha.1`).
 
 ## [0.4.0] - 2026-11-07
