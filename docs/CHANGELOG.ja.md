@@ -14,6 +14,8 @@
 
 - プラグインアイコンを追加しました。`package.json` が `icon: "./icon.svg"` を宣言し、プラグインのカード、詳細ページ、コンポーネント行にこのアイコンが表示され、既定の図形へのフォールバックがなくなります。アイコンは 36×36 の自己完結型 SVG（グラデーションのトラックとリング状のつまみ。プラグインの推論強度の段階に対応）で、`rect` と `circle` の図形だけで構成し、スクリプト、外部参照、フォント、アニメーションを含まないため `<img>` 内で描画でき、明暗どちらのテーマでも視認できます。
 - Added a plugin icon: `package.json` declares `icon: "./icon.svg"`, and the Plugins page shows it on the bundle card, its detail page, and its component rows instead of falling back to the default artwork. The image is a self-contained 36×36 SVG (a gradient track with a ring thumb, matching the plugin's thinking-effort levels) built from `rect` and `circle` geometry alone, with no scripts, external references, fonts, or animation, so it renders inside an `<img>` and reads in both themes.
+- ドキュメントに実機のスクリーンショットを追加しました。DSH `0.2.2-rc.1` の Web インスタンスで、`sub2api` プロバイダー（15 モデル）を宣言した実際の `llm-pi-ai` ルートを使い、プラグインアイコンと「モデル能力と档位」ページを撮影しています。`docs/SCREENSHOTS.md` を参照してください。
+- Documentation gained screenshots taken from a live DSH `0.2.2-rc.1` Web instance whose `llm-pi-ai` route declares a `sub2api` provider with 15 models: the plugin icon on the Plugins page and the Model capabilities and effort page, collected in `docs/SCREENSHOTS.md`.
 
 ### 变更 / Changed
 

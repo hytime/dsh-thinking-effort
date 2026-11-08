@@ -82,6 +82,7 @@ These identifiers have different responsibilities:
 | Subagent default model | Pick the provider/model a subagent starts on, applied through the official `agent.model.select()` during `agent/created`; with none configured the child keeps inheriting the parent session's route |
 | Compaction threshold | Set the trigger percentage and retained ratio per model; the plugin measures before each step and calls the official `compactRegion()` above its own threshold. Models without an override follow the global ratio, 60% by default |
 | Multilingual settings | Includes Chinese, English, Japanese, and Korean dictionaries; Japanese/Korean switching uses DSH language-pack support |
+| Plugin icon | Declares `icon: "./icon.svg"`, so the Plugins page shows this package's own artwork on its card, detail page, and component rows instead of the default glyph |
 | Version watermark | Show the installed plugin version in the bottom-right corner |
 
 ## Install, upgrade, and remove

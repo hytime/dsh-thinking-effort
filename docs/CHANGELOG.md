@@ -18,6 +18,8 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 - 新增插件图标：`package.json` 声明 `icon: "./icon.svg"`，插件页的插件卡片、详情页与组件行都显示这个图标，不再回退到默认图形。图标是 36×36 的自包含 SVG（渐变轨道加圆环滑块，对应插件的思考强度档位），几何只用 `rect` 与 `circle`，没有脚本、外链、字体或动画，因此在 `<img>` 里渲染即可，深浅两种主题都可见。
 - Added a plugin icon: `package.json` declares `icon: "./icon.svg"`, and the Plugins page shows it on the bundle card, its detail page, and its component rows instead of falling back to the default artwork. The image is a self-contained 36×36 SVG (a gradient track with a ring thumb, matching the plugin's thinking-effort levels) built from `rect` and `circle` geometry alone, with no scripts, external references, fonts, or animation, so it renders inside an `<img>` and reads in both themes.
+- 文档新增实测截图：在 DSH `0.2.2-rc.1` 的 Web 实例上，用声明了 `sub2api` 供应商（15 个模型）的真实 `llm-pi-ai` 路由截取插件页图标与「模型能力与档位」页面，见 `docs/SCREENSHOTS.md`。
+- Documentation gained screenshots taken from a live DSH `0.2.2-rc.1` Web instance whose `llm-pi-ai` route declares a `sub2api` provider with 15 models: the plugin icon on the Plugins page and the Model capabilities and effort page, collected in `docs/SCREENSHOTS.md`.
 
 ### 变更 / Changed
 
