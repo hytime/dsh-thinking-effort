@@ -51,11 +51,9 @@
     "docs/SCREENSHOTS.md",
     "docs/assets/",
     "icon.svg",
-    "lib/client.js",
+    "lib/*.js",
     "lib/entries/",
-    "lib/index.js",
-    "lib/types/**/*.d.ts",
-    "types/"
+    "lib/types/**/*.d.ts"
   ],
   "dsh": {
     "bundle": {

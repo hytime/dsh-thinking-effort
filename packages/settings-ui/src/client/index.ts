@@ -5,7 +5,6 @@ import { createTakeoverRuntimeStore, observeTakeoverSettings } from './takeover-
 import { LOCALE_NS } from './constants.js'
 import { SectionEditor } from './SectionEditor.js'
 import { LegacyMigrationModal } from './components/LegacyMigrationModal.js'
-import { apply as registerComposerSeat } from '@hytime/dsh-feature-composer'
 import type { ClientContext, ClientLocale, ClientSlots, ConfigFormsService } from '@hytime/dsh-plugin-kit'
 
 export const name = '@hytime/dsh-thinking-effort'
@@ -111,9 +110,4 @@ export function apply(context: ClientContext): void {
   context.on('internal/service', (serviceName) => {
     if (serviceName === 'remote.settings' || serviceName === 'remote' || serviceName === 'configForms') mountFromRemote()
   })
-
-  // Register the composer model slider seat after declaring the Settings page.
-  // The seat itself uses a declared `inject` on `modelDirectories`, so it can be
-  // dispatched at the top level without waiting on the Settings bridge.
-  registerComposerSeat(context)
 }

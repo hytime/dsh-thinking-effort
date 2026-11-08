@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { apply, inject, name } from '../packages/settings-ui/src/client/index.js'
+// The production composition, not one package: `src/client/index.ts` is what
+// `lib/client.js` is built from, and it is the only place that combines the
+// settings panel with the Composer seat. Testing a package directly would miss
+// a registration mounted twice (or dropped) at the seam between them.
+import { apply, inject, name } from '../src/client/index.js'
 import { LOCALE_NS } from '../packages/settings-ui/src/client/constants.js'
 import { PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
 import { observeTakeoverSettings, resolveTakeoverDescription } from '../packages/settings-ui/src/client/takeover-runtime.js'

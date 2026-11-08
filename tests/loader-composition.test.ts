@@ -1345,8 +1345,13 @@ describe('published package composition', () => {
       ],
       platform: 'web',
     })
-    expect(manifest.files).toContain('lib/index.js')
-    expect(manifest.files).toContain('lib/client.js')
+    // A multi-entry build also emits shared chunks (`lib/src-*.js`,
+    // `lib/opencode-session-*.js`, `lib/types-*.js`) beside the entry files, and
+    // every entry imports them. Listing only the entries published a package
+    // whose `apply` threw ERR_MODULE_NOT_FOUND on install, so the glob covers
+    // the whole root: `lib/entries/` carries the six subpath entries.
+    expect(manifest.files).toContain('lib/*.js')
+    expect(manifest.files).toContain('lib/entries/')
     expect(manifest.files).toContain('lib/types/**/*.d.ts')
     expect(manifest.files).toContain('cordis.patch.yml')
     for (const documentationFile of [
