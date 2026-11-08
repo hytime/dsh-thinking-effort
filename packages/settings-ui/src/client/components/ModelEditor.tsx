@@ -5,6 +5,7 @@ import type { CompactionDraft, ContextDraft, DraftCell, InputDraft, InventoryIte
 import type { Palette } from '../theme.js'
 import { ActionButton, Icon, SwitchControl } from './Controls.js'
 import { renderGatewayCompatControls } from './GatewayCompatControls.js'
+import { useAutoSave } from '../section-editor/use-auto-save.js'
 import css from '../settings.module.css'
 
 /**
@@ -23,22 +24,21 @@ export interface ModelCompactionControls {
   readonly retainPlaceholder: string
   /** Why the current pair would be refused, or `null` when it is savable. */
   readonly problem: string | null
-  /** Whether the draft differs from what is stored. */
-  readonly dirty: boolean
   /**
-   * The plugin-wide compaction switch, as persisted.
-   *
-   * It is the plugin's own policy flag, not a per-model override: the same value
-   * is shown in every model's editor because one flag gates the pre-step check
-   * for every route. It sits here rather than on a page-level card because this
-   * block is where the ratios it gates are set.
+   * The ratios save themselves once typing pauses, so there is no Save button:
+   * an accepted value and a stored one are the same state, and a button would
+   * only be a second place for the two to disagree.
    */
-  readonly enabled: boolean
-  /** Toggling saves immediately; the ratios are only meaningful once this is on. */
-  readonly onEnabledChange: (enabled: boolean) => void
   readonly onThresholdChange: (value: string) => void
   readonly onRetainChange: (value: string) => void
-  readonly onSave: () => void
+  /**
+   * Write the pair currently in the fields.
+   *
+   * Called by the idle timer rather than a button, so it takes no argument: the
+   * component that owns the draft is the same one that renders it, and reading
+   * the draft at commit time is what makes the write match the visible text.
+   */
+  readonly onCommit: () => void
 }
 
 export interface ModelEditorProps {
@@ -82,6 +82,19 @@ export interface ModelEditorProps {
 
 export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy, palette, t, onLevelChange, onContextChange, onOneMillionChange, onInputChange, onSave, blockedReason, onRestoreReasoning, onRestoreCapability, compatView, onCompatChange, onSaveCompat, compatDirty, compatExpanded, onToggleCompatExpanded, openCodeSession, openCodeSessionAvailable = false, onOpenCodeSessionChange, compaction }: ModelEditorProps): React.ReactElement {
   const levelLabel = (level: typeof ALL_LEVELS[number]): string => t(LEVEL_LABEL_KEYS[level])
+  // The compaction ratios persist themselves once typing pauses. The pair is
+  // written as one leaf, so it is only safe to send when BOTH fields parse and
+  // the retain ratio stays below the threshold; an invalid pair keeps its text
+  // in the fields and reports why instead of being written and rolled back.
+  const compactionDraft = compaction?.draft
+  useAutoSave(
+    {
+      text: compactionDraft === undefined ? '' : `${compactionDraft.threshold}\u0000${compactionDraft.retain}`,
+      writable: compaction !== undefined && compaction.problem === null,
+      touched: compactionDraft?.touched === true,
+    },
+    () => { compaction?.onCommit() },
+  )
   const anyCompatDirty = compatDirty !== undefined && GATEWAY_COMPAT_FIELD_KEYS.some((key) => compatDirty[key] === true)
   const modelCompatControls = compatView !== undefined
     ? renderGatewayCompatControls({ scope: 'model', view: compatView, onChange: (next) => onCompatChange?.(next as Partial<ModelGatewayCompatUpdate>), disabled: busy || onCompatChange === undefined, expanded: compatExpanded === true, onToggleExpanded: onToggleCompatExpanded, availableCount: GATEWAY_COMPAT_FIELD_KEYS.filter((key) => key !== 'supportsDeveloperRole' && key !== 'maxTokensField' && compatView[`${key}Available` as keyof ModelGatewayCompatView] === true).length }, { palette, t })
@@ -128,19 +141,19 @@ export function ModelEditor({ item, draft, contextDraft, inputDraft, dirty, busy
     {compaction !== undefined ? <div data-scope="compaction" style={{ display: 'grid', gap: '5px', marginTop: '8px', padding: '8px', border: `0.5px solid ${palette.border}`, borderRadius: '6px', backgroundColor: palette.field }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 650 }}><Icon name="sparkles" size={15} /><span>{t('compactionSectionTitle')}</span></span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', whiteSpace: 'nowrap' }}><span>{t('compactionEnable')}</span><SwitchControl checked={compaction.enabled} onChange={compaction.onEnabledChange} disabled={busy} label={t('compactionEnable')} palette={palette} /></span>
       </div>
-      {/* The ratios stay editable while the switch is off — a user who knows the
-          numbers they want sets them first and enables the pass afterwards — so
-          the block says outright that nothing fires until the switch is on. */}
-      {compaction.enabled ? null : <div data-scope="compaction-disabled" style={{ color: palette.secondary, fontSize: '11px', lineHeight: '15px' }}>{t('compactionDisabledHint')}</div>}
+      {/* There is no on/off switch: the percentages are the configuration, and
+          an unset field inherits the global ratio. A switch would have to mean
+          "do not compact at all", which this plugin cannot offer — DSH runs its
+          own automatic pass regardless of anything set here. */}
+      <div data-scope="compaction-scope" style={{ color: palette.secondary, fontSize: '11px', lineHeight: '15px' }}>{t('compactionSectionHint')}</div>
       <label className={css.labelControlRow} style={{ fontSize: '12px', color: palette.text }}><span style={{ display: 'grid', gap: '1px', minWidth: 0 }}><span>{t('compactionThreshold')}</span><span style={{ color: palette.secondary, fontSize: '10px', lineHeight: '13px' }}>{t('compactionThresholdHint')}</span></span><span style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0 }}><input type="text" inputMode="decimal" value={compaction.draft.threshold} disabled={busy} placeholder={compaction.thresholdPlaceholder} aria-label={t('compactionThreshold')} onChange={(event) => compaction.onThresholdChange(event.currentTarget.value)} style={{ boxSizing: 'border-box', width: '100%', minWidth: 0, height: '28px', padding: '0 8px', border: `1px solid ${palette.border}`, borderRadius: '8px', fontSize: '13px', backgroundColor: palette.group, color: palette.text, outline: 'none' }} /><span style={{ color: palette.secondary, fontSize: '11px' }}>%</span></span></label>
       <label className={css.labelControlRow} style={{ fontSize: '12px', color: palette.text }}><span style={{ display: 'grid', gap: '1px', minWidth: 0 }}><span>{t('compactionRetain')}</span><span style={{ color: palette.secondary, fontSize: '10px', lineHeight: '13px' }}>{t('compactionRetainHint')}</span></span><span style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0 }}><input type="text" inputMode="decimal" value={compaction.draft.retain} disabled={busy} placeholder={compaction.retainPlaceholder} aria-label={t('compactionRetain')} onChange={(event) => compaction.onRetainChange(event.currentTarget.value)} style={{ boxSizing: 'border-box', width: '100%', minWidth: 0, height: '28px', padding: '0 8px', border: `1px solid ${palette.border}`, borderRadius: '8px', fontSize: '13px', backgroundColor: palette.group, color: palette.text, outline: 'none' }} /><span style={{ color: palette.secondary, fontSize: '11px' }}>%</span></span></label>
       {/* The refusal is rendered here rather than in the page-top banner so the
-          reason sits beside the field the user is typing into. The same string
-          disables Save, so the affordance and the write path cannot disagree. */}
-      {compaction.problem !== null ? <div aria-live="polite" data-scope="compaction-problem" style={{ padding: '5px 8px', border: `1px solid ${palette.dangerBorder}`, borderRadius: '6px', color: palette.danger, backgroundColor: palette.dangerBg, fontSize: '11px', lineHeight: '15px' }}>{compaction.problem}</div> : null}
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}><ActionButton text={t('compactionSave')} onClick={compaction.onSave} disabled={busy || !compaction.dirty || compaction.problem !== null} tone="primary" palette={palette} icon="check" /></div>
+          reason sits beside the field the user is typing into. It is also what
+          keeps the field unsaved: an invalid pair is never written, because a
+          rejected write would roll the user's typing back under them. */}
+      {compaction.problem !== null ? <div aria-live="polite" data-scope="compaction-problem" style={{ padding: '5px 8px', border: `1px solid ${palette.dangerBorder}`, borderRadius: '6px', color: palette.danger, backgroundColor: palette.dangerBg, fontSize: '11px', lineHeight: '15px' }}>{compaction.problem}</div> : <div data-scope="compaction-autosave" style={{ color: palette.secondary, fontSize: '10px', lineHeight: '14px' }}>{t('compactionAutoSave')}</div>}
     </div> : null}
     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px', paddingTop: '6px', borderTop: `1px solid ${palette.divider}` }}>
       <ActionButton text={dirty ? t('saveChanges') : t('saved')} onClick={onSave} disabled={busy || !dirty || blockedReason != null} tone="primary" palette={palette} icon="check" label={dirty ? t('saveModelChanges') : t('noPendingChanges')} />

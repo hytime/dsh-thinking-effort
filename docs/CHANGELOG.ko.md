@@ -17,6 +17,13 @@
 - 문서에 실측 스크린샷을 추가했습니다. DSH `0.2.2-rc.1` Web 인스턴스에서 `sub2api` 공급자(15개 모델)를 선언한 실제 `llm-pi-ai` 라우트로 플러그인 아이콘과 "모델 능력 및 사고 강도" 페이지를 촬영했습니다. `docs/SCREENSHOTS.md`를 참고하세요.
 - Documentation gained screenshots taken from a live DSH `0.2.2-rc.1` Web instance whose `llm-pi-ai` route declares a `sub2api` provider with 15 models: the plugin icon on the Plugins page and the Model capabilities and effort page, collected in `docs/SCREENSHOTS.md`.
 
+### 修复 / Fixed
+
+- 上下文压缩去掉「启用」开关：百分比本身就是配置，留空跟随全局比例（默认 60%）。原先的开关文案会被读成「关掉就关闭上下文压缩」，但 DSH 官方的自动压缩不受本插件影响，仍按它自己的阈值运行——本插件只提供「更早压缩」这一层，不提供「完全不压缩」。已写入 `compaction.enabled` 的旧文档照常加载，该字段被忽略。
+- Removed the Context compaction on/off switch: the percentages ARE the configuration, and empty fields follow the global ratio (60% by default). The old switch read as "turn context compaction off", but DSH's own automatic compaction is unaffected by this plugin and keeps running at its own threshold — this plugin only offers an EARLIER pass, never "no compaction". Documents that already stored `compaction.enabled` still load; the field is ignored.
+- 压缩阈值与保留比例、子 agent 默认模型改为输入即保存，去掉了各自的保存按钮。两个百分比在输入停顿后作为一次写入提交，非法组合保留输入内容并就地说明原因，不会写入后再回滚；子 agent 供应商与模型在配对完整后一次写入，选择「继承父会话」则以 unset 清空。
+- The compaction ratios and the subagent default model now save as you type, and their Save buttons are gone. The two percentages commit as one write once typing pauses; an invalid pair keeps its text and explains itself in place rather than being written and rolled back. The subagent provider/model pair commits once complete, and choosing **Inherit parent session** clears it with an unset.
+
 ### 变更 / Changed
 
 - 最低支持的 DSH 版本从 `0.1.0-rc.7` 提高到 `0.1.7-alpha.1`，`engines.dsh` 与 `@deepseek-ai/dsh` peer 范围同步收紧。`0.1.7` 是 entry-config 设置模型的起点，也是本插件现在支持的最旧宿主。

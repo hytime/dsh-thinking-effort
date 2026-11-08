@@ -265,11 +265,11 @@
   "legacyMigrationNothingPending": "没有待迁移的旧数据。",
   "compactionSectionTitle": "上下文压缩",
   "compactionThreshold": "压缩阈值",
-  "compactionThresholdHint": "上下文用量达到窗口的该百分比时触发压缩；留空沿用全局设置。",
+  "compactionThresholdHint": "上下文用量达到窗口该百分比时，由插件提前压缩；留空沿用全局设置。",
   "compactionRetain": "保留最近上下文",
-  "compactionRetainHint": "压缩后按该百分比原样保留最近的消息；留空沿用全局设置。",
+  "compactionRetainHint": "插件压缩后按该百分比原样保留最近的消息；留空沿用全局设置。",
+  "compactionAutoSave": "修改后自动保存",
   "compactionFollowGlobal": "跟随全局 {percent}%",
-  "compactionSave": "保存压缩设置",
   "compactionInvalidThreshold": "压缩阈值需在 10% 到 95% 之间",
   "compactionInvalidRetain": "保留比例需大于 0",
   "compactionRetainNotBelow": "保留比例必须小于压缩阈值",
@@ -279,9 +279,8 @@
   "subagentModelProvider": "供应商",
   "subagentModelModel": "模型",
   "subagentModelUnavailable": "已保存但当前不可用（{route}）",
-  "subagentModelSave": "保存默认模型",
   "subagentModelHint": "子 agent 创建时切换到该模型；选择「继承父会话」则沿用父会话的模型。",
+  "subagentModelAutoSave": "选择后自动保存",
   "subagentModelSaved": "子 agent 默认模型已保存",
-  "compactionEnable": "启用上下文压缩",
-  "compactionDisabledHint": "启用后才会按上面的百分比触发压缩（插件级设置，对所有模型生效）。"
+  "compactionSectionHint": "留空则跟随全局比例；填写的百分比只影响该模型。"
 }

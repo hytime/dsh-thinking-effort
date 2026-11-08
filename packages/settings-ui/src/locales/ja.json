@@ -265,11 +265,11 @@
   "legacyMigrationNothingPending": "移行待ちの旧データはありません。",
   "compactionSectionTitle": "コンテキスト圧縮",
   "compactionThreshold": "圧縮しきい値",
-  "compactionThresholdHint": "コンテキスト使用量がウィンドウのこの割合に達したら圧縮します。空欄ならグローバル設定に従います。",
+  "compactionThresholdHint": "コンテキスト使用量がウィンドウのこの割合に達したとき、プラグインが早めに圧縮します。空欄は全体設定に従います。",
   "compactionRetain": "直近のコンテキストを保持",
-  "compactionRetainHint": "圧縮時にウィンドウのこの割合をそのまま保持します。空欄ならグローバル設定に従います。",
+  "compactionRetainHint": "プラグインの圧縮後、この割合の直近メッセージをそのまま保持します。空欄は全体設定に従います。",
+  "compactionAutoSave": "入力すると自動保存されます",
   "compactionFollowGlobal": "グローバルに従う {percent}%",
-  "compactionSave": "圧縮設定を保存",
   "compactionInvalidThreshold": "圧縮しきい値は 10%〜95% の範囲で指定してください",
   "compactionInvalidRetain": "保持率は 0 より大きい必要があります",
   "compactionRetainNotBelow": "保持率は圧縮しきい値より小さくしてください",
@@ -279,9 +279,8 @@
   "subagentModelProvider": "プロバイダー",
   "subagentModelModel": "モデル",
   "subagentModelUnavailable": "保存済みですが現在は利用できません（{route}）",
-  "subagentModelSave": "既定モデルを保存",
   "subagentModelHint": "Subagent の作成時にこのモデルへ切り替えます。「親セッションを継承」を選ぶと親のモデルを使います。",
+  "subagentModelAutoSave": "選択すると自動保存されます",
   "subagentModelSaved": "Subagent の既定モデルを保存しました",
-  "compactionEnable": "コンテキスト圧縮を有効にする",
-  "compactionDisabledHint": "有効にすると、上の割合に達したときに圧縮が実行されます（プラグイン全体の設定で、すべてのモデルに適用されます）。"
+  "compactionSectionHint": "空欄は全体の割合に従います。入力した割合はこのモデルにのみ適用されます。"
 }

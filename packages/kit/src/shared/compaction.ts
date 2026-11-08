@@ -35,8 +35,6 @@ export interface CompactionModelPolicy {
 
 /** The resolved plugin policy: defaults plus the per-route override table. */
 export interface CompactionPolicySettings {
-  /** Whether the plugin performs its own pre-step pressure check. */
-  readonly enabled: boolean
   /** Window fraction every model without an override compacts at. */
   readonly thresholdRatio: number
   /** Recent-conversation fraction kept verbatim when a model has no override. */
@@ -188,7 +186,6 @@ export function formatRatioPercent(ratio: number): string {
  */
 export function compactionPolicyFrom(value: unknown): CompactionPolicySettings {
   const fallback: CompactionPolicySettings = {
-    enabled: false,
     thresholdRatio: DEFAULT_THRESHOLD_RATIO,
     retainRatio: DEFAULT_RETAIN_RATIO,
     models: {},
@@ -223,7 +220,6 @@ export function compactionPolicyFrom(value: unknown): CompactionPolicySettings {
     ? value.retainRatio
     : DEFAULT_RETAIN_RATIO
   return {
-    enabled: value.enabled === true,
     thresholdRatio,
     retainRatio,
     models,

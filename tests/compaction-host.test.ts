@@ -140,12 +140,15 @@ const TOOL_ROUND_TRIP: readonly EventSpec[] = [
 ]
 
 describe('installCompactionPolicy', () => {
-  it('does nothing when the policy is disabled, and still forwards the decision', async () => {
+  it('runs on the configured ratio alone, with no on/off switch to consult', async () => {
+    // The pass has no flag: the percentages are the configuration. A section
+    // that carries only ratios must still act, because that is the shape every
+    // panel write produces.
     const { session, seqs } = fakeSession([1, 2, 3, 4, 5], TOOL_ROUND_TRIP, { provider: 'p', model: 'm' })
     const meter = fakeMeter(seqs, [100, 100, 100, 100, 100])
     const compaction = fakeCompaction()
     const host = fakeHost({
-      compaction: { enabled: false, thresholdRatio: 0.6, retainRatio: 0.16 },
+      compaction: { thresholdRatio: 0.6, retainRatio: 0.16 },
       services: {
         agentPresets: { serviceFor: () => compaction },
         tokenMeter: meter,
@@ -157,8 +160,9 @@ describe('installCompactionPolicy', () => {
 
     expect(observed.nextCalls).toBe(1)
     expect(observed.result).toBe(FORWARDED)
-    expect(meter.measure).not.toHaveBeenCalled()
-    expect(compaction.compactRegion).not.toHaveBeenCalled()
+    // 500 measured against a 600-token threshold: at the limit, so it acts.
+    expect(meter.measure).toHaveBeenCalled()
+    expect(compaction.compactRegion).toHaveBeenCalled()
   })
 
   it('does nothing while the surface is below the threshold', async () => {

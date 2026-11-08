@@ -101,12 +101,10 @@ const compactionModelPolicy = z.object({
  * shape removes the failure instead of validating it.
  */
 const compactionPolicy = z.object({
-  enabled: z.boolean().default(false),
   thresholdRatio: z.number().default(DEFAULT_THRESHOLD_RATIO),
   retainRatio: z.number().default(DEFAULT_RETAIN_RATIO),
   models: z.dict(z.dict(compactionModelPolicy)).default({}),
 }).default({
-  enabled: false,
   thresholdRatio: DEFAULT_THRESHOLD_RATIO,
   retainRatio: DEFAULT_RETAIN_RATIO,
   models: {},
@@ -252,7 +250,6 @@ const PLUGIN_SETTINGS_DEFAULTS = {
   autoFillDefaults: true,
   subagentModel: { provider: '', model: '' },
   compaction: {
-    enabled: false,
     thresholdRatio: DEFAULT_THRESHOLD_RATIO,
     retainRatio: DEFAULT_RETAIN_RATIO,
     models: {},

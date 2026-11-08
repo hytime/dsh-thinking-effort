@@ -64,7 +64,7 @@ describe('PLUGIN_SETTINGS_SCHEMA', () => {
       subagentEffort: '',
       autoFillDefaults: true,
       subagentModel: { provider: '', model: '' },
-      compaction: { enabled: false, thresholdRatio: 0.6, retainRatio: 0.16, models: {} },
+      compaction: { thresholdRatio: 0.6, retainRatio: 0.16, models: {} },
       legacyMigration: legacyMigrationDefaults,
     })
     expect(opencodeSession).toEqual({
@@ -141,7 +141,7 @@ const pluginSettingsDefaults = {
   subagentEffort: '',
   autoFillDefaults: true,
   subagentModel: { provider: '', model: '' },
-  compaction: { enabled: false, thresholdRatio: 0.6, retainRatio: 0.16, models: {} },
+  compaction: { thresholdRatio: 0.6, retainRatio: 0.16, models: {} },
   legacyMigration: legacyMigrationDefaults,
   profiles: {},
   autoBackup: {

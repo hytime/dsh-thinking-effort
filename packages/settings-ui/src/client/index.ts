@@ -47,7 +47,31 @@ function configFormsView(context: ClientContext): ConfigFormsService {
   return { get: (entryId) => resolve()?.get(entryId) }
 }
 
-export function apply(context: ClientContext): void {
+/**
+ * Which of the bundle's other components are switched on.
+ *
+ * The panel renders the OpenCode, compaction and subagent editors, but each of
+ * those is its own Loader row: turning `thinking-effort-opencode` off stops the
+ * Host from injecting headers without unmounting this panel, so the card has to
+ * disappear here or it would keep offering settings for a feature that is not
+ * running.
+ *
+ * Every flag defaults to on. A caller that does not know — an older client
+ * bundle, or the settings row mounted on its own — keeps the previous behaviour
+ * rather than silently hiding working controls.
+ */
+export interface SettingsParts {
+  readonly opencode?: boolean
+  readonly compaction?: boolean
+  readonly subagent?: boolean
+  readonly migration?: boolean
+}
+
+export function apply(context: ClientContext, parts: SettingsParts = {}): void {
+  const opencodeOn = parts.opencode !== false
+  const compactionOn = parts.compaction !== false
+  const subagentOn = parts.subagent !== false
+  const migrationOn = parts.migration !== false
   const slots = context.get('slots') as ClientSlots | undefined
   if (slots === undefined) return
   const connection = context.get('connection') as import('@hytime/dsh-plugin-kit').ClientConnection | undefined
@@ -94,13 +118,18 @@ export function apply(context: ClientContext): void {
         locale: LOCALE_NS,
         label: () => translate('pageTitle'),
       },
-      () => createElement(SectionEditor, { settings: observedSettings, locale, t: translate, takeoverRuntime: runtime }),
+      () => createElement(SectionEditor, { settings: observedSettings, locale, t: translate, takeoverRuntime: runtime, parts: { opencode: opencodeOn, compaction: compactionOn, subagent: subagentOn } }),
     ))
 
-    slots.inject(OVERLAY_NAME, () => slots.register(
-      { name: OVERLAY_NAME, id: OVERLAY_ID, order: OVERLAY_ORDER },
-      () => createElement(LegacyMigrationModal, { settings: observedSettings, t: translate }),
-    ))
+    // The migration dialog is its own Loader row: with `thinking-effort-migration`
+    // off there is no host watcher to offer anything, so the overlay must not
+    // mount at all rather than render an empty offer.
+    if (migrationOn) {
+      slots.inject(OVERLAY_NAME, () => slots.register(
+        { name: OVERLAY_NAME, id: OVERLAY_ID, order: OVERLAY_ORDER },
+        () => createElement(LegacyMigrationModal, { settings: observedSettings, t: translate }),
+      ))
+    }
   }
 
   const mountFromRemote = (): void => {

@@ -88,7 +88,7 @@ DSH 的 `llm-pi-ai` 适配器允许你手工声明第三方模型，但这些模
 | 配置备份与方案 | 把当前配置导出成 JSON 文件用于跨机器迁移；在本机保存多份命名方案并可在其中切换；导入前可选择「合并」或「替换」并预览影响范围 |
 | 子 agent 默认值 | 把配置的档位应用到子 agent 请求，覆盖子 agent 从父会话继承来的档位；未配置时不动请求，子 agent 继续继承父会话档位 |
 | 子 agent 默认模型 | 为子 agent 指定 provider/model，在 `agent/created` 阶段通过官方 `agent.model.select()` 应用；未指定时继续继承父会话路由 |
-| 上下文压缩阈值 | 按模型设置压缩触发百分比与保留比例，插件在每步开始前自行测量并在超阈值时调用官方 `compactRegion()`；未配置的模型跟随全局比例，默认 60% |
+| 上下文压缩阈值 | 按模型设置压缩触发百分比与保留比例，插件在每步开始前自行测量并在超阈值时调用官方 `compactRegion()`；留空跟随全局比例（默认 60%）。没有开关：百分比即配置，官方压缩始终按自己的阈值运行 |
 | 快捷预设 | 一键应用官方 DeepSeek 风格或通用档位组合 |
 | Composer 分档滑块 | 运行时提供 `modelDirectories` 服务时，注册 Composer 的可选 `seat`，显示当前 `provider/model` 的宿主已解析推理档位 |
 | 多语言设置 | 已包含中文、English、日本語和한국어字典；日语/韩语切换使用 DSH 的语言包支持 |
@@ -290,7 +290,7 @@ DSH 0.1.7 会把 `settings.yaml` 重命名并只导入一次，而更早版本�
 - **宿主侧：** 插件读取 `llm-pi-ai` 设置，在启动和设置变更时扫描 `models` 与 `modelOverrides`，只为缺少 `reasoningEfforts` 的模型补充默认档位。设置页的「自动补齐默认档位」开关默认开启、保存后立即生效；关闭只停止自动扫描和写入，不删除已有档位，重新开启会立即扫描一次。补齐只写入用户层，因此覆盖的是你自己 profile 声明的模型：由组合 base 或 schema 默认值提供的模型在该层没有可写入的条目，插件不会为其补全，并在宿主日志中说明跳过了多少个。插件同时读取模型级 OpenCode 会话设置，只在匹配的 `llm/stream` 请求中注入按 `opencodeSession.format` 生成（默认 `ses-derive`）的 `x-opencode-session`，并为 `opencodeSession.userAgent` 命中的模型改写 `user-agent`（否则会被 `llm-pi-ai` 适配器的归因头强制覆盖）。
 - **客户端：** 通过 DSH Settings Remote（`ctx.remote.settings`）注册设置页；运行时提供 `modelDirectories` 服务时，为可选 Composer `seat` 注册有意压过官方模型选择器的实现（该槽为单占位槽，优先级越低越胜出），并显示宿主已解析的推理档位滑块。模型编辑器把 OpenCode 会话 Header 设置保存在插件自有 namespace，与 `llm-pi-ai.compat` 分开。四种文案分别维护在 `src/locales/zh.json`、`src/locales/en.json`、`src/locales/ja.json` 和 `src/locales/ko.json`，发布前生成到客户端 bundle。
 - **子 agent：** 默认思考强度存放在本插件自有设置分区的 `subagentEffort`，子 agent 默认模型也存放在同一分区。具备 `agent.model.current()` 和 `agent.model.select()` 的宿主会在 `agent/created` 阶段、子 agent 首个模型步骤前应用这两项；未暴露该接口的宿主只对思考强度使用 `agent/request` waterfall 回退。未配置默认值或自定义线上值无法在目标模型上解析时，插件不改动当前选择，子 agent 继续继承父会话档位。
-- **上下文压缩：** 插件不挂载自己的压缩后端，只持有百分比策略。Web profile 里官方 `compaction-basic` 位于每个 agent preset 的隔离域内，宿主侧 `ctx.get('compaction')` 为 `undefined`，因此插件通过 `ctx.get('agentPresets').serviceFor(agent, 'compaction')` 取到该 agent 实际使用的实例。`agent/pre-step` 监听器用 `ctx.tokenMeter` 测量当前压力、用 `ctx.llm.resolveModelInfo()` 取模型容量，超过策略阈值时选一段工具调用配对的表面范围并调用官方 `compactRegion()`。策略默认 60%，低于官方默认的 80%，因此两者嵌套而非竞争：插件先压缩，官方自动策略随后测到的表面已低于其自身阈值。该功能默认关闭，需在设置页压缩区块的「启用上下文压缩」开关打开后才会生效。
+- **上下文压缩：** 插件不挂载自己的压缩后端，只持有百分比策略。Web profile 里官方 `compaction-basic` 位于每个 agent preset 的隔离域内，宿主侧 `ctx.get('compaction')` 为 `undefined`，因此插件通过 `ctx.get('agentPresets').serviceFor(agent, 'compaction')` 取到该 agent 实际使用的实例。`agent/pre-step` 监听器用 `ctx.tokenMeter` 测量当前压力、用 `ctx.llm.resolveModelInfo()` 取模型容量，超过策略阈值时选一段工具调用配对的表面范围并调用官方 `compactRegion()`。策略默认 60%，低于官方默认的 80%，因此两者嵌套而非竞争：插件先压缩，官方自动策略随后测到的表面已低于其自身阈值。该功能没有开关：百分比本身就是配置，留空则跟随全局比例（默认 60%）。想更晚触发就调高阈值；本插件不提供「完全不压缩」的选项，因为官方自动压缩不受这里影响。
 - **版本信息：** 设置页右下角显示当前安装版本，例如 `v0.1.14`；DSH 插件列表从已安装包的 `package.json.version` 读取同一版本。
 
 ## 安装验证

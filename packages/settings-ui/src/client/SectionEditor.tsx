@@ -52,12 +52,27 @@ const NOTICE_DISMISS_MS = 3000
 const noRuntimeSubscribe = (): (() => void) => () => undefined
 const noRuntimeSnapshot = (): typeof emptyTakeoverRuntimeResolution => emptyTakeoverRuntimeResolution
 
+/**
+ * Which of the bundle's other components are switched on.
+ *
+ * Each of the cards this page renders belongs to a separate Loader row, so a
+ * row the profile disabled must not render its card: the control would still
+ * look live while the host half that acts on it is not mounted. Absent means on,
+ * which keeps a standalone mount (tests, an older bundle) rendering everything.
+ */
+export interface SectionEditorParts {
+  readonly opencode?: boolean
+  readonly compaction?: boolean
+  readonly subagent?: boolean
+}
+
 export interface SectionEditorProps {
   readonly settings: SettingsApi
   readonly locale: ClientLocale
   readonly t: Translation
   readonly palette?: Palette
   readonly takeoverRuntime?: TakeoverRuntimeStore
+  readonly parts?: SectionEditorParts
 }
 
 // The OpenCode session helpers and the state shape live in `section-editor/`;
@@ -65,7 +80,10 @@ export interface SectionEditorProps {
 // them from, and the split must not move a public entry point.
 export { applyOpenCodeSessionMutation, createOpenCodeSessionState, saveOpenCodeSession } from './section-editor/open-code-session.js'
 export type { OpenCodeSessionState } from '@hytime/dsh-plugin-kit'
-export function SectionEditor({ settings, locale, t, palette = iosPalette(), takeoverRuntime }: SectionEditorProps): React.ReactElement {
+export function SectionEditor({ settings, locale, t, palette = iosPalette(), takeoverRuntime, parts = {} }: SectionEditorProps): React.ReactElement {
+  const opencodeOn = parts.opencode !== false
+  const compactionOn = parts.compaction !== false
+  const subagentOn = parts.subagent !== false
   const [state, setState] = React.useState<EditorState>(initialState)
   const takeoverResolution = React.useSyncExternalStore(
     takeoverRuntime?.subscribe ?? noRuntimeSubscribe,
@@ -389,12 +407,12 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
    * to change a ratio would write a stale container. A leaf write replays
    * verbatim, which is what `rebuildOps: () => ops` claims.
    */
-  const applyModelCompaction = (item: InventoryItem): void => {
+  const applyModelCompaction = (item: InventoryItem, pending?: CompactionDraft): void => {
     const section = state.pluginSection
     if (section === null) return
     const key = keyOf(item)
     const policy = compactionPolicyOf(section)
-    const draft = state.compactionDrafts[key] ?? compactionDraftFrom(policy, item.route, item.model)
+    const draft = pending ?? state.compactionDrafts[key] ?? compactionDraftFrom(policy, item.route, item.model)
     const check = checkCompactionDraft(policy, item.route, item.model, draft)
     if (!check.ok) {
       setState((current) => ({ ...current, notice: null, error: compactionProblemText(check.problem, t) }))
@@ -411,29 +429,6 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       onSuccess: () => {
         setState((current) => ({ ...current, compactionDrafts: { ...current.compactionDrafts, [key]: { ...draft, touched: false } } }))
       },
-    })
-  }
-
-  /**
-   * Turn the plugin's own compaction pass on or off.
-   *
-   * The switch saves immediately rather than joining the ratios' Save button:
-   * the flag is plugin-wide while the ratios are per-model, so folding them into
-   * one write would make every model's Save toggle a global setting — and a user
-   * flipping the switch would have to notice a second button to make it stick.
-   * The write is a leaf, so it replays verbatim after a conflict.
-   */
-  const applyCompactionEnabled = (enabled: boolean): void => {
-    const section = state.pluginSection
-    if (section === null) return
-    const ops: SettingsOp[] = [{ op: 'set', path: ['compaction', 'enabled'], value: enabled }]
-    runOps({
-      ns: section.ns,
-      revision: revisionOf(section),
-      ops,
-      rebuildOps: () => ops,
-      successMessage: t('compactionSaved'),
-      entrySectionWrite: true,
     })
   }
 
@@ -586,21 +581,23 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     retain: t('compactionFollowGlobal', { percent: formatRatioPercent(compactionPolicy.retainRatio) }),
   }
   const compactionControlsFor = (item: InventoryItem): ModelCompactionControls | undefined => {
+    // No compaction row means no host pass, so the card would offer ratios that
+    // nothing reads.
+    if (!compactionOn) return undefined
     if (state.pluginSection === null) return undefined
     const key = keyOf(item)
     const draft = state.compactionDrafts[key] ?? compactionDraftFrom(compactionPolicy, item.route, item.model)
     const check = checkCompactionDraft(compactionPolicy, item.route, item.model, draft)
     return {
-      enabled: compactionPolicy.enabled,
-      onEnabledChange: applyCompactionEnabled,
       draft,
       thresholdPlaceholder: compactionPlaceholders.threshold,
       retainPlaceholder: compactionPlaceholders.retain,
       problem: check.ok ? null : compactionProblemText(check.problem, t),
-      dirty: draft.touched,
       onThresholdChange: (value) => patchCompactionDraft(item, { threshold: value }),
       onRetainChange: (value) => patchCompactionDraft(item, { retain: value }),
-      onSave: () => applyModelCompaction(item),
+      // The idle timer fires this with no argument, so the draft is read at
+      // commit time from the state the fields are rendering.
+      onCommit: () => applyModelCompaction(item),
     }
   }
 
@@ -625,7 +622,8 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       && !subagentModelRoutes.some((route) => route.provider === state.subagentModelDraft.provider && route.models.includes(state.subagentModelDraft.model)),
     onProviderChange: (provider) => setState((current) => ({ ...current, notice: null, subagentModelDraft: { ...current.subagentModelDraft, provider, touched: true } })),
     onModelChange: (model) => setState((current) => ({ ...current, notice: null, subagentModelDraft: { ...current.subagentModelDraft, model, touched: true } })),
-    onSave: applySubagentModel,
+    // Fired by the picker's idle timer, which reads the pair at commit time.
+    onCommit: applySubagentModel,
   }
 
   return <div className={css.settingsRoot} style={{ color: palette.text, fontFamily: '-apple-system, BlinkMacSystemFont, SF Pro Text, Segoe UI, sans-serif' }}>
@@ -637,15 +635,15 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       <div style={{ display: 'grid', gap: '2px' }}><span style={{ fontSize: '13px', fontWeight: 700 }}>{t('autoFillDefaultsTitle')}</span><span style={{ fontSize: '12px', color: palette.secondary }}>{t('autoFillDefaultsDescription')}</span></div>
       <SwitchControl checked={state.pluginSection?.value.autoFillDefaults !== false} disabled={state.busy || state.pluginSection === null} label={t('autoFillDefaultsTitle')} palette={palette} onChange={applyAutoFillDefaults} />
     </div>
-    <SubagentSettings effort={state.subagent?.effort ?? null} namespaceFound={state.subagent !== null} draft={state.subagentDraft} custom={state.subagentCustom} busy={state.busy} palette={palette} t={t} onDraftChange={(value) => setState((current) => ({ ...current, notice: null, subagentDraft: value }))} onCustomChange={(value) => setState((current) => ({ ...current, notice: null, subagentCustom: value }))} onSave={applySubagentEffort} modelPicker={subagentModelPicker} />
+    {subagentOn ? <SubagentSettings effort={state.subagent?.effort ?? null} namespaceFound={state.subagent !== null} draft={state.subagentDraft} custom={state.subagentCustom} busy={state.busy} palette={palette} t={t} onDraftChange={(value) => setState((current) => ({ ...current, notice: null, subagentDraft: value }))} onCustomChange={(value) => setState((current) => ({ ...current, notice: null, subagentCustom: value }))} onSave={applySubagentEffort} modelPicker={subagentModelPicker} /> : null}
     <ConfigBackupCard settings={settings} palette={palette} t={t} onApplied={load} />
-    <OpenCodeFormatCard settings={settings} palette={palette} t={t} revision={state.openCodeSessionReads} namespace={state.pluginSection?.ns ?? OPENCODE_SESSION_NS} onApplied={load} />
+    {opencodeOn ? <OpenCodeFormatCard settings={settings} palette={palette} t={t} revision={state.openCodeSessionReads} namespace={state.pluginSection?.ns ?? OPENCODE_SESSION_NS} onApplied={load} /> : null}
     {state.nsFound === false ? <p style={{ fontSize: '12px', opacity: 0.75 }}>{t('noNamespace')}</p> : <div>
       <div className={css.controlRow} style={{ marginBottom: state.quickSettingsOpen ? '4px' : '6px' }}><ActionButton text={t('quickSettings')} onClick={() => setState((current) => ({ ...current, quickSettingsOpen: !current.quickSettingsOpen }))} disabled={state.busy} palette={palette} icon={state.quickSettingsOpen ? 'chevronUp' : 'sliders'} />{state.quickSettingsOpen ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flexBasis: '100%', padding: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.field }}>{PRESETS.map((preset) => <ActionButton key={preset.key} text={t(preset.labelKey)} onClick={() => { setState((current) => ({ ...current, quickSettingsOpen: false })); applyPreset(preset.levels) }} disabled={state.busy} palette={palette} icon={preset.key === 'official' ? 'sparkles' : 'sliders'} />)}</div> : null}</div>
       <div style={{ position: 'relative', marginBottom: '7px' }}><span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: palette.secondary, pointerEvents: 'none' }}><Icon name="search" size={15} /></span><input type="text" value={state.query} placeholder={t('searchPlaceholder')} onChange={(event) => { const value = event.currentTarget.value; setState((current) => ({ ...current, query: value })) }} style={{ boxSizing: 'border-box', width: '100%', height: '30px', padding: '0 10px 0 30px', border: `1px solid ${palette.border}`, borderRadius: '8px', fontSize: '13px', backgroundColor: palette.field, color: palette.text, outline: 'none', boxShadow: palette.shadow }} /></div>
       {state.loading ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{t('loading')}</div> : visible.length === 0 ? <div style={{ fontSize: '12px', opacity: 0.7 }}>{state.inventory.length === 0 ? t('noModels') : t('noMatches')}</div> :
          routes.map((route) => { const providerModels = visible.filter((item) => item.route === route); const providerOpen = query !== '' || state.expandedProviders[route] === true; return <div key={route} style={{ marginBottom: '6px' }}><div className={css.entityHeader} style={{ minHeight: '32px', padding: '4px 6px', marginBottom: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.raised }}><span style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}><span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', minWidth: '22px', border: `1px solid ${palette.border}`, borderRadius: '7px', color: palette.secondary, backgroundColor: palette.group }}><Icon name="layers" size={14} /></span><span style={{ display: 'grid', gap: '1px', minWidth: 0 }}><span style={{ color: palette.text, fontSize: '12px', fontWeight: 700, overflowWrap: 'anywhere' }}>{route}</span><span style={{ color: palette.accent, fontSize: '10px', lineHeight: '11px', fontWeight: 700 }}>{t('vendor')}</span></span></span><span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: palette.secondary, whiteSpace: 'nowrap' }}><span>{t('modelCount', { count: providerModels.length })}</span>{query !== '' ? <span>{t('searchResults')}</span> : <ActionButton text="" onClick={() => toggleProvider(route)} palette={palette} tone="ghost" icon={providerOpen ? 'chevronUp' : 'chevronDown'} label={providerOpen ? t('collapseProvider') : t('expandProvider')} />}</span></div>{providerOpen && state.providerDrafts[route] ? <>
-          {renderGatewayCompatControls({ view: state.providerDrafts[route], onChange: (next) => patchProviderCompat(route, next), disabled: state.busy, expanded: state.providerCompatExpanded[route] === true, onToggleExpanded: () => toggleProviderCompatExpanded(route), availableCount: availableCompatFieldCount(state.providerDrafts[route]) }, { palette, t })}{state.providerDirty[route] ? <ActionButton text={t('saveGatewayCompat')} onClick={() => applyProviderCompat(route)} disabled={state.busy} tone="primary" palette={palette} icon="check" /> : null}</> : null}{providerOpen ? providerModels.map((item) => { const key = keyOf(item); const dirty = state.dirty[key] ?? {}; const compatAvailable = state.modelCompatViews[key] !== undefined; const openCodeSessionEditable = state.openCodeSessionAvailable && item.modelSourceConflict !== true; return <ModelRow key={`${key}-${item.inOverrides ? 'override' : item.index}`} item={item} open={state.expanded[key] === true} draft={state.drafts[key]} contextDraft={state.contextDrafts[key] ?? contextDraftFrom(item)} inputDraft={state.inputDrafts[key] ?? inputDraftFrom(item)} dirty={dirty.levels === true || dirty.context === true || dirty.input === true} busy={state.busy} palette={palette} t={t} onToggle={() => toggleExpand(item)} onLevelChange={(level, patch) => patchDraft(item, level, patch)} onContextChange={(value) => patchContextValue(item, value)} onOneMillionChange={(enabled) => setOneMillion(item, enabled)} onInputChange={(modality, enabled) => patchInputCapability(item, modality, enabled)} onSave={() => applyModel(item)} blockedReason={modelSaveBlockedReason(buildLevels(state.drafts[key] ?? {}), state.contextDrafts[key] ?? contextDraftFrom(item), state.inputDrafts[key] ?? inputDraftFrom(item), t)} onRestoreReasoning={() => restoreReasoningDefaults(item)} onRestoreCapability={() => restoreProviderDefaults(item)}
+          {renderGatewayCompatControls({ view: state.providerDrafts[route], onChange: (next) => patchProviderCompat(route, next), disabled: state.busy, expanded: state.providerCompatExpanded[route] === true, onToggleExpanded: () => toggleProviderCompatExpanded(route), availableCount: availableCompatFieldCount(state.providerDrafts[route]) }, { palette, t })}{state.providerDirty[route] ? <ActionButton text={t('saveGatewayCompat')} onClick={() => applyProviderCompat(route)} disabled={state.busy} tone="primary" palette={palette} icon="check" /> : null}</> : null}{providerOpen ? providerModels.map((item) => { const key = keyOf(item); const dirty = state.dirty[key] ?? {}; const compatAvailable = state.modelCompatViews[key] !== undefined; const openCodeSessionEditable = opencodeOn && state.openCodeSessionAvailable && item.modelSourceConflict !== true; return <ModelRow key={`${key}-${item.inOverrides ? 'override' : item.index}`} item={item} open={state.expanded[key] === true} draft={state.drafts[key]} contextDraft={state.contextDrafts[key] ?? contextDraftFrom(item)} inputDraft={state.inputDrafts[key] ?? inputDraftFrom(item)} dirty={dirty.levels === true || dirty.context === true || dirty.input === true} busy={state.busy} palette={palette} t={t} onToggle={() => toggleExpand(item)} onLevelChange={(level, patch) => patchDraft(item, level, patch)} onContextChange={(value) => patchContextValue(item, value)} onOneMillionChange={(enabled) => setOneMillion(item, enabled)} onInputChange={(modality, enabled) => patchInputCapability(item, modality, enabled)} onSave={() => applyModel(item)} blockedReason={modelSaveBlockedReason(buildLevels(state.drafts[key] ?? {}), state.contextDrafts[key] ?? contextDraftFrom(item), state.inputDrafts[key] ?? inputDraftFrom(item), t)} onRestoreReasoning={() => restoreReasoningDefaults(item)} onRestoreCapability={() => restoreProviderDefaults(item)}
                          compatView={compatAvailable ? state.modelCompatDrafts[key] : undefined}
                           compatExpanded={state.modelCompatExpanded[key] === true}
                           onToggleCompatExpanded={compatAvailable ? () => toggleModelCompatExpanded(key) : undefined}

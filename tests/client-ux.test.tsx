@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SectionEditor } from '../packages/settings-ui/src/client/SectionEditor.js'
+import { AUTO_SAVE_IDLE_MS } from '../packages/settings-ui/src/client/section-editor/use-auto-save.js'
 import { createTakeoverRuntimeStore, type TakeoverRuntimeResolution } from '../packages/settings-ui/src/client/takeover-runtime.js'
 import { resolveGatewayCompat } from '@hytime/dsh-plugin-kit'
 import { GatewayCompatControls, renderGatewayCompatControls } from '../packages/settings-ui/src/client/components/GatewayCompatControls.js'
@@ -183,6 +184,8 @@ function renderEditor(options: {
    * sees no `formFor` at all, exactly like every host before 0.1.7.
    */
   formFor?: (entryId: string) => ConfigFormFace | undefined
+  /** The bundle's component switches, as the client entry resolves them. */
+  parts?: { opencode?: boolean; compaction?: boolean; subagent?: boolean }
 } = {}): {
   container: HTMLDivElement
   root: Root
@@ -211,7 +214,7 @@ function renderEditor(options: {
   const takeoverRuntime = options.takeoverResolution === undefined ? undefined : createTakeoverRuntimeStore()
   takeoverRuntime?.update(options.takeoverResolution!)
   act(() => {
-    root.render(<SectionEditor settings={settings} locale={locale} t={text as Translation} takeoverRuntime={takeoverRuntime} />)
+    root.render(<SectionEditor settings={settings} locale={locale} t={text as Translation} takeoverRuntime={takeoverRuntime} parts={options.parts} />)
   })
   return {
     container,
@@ -2699,7 +2702,7 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     value: {
       opencodeSession: { providers: {} },
       subagentEffort: 'medium',
-      compaction: { enabled: false, thresholdRatio: 0.6, retainRatio: 0.16, models: {} },
+      compaction: { thresholdRatio: 0.6, retainRatio: 0.16, models: {} },
       subagentModel: { provider: '', model: '' },
       profiles: {},
       autoBackup: { kind: 'dsh-thinking-effort/config-snapshot', version: 1, createdAt: '', pluginVersion: '', sourceProfile: 'unknown', sections: {} },
@@ -2717,6 +2720,17 @@ describe('SectionEditor compaction policy and subagent default route', () => {
 
   const compactionScope = (container: HTMLElement): HTMLElement => container.querySelector('[data-scope="compaction"]') as HTMLElement
   const compactionInput = (container: HTMLElement, label: string): HTMLInputElement => container.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement
+  /**
+   * Let the auto-save idle window elapse and the resulting write settle.
+   *
+   * The panel has no Save button any more: a field writes itself once typing
+   * pauses, so every assertion about a stored value has to advance the timer
+   * first. Real timers are used elsewhere, so this awaits the actual delay.
+   */
+  const settleAutoSave = async (): Promise<void> => {
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, AUTO_SAVE_IDLE_MS + 120)) })
+    await settle()
+  }
 
   it('renders the global ratios as placeholders instead of pinning them into the fields', async () => {
     const view = renderWithPluginSection()
@@ -2734,8 +2748,10 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     expect(retain.value).toBe('')
     expect(threshold.placeholder).toBe(text('compactionFollowGlobal', { percent: '60' }))
     expect(retain.placeholder).toBe(text('compactionFollowGlobal', { percent: '16' }))
-    // Nothing is pending, so the save button is inert until the user edits.
-    expect(button(scope, text('compactionSave')).disabled).toBe(true)
+    // No Save button: an untouched pair is already stored, so the card says so
+    // instead of offering a control that would do nothing.
+    expect(scope.textContent).toContain(text('compactionAutoSave'))
+    expect([...scope.querySelectorAll('button')].some((b) => b.textContent?.includes(text('compactionSave')))).toBe(false)
     view.unmount()
   })
 
@@ -2769,8 +2785,10 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     const scope = compactionScope(view.container)
     act(() => setValue(compactionInput(scope, text('compactionThreshold')), '45'))
     act(() => setValue(compactionInput(scope, text('compactionRetain')), '12'))
-    act(() => button(scope, text('compactionSave')).click())
-    await settle()
+    // Typing both fields inside one idle window is ONE write: the timer batches
+    // them, which is what keeps "no Save button" from meaning "one write per
+    // keystroke".
+    await settleAutoSave()
 
     expect(mutating).toHaveBeenCalledTimes(1)
     const [ns, ops, revision] = mutating.mock.calls[0]!
@@ -2796,12 +2814,11 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     act(() => setValue(compactionInput(scope, text('compactionRetain')), '40'))
 
     // The official backend refuses such a pair at LOAD time, which would break
-    // the preset rather than just the setting, so the panel must never write it.
+    // the preset rather than just the setting, so the panel must never write it —
+    // and with no Save button, the only thing that can refuse is the timer.
     expect(scope.textContent).toContain(text('compactionRetainNotBelow'))
-    expect(button(scope, text('compactionSave')).disabled).toBe(true)
 
-    act(() => button(scope, text('compactionSave')).click())
-    await settle()
+    await settleAutoSave()
     expect(mutating).not.toHaveBeenCalled()
     view.unmount()
   })
@@ -2814,7 +2831,6 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     const scope = compactionScope(view.container)
     act(() => setValue(compactionInput(scope, text('compactionThreshold')), 'abc'))
     expect(scope.textContent).toContain(text('compactionInvalidThreshold'))
-    expect(button(scope, text('compactionSave')).disabled).toBe(true)
 
     act(() => setValue(compactionInput(scope, text('compactionThreshold')), '99'))
     expect(scope.textContent).toContain(text('compactionInvalidThreshold'))
@@ -2825,60 +2841,41 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     view.unmount()
   })
 
-  /**
-   * The plugin's compaction pass ships DISABLED. Without a switch in the panel
-   * the only way to turn it on would be editing the Loader config by hand, so
-   * the flag is part of the same block the ratios live in.
-   */
-  const compactionSwitch = (container: HTMLElement): HTMLButtonElement => container.querySelector(
-    `[data-scope="compaction"] button[role="switch"][aria-label="${text('compactionEnable')}"]`,
-  ) as HTMLButtonElement
-
-  it('reflects the stored compaction flag and explains the disabled state', async () => {
+  it('offers only the percentages, with no on/off switch', async () => {
     const view = renderWithPluginSection()
     await settle()
     openFirstModel(view.container)
 
     const scope = compactionScope(view.container)
-    const toggle = compactionSwitch(view.container)
-    expect(toggle).not.toBeNull()
-    // The shipped default is off, so the switch must render off...
-    expect(toggle.getAttribute('aria-checked')).toBe('false')
-    // ...and say that nothing fires yet, while leaving the ratios editable so a
-    // user can set them first and enable the pass afterwards.
-    expect(scope.textContent).toContain(text('compactionDisabledHint'))
+    // The percentages ARE the configuration. A switch could only mean "do not
+    // compact at all", which this plugin cannot offer: DSH runs its own
+    // automatic pass whatever is set here, so a switch would misdescribe the
+    // host as well as the plugin.
+    expect(scope.querySelector('button[role="switch"]')).toBeNull()
+    expect(scope.textContent).toContain(text('compactionSectionHint'))
+    // Both fields stay editable — there is nothing to enable first.
     expect(compactionInput(scope, text('compactionThreshold')).disabled).toBe(false)
+    expect(compactionInput(scope, text('compactionRetain')).disabled).toBe(false)
     view.unmount()
   })
 
-  it('saves the compaction switch immediately as a leaf op and clears the hint', async () => {
-    const enabledPlugin = withPluginSection({
-      value: { compaction: { enabled: true, thresholdRatio: 0.6, retainRatio: 0.16, models: {} } } as unknown as SettingsNamespace['value'],
-    })
-    const mutating = vi.fn<SettingsApi['mutate']>(async () => ({ ok: true as const, value: enabledPlugin }))
-    const view = renderEditor({
-      namespaces: [withPluginSection()],
-      describe: async () => ({ ok: true, value: { namespaces: [namespace(), withPluginSection()] } }),
-      mutate: mutating,
-    })
+  it('keeps the compaction write limited to the per-model ratios', async () => {
+    const mutating = vi.fn<SettingsApi['mutate']>(async () => ({ ok: true as const, value: withPluginSection({ revision: 10 }) }))
+    const view = renderWithPluginSection({ mutate: mutating })
     await settle()
     openFirstModel(view.container)
 
-    act(() => compactionSwitch(view.container).click())
-    await settle()
+    const scope = compactionScope(view.container)
+    act(() => setValue(compactionInput(scope, text('compactionThreshold')), '45'))
+    await settleAutoSave()
 
-    // Immediate save — no trip through the ratios' Save button.
+    // One leaf write naming the model's own override path: no global flag, and
+    // no `providers` container rebuild.
     expect(mutating).toHaveBeenCalledTimes(1)
-    const [ns, ops, revision] = mutating.mock.calls[0]!
+    const [ns, ops] = mutating.mock.calls[0]!
     expect(ns).toBe('thinking-effort')
-    expect(revision).toBe(9)
-    expect(ops).toEqual([{ op: 'set', path: ['compaction', 'enabled'], value: true }])
-    // A flag write must never carry the per-model override container.
-    expect(ops.some((op) => op.path.includes('models'))).toBe(false)
-    expect(view.container.textContent).toContain(text('compactionSaved'))
-    // The accepted response reports the new flag, so the hint goes away.
-    expect(compactionSwitch(view.container).getAttribute('aria-checked')).toBe('true')
-    expect(compactionScope(view.container).textContent).not.toContain(text('compactionDisabledHint'))
+    expect(ops.every((op) => op.path[0] === 'compaction' && op.path[1] === 'models')).toBe(true)
+    expect(ops.some((op) => op.path[1] === 'enabled')).toBe(false)
     view.unmount()
   })
 
@@ -2898,8 +2895,7 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     const scope = compactionScope(view.container)
     act(() => setValue(compactionInput(scope, text('compactionThreshold')), ''))
     act(() => setValue(compactionInput(scope, text('compactionRetain')), ''))
-    act(() => button(scope, text('compactionSave')).click())
-    await settle()
+    await settleAutoSave()
 
     // Empty means "inherit the global ratio", and the stored shape cannot say
     // that with a value, so the whole override is removed.
@@ -2961,8 +2957,7 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     expect(modelSelect.value).toBe('model-b')
 
     act(() => setValue(modelSelect, 'model-a'))
-    act(() => button(scope, text('subagentModelSave')).click())
-    await settle()
+    await settleAutoSave()
 
     expect(mutating.mock.calls[0]?.[0]).toBe('thinking-effort')
     expect(mutating.mock.calls[0]?.[1]).toEqual([
@@ -2987,8 +2982,7 @@ describe('SectionEditor compaction policy and subagent default route', () => {
 
     const scope = view.container.querySelector('[data-scope="subagent-model"]') as HTMLElement
     act(() => setValue(scope.querySelector(`select[aria-label="${text('subagentModelProvider')}"]`) as HTMLSelectElement, ''))
-    act(() => button(scope, text('subagentModelSave')).click())
-    await settle()
+    await settleAutoSave()
 
     expect(mutating.mock.calls[0]?.[1]).toEqual([
       { op: 'unset', path: ['subagentModel', 'provider'] },
@@ -3028,4 +3022,100 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     expect(zh.compactionThreshold).toBe('压缩阈值')
     expect(zh.compactionRetain).toBe('保留最近上下文')
   })
+
+  describe('SectionEditor component switches', () => {
+    /**
+     * A mount that can reach every gated card.
+     *
+     * Mirrors the passing OpenCode tests exactly: the plugin section is the
+     * `dsh-thinking-effort` namespace that carries `opencodeSession`, and
+     * `llm-pi-ai` supplies the inventory `openFirstModel` clicks into. The
+     * compaction and subagent halves need their own fields, so those are added
+     * on top rather than replacing the shape the panel already expects.
+     */
+    const mountWith = (parts?: { opencode?: boolean; compaction?: boolean; subagent?: boolean }): ReturnType<typeof renderEditor> => {
+      const llm = openCodeLlmNamespace({ schema: realGatewaySchema })
+      const plugin = openCodeNamespace({
+        revision: 9,
+        value: {
+          opencodeSession: { providers: { provider: { models: { 'model-a': true } } } },
+          subagentEffort: 'medium',
+          compaction: { thresholdRatio: 0.6, retainRatio: 0.16, models: {} },
+          subagentModel: { provider: '', model: '' },
+          profiles: {},
+          autoBackup: { kind: 'dsh-thinking-effort/config-snapshot', version: 1, createdAt: '', pluginVersion: '', sourceProfile: 'unknown', sections: {} },
+        },
+      })
+      return renderEditor({
+        namespaces: [plugin],
+        describe: async () => ({ ok: true, value: { namespaces: [llm, plugin] } }),
+        compatibilityProfile: 'modern',
+        ...(parts === undefined ? {} : { parts }),
+      })
+    }
+
+    it('renders the OpenCode controls only while that row is on', async () => {
+      const on = mountWith({ opencode: true })
+      await settle()
+      openFirstModel(on.container)
+      expect(on.container.textContent).toContain(text('opencodeSessionHeaderTitle'))
+      on.unmount()
+
+      const off = mountWith({ opencode: false })
+      await settle()
+      openFirstModel(off.container)
+      expect(off.container.textContent).not.toContain(text('opencodeSessionHeaderTitle'))
+      off.unmount()
+    })
+
+    it('renders the subagent card only while that row is on', async () => {
+      const on = mountWith({ subagent: true })
+      await settle()
+      expect(on.container.textContent).toContain(text('subagentCardTitle'))
+      on.unmount()
+
+      const off = mountWith({ subagent: false })
+      await settle()
+      expect(off.container.textContent).not.toContain(text('subagentCardTitle'))
+      off.unmount()
+    })
+
+    it('renders the compaction card only while that row is on', async () => {
+      const open = mountWith({ compaction: true })
+      await settle()
+      openFirstModel(open.container)
+      expect(open.container.textContent).toContain(text('compactionSectionTitle'))
+      open.unmount()
+
+      const closed = mountWith({ compaction: false })
+      await settle()
+      openFirstModel(closed.container)
+      expect(closed.container.textContent).not.toContain(text('compactionSectionTitle'))
+      closed.unmount()
+    })
+
+    it('defaults every switch to on, so a standalone mount keeps its controls', async () => {
+      // An older client bundle, or a host whose inventory read failed, passes no
+      // `parts` at all. Hiding working controls there would be worse than showing
+      // one whose switch may be stale.
+      const view = mountWith()
+      await settle()
+      expect(view.container.textContent).toContain(text('subagentCardTitle'))
+      openFirstModel(view.container)
+      expect(view.container.textContent).toContain(text('opencodeSessionHeaderTitle'))
+      expect(view.container.textContent).toContain(text('compactionSectionTitle'))
+      view.unmount()
+    })
+  })
 })
+
+/**
+ * The bundle ships seven Loader rows but ONE browser artifact, so a row the
+ * profile switched off still loads this code. Without the switch check the panel
+ * keeps rendering cards whose host half is not mounted — the OpenCode card would
+ * offer a header format for a feature that is not injecting anything.
+ *
+ * `parts` is how the client entry hands the Host's answer down. These tests pin
+ * that each card disappears with its own row and comes back when it is on,
+ * because a gate that never closes is indistinguishable from no gate at all.
+ */

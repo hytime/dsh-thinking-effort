@@ -128,9 +128,12 @@ function signalOf(value: unknown): AbortSignal | undefined {
 /**
  * The plugin's own compaction policy, read from the section that stores it.
  *
- * A missing section, a legacy host without `describe()`, or a document written
- * before the field existed all resolve to the schema defaults (`enabled: false`),
- * which is the safe answer: the plugin stays out of the way rather than guessing.
+ * A missing section or a legacy host without `describe()` resolves to the schema
+ * defaults. The pass has no on/off switch of its own: the percentages ARE the
+ * configuration, and leaving them at their defaults is what keeps the plugin
+ * from firing early — the shipped 60% sits below the official backend's
+ * threshold, so an unconfigured install compacts first, and a user who wants a
+ * later trigger raises the number.
  */
 function policyOf(ctx: HostContext): CompactionPolicySettings {
   const section = readSettingsSection(ctx.settings, settingsEntryId(ctx, PLUGIN_ENTRY_ID))
@@ -437,7 +440,6 @@ function describeResult(result: CompactionRegionResult): string {
  */
 async function compactOnPressure(ctx: HostContext, payload: unknown): Promise<void> {
   const policy = policyOf(ctx)
-  if (!policy.enabled) return
   if (!isUnknownRecord(payload) || !isUnknownRecord(payload.agent)) return
   const agent = payload.agent
   const target = await targetOf(ctx, agent, signalOf(payload), policy)

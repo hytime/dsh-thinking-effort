@@ -3,6 +3,7 @@ import { ALL_LEVELS, LEVEL_LABEL_KEYS } from '../constants.js'
 import type { SubagentModelDraft, SubagentModelRoute, Translation } from '@hytime/dsh-plugin-kit'
 import type { Palette } from '../theme.js'
 import { ActionButton, Icon } from './Controls.js'
+import { useAutoSave } from '../section-editor/use-auto-save.js'
 import css from '../settings.module.css'
 
 export interface SubagentSettingsProps {
@@ -42,12 +43,36 @@ export interface SubagentModelPicker {
   readonly savedUnavailable: boolean
   readonly onProviderChange: (provider: string) => void
   readonly onModelChange: (model: string) => void
-  readonly onSave: () => void
+  /**
+   * Write the pair currently selected.
+   *
+   * Both halves are written in one batch, so this fires only once the pair is
+   * complete: a provider with no model names no route, and persisting the two
+   * separately would leave a half-configured pair visible to the Host.
+   */
+  readonly onCommit: () => void
 }
 
 const INHERIT = ''
 
 export function SubagentSettings({ effort, namespaceFound, draft, custom, busy, palette, t, onDraftChange, onCustomChange, onSave, modelPicker }: SubagentSettingsProps): React.ReactElement {
+  // The route picker persists itself once the pair settles, so it renders no
+  // Save button. A half-chosen pair (provider picked, model not yet) is left
+  // unsaved on purpose: it names no route, and writing it would half-configure
+  // the pair the Host reads.
+  const picked = modelPicker?.draft
+  useAutoSave(
+    {
+      text: picked === undefined ? '' : `${picked.provider}\u0000${picked.model}`,
+      // Inheriting is a write, not a missing value: it unsets the pair. So the
+      // only draft that names no route is a provider with NO model — the state
+      // between picking a route and picking its model. A chosen provider whose
+      // model was cleared is not that state: it means "inherit", which clears.
+      writable: picked !== undefined && (picked.provider === INHERIT || picked.model !== INHERIT),
+      touched: picked?.touched === true,
+    },
+    () => { modelPicker?.onCommit() },
+  )
   const options: Array<[string, string]> = [['default', t('providerDefault')], ...ALL_LEVELS.map((level) => [level, t(LEVEL_LABEL_KEYS[level])] as [string, string]), ['custom', t('customize')]]
   const picker = modelPicker
   const selectedProvider = picker === undefined || picker.draft.provider === INHERIT ? INHERIT : picker.draft.provider
@@ -88,7 +113,7 @@ export function SubagentSettings({ effort, namespaceFound, draft, custom, busy, 
         <label className={css.labelControlRow} style={{ fontSize: '12px', color: palette.text }}><span>{t('subagentModelModel')}</span><select aria-label={t('subagentModelModel')} value={picker.draft.model} disabled={busy || selectedProvider === INHERIT} onChange={(event) => picker.onModelChange(event.currentTarget.value)} style={{ boxSizing: 'border-box', minWidth: 0, height: '28px', padding: '0 7px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.field, color: palette.text, fontSize: '12px', colorScheme: 'light dark' }}>{selectedProvider === INHERIT ? <option value={INHERIT}>{t('subagentModelInherit')}</option> : <>{unavailableOption}{modelsOfSelected.map((model) => <option key={model} value={model}>{model}</option>)}</>}</select></label>
       </div>
       <span style={{ color: palette.secondary, fontSize: '10px', lineHeight: '14px' }}>{t('subagentModelHint')}</span>
-      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}><ActionButton text={t('subagentModelSave')} onClick={picker.onSave} disabled={busy || !picker.draft.touched} tone="primary" palette={palette} icon="check" /></div>
+      <span data-scope="subagent-model-autosave" style={{ color: palette.secondary, fontSize: '10px', lineHeight: '14px' }}>{t('subagentModelAutoSave')}</span>
     </div> : null}
   </div>
 }

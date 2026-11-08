@@ -321,7 +321,6 @@ const openCodeSessionUserAgentDefaults = { value: '', providers: {} }
  * test fail when a default moves.
  */
 const compactionDefaults = {
-  enabled: false,
   thresholdRatio: 0.6,
   retainRatio: 0.16,
   models: {},
