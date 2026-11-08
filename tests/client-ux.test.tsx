@@ -3164,6 +3164,19 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     view.unmount()
   })
 
+  it('hides every configured card when the panel row itself is off', async () => {
+    // The panel's own row gates the cards it renders, and the features depend on
+    // it: with `settings` off there is no surface to configure them from, so the
+    // cascade resolves all four to off and the page shows none of their cards.
+    const view = mountWith({ ...switchesWith('opencode', true), settings: 'off', opencode: 'off', compaction: 'off', subagent: 'off' })
+    await settle()
+    expect(view.container.textContent).not.toContain(text('subagentCardTitle'))
+    openFirstModel(view.container)
+    expect(view.container.textContent).not.toContain(text('opencodeSessionHeaderTitle'))
+    expect(view.container.textContent).not.toContain(text('compactionSectionTitle'))
+    view.unmount()
+  })
+
   it('defaults every switch to on, so a standalone mount keeps its controls', async () => {
       // An older client bundle, or a host whose inventory read failed, passes no
       // `parts` at all. Hiding working controls there would be worse than showing

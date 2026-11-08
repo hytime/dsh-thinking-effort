@@ -10,7 +10,8 @@
  * pick a header format for a host plugin that is not running.
  *
  * The inventory's `enabled` is the Loader's effective value, so it already
- * accounts for a disabled ancestor group; this module only maps the ids.
+ * accounts for a disabled ancestor GROUP — but not for one row depending on
+ * another row's feature, which is what {@link COMPONENT_DEPENDENCIES} covers.
  *
  * @module @hytime/dsh-plugin-kit/shared/component-switches
  */
@@ -42,6 +43,34 @@ export const COMPONENT_ROWS = {
 
 /** A switchable component's key in {@link COMPONENT_ROWS}. */
 export type ComponentKey = keyof typeof COMPONENT_ROWS
+
+/**
+ * Which components stop working when another one is switched off.
+ *
+ * The rows are not peers. Every feature entry reads its configuration from the
+ * settings section the ROOT row publishes, and every settings card is rendered
+ * by the panel that the `settings` row owns — so switching either of those off
+ * leaves the dependants running against a section nobody publishes, or with no
+ * surface to configure them.
+ *
+ * The direction is "these stop when I stop": {@link COMPONENT_DEPENDENCIES}
+ * maps a parent to the children it takes down with it. Dependencies are
+ * transitive — switching the root off disables everything — and a child may
+ * name several parents, any one of which is enough.
+ *
+ * Deliberately NOT a dependency: `composer`. The seat renders the tiers the
+ * OFFICIAL `modelDirectories` service resolves, not anything this plugin
+ * writes, so it keeps working with the root off.
+ */
+export const COMPONENT_DEPENDENCIES = {
+  /** The root row publishes the settings section every other feature reads. */
+  levels: ['settings', 'opencode', 'compaction', 'subagent', 'migration'],
+  /** The panel is the only surface that configures those features. */
+  settings: ['opencode', 'compaction', 'subagent', 'migration'],
+} as const satisfies Partial<Record<ComponentKey, readonly ComponentKey[]>>
+
+/** Parents of one component: switching any of them off takes this one down too. */
+export type ComponentParents = typeof COMPONENT_DEPENDENCIES
 
 /** What one component's switch resolves to. */
 export type ComponentSwitchState =
@@ -93,7 +122,44 @@ export function componentSwitchesFrom(
       ? (snapshot === undefined ? 'unknown' : 'off')
       : (row.enabled === true ? 'on' : 'off')
   }
-  return states
+  return cascadeDependencies(states)
+}
+
+/**
+ * Take a component down when a component it depends on is off.
+ *
+ * The Host reports each row's OWN switch, so a profile can leave a child row on
+ * while the parent it needs is off — and then the child would render controls
+ * whose configuration section nobody publishes, or that have no surface to
+ * reach them from. Resolving the cascade here means every consumer sees one
+ * answer instead of each surface re-deriving it.
+ *
+ * Only `off` propagates: a parent whose state is `unknown` was not reported as
+ * disabled, and cascading that would hide working controls on a host that merely
+ * cannot answer.
+ *
+ * @param states - each row's own state, as the Host reported it.
+ * @returns the same map with dependants of a disabled parent switched off.
+ */
+export function cascadeDependencies(
+  states: Record<ComponentKey, ComponentSwitchState>,
+): Record<ComponentKey, ComponentSwitchState> {
+  const resolved = { ...states }
+  // Repeat to a fixed point so a chain (root → settings → opencode) settles no
+  // matter which order the table names its keys.
+  for (let pass = 0; pass < Object.keys(COMPONENT_ROWS).length; pass += 1) {
+    let changed = false
+    for (const [parent, children] of Object.entries(COMPONENT_DEPENDENCIES) as Array<[ComponentKey, readonly ComponentKey[]]>) {
+      if (resolved[parent] !== 'off') continue
+      for (const child of children) {
+        if (resolved[child] === 'off') continue
+        resolved[child] = 'off'
+        changed = true
+      }
+    }
+    if (!changed) break
+  }
+  return resolved
 }
 
 /**
