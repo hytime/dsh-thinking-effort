@@ -184,8 +184,14 @@ function renderEditor(options: {
    * sees no `formFor` at all, exactly like every host before 0.1.7.
    */
   formFor?: (entryId: string) => ConfigFormFace | undefined
-  /** The bundle's component switches, as the client entry resolves them. */
-  parts?: { opencode?: boolean; compaction?: boolean; subagent?: boolean }
+  /**
+   * The bundle's component switches, as the client entry resolves them. A live
+   * store rather than fixed flags, because the panel has to react to a toggle
+   * while it is open.
+   */
+  switches?: Record<string, 'on' | 'off' | 'unknown'>
+  /** A live store the test drives, for asserting that a toggle reaches the page. */
+  liveStore?: { getSnapshot(): Record<string, 'on' | 'off'>; subscribe(listener: () => void): () => void }
 } = {}): {
   container: HTMLDivElement
   root: Root
@@ -214,7 +220,11 @@ function renderEditor(options: {
   const takeoverRuntime = options.takeoverResolution === undefined ? undefined : createTakeoverRuntimeStore()
   takeoverRuntime?.update(options.takeoverResolution!)
   act(() => {
-    root.render(<SectionEditor settings={settings} locale={locale} t={text as Translation} takeoverRuntime={takeoverRuntime} parts={options.parts} />)
+    const switchStore = options.liveStore ?? (options.switches === undefined ? undefined : {
+      getSnapshot: () => options.switches as never,
+      subscribe: () => () => undefined,
+    })
+    root.render(<SectionEditor settings={settings} locale={locale} t={text as Translation} takeoverRuntime={takeoverRuntime} switches={switchStore as never} />)
   })
   return {
     container,
@@ -3033,7 +3043,24 @@ describe('SectionEditor compaction policy and subagent default route', () => {
      * compaction and subagent halves need their own fields, so those are added
      * on top rather than replacing the shape the panel already expects.
      */
-    const mountWith = (parts?: { opencode?: boolean; compaction?: boolean; subagent?: boolean }): ReturnType<typeof renderEditor> => {
+    /**
+     * A switch map with one row toggled and everything else on.
+     *
+     * The panel reads the store per render, so these tests exercise the same
+     * path a live toggle takes rather than a mount-time flag.
+     */
+    const switchesWith = (key: 'opencode' | 'compaction' | 'subagent', on: boolean): Record<string, 'on' | 'off'> => ({
+      levels: 'on',
+      settings: 'on',
+      opencode: 'on',
+      compaction: 'on',
+      subagent: 'on',
+      migration: 'on',
+      composer: 'on',
+      [key]: on ? 'on' : 'off',
+    })
+
+    const mountWith = (switches?: Record<string, 'on' | 'off'>): ReturnType<typeof renderEditor> => {
       const llm = openCodeLlmNamespace({ schema: realGatewaySchema })
       const plugin = openCodeNamespace({
         revision: 9,
@@ -3050,18 +3077,18 @@ describe('SectionEditor compaction policy and subagent default route', () => {
         namespaces: [plugin],
         describe: async () => ({ ok: true, value: { namespaces: [llm, plugin] } }),
         compatibilityProfile: 'modern',
-        ...(parts === undefined ? {} : { parts }),
+        ...(switches === undefined ? {} : { switches }),
       })
     }
 
     it('renders the OpenCode controls only while that row is on', async () => {
-      const on = mountWith({ opencode: true })
+      const on = mountWith(switchesWith('opencode', true))
       await settle()
       openFirstModel(on.container)
       expect(on.container.textContent).toContain(text('opencodeSessionHeaderTitle'))
       on.unmount()
 
-      const off = mountWith({ opencode: false })
+      const off = mountWith(switchesWith('opencode', false))
       await settle()
       openFirstModel(off.container)
       expect(off.container.textContent).not.toContain(text('opencodeSessionHeaderTitle'))
@@ -3069,32 +3096,75 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     })
 
     it('renders the subagent card only while that row is on', async () => {
-      const on = mountWith({ subagent: true })
+      const on = mountWith(switchesWith('subagent', true))
       await settle()
       expect(on.container.textContent).toContain(text('subagentCardTitle'))
       on.unmount()
 
-      const off = mountWith({ subagent: false })
+      const off = mountWith(switchesWith('subagent', false))
       await settle()
       expect(off.container.textContent).not.toContain(text('subagentCardTitle'))
       off.unmount()
     })
 
     it('renders the compaction card only while that row is on', async () => {
-      const open = mountWith({ compaction: true })
+      const open = mountWith(switchesWith('compaction', true))
       await settle()
       openFirstModel(open.container)
       expect(open.container.textContent).toContain(text('compactionSectionTitle'))
       open.unmount()
 
-      const closed = mountWith({ compaction: false })
+      const closed = mountWith(switchesWith('compaction', false))
       await settle()
       openFirstModel(closed.container)
       expect(closed.container.textContent).not.toContain(text('compactionSectionTitle'))
       closed.unmount()
     })
 
-    it('defaults every switch to on, so a standalone mount keeps its controls', async () => {
+    it('drops and restores a card when its row is toggled while the page is open', async () => {
+    // The defect this covers: the panel used to read the switches once at
+    // mount, so turning a row off in the plugin page only took effect after a
+    // full page refresh. A store the component subscribes to is what fixes it,
+    // and this is the only test that proves the subscription is live rather
+    // than sampled once.
+    const plugin = withPluginSection({ revision: 9 })
+    const llm = openCodeLlmNamespace({ schema: realGatewaySchema })
+    let current: Record<string, 'on' | 'off'> = switchesWith('opencode', true)
+    const listeners = new Set<() => void>()
+    const liveStore = {
+      getSnapshot: () => current,
+      subscribe: (listener: () => void) => {
+        listeners.add(listener)
+        return () => { listeners.delete(listener) }
+      },
+    }
+    const view = renderEditor({
+      namespaces: [plugin, llm],
+      describe: async () => ({ ok: true, value: { namespaces: [llm, plugin] } }),
+      compatibilityProfile: 'modern',
+      liveStore,
+    })
+    await settle()
+    openFirstModel(view.container)
+    expect(view.container.textContent).toContain(text('opencodeSessionHeaderTitle'))
+
+    act(() => {
+      current = switchesWith('opencode', false)
+      for (const listener of listeners) listener()
+    })
+    await settle()
+    expect(view.container.textContent).not.toContain(text('opencodeSessionHeaderTitle'))
+
+    act(() => {
+      current = switchesWith('opencode', true)
+      for (const listener of listeners) listener()
+    })
+    await settle()
+    expect(view.container.textContent).toContain(text('opencodeSessionHeaderTitle'))
+    view.unmount()
+  })
+
+  it('defaults every switch to on, so a standalone mount keeps its controls', async () => {
       // An older client bundle, or a host whose inventory read failed, passes no
       // `parts` at all. Hiding working controls there would be worse than showing
       // one whose switch may be stale.

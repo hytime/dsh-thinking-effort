@@ -1,5 +1,6 @@
 import React from 'react'
-import { GATEWAY_COMPAT_FIELD_KEYS, type GatewayCompatFieldKey } from '@hytime/dsh-plugin-kit'
+import { useSyncExternalStore } from 'react'
+import { GATEWAY_COMPAT_FIELD_KEYS, partEnabled, type GatewayCompatFieldKey } from '@hytime/dsh-plugin-kit'
 import { editableProviderCompatFields } from '@hytime/dsh-plugin-kit'
 import { ALL_LEVELS, CONTEXT_1M, DEFAULT_LEVELS, NS, OPENCODE_SESSION_NS, PRESETS } from './constants.js'
 import { inventoryFrom } from './model-inventory.js'
@@ -26,6 +27,16 @@ import { formatRatioPercent } from '@hytime/dsh-plugin-kit'
 import { compactionDraftFrom, compactionPolicyOf, keyOf as keyOfState } from './section-editor/state.js'
 import { PLUGIN_VERSION } from '@hytime/dsh-plugin-kit'
 import type { CompactionDraft, SubagentModelRoute } from './section-editor/state.js'
+import type { ComponentKey, ComponentSwitchState, ComponentSwitchStore } from '@hytime/dsh-plugin-kit'
+
+/**
+ * Stable fallbacks for a mount without a store.
+ *
+ * `useSyncExternalStore` resubscribes when either callback changes identity, so
+ * inline closures would tear down and rebuild the subscription on every render.
+ */
+const NO_SUBSCRIBE = (): (() => void) => () => undefined
+const NO_SNAPSHOT = (): Record<ComponentKey, ComponentSwitchState> | undefined => undefined
 import type { ModelCompactionControls } from './components/ModelEditor.js'
 import type { SubagentModelPicker } from './components/SubagentSettings.js'
 import { useSaveQueue, type SaveRequest } from './section-editor/use-save-queue.js'
@@ -52,27 +63,23 @@ const NOTICE_DISMISS_MS = 3000
 const noRuntimeSubscribe = (): (() => void) => () => undefined
 const noRuntimeSnapshot = (): typeof emptyTakeoverRuntimeResolution => emptyTakeoverRuntimeResolution
 
-/**
- * Which of the bundle's other components are switched on.
- *
- * Each of the cards this page renders belongs to a separate Loader row, so a
- * row the profile disabled must not render its card: the control would still
- * look live while the host half that acts on it is not mounted. Absent means on,
- * which keeps a standalone mount (tests, an older bundle) rendering everything.
- */
-export interface SectionEditorParts {
-  readonly opencode?: boolean
-  readonly compaction?: boolean
-  readonly subagent?: boolean
-}
-
 export interface SectionEditorProps {
   readonly settings: SettingsApi
   readonly locale: ClientLocale
   readonly t: Translation
   readonly palette?: Palette
   readonly takeoverRuntime?: TakeoverRuntimeStore
-  readonly parts?: SectionEditorParts
+  /**
+   * Which of the bundle's other components are switched on.
+   *
+   * Each card this page renders belongs to a separate Loader row, so a row the
+   * profile disabled must not render its card — the control would still look
+   * live while the host half that acts on it is not mounted. This is a STORE
+   * rather than a snapshot because the page stays mounted across a toggle in
+   * the plugin page: reading it per render is what makes the change appear
+   * without a refresh. Absent means an older caller, which renders everything.
+   */
+  readonly switches?: ComponentSwitchStore
 }
 
 // The OpenCode session helpers and the state shape live in `section-editor/`;
@@ -80,10 +87,17 @@ export interface SectionEditorProps {
 // them from, and the split must not move a public entry point.
 export { applyOpenCodeSessionMutation, createOpenCodeSessionState, saveOpenCodeSession } from './section-editor/open-code-session.js'
 export type { OpenCodeSessionState } from '@hytime/dsh-plugin-kit'
-export function SectionEditor({ settings, locale, t, palette = iosPalette(), takeoverRuntime, parts = {} }: SectionEditorProps): React.ReactElement {
-  const opencodeOn = parts.opencode !== false
-  const compactionOn = parts.compaction !== false
-  const subagentOn = parts.subagent !== false
+export function SectionEditor({ settings, locale, t, palette = iosPalette(), takeoverRuntime, switches }: SectionEditorProps): React.ReactElement {
+  // Subscribed rather than read once: a row toggled in the plugin page has to
+  // take effect on the panel that is already open.
+  const switchSnapshot = useSyncExternalStore(
+    switches?.subscribe ?? NO_SUBSCRIBE,
+    switches?.getSnapshot ?? NO_SNAPSHOT,
+    switches?.getSnapshot ?? NO_SNAPSHOT,
+  )
+  const opencodeOn = switchSnapshot === undefined || partEnabled(switchSnapshot, 'opencode')
+  const compactionOn = switchSnapshot === undefined || partEnabled(switchSnapshot, 'compaction')
+  const subagentOn = switchSnapshot === undefined || partEnabled(switchSnapshot, 'subagent')
   const [state, setState] = React.useState<EditorState>(initialState)
   const takeoverResolution = React.useSyncExternalStore(
     takeoverRuntime?.subscribe ?? noRuntimeSubscribe,

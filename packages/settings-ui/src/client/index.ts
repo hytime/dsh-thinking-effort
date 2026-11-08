@@ -1,14 +1,39 @@
 import { createElement } from 'react'
+import { partEnabled } from '@hytime/dsh-plugin-kit'
 import { LOCALE_DATA } from './locales.js'
 import { settingsBridge } from './settings-bridge.js'
 import { createTakeoverRuntimeStore, observeTakeoverSettings } from './takeover-runtime.js'
 import { LOCALE_NS } from './constants.js'
 import { SectionEditor } from './SectionEditor.js'
 import { LegacyMigrationModal } from './components/LegacyMigrationModal.js'
-import type { ClientContext, ClientLocale, ClientSlots, ConfigFormsService } from '@hytime/dsh-plugin-kit'
+import type { ClientContext, ClientLocale, ClientSlots, ComponentSwitchStore, ConfigFormsService } from '@hytime/dsh-plugin-kit'
+import { useSyncExternalStore } from 'react'
 
 export const name = '@hytime/dsh-thinking-effort'
 export const inject = ['slots', 'connection', 'locale'] as const
+
+/**
+ * The legacy-migration dialog, rendered only while its Loader row is on.
+ *
+ * The slot itself stays registered for the life of the page: a slot cannot be
+ * un-registered and re-registered on a switch change, so the row is consulted
+ * per render instead. Returning `null` is what makes toggling the row take
+ * effect without a page refresh.
+ */
+function MigrationOverlayGate({ settings, t, switches }: {
+  readonly settings: Parameters<typeof LegacyMigrationModal>[0]['settings']
+  readonly t: Parameters<typeof LegacyMigrationModal>[0]['t']
+  readonly switches?: ComponentSwitchStore
+}): ReturnType<typeof createElement> | null {
+  const snapshot = useSyncExternalStore(
+    switches?.subscribe ?? (() => () => undefined),
+    switches?.getSnapshot ?? (() => undefined),
+    switches?.getSnapshot ?? (() => undefined),
+  )
+  // No store means an older caller, which renders everything.
+  if (switches !== undefined && snapshot !== undefined && !partEnabled(snapshot, 'migration')) return null
+  return createElement(LegacyMigrationModal, { settings, t })
+}
 
 const SLOT_NAME = 'settings.section'
 // A UI Slot id, unrelated to the settings section id (`PLUGIN_ENTRY_ID`).
@@ -47,31 +72,10 @@ function configFormsView(context: ClientContext): ConfigFormsService {
   return { get: (entryId) => resolve()?.get(entryId) }
 }
 
-/**
- * Which of the bundle's other components are switched on.
- *
- * The panel renders the OpenCode, compaction and subagent editors, but each of
- * those is its own Loader row: turning `thinking-effort-opencode` off stops the
- * Host from injecting headers without unmounting this panel, so the card has to
- * disappear here or it would keep offering settings for a feature that is not
- * running.
- *
- * Every flag defaults to on. A caller that does not know — an older client
- * bundle, or the settings row mounted on its own — keeps the previous behaviour
- * rather than silently hiding working controls.
- */
-export interface SettingsParts {
-  readonly opencode?: boolean
-  readonly compaction?: boolean
-  readonly subagent?: boolean
-  readonly migration?: boolean
-}
-
-export function apply(context: ClientContext, parts: SettingsParts = {}): void {
-  const opencodeOn = parts.opencode !== false
-  const compactionOn = parts.compaction !== false
-  const subagentOn = parts.subagent !== false
-  const migrationOn = parts.migration !== false
+export function apply(context: ClientContext, switches?: ComponentSwitchStore): void {
+  // The store is read per render rather than snapshotted here: a row toggled in
+  // the plugin page must reach the panel without a page refresh, and a slot
+  // registers once. `undefined` means an older caller, which renders everything.
   const slots = context.get('slots') as ClientSlots | undefined
   if (slots === undefined) return
   const connection = context.get('connection') as import('@hytime/dsh-plugin-kit').ClientConnection | undefined
@@ -118,18 +122,17 @@ export function apply(context: ClientContext, parts: SettingsParts = {}): void {
         locale: LOCALE_NS,
         label: () => translate('pageTitle'),
       },
-      () => createElement(SectionEditor, { settings: observedSettings, locale, t: translate, takeoverRuntime: runtime, parts: { opencode: opencodeOn, compaction: compactionOn, subagent: subagentOn } }),
+      () => createElement(SectionEditor, { settings: observedSettings, locale, t: translate, takeoverRuntime: runtime, ...(switches === undefined ? {} : { switches }) }),
     ))
 
     // The migration dialog is its own Loader row: with `thinking-effort-migration`
-    // off there is no host watcher to offer anything, so the overlay must not
-    // mount at all rather than render an empty offer.
-    if (migrationOn) {
-      slots.inject(OVERLAY_NAME, () => slots.register(
-        { name: OVERLAY_NAME, id: OVERLAY_ID, order: OVERLAY_ORDER },
-        () => createElement(LegacyMigrationModal, { settings: observedSettings, t: translate }),
-      ))
-    }
+    // off there is no host watcher to offer anything. The slot is still
+    // registered so a row re-enabled while the page is open starts offering
+    // again; the component returns null while the row is off.
+    slots.inject(OVERLAY_NAME, () => slots.register(
+      { name: OVERLAY_NAME, id: OVERLAY_ID, order: OVERLAY_ORDER },
+      () => createElement(MigrationOverlayGate, { settings: observedSettings, t: translate, switches }),
+    ))
   }
 
   const mountFromRemote = (): void => {

@@ -17,8 +17,7 @@
  * `window.__ModuleLoader__.load({ id: '@hytime/dsh-thinking-effort' })` banner and
  * the `dsh.client` declaration both assume it.
  */
-import { componentEnabled, readComponentSwitches } from '@hytime/dsh-plugin-kit'
-import type { ComponentKey, ComponentSwitchState } from '@hytime/dsh-plugin-kit'
+import { createComponentSwitchStore, readComponentSwitches } from '@hytime/dsh-plugin-kit'
 import { apply as applySettings } from '@hytime/dsh-feature-settings-ui'
 import { apply as applyComposer } from '@hytime/dsh-feature-composer'
 import type { ClientContext } from '@hytime/dsh-plugin-kit'
@@ -27,42 +26,23 @@ export const name = '@hytime/dsh-thinking-effort'
 export const inject = ['slots', 'connection', 'locale'] as const
 
 /**
- * Register every client surface this plugin contributes, minus the ones the
- * profile switched off.
+ * Register every client surface this plugin contributes.
  *
- * The switch read is asynchronous because it asks the Host, so nothing mounts
- * until the answer arrives. That is deliberate: mounting first and unmounting
- * later would flash an OpenCode card that is about to disappear, and every
- * surface here registers a slot rather than returning markup that could simply
- * re-render.
+ * Mounting is NOT gated on the switches: a slot registers once and cannot be
+ * re-registered, so deciding here would mean a row toggled in the plugin page
+ * needed a page refresh. Instead each surface receives the store and re-reads it
+ * per render, which is what makes the change visible immediately.
  *
- * A Host that cannot answer (no inventory remote, a failed read) resolves to
- * "unknown", which `componentEnabled` treats as on — a working surface is the
- * safer default there.
+ * The store starts at "every part on" so the first frame renders the full panel;
+ * the first Host answer then corrects it.
  *
  * @param context - the client root context.
  */
 export function apply(context: ClientContext): void {
-  readComponentSwitches(context, (switches) => { mount(context, switches) })
-}
-
-/**
- * Mount the parts whose rows are live.
- *
- * @param context - the client root context.
- * @param switches - the Host's answer per component row.
- */
-function mount(context: ClientContext, switches: Record<ComponentKey, ComponentSwitchState>): void {
-  // The settings panel carries the OpenCode, compaction and subagent editors, so
-  // its own row AND each of those rows decide whether the corresponding card
-  // renders. Passing the map down keeps the panel from needing the remote.
-  if (componentEnabled(switches.settings)) {
-    applySettings(context, {
-      opencode: componentEnabled(switches.opencode),
-      compaction: componentEnabled(switches.compaction),
-      subagent: componentEnabled(switches.subagent),
-      migration: componentEnabled(switches.migration),
-    })
-  }
-  if (componentEnabled(switches.composer)) applyComposer(context)
+  const switches = createComponentSwitchStore()
+  readComponentSwitches(context, switches.update)
+  // Both surfaces take the store, not a snapshot: the Composer seat's own
+  // registration is a slot as well, so it re-checks on every render.
+  applySettings(context, switches.store)
+  applyComposer(context, switches.store)
 }
