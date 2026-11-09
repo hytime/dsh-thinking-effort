@@ -79,14 +79,22 @@ function entryFormFields(schema: unknown): string[] {
 const root = resolve(import.meta.dirname, '..')
 const integrationEnabled = process.env.DSH_LOADER_INTEGRATION === '1'
 
+/**
+ * Parse the official DSH roots the workflow built.
+ *
+ * The count is not fixed: the plugin's floor moved to `0.1.7-alpha.1`, so the
+ * suite verifies one representative instead of the five capability windows it
+ * used to build. The cases below assert what they actually need — one
+ * entry-config root — rather than a number that has to be edited twice.
+ */
 function parseCliRoots(raw: string): string[] {
-  const values = raw.split(',').map((value) => value.trim())
-  if (values.length !== 5 || values.some((value) => value === '')) {
-    throw new Error('DSH_CLI_ROOTS must contain exactly five non-empty comma-separated roots: rc7, rc2, alpha2, namespace, entry-config')
+  const values = raw.split(',').map((value) => value.trim()).filter((value) => value !== '')
+  if (values.length === 0) {
+    throw new Error('DSH_CLI_ROOTS must name at least one official DSH root')
   }
   const roots = values.map((value) => realpathSync(value))
-  if (new Set(roots).size !== 5) {
-    throw new Error('DSH_CLI_ROOTS must contain five distinct roots')
+  if (new Set(roots).size !== roots.length) {
+    throw new Error('DSH_CLI_ROOTS must name distinct roots')
   }
   return roots
 }
@@ -1265,10 +1273,13 @@ describe('compatibility documentation and root validation', () => {
     expect(() => parseCliRoots(duplicateRoots)).toThrow(/distinct|unique/i)
   })
 
-  it('rejects a root list that does not cover all five official representatives', () => {
-    const fourRoots = `${root},${join(root, '.')},${root},${root}`
-
-    expect(() => parseCliRoots(fourRoots)).toThrow(/exactly five/)
+  it('rejects a root list that repeats a root or names none', () => {
+    // The count is not the contract any more — the plugin verifies one
+    // representative, not five — but the roots still have to be usable: a
+    // repeated path would run the same host twice, and an empty list would run
+    // the suite against nothing.
+    expect(() => parseCliRoots(`${root},${join(root, '.')}`)).toThrow(/distinct/)
+    expect(() => parseCliRoots(' , ')).toThrow(/at least one/)
   })
 })
 
