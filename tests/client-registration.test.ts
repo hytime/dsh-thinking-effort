@@ -1,12 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
 
+// The production composition, not one package: `src/client/index.ts` is what
+// `lib/client.js` is built from, and it is the only place that combines the
+// settings panel with the Composer seat. Testing a package directly would miss
+// a registration mounted twice (or dropped) at the seam between them.
 import { apply, inject, name } from '../src/client/index.js'
-import { LOCALE_NS } from '../src/client/constants.js'
-import { PLUGIN_ENTRY_ID } from '../src/shared/constants.js'
-import { observeTakeoverSettings, resolveTakeoverDescription } from '../src/client/takeover-runtime.js'
-import { providerGatewayCompatViewFrom } from '../src/client/model-inventory.js'
-import { resolveTakeoverGatewayCompat, resolveTakeoverProviders, takeoverGatewayCompatInputs } from '../src/compat/gateway/resolve.js'
-import type { ClientContext, SettingsNamespace } from '../src/client/types.js'
+import { LOCALE_NS } from '../packages/settings-ui/src/client/constants.js'
+import { COMPONENT_ROWS, PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
+import { observeTakeoverSettings, resolveTakeoverDescription } from '../packages/settings-ui/src/client/takeover-runtime.js'
+import { providerGatewayCompatViewFrom } from '../packages/settings-ui/src/client/model-inventory.js'
+import { resolveTakeoverGatewayCompat, resolveTakeoverProviders, takeoverGatewayCompatInputs } from '@hytime/dsh-plugin-kit'
+import type { ClientContext, SettingsNamespace } from '@hytime/dsh-plugin-kit'
+
+/** Every component row as a host with all of them enabled reports it. */
+function enabledRows(): Array<{ moduleName: string; enabled: boolean }> {
+  return Object.values(COMPONENT_ROWS).map((row) => ({ moduleName: row.moduleName, enabled: true }))
+}
 
 function createHarness(mode: 'modern' | 'legacy') {
   const listeners: Array<(name: string) => void> = []
@@ -58,7 +67,13 @@ function createHarness(mode: 'modern' | 'legacy') {
   // legacy transports do not. The seat probes this shape to decide whether to
   // declare `remote.session` in its inject list.
   const sessionRemote = mode === 'modern' ? { modelCatalog: vi.fn().mockResolvedValue({ ok: true }) } : undefined
-  const remote = {}
+  // The client entry asks the Host which component rows are live before it
+  // mounts anything; this answers like a host with every row enabled.
+  const remote = {
+    pluginInventory: {
+      list: async () => ({ ok: true as const, value: { entries: enabledRows() } }),
+    },
+  }
   const sessions = {}
   // `ctx.configForms` is optional and belongs to a DIFFERENT client entry, so it
   // may only exist after this plugin's `apply`. Mutable on purpose: a test can
@@ -84,7 +99,21 @@ function createHarness(mode: 'modern' | 'legacy') {
       plugin.apply({ ...context, slots, modelDirectories } as unknown as ClientContext)
       return () => undefined
     }),
-    inject: vi.fn(() => () => undefined),
+    // The entry declares `remote.pluginInventory` so it can ask which components
+    // the profile switched off. This harness answers that dependency like a host
+    // with every row enabled, and calls back synchronously so a test can assert
+    // the mounted registrations without awaiting a tick.
+    // `remote.pluginInventory` is a NAMESPACE on the `remote` service, not a key
+    // `get` can answer, so presence is checked through the namespace the way the
+    // real client does — otherwise this mock would silently never call back.
+    inject: vi.fn((options: string[], callback: (scope: ClientContext) => void) => {
+      const remoteFace = context.get('remote') as { pluginInventory?: { list?: unknown } } | undefined
+      const allPresent = options.every((name) => name === 'remote.pluginInventory'
+        ? typeof remoteFace?.pluginInventory?.list === 'function'
+        : context.get(name) !== undefined)
+      if (allPresent) callback(context as unknown as ClientContext)
+      return () => undefined
+    }),
     on: vi.fn((event: string, callback: (name: string) => void) => {
       expect(event).toBe('internal/service')
       listeners.push(callback)
@@ -110,8 +139,24 @@ function createHarness(mode: 'modern' | 'legacy') {
 }
 
 
+/**
+ * Let the entry's component-switch read settle.
+ *
+ * `apply` asks the Host which rows are live before mounting anything, because a
+ * card whose host half is switched off must not render. That read is a Remote
+ * call, so it lands on a microtask; tests that assert on registrations have to
+ * await it rather than inspecting a half-mounted context.
+ */
+async function flushSwitches(): Promise<void> {
+  // One macrotask drains the whole microtask chain the read builds: the inject
+  // callback, the Remote promise, and the `.then` that mounts. Counting
+  // `Promise.resolve()` hops instead would silently stop working the moment the
+  // read grows another step.
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
 describe('client registration through the guarded context', () => {
-  it('mounts after the remote.settings service is announced without context.inject', () => {
+  it('mounts after the remote.settings service is announced without context.inject', async () => {
     const registrations: Array<{ descriptor: Record<string, unknown>; render: unknown }> = []
     const listeners: Array<(name: string) => void> = []
     let remoteSettings: unknown
@@ -136,7 +181,11 @@ describe('client registration through the guarded context', () => {
       modelDirectories: undefined,
     }
     const context = {
-      get: vi.fn((key: string) => key === 'remote.settings' ? remoteSettings : services[key]),
+      get: vi.fn((key: string) => key === 'remote.settings'
+        ? remoteSettings
+        : key === 'remote'
+          ? { pluginInventory: { list: async () => ({ ok: true, value: { entries: enabledRows() } }) } }
+          : services[key]),
       plugin: vi.fn((plugin: { inject?: readonly string[]; apply: (scope: ClientContext) => void }) => {
         for (const name of plugin.inject ?? []) {
           if (context.get(name) === undefined) return () => undefined
@@ -144,7 +193,17 @@ describe('client registration through the guarded context', () => {
         plugin.apply(context)
         return () => undefined
       }),
-      inject: vi.fn(() => () => undefined),
+      // The entry declares `remote.pluginInventory` to learn which components
+      // the profile switched off; this harness answers it like a host with every
+      // row enabled.
+      inject: vi.fn((options: string[], callback: (scope: unknown) => void) => {
+        const remoteFace = context.get('remote') as { pluginInventory?: { list?: unknown } } | undefined
+        const allPresent = options.every((name) => name === 'remote.pluginInventory'
+          ? typeof remoteFace?.pluginInventory?.list === 'function'
+          : context.get(name) !== undefined)
+        if (allPresent) callback(context)
+        return () => undefined
+      }),
       on: vi.fn((event: string, callback: (name: string) => void) => {
         expect(event).toBe('internal/service')
         listeners.push(callback)
@@ -154,6 +213,7 @@ describe('client registration through the guarded context', () => {
     }
 
     apply(context as Parameters<typeof apply>[0])
+    await flushSwitches()
     expect(registrations).toHaveLength(0)
 
     remoteSettings = {
@@ -200,6 +260,7 @@ describe('client registration', () => {
     })
 
     apply(harness.context)
+    await flushSwitches()
     const render = harness.registrations[0]?.render
     const element = (render as () => { props?: { settings?: { describe: () => Promise<unknown> } } })()
     await element.props?.settings?.describe()
@@ -210,6 +271,7 @@ describe('client registration', () => {
   it('re-resolves after the observed settings API describes or mutates', async () => {
     const harness = createHarness('modern')
     apply(harness.context)
+    await flushSwitches()
     const render = harness.registrations[0]?.render
     const element = (render as () => { props?: { settings?: { describe: () => Promise<unknown>; mutate: (ns: string, ops: readonly unknown[], revision: number) => Promise<unknown> } } })()
     const observed = element.props?.settings
@@ -245,6 +307,7 @@ describe('client registration', () => {
     })
 
     apply(harness.context)
+    await flushSwitches()
     const render = harness.registrations[0]?.render
     const element = (render as () => { props?: Record<string, unknown> })()
     const observed = element.props?.settings as { describe: () => Promise<unknown> }
@@ -257,9 +320,10 @@ describe('client registration', () => {
     })
   })
 
-  it('clears the runtime snapshot when the mount effect is disposed', () => {
+  it('clears the runtime snapshot when the mount effect is disposed', async () => {
     const harness = createHarness('modern')
     apply(harness.context)
+    await flushSwitches()
     const render = harness.registrations[0]?.render
     const element = (render as () => { props?: Record<string, unknown> })()
     const runtime = element.props?.takeoverRuntime as { getSnapshot: () => { providers: readonly string[]; compat: readonly unknown[] }; update: (resolution: { providers: readonly string[]; compat: readonly unknown[] }) => void }
@@ -673,9 +737,9 @@ describe('client registration', () => {
     }
     const fullSchema = { properties: { providers: { additionalProperties: { properties: { compat: { properties: { supportsDeveloperRole: {}, maxTokensField: {} } } } } } } }
 
-    // A mapped version keeps owning its transport, even when the profile could take over.
-    expect(resolveTakeoverProviders({ version: '0.1.0-rc.7', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual([])
-    // The 0.2.0 line is mapped to the same window, so it takes the mapped path too.
+    // Every supported version sits in one mapped window, so it takes the mapped
+    // path rather than the runtime fallback.
+    expect(resolveTakeoverProviders({ version: '0.1.7-alpha.1', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual(['local'])
     expect(resolveTakeoverProviders({ version: '0.2.0-rc.2', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual(['local'])
     // An unmapped newer version falls back to what the host actually reports.
     expect(resolveTakeoverProviders({ version: '0.3.0', runtimeProfile: 'modern', descriptorSchema: fullSchema, piAi })).toEqual(['local'])
@@ -691,9 +755,10 @@ describe('client registration', () => {
     expect(inject).toEqual(['slots', 'connection', 'locale'])
   })
 
-  it('reads remote.settings and registers the expected settings slot', () => {
+  it('reads remote.settings and registers the expected settings slot', async () => {
     const harness = createHarness('modern')
     apply(harness.context)
+    await flushSwitches()
 
     expect(harness.context.get).toHaveBeenCalledWith('remote.settings')
     expect(harness.context.on).toHaveBeenCalledWith('internal/service', expect.any(Function))
@@ -719,9 +784,10 @@ describe('client registration', () => {
     })
   })
 
-  it('registers the composer seat with an injected directory face', () => {
+  it('registers the composer seat with an injected directory face', async () => {
     const harness = createHarness('modern')
     apply(harness.context)
+    await flushSwitches()
 
     const descriptor = harness.registrations[2]?.descriptor
     expect(descriptor).toMatchObject({
@@ -732,9 +798,10 @@ describe('client registration', () => {
     expect(harness.slots.inject).toHaveBeenCalledWith('conversation.input.model', expect.any(Function))
   })
 
-  it('shadows the shipped model seat on purpose, so the priority must stay below 0', () => {
+  it('shadows the shipped model seat on purpose, so the priority must stay below 0', async () => {
     const harness = createHarness('modern')
     apply(harness.context)
+    await flushSwitches()
 
     // `conversation.input.model` is a SINGLE slot, and its winner is the FIRST
     // entry in ASCENDING priority order, so a negative priority SHADOWS the
@@ -744,9 +811,10 @@ describe('client registration', () => {
     expect(descriptor?.priority).toBeLessThan(0)
   })
 
-  it('registers a render factory for the provider compatibility settings surface', () => {
+  it('registers a render factory for the provider compatibility settings surface', async () => {
     const harness = createHarness('modern')
     apply(harness.context)
+    await flushSwitches()
 
     const render = harness.registrations[0]?.render
     expect(render).toEqual(expect.any(Function))
@@ -754,13 +822,14 @@ describe('client registration', () => {
     expect(element.props).toEqual(expect.objectContaining({ settings: expect.any(Object), locale: expect.any(Object), t: expect.any(Function) }))
   })
 
-  it('delivers a late configForms service to the already-mounted editor', () => {
+  it('delivers a late configForms service to the already-mounted editor', async () => {
     const harness = createHarness('modern')
     // `ctx.configForms` (DSH 0.1.7+) belongs to `@deepseek-ai/dsh-client-ui-settings`,
     // whose client entry is created CONCURRENTLY with this one, so it can activate
     // after `apply` has already registered the slot. Mount therefore sees no
     // service, and the bridge keeps a LIVE view that re-reads the context.
     apply(harness.context)
+    await flushSwitches()
 
     const render = harness.registrations[0]?.render
     const element = (render as () => { props?: { settings?: { formFor?: (entryId: string) => unknown } } })()
@@ -789,6 +858,7 @@ describe('client registration', () => {
   it('keeps legacy fallback active and does not replace the first successful mount', async () => {
     const harness = createHarness('legacy')
     apply(harness.context)
+    await flushSwitches()
 
     expect(harness.context.on).toHaveBeenCalledWith('internal/service', expect.any(Function))
     expect(harness.registrations).toHaveLength(3)
@@ -798,9 +868,10 @@ describe('client registration', () => {
     expect(harness.legacySettings.describe).toHaveBeenCalled()
   })
 
-  it('disposes dictionaries and externally registered languages', () => {
+  it('disposes dictionaries and externally registered languages', async () => {
     const harness = createHarness('modern')
     apply(harness.context)
+    await flushSwitches()
 
     expect(harness.register).toHaveBeenCalledWith(LOCALE_NS, expect.objectContaining({ zh: expect.any(Object), en: expect.any(Object), ja: expect.any(Object), ko: expect.any(Object) }))
     expect(harness.addLanguage).toHaveBeenCalledTimes(2)
@@ -812,9 +883,10 @@ describe('client registration', () => {
     expect(harness.disposed).toEqual(['slot', 'slot', 'slot', 'ko', 'ja', 'dictionary'])
   })
 
-  it('injects the per-session directory store and verbs into the composer seat', () => {
+  it('injects the per-session directory store and verbs into the composer seat', async () => {
     const harness = createHarness('modern')
     apply(harness.context)
+    await flushSwitches()
 
     expect(harness.context.get).toHaveBeenCalledWith('modelDirectories')
     const descriptor = harness.registrations[2]?.descriptor as { inject?: (sessionId: string) => unknown }
@@ -829,7 +901,7 @@ describe('client registration', () => {
     expect(harness.directory.store).toBe(face.directory)
   })
 
-  it('skips the composer seat when the modelDirectories service is absent', () => {
+  it('skips the composer seat when the modelDirectories service is absent', async () => {
     const registrations: Array<{ descriptor: Record<string, unknown> }> = []
     const listeners: Array<(name: string) => void> = []
     const calls: string[] = []
@@ -853,7 +925,12 @@ describe('client registration', () => {
     const context = {
       get: vi.fn((key: string) => {
         calls.push(key)
-        return key === 'remote.settings' ? remoteSettings : key === 'modelDirectories' ? undefined : ({ slots, connection: {}, locale } as Record<string, unknown>)[key]
+        if (key === 'remote.settings') return remoteSettings
+        if (key === 'modelDirectories') return undefined
+        // The entry asks which component rows are live before mounting; answer
+        // like a host with every row enabled.
+        if (key === 'remote') return { pluginInventory: { list: async () => ({ ok: true, value: { entries: enabledRows() } }) } }
+        return ({ slots, connection: {}, locale } as Record<string, unknown>)[key]
       }),
       plugin: vi.fn((plugin: { inject?: readonly string[]; apply: (scope: ClientContext) => void }) => {
         for (const name of plugin.inject ?? []) {
@@ -862,7 +939,14 @@ describe('client registration', () => {
         plugin.apply(context)
         return () => undefined
       }),
-      inject: vi.fn(() => () => undefined),
+      inject: vi.fn((options: string[], callback: (scope: unknown) => void) => {
+        const remoteFace = context.get('remote') as { pluginInventory?: { list?: unknown } } | undefined
+        const allPresent = options.every((name) => name === 'remote.pluginInventory'
+          ? typeof remoteFace?.pluginInventory?.list === 'function'
+          : context.get(name) !== undefined)
+        if (allPresent) callback(context)
+        return () => undefined
+      }),
       on: vi.fn((event: string, callback: (name: string) => void) => {
         listeners.push(callback)
         return () => undefined
@@ -871,6 +955,7 @@ describe('client registration', () => {
     }
 
     apply(context as Parameters<typeof apply>[0])
+    await flushSwitches()
     // The seat declares modelDirectories through inject, so it is probed at
     // apply time; because the injected service is absent, the seat is skipped.
     expect(calls).toContain('modelDirectories')

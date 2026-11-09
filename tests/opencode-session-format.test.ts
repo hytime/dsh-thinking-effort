@@ -10,7 +10,7 @@ import {
   OPENCODE_SESSION_DEFAULT_REGEX,
   OpenCodeSessionFormatter,
   resolveFormatConfig,
-} from '../src/host/opencode-session-format.ts'
+} from '@hytime/dsh-feature-opencode'
 
 const FIXED_NOW = 1727088000000
 const SESSION_UUID = 'session-e8a7929f-8957-42c3-ad85-459e208fb91e'

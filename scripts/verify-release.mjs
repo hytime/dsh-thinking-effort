@@ -115,7 +115,11 @@ export async function runGuard(root = scriptRoot, tag) {
   if (!Array.isArray(manifest.files)) {
     throw new Error('files must include release entries');
   }
-  for (const requiredFile of ['lib/index.js', 'lib/client.js', 'lib/types/**/*.d.ts']) {
+  // `lib/*.js` rather than the two entry paths alone: a multi-entry build emits
+  // shared chunks beside them and every entry imports those, so listing only the
+  // entries ships a package that fails to load. `lib/entries/` carries the
+  // subpath entries, and the declarations are matched by glob as well.
+  for (const requiredFile of ['lib/*.js', 'lib/entries/', 'lib/types/**/*.d.ts']) {
     if (!manifest.files.includes(requiredFile)) {
       throw new Error(`files must include ${requiredFile}`);
     }

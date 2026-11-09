@@ -1,0 +1,118 @@
+import React from 'react'
+import { GATEWAY_COMPAT_FIELD_KEYS, GATEWAY_COMPAT_GROUPS } from '@hytime/dsh-plugin-kit'
+import type { ModelGatewayCompatUpdate, ModelGatewayCompatView, ProviderGatewayCompatView, Translation } from '@hytime/dsh-plugin-kit'
+import { en } from '../locales.js'
+import type { Palette } from '../theme.js'
+import css from '../settings.module.css'
+import { iosPalette } from '../theme.js'
+import { GatewayCompatGroup } from './GatewayCompatGroup.js'
+
+interface ProviderGatewayCompatControlsProps {
+  readonly scope?: 'provider'
+  readonly view: ProviderGatewayCompatView
+  readonly onChange: (next: ProviderGatewayCompatView) => void
+  readonly disabled?: boolean
+  readonly expanded?: boolean
+  readonly onToggleExpanded?: () => void
+  readonly availableCount: number
+  readonly expandedLabel?: string
+  readonly collapsedHint?: string
+}
+
+interface ModelGatewayCompatControlsProps {
+  readonly scope: 'model'
+  readonly view: ModelGatewayCompatView
+  readonly onChange: (next: Partial<ModelGatewayCompatUpdate>) => void
+  readonly disabled?: boolean
+  readonly expanded?: boolean
+  readonly onToggleExpanded?: () => void
+  readonly availableCount: number
+  readonly expandedLabel?: string
+  readonly collapsedHint?: string
+}
+
+export type GatewayCompatControlsProps = ProviderGatewayCompatControlsProps | ModelGatewayCompatControlsProps
+
+export interface GatewayCompatControlsPresentation {
+  readonly palette: Palette
+  readonly t: Translation
+}
+
+function selectStyle(palette: Palette): React.CSSProperties {
+  return {
+    boxSizing: 'border-box',
+    minWidth: 0,
+    height: '28px',
+    padding: '0 7px',
+    border: `1px solid ${palette.border}`,
+    borderRadius: '8px',
+    backgroundColor: palette.group,
+    color: palette.text,
+    fontSize: '12px',
+  }
+}
+
+function defaultTranslation(key: string, params?: Record<string, unknown>): string {
+  const value = (en as Record<string, string>)[key] ?? key
+  if (params === undefined) return value
+  return value.replace(/\{(\w+)\}/g, (_match: string, name: string) => String(params[name] ?? `{${name}}`))
+}
+
+function sourceKey(source: ModelGatewayCompatView['supportsDeveloperRoleSource']): string {
+  const keys: Record<ModelGatewayCompatView['supportsDeveloperRoleSource'], string> = {
+    model: 'compatSourceModel',
+    provider: 'compatSourceProvider',
+    base: 'compatSourceBase',
+    catalog: 'compatSourceCatalog',
+    protocol: 'compatSourceProtocol',
+    unknown: 'compatSourceUnknown',
+  }
+  return keys[source]
+}
+
+function sourceLabel(t: Translation, source: ModelGatewayCompatView['supportsDeveloperRoleSource']): string {
+  return t(sourceKey(source))
+}
+
+function isModelView(scope: GatewayCompatControlsProps['scope'], view: GatewayCompatControlsProps['view']): view is ModelGatewayCompatView {
+  return scope === 'model'
+    && 'model' in view
+}
+
+export function renderGatewayCompatControls(
+  { scope = 'provider', view, onChange, disabled = false, expanded = false, onToggleExpanded, availableCount, expandedLabel, collapsedHint }: GatewayCompatControlsProps,
+  { palette, t }: GatewayCompatControlsPresentation,
+): React.ReactElement | null {
+  const hasAvailableField = GATEWAY_COMPAT_FIELD_KEYS.some((key) => view[`${key}Available`] === true)
+  if (!hasAvailableField) return null
+  const modelView = isModelView(scope, view)
+  const patch = (next: Partial<ModelGatewayCompatUpdate>): void => {
+    if (modelView) (onChange as (value: Partial<ModelGatewayCompatUpdate>) => void)(next)
+    else (onChange as (value: ProviderGatewayCompatView) => void)({ ...view, ...next } as ProviderGatewayCompatView)
+  }
+  const fieldSource = (source: ModelGatewayCompatView['supportsDeveloperRoleSource']): React.ReactElement => <span style={{ color: palette.secondary, fontSize: '10px', fontWeight: 500 }}>({sourceLabel(t, source)})</span>
+  return <div data-provider={view.provider} data-scope={modelView ? 'model' : 'provider'} style={{ display: 'grid', gap: '5px', marginBottom: '4px', padding: '6px 8px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.group }}>
+    <div style={{ display: 'grid', gap: '2px', fontSize: '12px', fontWeight: 700, color: palette.text }}>
+      <span>{t(modelView ? 'modelGatewayCompatTitle' : 'gatewayCompatTitle')}</span>
+      {modelView ? <span style={{ fontSize: '11px', fontWeight: 600, overflowWrap: 'anywhere' }}>{view.model}</span> : null}
+    </div>
+    {view.supportsDeveloperRoleAvailable || view.maxTokensFieldAvailable ? <div className={css.pairGridTight}>
+      {view.supportsDeveloperRoleAvailable ? <label className={css.labelControlRow} style={{ fontSize: '12px', color: palette.text }}><span style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0, flexWrap: 'wrap' }}><span>{t('supportsDeveloperRole')}</span>{modelView ? fieldSource(view.supportsDeveloperRoleSource) : null}</span><select aria-label={t('supportsDeveloperRole')} value={view.supportsDeveloperRole} disabled={disabled} onChange={(event) => patch({ supportsDeveloperRole: event.currentTarget.value as ModelGatewayCompatView['supportsDeveloperRole'] })} style={selectStyle(palette)}><option value="auto">{t('gatewayCompatAuto')}</option><option value="supported">{t('gatewayCompatSupported')}</option><option value="unsupported">{t('gatewayCompatUnsupported')}</option></select></label> : null}
+      {view.maxTokensFieldAvailable ? <label className={css.labelControlRow} style={{ fontSize: '12px', color: palette.text }}><span style={{ display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0, flexWrap: 'wrap' }}><span>{t('maxTokensField')}</span>{modelView ? fieldSource(view.maxTokensFieldSource) : null}</span><select aria-label={t('maxTokensField')} value={view.maxTokensField} disabled={disabled} onChange={(event) => patch({ maxTokensField: event.currentTarget.value as ModelGatewayCompatView['maxTokensField'] })} style={selectStyle(palette)}><option value="auto">{t('gatewayCompatAuto')}</option><option value="max_tokens">{t('maxTokensFieldStandard')}</option><option value="max_completion_tokens">{t('maxTokensFieldCompletion')}</option></select></label> : null}
+    </div> : null}
+    {availableCount > 0 ? <div style={{ display: 'grid', gap: '3px', justifyItems: 'start' }}>
+      <button type="button" aria-expanded={expanded} onClick={() => onToggleExpanded?.()} disabled={disabled} style={{ border: 0, padding: '2px 0', background: 'transparent', color: palette.accent, fontSize: '11px', fontWeight: 650, cursor: disabled ? 'default' : 'pointer' }}>
+        {expanded ? t('gatewayExpandedLess') : expandedLabel ?? t('gatewayMoreFields', { count: availableCount })}
+      </button>
+      {!expanded && collapsedHint ? <span style={{ color: palette.secondary, fontSize: '10px' }}>{collapsedHint}</span> : null}
+    </div> : null}
+    {expanded ? <div style={{ display: 'grid', gap: '9px', paddingTop: '2px' }}>
+      {GATEWAY_COMPAT_GROUPS.map((group) => <GatewayCompatGroup key={group.id} groupId={group.id} view={view} onChange={patch} disabled={disabled} excludeKeys={['supportsDeveloperRole', 'maxTokensField']} palette={palette} t={t} />)}
+    </div> : null}
+    {modelView ? <div style={{ color: palette.secondary, fontSize: '10px' }}>{t('inheritProviderCompat')}</div> : null}
+  </div>
+}
+
+export function GatewayCompatControls(props: GatewayCompatControlsProps): React.ReactElement | null {
+  return renderGatewayCompatControls(props, { palette: iosPalette(), t: defaultTranslation })
+}

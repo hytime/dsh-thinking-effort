@@ -1,0 +1,104 @@
+import React from 'react'
+import { GATEWAY_COMPAT_GROUPS, fieldsInGroup, type GatewayCompatFieldKey, type GatewayCompatGroupId, type GatewayCompatFieldSpec } from '@hytime/dsh-plugin-kit'
+import type { ModelGatewayCompatUpdate, ModelGatewayCompatView, ProviderGatewayCompatView, Translation } from '@hytime/dsh-plugin-kit'
+import { en } from '../locales.js'
+import type { Palette } from '../theme.js'
+import { iosPalette } from '../theme.js'
+import css from '../settings.module.css'
+
+export interface GatewayCompatGroupProps {
+  readonly groupId: GatewayCompatGroupId
+  readonly view: ProviderGatewayCompatView | ModelGatewayCompatView
+  readonly onChange: (next: Partial<ModelGatewayCompatUpdate>) => void
+  readonly disabled?: boolean
+  readonly excludeKeys?: readonly GatewayCompatFieldKey[]
+  readonly palette?: Palette
+  readonly t?: Translation
+}
+
+function defaultTranslation(key: string): string {
+  return (en as Record<string, string>)[key] ?? key
+}
+
+function selectStyle(palette: Palette): React.CSSProperties {
+  return {
+    boxSizing: 'border-box',
+    minWidth: 0,
+    height: '28px',
+    padding: '0 7px',
+    border: `1px solid ${palette.border}`,
+    borderRadius: '8px',
+    backgroundColor: palette.group,
+    color: palette.text,
+    fontSize: '12px',
+  }
+}
+
+/** The registry kinds that render a `<select>`; `number` renders an `<input>`. */
+type SelectCompatFieldSpec = Exclude<GatewayCompatFieldSpec, { readonly kind: 'number' }>
+
+function fieldOptions(spec: SelectCompatFieldSpec, t: Translation): readonly { value: string; label: string }[] {
+  if (spec.kind === 'enum') {
+    return [
+      { value: 'auto', label: t('gatewayCompatAuto') },
+      ...spec.enumValues.map((value) => {
+        const option = spec.enumOptions?.find((candidate) => candidate.value === value)
+        return { value, label: option?.labelKey === undefined ? value : t(option.labelKey) }
+      }),
+    ]
+  }
+  return [
+    { value: 'auto', label: t('gatewayCompatAuto') },
+    { value: 'supported', label: t('gatewayCompatSupported') },
+    { value: 'unsupported', label: t('gatewayCompatUnsupported') },
+  ]
+}
+
+function renderField(
+  spec: GatewayCompatFieldSpec,
+  view: ProviderGatewayCompatView | ModelGatewayCompatView,
+  onChange: GatewayCompatGroupProps['onChange'],
+  disabled: boolean,
+  palette: Palette,
+  t: Translation,
+): React.ReactElement {
+  const key = spec.key as GatewayCompatFieldKey
+  const value = (view as unknown as Record<string, string>)[key] ?? 'auto'
+  if (spec.kind === 'number') {
+    // A numeric field carries its selection as a string (like every other
+    // field), so the empty value is `auto` and the write path parses it back.
+    return <label key={key} className={css.labelControlRow} style={{ fontSize: '12px', color: palette.text }}>
+      <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{t(spec.labelKey)}</span>
+      <input
+        aria-label={t(spec.labelKey)}
+        type="number"
+        step={spec.step}
+        value={value === 'auto' ? '' : value}
+        placeholder={t('gatewayCompatAuto')}
+        disabled={disabled}
+        onChange={(event) => onChange({ [key]: event.currentTarget.value === '' ? 'auto' : event.currentTarget.value } as Partial<ModelGatewayCompatUpdate>)}
+        style={selectStyle(palette)}
+      />
+    </label>
+  }
+  return <label key={key} className={css.labelControlRow} style={{ fontSize: '12px', color: palette.text }}>
+    <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{t(spec.labelKey)}</span>
+    <select aria-label={t(spec.labelKey)} value={value} disabled={disabled} onChange={(event) => onChange({ [key]: event.currentTarget.value } as Partial<ModelGatewayCompatUpdate>)} style={selectStyle(palette)}>
+      {fieldOptions(spec, t).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+    </select>
+  </label>
+}
+
+export function GatewayCompatGroup({ groupId, view, onChange, disabled = false, excludeKeys, palette = iosPalette(), t = defaultTranslation }: GatewayCompatGroupProps): React.ReactElement | null {
+  const excluded = new Set(excludeKeys ?? [])
+  const specs = fieldsInGroup(groupId)
+  const available = specs.filter((spec) => !excluded.has(spec.key as GatewayCompatFieldKey) && (view as unknown as Record<string, unknown>)[`${spec.key}Available`] === true)
+  if (available.length === 0) return null
+  const titleKey = GATEWAY_COMPAT_GROUPS.find((group) => group.id === groupId)?.titleKey ?? groupId
+  return <div style={{ display: 'grid', gap: '4px' }}>
+    <div style={{ fontSize: '11px', fontWeight: 700, color: palette.secondary }}>{t(titleKey)}</div>
+    <div className={css.pairGridTight}>
+      {available.map((spec) => renderField(spec, view, onChange, disabled, palette, t))}
+    </div>
+  </div>
+}

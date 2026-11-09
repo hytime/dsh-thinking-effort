@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isUnknownRecord } from '../src/shared/guards.js'
+import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
 import {
   ALL_LEVELS,
   DEFAULT_LEVELS,
@@ -11,8 +11,8 @@ import {
   PLUGIN_ENTRY_ID,
   PLUGIN_NS,
   SNAPSHOT_KIND,
-} from '../src/shared/constants.js'
-import { isSettingsConflict } from '../src/shared/conflict.js'
+} from '@hytime/dsh-plugin-kit'
+import { isSettingsConflict } from '@hytime/dsh-plugin-kit'
 
 describe('shared guards', () => {
   it('accepts plain objects and rejects everything else', () => {

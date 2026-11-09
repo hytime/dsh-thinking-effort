@@ -14,6 +14,33 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-09
+
+### 新增 / Added
+
+- 新增插件图标：`package.json` 声明 `icon: "./icon.svg"`，插件页的插件卡片、详情页与组件行都显示这个图标，不再回退到默认图形。图标是 36×36 的自包含 SVG（渐变轨道加圆环滑块，对应插件的思考强度档位），几何只用 `rect` 与 `circle`，没有脚本、外链、字体或动画，因此在 `<img>` 里渲染即可，深浅两种主题都可见。
+- Added a plugin icon: `package.json` declares `icon: "./icon.svg"`, and the Plugins page shows it on the bundle card, its detail page, and its component rows instead of falling back to the default artwork. The image is a self-contained 36×36 SVG (a gradient track with a ring thumb, matching the plugin's thinking-effort levels) built from `rect` and `circle` geometry alone, with no scripts, external references, fonts, or animation, so it renders inside an `<img>` and reads in both themes.
+- 文档新增实测截图：在 DSH `0.2.2-rc.1` 的 Web 实例上，用声明了 `sub2api` 供应商（15 个模型）的真实 `llm-pi-ai` 路由截取插件页图标与「模型能力与档位」页面，见 `docs/SCREENSHOTS.md`。
+- Documentation gained screenshots taken from a live DSH `0.2.2-rc.1` Web instance whose `llm-pi-ai` route declares a `sub2api` provider with 15 models: the plugin icon on the Plugins page and the Model capabilities and effort page, collected in `docs/SCREENSHOTS.md`.
+
+### 修复 / Fixed
+
+- 上下文压缩去掉「启用」开关：百分比本身就是配置，留空跟随全局比例（默认 60%）。原先的开关文案会被读成「关掉就关闭上下文压缩」，但 DSH 官方的自动压缩不受本插件影响，仍按它自己的阈值运行——本插件只提供「更早压缩」这一层，不提供「完全不压缩」。已写入 `compaction.enabled` 的旧文档照常加载，该字段被忽略。
+- Removed the Context compaction on/off switch: the percentages ARE the configuration, and empty fields follow the global ratio (60% by default). The old switch read as "turn context compaction off", but DSH's own automatic compaction is unaffected by this plugin and keeps running at its own threshold — this plugin only offers an EARLIER pass, never "no compaction". Documents that already stored `compaction.enabled` still load; the field is ignored.
+- 压缩阈值与保留比例、子 agent 默认模型改为输入即保存，去掉了各自的保存按钮。两个百分比在输入停顿后作为一次写入提交，非法组合（保留比例不小于阈值、无法解析的数字）保留输入内容并就地说明原因，不会写入后再回滚；子 agent 供应商与模型在配对完整后一次写入，选择「继承父会话」则以 unset 清空。
+- The compaction ratios and the subagent default model now save as you type, and their Save buttons are gone. The two percentages commit as one write once typing pauses; an invalid pair (retain not below the threshold, an unparseable number) keeps its text and explains itself in place rather than being written and rolled back. The subagent provider/model pair commits once complete, and choosing **Inherit parent session** clears it with an unset.
+- 组件开关现在真正控制设置页：此前七个组件共用一个客户端 bundle，关闭某个组件后它的设置卡片仍会渲染，改动也不会生效。现在客户端按宿主报告的启用状态逐项渲染，并订阅宿主的 `plugin-manager/changed` 事件，因此在插件页切换开关后无需刷新页面即可看到卡片出现或消失。依赖关系一并生效：根组件关闭会带走全部依赖它的组件，设置面板关闭会带走它承载的 OpenCode、压缩、子 agent 与迁移配置；Composer 滑块不依赖本插件的宿主侧，因此保持独立。
+- Component switches now actually control the settings page: the seven components share one client bundle, so a disabled component used to keep rendering its card while its settings did nothing. The client now renders each surface from the enablement the Host reports and subscribes to `plugin-manager/changed`, so toggling a row in the plugin page adds or removes its card without a page refresh. Dependencies apply too: turning off the root component takes every component that depends on it, and turning off the settings panel takes the OpenCode, compaction, subagent and migration configuration it hosts; the Composer seat stays independent because it does not depend on this plugin's host half.
+- 发布包不再夹带上一次构建的残留文件：构建前会清空 `lib/`，因此旧的共享 chunk 不会被 `files` 的 glob 打进 tarball。CI 的语法检查改为覆盖 `package.json` 的 `exports` 声明的全部入口，而不是只查两个旧路径。
+- The published package no longer carries leftovers from a previous build: `lib/` is cleared before compiling, so a stale shared chunk cannot be swept into the tarball by the `files` glob. The CI syntax check now covers every entry the manifest's `exports` declares instead of the two legacy paths only.
+
+### 变更 / Changed
+
+- 最低支持的 DSH 版本从 `0.1.0-rc.7` 提高到 `0.1.7-alpha.1`，`engines.dsh` 与 `@deepseek-ai/dsh` peer 范围同步收紧。`0.1.7` 是 entry-config 设置模型的起点，也是本插件现在支持的最旧宿主。
+- Raised the minimum supported DSH version from `0.1.0-rc.7` to `0.1.7-alpha.1`, tightening both `engines.dsh` and the `@deepseek-ai/dsh` peer range. `0.1.7` is where the entry-config settings model begins and is now the oldest host this plugin supports.
+- 移除了只服务于旧版本的兼容层：版本映射表中 rc.7 / rc.8 / 0.1.2 / 0.1.3 / 0.1.6 五段能力窗口合并为一段，`namespace` 设置模型（`register` / `installSection` / `get` / `settings/updated` 事件）从代码中删除，`readSettingsSection` 只从 `describe()` 投影。发布 workflow 的兼容矩阵也由五个官方代表缩减为一个（`0.1.7-alpha.1`）。
+- Removed the compatibility layer that only served the older releases: the version map's five capability windows (rc.7, rc.8, 0.1.2, 0.1.3, 0.1.6) collapsed into one, the `namespace` settings model (`register` / `installSection` / `get` and the `settings/updated` event) is gone from the code, and `readSettingsSection` projects from `describe()` alone. The release workflow's compatibility matrix shrank from five official representatives to one (`0.1.7-alpha.1`).
+
 ## [0.4.0] - 2026-11-07
 
 ### 新增 / Added

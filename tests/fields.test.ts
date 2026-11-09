@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { ALPHA1_PLUS_COMPAT_FIELDS, ALPHA3_PLUS_COMPAT_FIELDS, GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, GATEWAY_COMPAT_GROUPS, RC8_COMPAT_FIELDS, SUPPORTED_THINKING_FORMATS, fieldsForApi } from '../src/compat/gateway/fields.js'
-import { resolveGatewayCompat, resolveModelGatewayCompat } from '../src/compat/gateway/resolve.js'
-import { opsForProviderCompat } from '../src/compat/gateway/ops.js'
-import type { GatewayCompatEditability } from '../src/compat/gateway/types.js'
-import { LOCALE_DATA } from '../src/client/locales.js'
+import { ALPHA1_PLUS_COMPAT_FIELDS, ALPHA3_PLUS_COMPAT_FIELDS, GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, GATEWAY_COMPAT_GROUPS, RC8_COMPAT_FIELDS, SUPPORTED_THINKING_FORMATS, fieldsForApi } from '@hytime/dsh-plugin-kit'
+import { resolveGatewayCompat, resolveModelGatewayCompat } from '@hytime/dsh-plugin-kit'
+import { opsForProviderCompat } from '@hytime/dsh-plugin-kit'
+import type { GatewayCompatEditability } from '@hytime/dsh-plugin-kit'
+import { LOCALE_DATA } from '../packages/settings-ui/src/client/locales.js'
 
 describe('gateway compat field registry', () => {
   it('keeps every field key unique and non-empty', () => {

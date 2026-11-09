@@ -39,16 +39,13 @@ ls "${DSH_HOME:-$HOME/.dsh}/profiles"
 
 - **DSH Runtime:** Settings transport는 최신 DSH에서 `remote.settings`, 이전 DSH에서 `connection.api.settings`입니다. 플러그인은 실제 런타임 capability를 감지하고 이전 경로 fallback을 선택 사항으로 유지합니다.
 - **Gateway Protocol:** DSH schema가 제공하는 경우 공식 `llm-pi-ai.compat` 필드를 사용합니다. 선택 사항인 `dsh-llm-openai-completions` transport를 설치하고 활성화하면 조건을 충족하는 사용자 지정 OpenAI 호환 사고 provider를 takeover할 수 있습니다.
-- **Settings model:** DSH `0.1.7`부터는 각 Loader 항목 자체의 `Config` schema에서 설정 폼을 도출하고(`entry-config`) 설정 문서를 현재 profile의 `cordis.patch.yml`에 저장합니다. DSH `0.1.0-rc.7`부터 `0.1.6`까지는 namespace를 등록하는 방식이며 DSH 설정 문서(예: `~/.dsh/settings.yaml`)에 저장합니다. 플러그인은 두 모델을 모두 지원하고, Client는 실행 중인 Host가 게시한 섹션 ID(`entry-config`에서는 `thinking-effort`, namespace 모델에서는 `dsh-thinking-effort`)를 해석합니다.
+- **Settings model:** DSH는 각 Loader 항목 자체의 `Config` schema에서 설정 폼을 도출하고(`entry-config`) 설정 문서를 현재 profile의 `cordis.patch.yml`에 저장합니다. 이 플러그인의 섹션은 Loader 항목 ID `thinking-effort`로 지정합니다. 이것이 플러그인이 지원하는 유일한 설정 모델이며, `0.1.7-alpha.1`이 설치 가능한 가장 오래된 호스트입니다.
 
 version-map은 다음 규칙으로 게이트웨이 capability를 판정합니다.
 
 | DSH 범위 | Gateway compat 필드 | Takeover transport |
 | --- | --- | --- |
-| `0.1.0-rc.7` | 지원하지 않음 | 지원하지 않음 |
-| `0.1.0-rc.8`부터 `<0.1.2-alpha.1`까지 | schema가 노출하는 경우 지원하지만 `supportsFinishReason` 및 `supportsThinkingTokenBudget`는 없음 | 선택 사항 |
-| `0.1.2-alpha.1`부터 `<0.1.3-alpha.2`까지 | schema가 노출하는 경우 15개 필드 지원. `thinkingTokenBudgetField`, `vllmPriority`, `supportsMaxOutputTokens`는 아직 제공되지 않음 | 선택 사항 |
-| `0.1.3-alpha.2` 이상 지원 범위 | schema가 노출하는 경우 18개 필드 모두 지원 | 선택 사항 |
+| `0.1.7-alpha.1`부터 `<0.2.3-0`까지 | schema가 노출하는 경우 18개 필드 모두 지원 | 선택 사항 |
 
 DSH `0.1.0-rc.8` 이후 지원 범위에서는 필드 사용 가능 여부가 런타임 schema 노출에 따라 결정됩니다.
 런타임 schema가 노출하지 않는 필드는 UI에 표시되지 않습니다. 선택 사항인 transport가 설치되지 않았거나 비활성화된 경우 takeover를 적용하지 않습니다.
@@ -76,10 +73,10 @@ OpenCode 세션 Header는 모델 편집기의 모델별 설정이며 provider �
 
 ### 생성기 설정
 
-생성기 위치는 DSH 계열에 따라 다릅니다. `0.1.7` 이상에서는 현재 profile의 `cordis.patch.yml`에 있는 `opencodeSession.format` 섹션(Loader 항목 ID `thinking-effort`로 지정)입니다. `0.1.0-rc.7`부터 `0.1.6`까지는 DSH 설정 문서(예: `~/.dsh/settings.yaml`)의 `dsh-thinking-effort.opencodeSession.format`입니다. 두 위치 모두 설정 페이지가 대신 기록합니다. 아래 YAML은 `0.1.7` 이전 릴리스가 읽는 namespace 형태를 보여 줍니다:
+생성기 위치는 현재 profile의 `cordis.patch.yml`에 있는 `opencodeSession.format` 섹션이며 Loader 항목 ID `thinking-effort`로 지정합니다. 설정 페이지가 이 위치에 대한 쓰기를 대행합니다. 아래 YAML은 그 형태를 보여 줍니다:
 
 ```yaml
-dsh-thinking-effort:
+생성기 위치는 현재 profile의 `cordis.patch.yml`에 있는 `opencodeSession.format` 섹션이며 Loader 항목 ID `thinking-effort`로 지정합니다. 설정 페이지가 이 위치에 대한 쓰기를 대행합니다. 아래 YAML은 그 형태를 보여 줍니다:
   opencodeSession:
     providers:
       opencode-go:
@@ -254,7 +251,7 @@ dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 현재 릴리스 버전을 명시하여 설치합니다.
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.1
 ```
 
 공식 CLI가 profile 의존성, lockfile 및 `dsh.profile.bundles`를 자동으로 업데이트합니다. YAML 행을 수동으로 추가하지 마세요.
@@ -270,7 +267,7 @@ dsh plugin --profile <profile> update @hytime/dsh-thinking-effort
 특정 버전으로 업데이트하려면 다음을 사용합니다.
 
 ```bash
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.1
 ```
 
 Host 변경에는 DSH를 재시작하고 Client 변경에는 Web 페이지를 새로 고치세요.
@@ -288,7 +285,7 @@ github:hytime/dsh-thinking-effort
 
 ```bash
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.1
 ```
 
 다른 도구로 의존성을 제거했지만 이전 bundle이 남아 있으면 composition을 확인합니다.
@@ -302,7 +299,7 @@ dsh --profile <profile> --dump-default-config
 ```bash
 dsh plugin --profile <profile> add github:hytime/dsh-thinking-effort#<old-commit>
 dsh plugin --profile <profile> remove dsh-thinking-effort
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.1
 ```
 
 새 bundle 목록에 이전 패키지 이름을 추가하지 마세요.
@@ -317,7 +314,7 @@ grep -n "@hytime/dsh-thinking-effort" \
 node -p "require('${DSH_HOME:-$HOME/.dsh}/profiles/<profile>/node_modules/@hytime/dsh-thinking-effort/package.json').version"
 ```
 
-이 릴리스의 버전은 `0.4.0`이어야 합니다.
+이 릴리스의 버전은 `0.4.1`이어야 합니다.
 
 ## 일본어 및 한국어 지원 상태
 
@@ -378,15 +375,9 @@ cat "${DSH_HOME:-$HOME/.dsh}/thinking-effort-loaded.json"
 
 npm 패키지에 GitHub Trusted Publishing을 설정하세요. 저장소는 `hytime/dsh-thinking-effort`, workflow는 `publish.yml`입니다. 게시에는 GitHub OIDC와 provenance를 사용하고 `pnpm publish --provenance --access public --skip-manifest-obfuscation`을 실행합니다. `NPM_TOKEN`이나 장기 token은 사용하지 않습니다. `--skip-manifest-obfuscation`은 필수입니다. pnpm은 기본적으로 `packageManager`를 게시 매니페스트에서 제거하며, 공식 DSH CLI는 그 필드가 없는 플러그인을 profile 설치 시 거부합니다. npm에 같은 버전이 이미 있으면 게시가 중단됩니다.
 
-게시 전에 workflow는 rc7 → rc2 → alpha2 → namespace → entry 순서로 다섯 개의 임시 공식 DSH capability representative checkout을 만들고, 공식 `dsh plugin` 명령으로 현재 tarball을 설치한 뒤 실제 호환성 테스트를 실행합니다.
+게시 전에 workflow는 하나의 임시 공식 DSH capability representative checkout을 만들고, 공식 `dsh plugin` 명령으로 현재 tarball을 설치한 뒤 실제 호환성 테스트를 실행합니다.
 
-- `dsh-v0.1.0-rc.7` (`0.1.0-rc.7`) — rc7 capability representative
-- `dsh-v0.1.1-rc.2` (`0.1.1-rc.2`) — rc2 capability representative
-- `dsh-v0.1.3-alpha.2` (`0.1.3-alpha.2`) — alpha2 capability representative
-- `dsh-v0.1.6-alpha.1` (`0.1.6-alpha.1`) — 최신 namespace 모델 capability representative(실제 브라우저 DOM 프로브 실행)
-- `dsh-v0.1.7-alpha.1` (`0.1.7-alpha.1`) — entry-config capability representative(설정 폼은 각 Loader 엔트리 자체의 `Config`에서 도출. 실제 브라우저 DOM 프로브도 실행)
-
-일반 CI는 테스트 전용이며 Pull Request와 `main` 푸시에서 실행됩니다. `pnpm install --frozen-lockfile`를 사용하므로 의존성 변경 시 `pnpm-lock.yaml`을 커밋하세요.
+- `dsh-v0.1.7-alpha.1` (`0.1.7-alpha.1`) — 이 플러그인이 지원하는 가장 오래된 호스트이자 entry-config 모델의 시작점(설정 폼은 각 Loader 엔트리 자체의 `Config`에서 도출. 실제 브라우저 DOM 프로브도 실행)
 
 ## 7. 제거
 

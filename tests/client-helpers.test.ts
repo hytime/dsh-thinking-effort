@@ -10,11 +10,11 @@ import {
   LOCALE_NS,
   NS,
   PRESETS,
-} from '../src/client/constants.js'
-import { directResult, settingsBridge } from '../src/client/settings-bridge.js'
-import { LOCALE_DATA, LOCALE_CODES } from '../src/client/locales.js'
-import { inventoryFrom, modelCompatKey, modelGatewayCompatViewFrom, modelGatewayCompatViewsFrom, providerGatewayCompatViewFrom, routeApi } from '../src/client/model-inventory.js'
-import { mergeModelUpdate, opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from '../src/client/model-ops.js'
+} from '../packages/settings-ui/src/client/constants.js'
+import { directResult, settingsBridge } from '../packages/settings-ui/src/client/settings-bridge.js'
+import { LOCALE_DATA, LOCALE_CODES } from '../packages/settings-ui/src/client/locales.js'
+import { inventoryFrom, modelCompatKey, modelGatewayCompatViewFrom, modelGatewayCompatViewsFrom, providerGatewayCompatViewFrom, routeApi } from '../packages/settings-ui/src/client/model-inventory.js'
+import { mergeModelUpdate, opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from '../packages/settings-ui/src/client/model-ops.js'
 import {
   buildInput,
   buildLevels,
@@ -23,19 +23,19 @@ import {
   inputDraftFrom,
   validateContextWindow,
   validateLevels,
-} from '../src/client/validation.js'
-import { iosPalette } from '../src/client/theme.js'
-import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '../src/compat/model-source.js'
-import { resolveGatewayCompat, resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../src/compat/gateway/resolve.js'
-import { editableProviderCompatFields, validateProviderCompat } from '../src/compat/gateway/validation.js'
-import type { GatewayCompatEditability, GatewayCompatFieldKey, GatewayCompatFieldResolution } from '../src/compat/gateway/types.js'
-import { capabilitiesForVersion } from '../src/compat/version-map.js'
-import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS, fieldsForApi } from '../src/compat/gateway/fields.js'
-import type { InventoryItem, ModelGatewayCompatUpdate, Translation } from '../src/client/types.js'
-import { revisionOf } from '../src/client/types.js'
-import { hasSessionRemote } from '../src/compat/model-directory.js'
-import { isSettingsConflict } from '../src/shared/conflict.js'
-import type { TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
+} from '../packages/settings-ui/src/client/validation.js'
+import { iosPalette } from '../packages/settings-ui/src/client/theme.js'
+import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '@hytime/dsh-plugin-kit'
+import { resolveGatewayCompat, resolveModelGatewayCompat, resolveProviderGatewayCompat } from '@hytime/dsh-plugin-kit'
+import { editableProviderCompatFields, validateProviderCompat } from '@hytime/dsh-plugin-kit'
+import type { GatewayCompatEditability, GatewayCompatFieldKey, GatewayCompatFieldResolution } from '@hytime/dsh-plugin-kit'
+import { capabilitiesForVersion } from '@hytime/dsh-plugin-kit'
+import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS, fieldsForApi } from '@hytime/dsh-plugin-kit'
+import type { InventoryItem, ModelGatewayCompatUpdate, Translation } from '@hytime/dsh-plugin-kit'
+import { revisionOf } from '@hytime/dsh-plugin-kit'
+import { hasSessionRemote } from '@hytime/dsh-plugin-kit'
+import { isSettingsConflict } from '@hytime/dsh-plugin-kit'
+import type { TakeoverRuntimeResolution } from '../packages/settings-ui/src/client/takeover-runtime.js'
 
 const translate: Translation = (key, params) => `${key}${params?.level ? `:${params.level}` : ''}`
 
@@ -1396,7 +1396,7 @@ describe('model inventory and operations', () => {
         },
       },
     }
-    const complete = editableProviderCompatFields(capabilitiesForVersion('0.1.0-rc.8'), schema)
+    const complete = editableProviderCompatFields(capabilitiesForVersion('0.1.7-alpha.1'), schema)
     expect(complete).toEqual({
       supportsDeveloperRole: true,
       maxTokensField: true,
@@ -1406,7 +1406,7 @@ describe('model inventory and operations', () => {
       editableFields: [],
       available: false,
     })
-    expect(validateProviderCompat(capabilitiesForVersion('0.1.0-rc.8'), {})).toMatchObject({
+    expect(validateProviderCompat(capabilitiesForVersion('0.1.7-alpha.1'), {})).toMatchObject({
       editableFields: [],
       available: false,
     })
@@ -1421,16 +1421,21 @@ describe('model inventory and operations', () => {
         },
       },
     }
-    expect(editableProviderCompatFields(capabilitiesForVersion('0.1.0-rc.8'), rc8Schema).editableFields)
+    // The schema decides which of the window's fields are editable: one that
+    // declares only the older set yields only that set, even though every
+    // supported host offers the full set.
+    expect(editableProviderCompatFields(capabilitiesForVersion('0.1.7-alpha.1'), rc8Schema).editableFields)
       .toEqual(GATEWAY_COMPAT_FIELD_KEYS.filter((field) => RC8_COMPAT_FIELDS.includes(field as typeof RC8_COMPAT_FIELDS[number])))
   })
 
-  it('keeps aggregate provider availability true for rc8 with alpha-only schema fields excluded', () => {
-    const result = validateProviderCompat(capabilitiesForVersion('0.1.0-rc.8'), realGatewaySchema)
+  it('keeps aggregate provider availability true and reports every field the schema offers', () => {
+    const result = validateProviderCompat(capabilitiesForVersion('0.1.7-alpha.1'), realGatewaySchema)
     expect(result.available).toBe(true)
-    expect(result.editableFields).toEqual(GATEWAY_COMPAT_FIELD_KEYS.filter((field) => RC8_COMPAT_FIELDS.includes(field as typeof RC8_COMPAT_FIELDS[number])))
-    expect(result.supportsFinishReason).toBeUndefined()
-    expect(result.supportsThinkingTokenBudget).toBeUndefined()
+    // Every supported host is in one window, so the aggregate covers the full
+    // editable set rather than a per-release subset.
+    expect(result.editableFields).toEqual([...GATEWAY_COMPAT_FIELD_KEYS])
+    expect(result.supportsFinishReason).toBe(true)
+    expect(result.supportsThinkingTokenBudget).toBe(true)
   })
 
   it('refuses provider compat writes when editability is missing or unclear', () => {
@@ -1576,7 +1581,7 @@ describe('model inventory and operations', () => {
 
   it('checks each schema field independently', () => {
     const schema = { properties: { maxTokensField: {} } }
-    const result = editableProviderCompatFields(capabilitiesForVersion('0.1.0-rc.8'), schema)
+    const result = editableProviderCompatFields(capabilitiesForVersion('0.1.7-alpha.1'), schema)
     expect(result).toEqual({
       maxTokensField: true,
       editableFields: ['maxTokensField'],

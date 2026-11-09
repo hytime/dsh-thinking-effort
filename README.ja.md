@@ -18,7 +18,7 @@
 
 > **互換性の境界：** DSH Runtime compatibility は Settings の transport だけを扱います。新しい DSH は `remote.settings`、古い DSH は `connection.api.settings` を公開します。プラグインは実行時の capability を検出し、古い DSH で Remote provider がない場合も、オプションの Remote service を必須にしません。
 >
-> Gateway Protocol compatibility は別の層です。DSH の schema が提供する場合、18 個の一般的なスカラー `llm-pi-ai.compat` フィールドに対応します。フィールドはロールと推論、形式と出力、ストリーミングとツール、保存とキャッシュの 4 グループに分かれ、既定では折りたたまれています。boolean は `Auto`、対応、非対応、enum は `Auto` と具体的な値、number は整数または `Auto` を選べます。DSH `0.1.0-rc.7` にはゲートウェイ互換設定がなく、`0.1.0-rc.8` から `<0.1.2-alpha.1` では `supportsFinishReason` と `supportsThinkingTokenBudget` がありません。DSH `0.1.2-alpha.1` から `<0.1.3-alpha.2` はそのうち 15 フィールドを提供し、`0.1.3-alpha.2` 以降は schema が対応する場合に 18 フィールドすべてを提供します。オプションの `dsh-llm-openai-completions` transport をインストールして有効にすると、条件を満たすカスタム OpenAI 互換の思考プロバイダーを takeover できます。`Auto` は現在の層の上書きを unset し、継承チェーンの次の値へ戻します。
+> Gateway Protocol compatibility は別の層です。DSH の schema が提供する場合、18 個の一般的なスカラー `llm-pi-ai.compat` フィールドに対応します。フィールドはロールと推論、形式と出力、ストリーミングとツール、保存とキャッシュの 4 グループに分かれ、既定では折りたたまれています。boolean は `Auto`、対応、非対応、enum は `Auto` と具体的な値、number は整数または `Auto` を選べます。サポート範囲（`0.1.7-alpha.1` から `0.2.2` まで）の各リリースは、schema が対応する場合に 18 フィールドすべてを提供します。オプションの `dsh-llm-openai-completions` transport をインストールして有効にすると、条件を満たすカスタム OpenAI 互換の思考プロバイダーを takeover できます。`Auto` は現在の層の上書きを unset し、継承チェーンの次の値へ戻します。
 >
 > DSH `0.1.2-alpha.1` 以降は `LocaleRuntime` の language-pack 拡張をサポートします。このプラグインは `ja` と `ko` を動的に登録するため、DSH の fork は不要です。組み込み locale ID だけを受け付ける古い DSH では `zh` と `en` のみ使用できます。
 >
@@ -30,18 +30,14 @@
 
 | DSH 範囲 | ゲートウェイ互換設定 |
 | --- | --- |
-| `0.1.0-rc.7` | 非対応 |
-| `0.1.0-rc.8` から `<0.1.2-alpha.1` | schema が公開する場合は対応。ただし `supportsFinishReason` と `supportsThinkingTokenBudget` はありません |
-| `0.1.2-alpha.1` から `<0.1.3-alpha.2` | schema が公開する場合は 15 フィールドに対応。`thinkingTokenBudgetField`、`vllmPriority`、`supportsMaxOutputTokens` はまだ提供されません |
-| `0.1.3-alpha.2` から `<0.2.3-0` | schema が公開する場合は 18 フィールドすべてに対応。この範囲は `0.1.7` の Settings 書き換えと `0.2.0` から `0.2.2` までの各ラインにまたがり、いずれも編集可能なフィールド集合が同じであることを検証済みです。上限以降のリリースは未マップのまま、実行中のホストが報告する能力に従って動作を継続します |
-
+| `0.1.7-alpha.1` から `<0.2.3-0` | schema が公開する場合は 18 フィールドすべてに対応。この範囲は `0.1.7` の Settings 書き換えと `0.2.0` から `0.2.2` までの各ラインにまたがり、いずれも編集可能なフィールド集合が同じであることを検証済みです。この下限より前のリリースはサポート対象外です。上限以降のリリースは未マップのまま、実行中のホストが報告する能力に従って動作を継続します |
 DSH `0.1.0-rc.8` 以降の対応範囲では、フィールドの有無は実行時 schema の公開内容に従います。上表は各 DSH バージョンで利用できるフィールドの上限であり、ルートのプロトコルによってさらに絞り込まれます。
 
-`@deepseek-ai/cordis` の peer 範囲は `^4.0.1 || ^4.0.6-alpha.1` です。`0.2.1-rc.5` 以前の DSH は cordis 4.0.5 で構築され、`0.2.2-alpha.2` と `0.2.2-alpha.3` は 4.0.6 のプレリリース、`0.2.2-rc.1` 以降は 4.1.0 で構築されています。この和集合がすべてを覆うため、本パッケージはこれらのホストにインストールできます。本プラグインは cordis モジュールを直接 import せず、自身が宣言する最小の `HostContext` インターフェース経由でのみランタイムに触れるため、この peer はインストール時の範囲であり、実行時の能力要件ではありません。`engines.dsh` は意図的に広い `>=0.1.0-rc.7` の下限を保っています。DSH の互換性チェックはこのフィールドだけを読み cordis peer を無視するため、狭めると `0.2.2-alpha.2` より前のすべてのホストが非互換と判定されますが、プラグインはそれらでも動作します。
+`@deepseek-ai/cordis` の peer 範囲は `^4.0.1 || ^4.0.6-alpha.1` です。`0.2.1-rc.5` 以前の DSH は cordis 4.0.5 で構築され、`0.2.2-alpha.2` と `0.2.2-alpha.3` は 4.0.6 のプレリリース、`0.2.2-rc.1` 以降は 4.1.0 で構築されています。この和集合がすべてを覆うため、本パッケージはこれらのホストにインストールできます。本プラグインは cordis モジュールを直接 import せず、自身が宣言する最小の `HostContext` インターフェース経由でのみランタイムに触れるため、この peer はインストール時の範囲であり、実行時の能力要件ではありません。`engines.dsh` は `>=0.1.7-alpha.1` になりました。これは entry-config 設定モデルの起点であり、本プラグインがサポートする最も古いホストです。それより前のリリースはコードから削除された namespace モデルを使用するため、サポート対象外です。
 
 ゲートウェイ互換フィールドを設定できるのは、DSH のバージョン、実行時 schema、ルートの `api` プロトコルのすべてが対応している場合だけです。対応しないフィールドは UI に表示されず、Settings にも書き込まれません。この 18 フィールドでは `openai-completions` が `supportsMaxOutputTokens` 以外のすべてを提供し、`openai-responses`、`azure-openai-responses`、`openai-codex-responses` は `supportsDeveloperRole`、`supportsStrictMode`、`supportsLongCacheRetention`、`supportsMaxOutputTokens` だけを提供します。`api` がない、または認識できない場合は、実行時 schema と DSH の検証を最終的な基準にします。
 
-DSH `0.1.7` 以降は、各 Loader エントリ自身の `Config` schema から設定フォームを導出します（entry-config モデル）。この schema を公開しないプラグインには設定フォームが表示されません。本プラグインはこれを公開しているため、`0.1.7` 以降の設定セクションは Loader エントリ ID の `thinking-effort` になります。`0.1.0-rc.7` から `0.1.6` までは登録済み namespace の `dsh-thinking-effort` のままで、Client は実行中の Host が公開している方の ID を解決します。`subagentEffort` は本プラグイン自身のセクションに移り、`0.1.7` 以降は旧 `llm-pi-ai` の場所がフォールバックになりません。このセクションの schema は `providers` しか宣言しておらず、Host はそれ以外のパスへの書き込みを拒否し、公開するユーザーレイヤーから未宣言のキーを落とすためです。したがって以前に設定した Subagent の既定値は未設定として表示され、プラグインの設定カードで選び直す必要があります。`0.1.7` より前に本プラグインが書き出したスナップショットは今もこの値を `llm-pi-ai` の中に持っており、インポート時にプラグイン自身のセクションへ移行します。同じバッチの providers が取り込めるのはこの移行のおかげです（volatile でないパスが 1 つでもあると Host はバッチ全体を拒否します）。`0.1.7` 以降の設定は `~/.dsh/settings.yaml` ではなく現在の profile の `cordis.patch.yml` に保存されます（`0.1.7` はこのファイルを使用しません）。
+DSH `0.1.7` 以降は、各 Loader エントリ自身の `Config` schema から設定フォームを導出します（entry-config モデル）。この schema を公開しないプラグインには設定フォームが表示されません。本プラグインはこれを公開しているため、設定セクションは Loader エントリ ID の `thinking-effort` になります。`subagentEffort` と Subagent の既定モデルはどちらもこのセクションに保存され、旧 `llm-pi-ai` の場所はフォールバックになりません。このセクションの schema は `providers` しか宣言しておらず、Host はそれ以外のパスへの書き込みを拒否し、公開するユーザーレイヤーから未宣言のキーを落とすためです。設定は現在の profile の `cordis.patch.yml` に保存され、`~/.dsh/settings.yaml` は使用しません。
 
 ## なぜ使うのか
 
@@ -77,6 +73,7 @@ DSH 内蔵モデルだけを使用し、すでに推論コントロールが動�
 | 設定のバックアップとプロファイル | 現在の設定を JSON ファイルとして書き出して移行に利用。名前付きプロファイルを保存して切り替え。読み込み前に「マージ」または「置換」を選び、影響範囲をプレビュー |
 | Subagent の既定値 | 設定したレベルを Subagent リクエストに適用し、親セッションから継承したレベルを上書き。未設定ならリクエストに手を加えず、親セッションのレベルを継承 |
 | 多言語設定 | 中文、English、日本語、한국어の辞書を同梱。日本語/韓国語の切り替えは DSH の language-pack 対応を使用 |
+| プラグインアイコン | `icon: "./icon.svg"` を宣言し、プラグインのカード、詳細ページ、コンポーネント行にこのパッケージ独自のアイコンを表示します（既定の図形へのフォールバックなし） |
 | バージョン表示 | 設定ページ右下にインストール済みバージョンを表示 |
 
 ## インストール、更新、削除
@@ -149,7 +146,7 @@ Settings の provider グローバル領域では、その provider の全モデ
 
 有効時で `format` 未設定の場合、Host は `ses_` の正規形を持ち**現在の DSH セッションから決定論的に導出**した値を送信します。`ses_` + 12 桁の 16 進（セッションごとに 1 回鋳造する 48 ビットのミリ秒タイムスタンプ）+ 14 桁の Base62（正規化した DSH セッション ID の 80 ビット SHA-256 ダイジェスト）です。同じ DSH セッションは常に同じ値を送ります。値はセッション単位で保持され、サイズ上限付きキャッシュの淘汰はキャッシュした値だけを捨て、初回鋳造は決して捨てないため、淘汰されたセッションを再訪しても値は変わりません。16 進タイムスタンプが再鋳造されるのは DSH 再起動後の `firstUse` モードだけです（`time: hash` は完全にステートレス）。14 桁の接尾辞は導出値であって保存値ではないため、DSH 再起動後も安定しています。別のセッション（各 subagent 実行を含む）は別の値を導出します。
 
-生成器のパラメーターは、設定ページの**セッション値ジェネレーター**カードからも、設定ドキュメントに直接書いても設定できます。`0.1.7` 以降は現在の profile の `cordis.patch.yml` にある `opencodeSession.format` セクション（Loader エントリ ID `thinking-effort` で指定）、`0.1.0-rc.7` から `0.1.6` までは `dsh-thinking-effort.opencodeSession.format`（例：`~/.dsh/settings.yaml`）です。どちらも等価です。上流の形式変更にプラグインの再ビルドなしで対応できる 4 つのモードがあります。
+生成器のパラメーターは、設定ページの**セッション値ジェネレーター**カードからも、設定ドキュメントに直接書いても設定できます。現在の profile の `cordis.patch.yml` にある `opencodeSession.format` セクション（Loader エントリ ID `thinking-effort` で指定）がそれです。上流の形式変更にプラグインの再ビルドなしで対応できる 4 つのモードがあります：
 
 - `ses-derive`（既定）— 上記の正規生成器。`time: firstUse` はセッションごとに hex 部を 1 回鋳造し、`time: hash` はセッションダイジェストから導出してどのマシンでも値が完全に一致します。
 - `passthrough` — 旧動作：生の DSH セッション ID を送信します。
@@ -190,7 +187,7 @@ dsh-thinking-effort:
 
 **設定のバックアップとプロファイル** カードは言語セレクターと **Subagent default effort** カードの下にあり、現在の設定の書き出し、名前付きプロファイルの保存と切り替え、以前に書き出したファイルの読み込みができます。
 
-1. **現在の設定を書き出す** を押すと `dsh-config-<タイムスタンプ>.json` がダウンロードされます。ファイルには `llm-pi-ai` のユーザーレイヤーと本プラグイン自身の設定セクションがそのまま入ります（`0.1.0-rc.7` から `0.1.6` までは `dsh-thinking-effort`、`0.1.7` 以降は Loader エントリ ID の `thinking-effort` がキーになります）。認証情報の値は書き出されません（provider が持つのは鍵を入れた環境変数の名前 `apiKeyEnv` だけです）が、これらのセクションの値はそのまま記録されるため、provider の `headers` に置いた平文トークンもそのまま残ります。保管に注意してください。
+1. **現在の設定を書き出す** を押すと `dsh-config-<タイムスタンプ>.json` がダウンロードされます。ファイルには `llm-pi-ai` のユーザーレイヤーと本プラグイン自身の設定セクションがそのまま入り、後者は Loader エントリ ID の `thinking-effort` がキーになります。認証情報の値は書き出されません（provider が持つのは鍵を入れた環境変数の名前 `apiKeyEnv` だけです）が、これらのセクションの値はそのまま記録されるため、provider の `headers` に置いた平文トークンもそのまま残ります。保管に注意してください。
 2. **プロファイル一覧** で名前を入力して **現在の設定を保存** を押すと、現在の設定が名前付きプロファイルとして保存されます。**書き出し** でファイルに保存し、**削除** で削除できます。保存できるのは最大 20 件です。**適用** は読み込みと同じプレビューを開くため、既定の **マージ** ではファイルにない provider が残ります。完全に戻すにはプレビューで **置換** を選びます。
 3. **設定を読み込む** の **ファイルを選択…** を押すと、**読み込みプレビュー** に追加 / 上書き / 削除の件数が表示されます。確認するまで設定は書き換えられません。
 4. 読み込みの既定は **マージ**（ファイルにない設定は保持）です。**置換** は明示的に選択する必要があり、ファイルにない provider を削除します。**読み込みを実行** はまず現在の設定を **読み込み前の自動バックアップ** として保存し、そのあとで変更を書き込みます。戻すときも同じプレビューを使います。
@@ -216,7 +213,7 @@ DSH 0.1.7 は `settings.yaml` の名前を変更して一度だけ取り込み�
 
 - **Host：** 起動時と設定変更時に `llm-pi-ai` の `models` と `modelOverrides` を確認し、`reasoningEfforts` がない場合だけ既定値を追加します。設定ページの「既定の推論強度を自動補完」は既定で有効になり、保存後すぐに反映されます。無効にしても自動スキャンと書き込みを停止するだけで既存の値は削除せず、再度有効にすると即時にスキャンします。書き込みはユーザーレイヤーだけを対象とするため、補完されるのは自身のプロファイルで宣言したモデルです。コンポジションのベースやスキーマ既定値だけが供給するモデルには書き込む先のエントリがないため補完せず、スキップした件数を Host ログに出力します。さらにモデル単位の OpenCode セッション設定を読み、一致する `llm/stream` リクエストにだけ `opencodeSession.format` に従って生成（既定 `ses-derive`）した `x-opencode-session` を注入し、`opencodeSession.userAgent` で選択したモデルの `user-agent` を書き換えます（それ以外は `llm-pi-ai` アダプターの帰属ヘッダーが強制）。
 - **Client：** DSH Settings Remote（`ctx.remote.settings`）と locale service を使って設定ページを登録します。モデル編集では OpenCode セッション Header を専用 namespace に保存し、`llm-pi-ai.compat` とは分離します。辞書は `src/locales/ja.json` と `src/locales/ko.json` などで管理し、公開前にクライアント bundle へ生成します。
-- **Subagent：** `0.1.7` 以降は本プラグイン自身の設定セクションに `subagentEffort` を保存します（`0.1.0-rc.7` から `0.1.6` までは `llm-pi-ai` のユーザーレイヤー）。Host は自身のセクションを先に読み、次に `llm-pi-ai` へフォールバックします。後者に値が入るのは `0.1.7` より前だけです（entry-config セクションは `providers` しか宣言しません）。`agent.model.current()` と `agent.model.select()` を提供する Host では、最初のモデルステップ前に `agent/created` で設定レベルを適用し、旧 Host では `agent/request` waterfall をフォールバックとして使います。既定値が未設定の場合、またはカスタム値を対象モデルで解決できない場合は現在の選択を変更せず、Subagent は親セッションのレベルを継承します。
+- **Subagent：** 既定の推論強度は本プラグイン自身の設定セクションの `subagentEffort` に保存され、Subagent の既定モデルも同じセクションに保存されます。`agent.model.current()` と `agent.model.select()` を提供する Host では、最初のモデルステップ前に `agent/created` で両方を適用します。これらのインターフェースを公開しない Host は、推論強度についてのみ `agent/request` waterfall をフォールバックとして使います。既定値が未設定の場合、またはカスタム値を対象モデルで解決できない場合は現在の選択を変更せず、Subagent は親セッションのレベルを継承します。
 - **既定値なし：** プラグインは `off`、`high`、`max` を自動選択しません。設定したレベルだけを適用し、独自にレベルを決めることはありません。
 
 ## 制限事項
@@ -236,7 +233,7 @@ DSH 0.1.7 は `settings.yaml` の名前を変更して一度だけ取り込み�
 - 通常の CI workflow は npm に公開しません。`publish.yml` は `v<version>` tag によってのみ公開を開始します。
 - リリース tag を作成する前に、メンテナーは `package.json` の version と各言語の `CHANGELOG` を更新してコミットし、一致する `v<version>` tag を作成します。tag の指す commit は `main` の履歴に含まれている必要があります。
 - npm パッケージには GitHub Trusted Publisher を設定してください。リポジトリは `hytime/dsh-thinking-effort`、workflow は `publish.yml` です。公開は GitHub OIDC による provenance を含み、`NPM_TOKEN` は必要ありません。
-- 公開前に workflow は rc7 → rc2 → alpha2 → namespace → entry の順で 5 つの公式 DSH capability representative を構築・テストします：`dsh-v0.1.0-rc.7`（`0.1.0-rc.7`）、`dsh-v0.1.1-rc.2`（`0.1.1-rc.2`）、`dsh-v0.1.3-alpha.2`（`0.1.3-alpha.2`）、`dsh-v0.1.6-alpha.1`（`0.1.6-alpha.1`）、`dsh-v0.1.7-alpha.1`（`0.1.7-alpha.1`）。公式の `dsh plugin` コマンドでインストールし、実際の互換性テストを実行します。実ブラウザ DOM プローブは `0.1.6-alpha.1`（namespace モデル）と `0.1.7-alpha.1`（entry-config モデル）の両方の代表で実行します。
+- 公開前に workflow は公式 DSH 能力代表 `dsh-v0.1.7-alpha.1`（`0.1.7-alpha.1`、本プラグインがサポートする最も古いホストであり entry-config モデルの起点）を構築・テストし、公式の `dsh plugin` コマンドでインストールして実際の互換性テストを実行し、実ブラウザ DOM プローブも実行します。
 - workflow は version や `CHANGELOG` を自動変更しません。npm に同じ version が既にある場合も公開を停止します。
 
 ## ライセンス

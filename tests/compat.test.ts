@@ -1,201 +1,115 @@
 import { describe, expect, it } from 'vitest'
-import { ALPHA1_PLUS_COMPAT_FIELDS, ALPHA3_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS } from '../src/compat/gateway/fields.ts'
-import { clientCapabilities, hostCapabilities } from '../src/compat/capabilities.ts'
-import { capabilitiesForVersion, settingsModelForVersion, takeoverSupportedForVersion, takeoverTransportForVersion } from '../src/compat/version-map.ts'
-import { resolveCompatibility } from '../src/compat/version-adapter.ts'
+import { ALPHA3_PLUS_COMPAT_FIELDS } from '@hytime/dsh-plugin-kit'
+import { clientCapabilities, hostCapabilities } from '@hytime/dsh-plugin-kit'
+import { capabilitiesForVersion, settingsModelForVersion, takeoverSupportedForVersion, takeoverTransportForVersion } from '@hytime/dsh-plugin-kit'
+import { resolveCompatibility } from '@hytime/dsh-plugin-kit'
 
 const legacy = { settings: 'legacy', externalLanguages: false } as const
 const modern = { settings: 'remote', externalLanguages: true } as const
 const noSettings = { settings: 'none', externalLanguages: false } as const
 
-const rc7Capabilities = {
-  settingsTransport: 'legacy',
-  settingsApi: 'connection.api.settings',
-  settingsModel: 'namespace',
-  baseModelFields: ['reasoningEfforts'],
-  gatewayCompatFields: [],
-  externalLanguages: false,
-  takeoverTransport: 'unsupported',
-} as const
-
-const rc8Capabilities = {
-  settingsTransport: 'legacy',
-  settingsApi: 'connection.api.settings',
-  settingsModel: 'namespace',
-  baseModelFields: ['reasoningEfforts', 'input', 'contextWindow'],
-  gatewayCompatFields: [...RC8_COMPAT_FIELDS],
-  externalLanguages: false,
-  takeoverTransport: 'optional',
-} as const
-
-const modernCapabilities = {
+/**
+ * The supported window is `0.1.7-alpha.1` through `0.2.2`: the entry-config
+ * settings model, the modern Settings transport, the fully grown editable compat
+ * field set, external language packs and optional takeover. Everything older
+ * than `0.1.7-alpha.1` — the rc.7/rc.8, `0.1.2`, `0.1.3` and `0.1.6` lines — is
+ * outside the map, and so is `0.2.3-0` and everything after it.
+ */
+const windowCapabilities = {
   settingsTransport: 'modern',
   settingsApi: 'remote.settings',
-  settingsModel: 'namespace',
+  settingsModel: 'entry-config',
   baseModelFields: ['reasoningEfforts', 'input', 'contextWindow'],
-  gatewayCompatFields: [...ALPHA1_PLUS_COMPAT_FIELDS],
+  gatewayCompatFields: [...ALPHA3_PLUS_COMPAT_FIELDS],
   externalLanguages: true,
   takeoverTransport: 'optional',
 } as const
 
-/**
- * `0.1.3-alpha.2` grew the completions gate by `thinkingTokenBudgetField` and
- * the Responses gate by `supportsMaxOutputTokens`, so every release at or after
- * it carries a strictly wider field set than the `0.1.2` line.
- */
-const alpha3Capabilities = {
-  ...modernCapabilities,
-  gatewayCompatFields: [...ALPHA3_PLUS_COMPAT_FIELDS],
-} as const
-
-/**
- * The `0.1.7` line keeps every transport fact and swaps the settings model:
- * forms come from each Loader entry's Config, so no namespace is registered.
- */
-const entryConfigCapabilities = {
-  ...alpha3Capabilities,
-  settingsModel: 'entry-config',
-} as const
-
 describe('version capability map', () => {
-  it('returns the complete rc7 capability matrix', () => {
-    expect(capabilitiesForVersion('0.1.0-rc.7')).toEqual(rc7Capabilities)
+  it('returns the complete supported capability matrix', () => {
+    expect(capabilitiesForVersion('0.1.7-alpha.1')).toEqual(windowCapabilities)
+    expect(capabilitiesForVersion('0.2.2-alpha.2')).toEqual(windowCapabilities)
   })
 
-  it('returns the complete rc8 legacy capability matrix', () => {
-    expect(capabilitiesForVersion('0.1.0-rc.8')).toEqual(rc8Capabilities)
-  })
-
-  it('returns the complete modern capability matrix', () => {
-    expect(capabilitiesForVersion('0.1.2-alpha.1')).toEqual(modernCapabilities)
-  })
-
-  it('returns the complete 0.1.3-alpha.2 capability matrix', () => {
-    expect(capabilitiesForVersion('0.1.3-alpha.2')).toEqual(alpha3Capabilities)
-  })
-
-  it('keeps the field-set boundary exactly at 0.1.3-alpha.2', () => {
-    // Prerelease ordering: 0.1.3-0 < 0.1.3-alpha.1 < 0.1.3-alpha.2, so only the
-    // last of the three carries the fields DSH added in 0.1.3-alpha.2.
-    expect(capabilitiesForVersion('0.1.3-0')).toEqual(modernCapabilities)
-    expect(capabilitiesForVersion('0.1.3-alpha.1')).toEqual(modernCapabilities)
-    expect(capabilitiesForVersion('0.1.3-alpha.2')).toEqual(alpha3Capabilities)
-    expect(capabilitiesForVersion('0.1.3-alpha.3')).toEqual(alpha3Capabilities)
+  it('starts the map at 0.1.7-alpha.1', () => {
+    // The floor is the first release of the entry-config model; the prerelease
+    // immediately below it and every older line map to nothing.
+    expect(capabilitiesForVersion('0.1.7-0')).toBeUndefined()
+    expect(capabilitiesForVersion('0.1.6')).toBeUndefined()
+    expect(capabilitiesForVersion('0.1.6-alpha.2')).toBeUndefined()
+    expect(settingsModelForVersion('0.1.6-alpha.2')).toBeUndefined()
+    expect(settingsModelForVersion('0.1.7-alpha.1')).toBe('entry-config')
   })
 
   it('exposes takeover availability from the mapped capability ranges', () => {
-    expect(takeoverTransportForVersion('0.1.0-rc.7')).toBe('unsupported')
-    expect(takeoverSupportedForVersion('0.1.0-rc.7')).toBe(false)
-    expect(takeoverTransportForVersion('0.1.1-rc.2')).toBe('optional')
-    expect(takeoverTransportForVersion('0.1.3-alpha.2')).toBe('optional')
-    expect(takeoverTransportForVersion('0.1.3')).toBe('optional')
+    expect(takeoverTransportForVersion('0.1.7-alpha.1')).toBe('optional')
+    expect(takeoverTransportForVersion('0.1.7')).toBe('optional')
+    expect(takeoverTransportForVersion('0.2.2-alpha.2')).toBe('optional')
+    expect(takeoverSupportedForVersion('0.2.2-alpha.2')).toBe(true)
+    // An unmapped version answers neither way: no transport fact is known.
+    expect(takeoverTransportForVersion('0.1.6-alpha.2')).toBeUndefined()
+    expect(takeoverSupportedForVersion('0.1.6-alpha.2')).toBe(false)
     expect(takeoverSupportedForVersion('bad')).toBe(false)
   })
 
-  it('maps the newest published DSH release inside the modern window', () => {
-    expect(capabilitiesForVersion('0.1.5-rc.1')).toEqual(alpha3Capabilities)
-    expect(capabilitiesForVersion('0.1.5-rc.2')).toEqual(alpha3Capabilities)
-    expect(takeoverTransportForVersion('0.1.5-rc.2')).toBe('optional')
-    expect(capabilitiesForVersion('0.1.6-alpha.1')).toEqual(alpha3Capabilities)
-    expect(takeoverTransportForVersion('0.1.6-alpha.1')).toBe('optional')
-  })
-
-  it('maps the 0.1.7 settings rewrite as its own window', () => {
-    expect(capabilitiesForVersion('0.1.7-alpha.1')).toEqual(entryConfigCapabilities)
-    expect(takeoverTransportForVersion('0.1.7-alpha.1')).toBe('optional')
-    expect(capabilitiesForVersion('0.1.7')).toEqual(entryConfigCapabilities)
-    expect(settingsModelForVersion('0.1.7-alpha.1')).toBe('entry-config')
-    expect(settingsModelForVersion('0.1.6-alpha.2')).toBe('namespace')
-  })
-
-  it('keeps the 0.2.0 line inside the verified 0.1.7 window', () => {
-    // `0.2.0-rc.2` changed none of the capabilities this window records, so the
-    // bound moved to the next minor line instead of the `0.2.0` releases
-    // dropping out of the map.
-    expect(capabilitiesForVersion('0.2.0-rc.1')).toEqual(entryConfigCapabilities)
-    expect(capabilitiesForVersion('0.2.0-rc.2')).toEqual(entryConfigCapabilities)
-    expect(capabilitiesForVersion('0.2.0')).toEqual(entryConfigCapabilities)
-    expect(takeoverTransportForVersion('0.2.0-rc.2')).toBe('optional')
-    expect(settingsModelForVersion('0.2.0-rc.2')).toBe('entry-config')
-  })
-
-  it('keeps the 0.2.1 line inside the same verified window', () => {
-    // `0.2.1-alpha.1` changed none of the capabilities this window records
-    // either: every API the plugin reads is byte-identical to `0.2.0-rc.2`, and
-    // its breaking changes (removed `./invariant` exports, split input-stats
-    // extensions, subpath plugins no longer reading package.json) miss a
-    // package-root plugin that imports none of them.
-    expect(capabilitiesForVersion('0.2.1-alpha.0')).toEqual(entryConfigCapabilities)
-    expect(capabilitiesForVersion('0.2.1-alpha.1')).toEqual(entryConfigCapabilities)
-    expect(capabilitiesForVersion('0.2.1')).toEqual(entryConfigCapabilities)
-    expect(takeoverTransportForVersion('0.2.1-alpha.1')).toBe('optional')
-    expect(settingsModelForVersion('0.2.1-alpha.1')).toBe('entry-config')
-  })
-
-  it('keeps the 0.2.2 line inside the same verified window', () => {
-    // `0.2.2-alpha.2` keeps the settings/gateway capabilities this map records.
-    // Its AgentLoop changes request-time effort selection; the Host handles that
-    // separate runtime contract through agent.model when available.
-    expect(capabilitiesForVersion('0.2.2-alpha.0')).toEqual(entryConfigCapabilities)
-    expect(capabilitiesForVersion('0.2.2-alpha.2')).toEqual(entryConfigCapabilities)
-    expect(capabilitiesForVersion('0.2.2')).toEqual(entryConfigCapabilities)
-    expect(takeoverTransportForVersion('0.2.2-alpha.2')).toBe('optional')
-    expect(settingsModelForVersion('0.2.2-alpha.2')).toBe('entry-config')
+  it('maps every release inside the supported window to the same capabilities', () => {
+    for (const version of [
+      '0.1.7-alpha.1', '0.1.7', '0.1.7-alpha.1+build.1',
+      '0.2.0-rc.1', '0.2.0-rc.2', '0.2.0',
+      '0.2.1-alpha.1', '0.2.1',
+      '0.2.2-alpha.0', '0.2.2-alpha.2', '0.2.2',
+    ]) {
+      expect(capabilitiesForVersion(version)).toEqual(windowCapabilities)
+      expect(takeoverTransportForVersion(version)).toBe('optional')
+      expect(settingsModelForVersion(version)).toBe('entry-config')
+    }
+    // The first release of the next minor line is the exclusive upper bound.
     expect(capabilitiesForVersion('0.2.3-0')).toBeUndefined()
   })
 
-  it('keeps every half-open boundary and accepts semver build metadata', () => {
-    expect(capabilitiesForVersion('0.1.0-rc.6')).toBeUndefined()
-    expect(capabilitiesForVersion('0.1.0-rc.7+ci.1')).toEqual(rc7Capabilities)
-    expect(capabilitiesForVersion('0.1.0-rc.8+ci.1')).toEqual(rc8Capabilities)
-    expect(capabilitiesForVersion('0.1.2-alpha.0+ci.1')).toEqual(rc8Capabilities)
-    expect(capabilitiesForVersion('0.1.2-alpha.1+ci.1')).toEqual(modernCapabilities)
-    expect(capabilitiesForVersion('0.1.2-alpha.0-foo')).toEqual(modernCapabilities)
-    expect(capabilitiesForVersion('0.1.2+build.7')).toEqual(modernCapabilities)
-    expect(capabilitiesForVersion('0.1.3-0+build.7')).toEqual(modernCapabilities)
-    expect(capabilitiesForVersion('0.1.3-0')).toEqual(modernCapabilities)
-    expect(capabilitiesForVersion('0.1.3')).toEqual(alpha3Capabilities)
-    expect(capabilitiesForVersion('0.1.5-rc.2+ci.1')).toEqual(alpha3Capabilities)
-    expect(capabilitiesForVersion('0.1.6-alpha.1')).toEqual(alpha3Capabilities)
-    expect(capabilitiesForVersion('0.1.6')).toEqual(alpha3Capabilities)
-    expect(capabilitiesForVersion('0.1.6-alpha.2')).toEqual(alpha3Capabilities)
-    expect(capabilitiesForVersion('0.1.7-0')).toEqual(entryConfigCapabilities)
-    expect(capabilitiesForVersion('0.1.7-alpha.1+ci.1')).toEqual(entryConfigCapabilities)
-    expect(capabilitiesForVersion('0.2.0-rc.2+build.9')).toEqual(entryConfigCapabilities)
-    expect(capabilitiesForVersion('0.2.1-alpha.1+build.3')).toEqual(entryConfigCapabilities)
-    expect(capabilitiesForVersion('0.2.2-alpha.2+build.5')).toEqual(entryConfigCapabilities)
+  it('keeps the half-open bounds and accepts semver build metadata', () => {
+    expect(capabilitiesForVersion('0.1.6-alpha.2')).toBeUndefined()
     expect(capabilitiesForVersion('0.2.3-0')).toBeUndefined()
     expect(capabilitiesForVersion('0.3.0')).toBeUndefined()
+
+    expect(capabilitiesForVersion('0.1.7-alpha.1+ci.1')).toEqual(windowCapabilities)
+    expect(capabilitiesForVersion('0.1.7-0+build.7')).toBeUndefined()
+    expect(capabilitiesForVersion('0.2.0+build.9')).toEqual(windowCapabilities)
+    expect(capabilitiesForVersion('0.2.1-alpha.1+build.3')).toEqual(windowCapabilities)
+    expect(capabilitiesForVersion('0.2.2-alpha.2+build.5')).toEqual(windowCapabilities)
+    expect(capabilitiesForVersion('0.2.3-0+build.5')).toBeUndefined()
   })
 
   it('carries the complete mapped matrix in compatibility reports', () => {
-    expect(resolveCompatibility({ version: '0.1.0-rc.7', capabilities: legacy }).versionCapabilities)
-      .toEqual(rc7Capabilities)
-    expect(resolveCompatibility({ version: '0.1.0-rc.8', capabilities: legacy }).versionCapabilities)
-      .toEqual(rc8Capabilities)
-    expect(resolveCompatibility({ version: '0.1.3-alpha.2+build.7', capabilities: modern }).versionCapabilities)
-      .toEqual(alpha3Capabilities)
+    expect(resolveCompatibility({ version: '0.1.7-alpha.1', capabilities: modern }).versionCapabilities)
+      .toEqual(windowCapabilities)
+    expect(resolveCompatibility({ version: '0.2.2-alpha.2+build.5', capabilities: modern }).versionCapabilities)
+      .toEqual(windowCapabilities)
   })
 
-  it('reports the newest published DSH release as the mapped modern profile', () => {
-    const report = resolveCompatibility({ version: '0.1.6-alpha.1', capabilities: modern })
+  it('reports a supported release as the mapped modern profile', () => {
+    const report = resolveCompatibility({ version: '0.2.2-alpha.2', capabilities: modern })
 
     expect(report.profile).toBe('modern')
     expect(report.expected).toBe('modern')
-    expect(report.versionCapabilities).toEqual(alpha3Capabilities)
+    expect(report.versionCapabilities).toEqual(windowCapabilities)
     expect(report.diagnostics).toHaveLength(0)
   })
 })
 
 describe('compatibility profiles', () => {
   it('classifies compatibility ranges without enumerating every release', () => {
-    const legacyRange = resolveCompatibility({ version: '0.1.1-rc.99', capabilities: modern })
-    expect(legacyRange.profile).toBe('modern')
-    expect(legacyRange.expected).toBe('legacy')
+    const mappedWindow = resolveCompatibility({ version: '0.1.7-alpha.1', capabilities: modern })
+    expect(mappedWindow.profile).toBe('modern')
+    expect(mappedWindow.expected).toBe('modern')
 
-    const modernRange = resolveCompatibility({ version: '0.1.2-alpha.99', capabilities: legacy })
-    expect(modernRange.profile).toBe('legacy')
-    expect(modernRange.expected).toBe('modern')
+    // A release the map does not cover carries no expectation, so its actual
+    // capabilities decide the profile without a diagnostic.
+    const belowFloor = resolveCompatibility({ version: '0.1.6-alpha.2', capabilities: legacy })
+    expect(belowFloor.profile).toBe('legacy')
+    expect(belowFloor.expected).toBeUndefined()
+    expect(belowFloor.versionCapabilities).toBeUndefined()
+    expect(belowFloor.diagnostics).toHaveLength(0)
 
     const unknownFuture = resolveCompatibility({ version: '0.3.0', capabilities: legacy })
     expect(unknownFuture.profile).toBe('legacy')
@@ -209,7 +123,7 @@ describe('compatibility profiles', () => {
 
     expect(report.profile).toBe('modern')
     expect(report.expected).toBe('modern')
-    expect(report.versionCapabilities).toEqual(entryConfigCapabilities)
+    expect(report.versionCapabilities).toEqual(windowCapabilities)
     expect(report.diagnostics).toHaveLength(0)
   })
 
@@ -249,7 +163,7 @@ describe('compatibility profiles', () => {
   })
 
   it('uses actual capabilities and reports a modern-version mismatch', () => {
-    const report = resolveCompatibility({ version: '0.1.2-alpha.1', capabilities: legacy })
+    const report = resolveCompatibility({ version: '0.2.2-alpha.2', capabilities: legacy })
 
     expect(report.profile).toBe('legacy')
     expect(report.expected).toBe('modern')
@@ -259,23 +173,11 @@ describe('compatibility profiles', () => {
       expectedProfile: 'modern',
       actualCapabilities: legacy,
     })
-    expect(report.versionCapabilities).toEqual(modernCapabilities)
-  })
-
-  it('uses actual capabilities and reports a legacy-version mismatch', () => {
-    const report = resolveCompatibility({ version: '0.1.0-rc.7', capabilities: modern })
-
-    expect(report.profile).toBe('modern')
-    expect(report.expected).toBe('legacy')
-    expect(report.diagnostics).toHaveLength(1)
-    expect(report.diagnostics[0]).toMatchObject({
-      expectedProfile: 'legacy',
-      actualCapabilities: modern,
-    })
+    expect(report.versionCapabilities).toEqual(windowCapabilities)
   })
 
   it('reports missing capabilities as a mismatch without throwing', () => {
-    const report = resolveCompatibility({ version: '0.1.2-alpha.1', capabilities: noSettings })
+    const report = resolveCompatibility({ version: '0.2.2-alpha.2', capabilities: noSettings })
 
     expect(report.profile).toBe('unknown')
     expect(report.diagnostics).toHaveLength(1)

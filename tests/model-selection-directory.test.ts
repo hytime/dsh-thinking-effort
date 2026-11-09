@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { createSelectionDirectory } from '../src/compat/model-selection-directory.js'
-import type { ModelDirectoryState, ModelSelection } from '../src/client/thinking-slider/slider.js'
+import { createSelectionDirectory } from '@hytime/dsh-plugin-kit'
+import type { ModelDirectoryState, ModelSelection } from '../packages/composer/src/thinking-slider/slider.js'
 
 const saved: ModelSelection = { provider: 'custom', model: 'session', reasoningEffort: 'high' }
 const fallback: ModelSelection = { provider: 'custom', model: 'default', reasoningEffort: 'medium' }

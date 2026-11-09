@@ -5,30 +5,30 @@ import { basename, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
-import { settingsBridge } from '../src/client/settings-bridge.js'
-import { inventoryFrom } from '../src/client/model-inventory.js'
-import { opsForModelArrayCompat } from '../src/client/model-ops.js'
-import { editableProviderCompatFields, schemaNodeAtPath } from '../src/compat/gateway/validation.js'
-import { PLUGIN_ENTRY_ID } from '../src/compat/settings-model.js'
-import type { SettingsModel } from '../src/compat/settings-model.js'
-import { capabilitiesForVersion } from '../src/compat/version-map.js'
+import { settingsBridge } from '../packages/settings-ui/src/client/settings-bridge.js'
+import { inventoryFrom } from '../packages/settings-ui/src/client/model-inventory.js'
+import { opsForModelArrayCompat } from '../packages/settings-ui/src/client/model-ops.js'
+import { editableProviderCompatFields, schemaNodeAtPath } from '@hytime/dsh-plugin-kit'
+import { PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
+import type { SettingsModel } from '@hytime/dsh-plugin-kit'
+import { capabilitiesForVersion } from '@hytime/dsh-plugin-kit'
 import {
   identifyTakeoverProviders,
   isCustomOpenAiGateway,
   resolveTakeoverProviders,
   takeoverProvidersOf,
-} from '../src/compat/gateway/takeover.js'
-import { opsForProviderCompat } from '../src/compat/gateway/ops.js'
+} from '@hytime/dsh-plugin-kit'
+import { opsForProviderCompat } from '@hytime/dsh-plugin-kit'
 import {
   LEGACY_RESULT_APPLIED,
   isLegacyMigrationPending,
   legacyCandidatesOf,
   legacyMigrationOf,
-} from '../src/compat/legacy-migration.js'
+} from '@hytime/dsh-plugin-kit'
 import {
   digestTail62 as digestTail62ForLoaderProbe,
   normalizeSessionId as normalizeSessionIdForLoaderProbe,
-} from '../src/host/opencode-session-format.js'
+} from '@hytime/dsh-feature-opencode'
 import { afterAll, describe, expect, it } from 'vitest'
 
 type PackageManifest = {
@@ -37,6 +37,7 @@ type PackageManifest = {
   readonly packageManager?: string
   readonly main?: string
   readonly types?: string
+  readonly icon?: string
   readonly exports: Record<string, string | { readonly types?: string; readonly default?: string }>
   readonly files: readonly string[]
   readonly engines?: { readonly dsh?: string }
@@ -99,13 +100,14 @@ function readOfficialDshVersion(cliRoot: string): string {
   return manifest.version
 }
 
-const expectedOfficialDshVersions = [
-  '0.1.0-rc.7',
-  '0.1.1-rc.2',
-  '0.1.3-alpha.2',
-  '0.1.6-alpha.1',
-  '0.1.7-alpha.1',
-] as const
+/**
+ * The official representative the integration suite builds.
+ *
+ * The plugin supports `0.1.7-alpha.1` and later only, so the pre-entry-config
+ * hosts (rc.7, rc.2, alpha.2, 0.1.6) are no longer built or verified: the
+ * namespace-model path they exercised no longer exists in the plugin.
+ */
+const expectedOfficialDshVersions = ['0.1.7-alpha.1'] as const
 
 /**
  * Poll `read` until it answers something other than `undefined`, then return
@@ -189,7 +191,12 @@ function officialRootsOf(roots: readonly string[]): OfficialRoot[] {
  * asserted in the cases below, so an added root cannot silently join neither.
  */
 const officialRoots = integrationEnabled ? officialRootsOf(cliRoots) : []
-const namespaceRoots = officialRoots.filter(({ settingsModel }) => settingsModel === 'namespace')
+/**
+ * Roots still on the namespace model. Empty by construction now that the floor
+ * is `0.1.7-alpha.1`: kept so the entry-config case below stays the only body
+ * that runs, rather than folding a second loop into it.
+ */
+const namespaceRoots: readonly OfficialRoot[] = []
 const entryConfigRoots = officialRoots.filter(({ settingsModel }) => settingsModel === 'entry-config')
 
 function readPackage(): PackageManifest {
@@ -1161,8 +1168,12 @@ describe('compatibility documentation and root validation', () => {
     { name: 'models[] settings behavior', pattern: /models\[\][^\n]*(?:complete|完整|全体|全体|전체)[^\n]*(?:array set|数组 set|配列 set|배열 set)/i },
     { name: 'schema rejects model source conflict', pattern: /(?=[^\n]*(?:official schema|官方 schema|公式 schema|공식 schema))(?=[^\n]*models\[\])[^\n]*(?:rejects|拒绝|拒否|거부)[^\n]*(?:fails? closed|异常数据|異常なデータ|비정상 데이터)/i },
     { name: 'control plane and transport boundary', pattern: /(?:control plane|控制面|コントロールプレーン|제어면)[^\n]*(?:transport|传输|トランスポート|전송)/i },
-    { name: 'rc7 capability boundary', pattern: /0\.1\.0-rc\.7/ },
-    { name: 'rc8 and later capability boundary', pattern: /0\.1\.0-rc\.8[^\n]*(?:later|后续|以降|이후)/i },
+    // The supported window's lower and upper bounds. The pre-0.1.7 hosts the
+    // contract used to pin (rc.7, rc.8) are no longer supported, so the
+    // documented boundary is the floor the plugin installs on and the exclusive
+    // bound past which the map stops answering.
+    { name: 'supported capability floor', pattern: /0\.1\.7-alpha\.1/ },
+    { name: 'capability upper bound', pattern: /0\.2\.3-0/ },
     { name: 'Auto reset semantics', pattern: /Auto[^\n]*(?:unset|取消|恢复|復元|복원)/i },
     {
       name: 'optional takeover semantics',
@@ -1235,13 +1246,7 @@ describe('compatibility documentation and root validation', () => {
 
   it('keeps publish workflow roots aligned with loader verification order', () => {
     const workflow = readFileSync(join(root, '.github/workflows/publish.yml'), 'utf8')
-    const roots = [
-      '"rc7:$RC7_ROOT:$RUN_ROOT/homes/rc7"',
-      '"rc2:$RC2_ROOT:$RUN_ROOT/homes/rc2"',
-      '"alpha:$ALPHA_ROOT:$RUN_ROOT/homes/alpha"',
-      '"namespace:$NAMESPACE_ROOT:$RUN_ROOT/homes/namespace"',
-      '"entry:$ENTRY_ROOT:$RUN_ROOT/homes/entry"',
-    ]
+    const roots = ['"entry:$ENTRY_ROOT:$RUN_ROOT/homes/entry"']
     const rootSpecStart = workflow.indexOf('for spec in')
     expect(rootSpecStart).toBeGreaterThanOrEqual(0)
     let previous = rootSpecStart
@@ -1250,8 +1255,8 @@ describe('compatibility documentation and root validation', () => {
       expect(position, `publish workflow missing ordered root ${rootSpec}`).toBeGreaterThan(previous)
       previous = position
     }
-    expect(workflow).toContain('DSH_CLI_ROOTS="$RC7_ROOT,$RC2_ROOT,$ALPHA_ROOT,$NAMESPACE_ROOT,$ENTRY_ROOT"')
-    expect(expectedOfficialDshVersions).toEqual(['0.1.0-rc.7', '0.1.1-rc.2', '0.1.3-alpha.2', '0.1.6-alpha.1', '0.1.7-alpha.1'])
+    expect(workflow).toContain('DSH_CLI_ROOTS="$ENTRY_ROOT"')
+    expect(expectedOfficialDshVersions).toEqual(['0.1.7-alpha.1'])
   })
 
   it('rejects duplicate normalized DSH CLI roots', () => {
@@ -1286,7 +1291,7 @@ describe('optional openai-completions takeover contract', () => {
           models: [{ id: 'model', reasoningEfforts: { high: 'high' } }],
         },
       },
-    }, capabilitiesForVersion('0.1.1-rc.2'))).toEqual(['local'])
+    }, capabilitiesForVersion('0.1.7-alpha.1'))).toEqual(['local'])
     expect(identifyTakeoverProviders({
       providers: {
         local: {
@@ -1295,7 +1300,7 @@ describe('optional openai-completions takeover contract', () => {
           models: [{ id: 'model', reasoningEfforts: { high: 'high' } }],
         },
       },
-    }, capabilitiesForVersion('0.1.0-rc.7'))).toEqual([])
+    })).toEqual([])
     expect(identifyTakeoverProviders({
       providers: {
         local: { api: 'openai-completions', baseURL: 'http://gateway.test/v1', models: [{ id: 'model', reasoningEfforts: { high: 'high' } }] },
@@ -1316,16 +1321,19 @@ describe('published package composition', () => {
   it('exposes built Host and Client artifacts with declarations', () => {
     const manifest = readPackage()
 
-    expect(manifest.version).toBe('0.4.0')
+    expect(manifest.version).toBe('0.4.1')
     expect(manifest.packageManager).toBe('pnpm@11.7.0')
     expect(manifest.main).toBe('./lib/index.js')
-    expect(manifest.types).toBe('./lib/types/index.d.ts')
+    // `rootDir` is the repository root so that `packages/*` emit declarations
+    // too, which mirrors `src/` under `lib/types/src/`. The published type
+    // entry follows the emitted layout rather than the pre-workspace one.
+    expect(manifest.types).toBe('./lib/types/src/index.d.ts')
     expect(manifest.exports['.']).toEqual({
-      types: './lib/types/index.d.ts',
+      types: './lib/types/src/index.d.ts',
       default: './lib/index.js',
     })
     expect(manifest.exports['./client']).toEqual({
-      types: './lib/types/client/index.d.ts',
+      types: './lib/types/src/client/index.d.ts',
       default: './lib/client.js',
     })
     expect(manifest.dsh?.client).toEqual({
@@ -1337,8 +1345,13 @@ describe('published package composition', () => {
       ],
       platform: 'web',
     })
-    expect(manifest.files).toContain('lib/index.js')
-    expect(manifest.files).toContain('lib/client.js')
+    // A multi-entry build also emits shared chunks (`lib/src-*.js`,
+    // `lib/opencode-session-*.js`, `lib/types-*.js`) beside the entry files, and
+    // every entry imports them. Listing only the entries published a package
+    // whose `apply` threw ERR_MODULE_NOT_FOUND on install, so the glob covers
+    // the whole root: `lib/entries/` carries the six subpath entries.
+    expect(manifest.files).toContain('lib/*.js')
+    expect(manifest.files).toContain('lib/entries/')
     expect(manifest.files).toContain('lib/types/**/*.d.ts')
     expect(manifest.files).toContain('cordis.patch.yml')
     for (const documentationFile of [
@@ -1354,6 +1367,12 @@ describe('published package composition', () => {
     expect(manifest.files).not.toContain('CHANGELOG.ja.md')
     expect(manifest.files).not.toContain('CHANGELOG.ko.md')
     expect(manifest.files).toContain('docs/assets/')
+    // `icon` is the only display field a package-root plugin declares in its
+    // manifest; the Plugin Manager reads it through the exported
+    // `./package.json` and turns the file into a data URL, so the image must be
+    // inside `files` or the card silently falls back to the default artwork.
+    expect(manifest.icon).toBe('./icon.svg')
+    expect(manifest.files).toContain('icon.svg')
   })
 
   it('declares its DSH version requirement the way the runtime reads it', () => {
@@ -1387,13 +1406,14 @@ describe('loader seed schema contract', () => {
 
 integrationDescribe('official DSH loader composition', () => {
   it('requires and verifies the four namespace-model hosts independently', { timeout: 300000 }, async () => {
-    expect(cliRoots).toHaveLength(5)
+    expect(cliRoots).toHaveLength(1)
     expect(cliRoots.every((cliRoot) => cliRoot === resolve(cliRoot))).toBe(true)
-    expect(new Set(cliRoots).size).toBe(5)
     expect(officialRoots.map(({ version }) => version)).toEqual(expectedOfficialDshVersions)
-    expect(namespaceRoots).toHaveLength(4)
+    expect(namespaceRoots).toHaveLength(0)
     expect(entryConfigRoots).toHaveLength(1)
 
+    // No supported host is on the namespace model any more, so this loop is
+    // empty; the entry-config case below carries the whole integration surface.
     for (const { cliRoot, version } of namespaceRoots) {
       const home = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-loader-'))
       const packDestination = mkdtempSync(join(tmpdir(), 'dsh-thinking-effort-pack-'))
@@ -1418,7 +1438,7 @@ integrationDescribe('official DSH loader composition', () => {
     const installedDir = join(profile, 'node_modules', '@hytime', 'dsh-thinking-effort')
     const installedManifest = JSON.parse(readFileSync(join(installedDir, 'package.json'), 'utf8')) as PackageManifest
     expect(installedManifest.name).toBe('@hytime/dsh-thinking-effort')
-    expect(installedManifest.version).toBe('0.4.0')
+    expect(installedManifest.version).toBe('0.4.1')
 
     const hostEntry = join(installedDir, 'lib', 'index.js')
     const clientEntry = join(installedDir, 'lib', 'client.js')
@@ -1474,11 +1494,11 @@ integrationDescribe('official DSH loader composition', () => {
         const settings = legacyRpc
           ? settingsBridge({ api: { settings: {
             describe: () => liveResult(describeEndpoint, {}),
-            mutate: (args: { ns: string; ops: readonly import('../src/client/types.js').SettingsOp[]; expectedRevision: number }) => liveResult(mutateEndpoint, args),
+            mutate: (args: { ns: string; ops: readonly import('@hytime/dsh-plugin-kit').SettingsOp[]; expectedRevision: number }) => liveResult(mutateEndpoint, args),
           } } })
           : settingsBridge(undefined, {
             describe: () => liveResult(describeEndpoint, {}),
-            mutate: (ns: string, ops: readonly import('../src/client/types.js').SettingsOp[], expectedRevision: number) => liveResult(mutateEndpoint, { ns, ops, expectedRevision }),
+            mutate: (ns: string, ops: readonly import('@hytime/dsh-plugin-kit').SettingsOp[], expectedRevision: number) => liveResult(mutateEndpoint, { ns, ops, expectedRevision }),
            })
 
         expect(settings).toBeDefined()

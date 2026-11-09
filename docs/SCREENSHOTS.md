@@ -3,6 +3,21 @@
 These screenshots show the current settings page and Composer controls for DSH `v0.1.3-alpha.2`.
 The image files live in [`docs/assets/screenshots/`](./assets/screenshots/) so GitHub renders them through stable raw URLs after the branch is merged.
 
+## Plugin page and per-model compaction
+
+Captured on a live DSH `0.2.2-rc.1` Web instance whose `llm-pi-ai` route declares
+one `sub2api` provider with 15 models, so the per-model surface is shown against
+a real catalog rather than a fixture.
+
+| Plugin icon on the Plugins page | Per-model effort levels and compaction thresholds |
+| --- | --- |
+| [![Plugin icon on the Plugins page](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/screenshots/plugin-zh-plugins-page-icon.png)](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/screenshots/plugin-zh-plugins-page-icon.png) | [![Per-model effort levels and compaction thresholds](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/screenshots/plugin-zh-compaction-thresholds.png)](https://raw.githubusercontent.com/hytime/dsh-thinking-effort/main/docs/assets/screenshots/plugin-zh-compaction-thresholds.png) |
+
+The icon is the manifest `icon` this package declares, rendered by the Plugin
+Manager as a data URL. The second image is the editor for one `sub2api` model:
+its effort levels with their wire values, and the **Context compaction** card
+whose empty fields follow the global 60% trigger and 16% retained ratio.
+
 ## Chinese
 
 | Settings overview | Expanded settings | Composer reasoning | Model search |

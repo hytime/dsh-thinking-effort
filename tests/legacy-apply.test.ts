@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { LEGACY_RESULT_APPLIED, LEGACY_FAILED_PREFIX } from '../src/compat/legacy-migration.ts'
-import type { LegacyCandidate } from '../src/compat/legacy-migration.ts'
-import { applyLegacyMigration, opsForCandidates, rollbackSnapshot } from '../src/host/legacy-apply.ts'
-import type { SettingsPathOp } from '../src/host/types.ts'
+import { LEGACY_RESULT_APPLIED, LEGACY_FAILED_PREFIX } from '@hytime/dsh-plugin-kit'
+import type { LegacyCandidate } from '@hytime/dsh-plugin-kit'
+import { applyLegacyMigration, opsForCandidates, rollbackSnapshot } from '@hytime/dsh-feature-migration'
+import type { SettingsPathOp } from '@hytime/dsh-plugin-kit'
 
 // Typed, not `as const`: `as const` would make each `path` a readonly tuple, and
 // `LegacyCandidate.path` is deliberately mutable (task 1's `z<PluginSettings>`

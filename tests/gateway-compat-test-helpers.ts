@@ -1,5 +1,5 @@
-import { GATEWAY_COMPAT_FIELD_KEYS } from '../src/compat/gateway/fields.js'
-import type { ModelGatewayCompatView, ProviderGatewayCompatView } from '../src/compat/gateway/types.js'
+import { GATEWAY_COMPAT_FIELD_KEYS } from '@hytime/dsh-plugin-kit'
+import type { ModelGatewayCompatView, ProviderGatewayCompatView } from '@hytime/dsh-plugin-kit'
 
 export function countAvailable(view: Record<string, unknown>): number {
   return GATEWAY_COMPAT_FIELD_KEYS.filter((key) => view[`${key}Available`] === true).length

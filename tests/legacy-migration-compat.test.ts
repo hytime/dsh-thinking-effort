@@ -5,8 +5,8 @@ import {
   legacyDecisionOf,
   legacyMigrationOf,
   isLegacyMigrationPending,
-} from '../src/compat/legacy-migration.ts'
-import { Config, PLUGIN_SETTINGS_SCHEMA } from '../src/host/plugin-settings.ts'
+} from '@hytime/dsh-plugin-kit'
+import { Config, PLUGIN_SETTINGS_SCHEMA } from '@hytime/dsh-plugin-kit'
 
 const candidate = {
   path: ['opencodeSession', 'providers', 'sub2api', 'models', 'deepseek-flash'],

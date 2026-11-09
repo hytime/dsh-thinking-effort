@@ -51,11 +51,11 @@ jobs:
       - name: Run release and workflow guards
         run: pnpm run test:release
 
-      - name: Check compiled Host entry
-        run: node --check lib/index.js
-
-      - name: Check compiled Client entry
-        run: node --check lib/client.js
+      # Every published entry, taken from the manifest's own `exports`. The two
+      # legacy paths this used to name stopped covering the six subpath entries
+      # the bundle split added.
+      - name: Check compiled entries
+        run: pnpm run check:entries
 
       - name: Check package contents
         run: pnpm pack --dry-run

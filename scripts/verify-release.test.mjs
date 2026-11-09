@@ -12,7 +12,7 @@ const validManifest = {
   private: false,
   main: './lib/index.js',
   publishConfig: { access: 'public' },
-  files: ['lib/index.js', 'lib/client.js', 'lib/types/**/*.d.ts'],
+  files: ['lib/*.js', 'lib/entries/', 'lib/types/**/*.d.ts'],
   exports: {
     '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
     './client': { types: './lib/types/client/index.d.ts', default: './lib/client.js' },
@@ -138,8 +138,8 @@ test('rejects a missing conditional package export target', async () => {
 });
 
 test('rejects release files missing a required entry', async () => {
-  await withFixture({ files: ['lib/index.js'] }, {}, async (fixture) => {
-    await assert.rejects(() => runGuard(fixture, 'v0.1.11'), /files must include lib\/client\.js/);
+  await withFixture({ files: ['lib/*.js'] }, {}, async (fixture) => {
+    await assert.rejects(() => runGuard(fixture, 'v0.1.11'), /files must include lib\/entries\//);
   });
 });
 

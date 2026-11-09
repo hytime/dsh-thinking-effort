@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { schemaNodeAtPath } from '../src/compat/gateway/validation.ts'
-import { LEGACY_LLM_SHAPE, LEGACY_OWN_SHAPE, leavesOf, type LegacyShape } from '../src/host/legacy-shape.ts'
-import { PLUGIN_SETTINGS_SCHEMA } from '../src/host/plugin-settings.ts'
+import { schemaNodeAtPath } from '@hytime/dsh-plugin-kit'
+import { LEGACY_LLM_SHAPE, LEGACY_OWN_SHAPE, leavesOf, type LegacyShape } from '@hytime/dsh-feature-migration'
+import { PLUGIN_SETTINGS_SCHEMA } from '@hytime/dsh-plugin-kit'
 
 /**
  * Every leaf the shape table declares, with a dynamic dict segment written as

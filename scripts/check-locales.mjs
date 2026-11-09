@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 const root = resolve(import.meta.dirname, '..')
 const localeCodes = ['zh', 'en', 'ja', 'ko']
 const locales = Object.fromEntries(localeCodes.map((code) => {
-  const path = resolve(root, 'src', 'locales', `${code}.json`)
+  const path = resolve(root, 'packages', 'settings-ui', 'src', 'locales', `${code}.json`)
   return [code, JSON.parse(readFileSync(path, 'utf8'))]
 }))
 

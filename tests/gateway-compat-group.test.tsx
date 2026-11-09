@@ -2,9 +2,9 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { GatewayCompatGroup } from '../src/client/components/GatewayCompatGroup.js'
-import { GatewayCompatControls } from '../src/client/components/GatewayCompatControls.js'
-import { en } from '../src/client/locales.js'
+import { GatewayCompatGroup } from '../packages/settings-ui/src/client/components/GatewayCompatGroup.js'
+import { GatewayCompatControls } from '../packages/settings-ui/src/client/components/GatewayCompatControls.js'
+import { en } from '../packages/settings-ui/src/client/locales.js'
 import { modelView, availableCountFor } from './gateway-compat-test-helpers.js'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
