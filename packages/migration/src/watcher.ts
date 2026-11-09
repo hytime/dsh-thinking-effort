@@ -10,7 +10,7 @@ import {
   legacyMigrationOf,
   type LegacyCandidate,
 } from '@hytime/dsh-plugin-kit'
-import { readSettingsSectionUser, settingsChangeEvents, settingsEntryId, settingsModelForRuntime } from '@hytime/dsh-plugin-kit'
+import { readSettingsSectionUser, settingsChangeEvents, pluginSectionId, settingsModelForRuntime } from '@hytime/dsh-plugin-kit'
 import { applyLegacyMigration, rollbackSnapshot } from './apply.js'
 import { scanLegacyData, type LegacyScan } from './scan.js'
 import { PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
@@ -118,7 +118,7 @@ export function installLegacyMigration(ctx: HostContext, files: LegacyMigrationF
   if (settings === undefined) return
   if (settingsModelForRuntime({ settings }) !== 'entry-config') return
 
-  const ns = settingsEntryId(ctx, PLUGIN_ENTRY_ID)
+  const ns = pluginSectionId()
 
   ctx.effect(() => {
     /**
