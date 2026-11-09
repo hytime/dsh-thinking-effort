@@ -982,11 +982,19 @@ describe('subagent effort section read order', () => {
     expect(result).toEqual({ provider: 'provider', model: 'model', reasoningEffort: 'max' })
   })
 
-  it('follows a renamed Loader entry id rather than the compiled default', async () => {
+  it('reads the ROOT section even when this feature runs in a renamed row', async () => {
+    // The bundle splits into seven Loader rows but only the root publishes a
+    // schema, so `subagentEffort` lives in the root section whatever id the
+    // subagent row itself carries. Addressing the row's own id found nothing and
+    // silently fell back to the legacy namespace — the value was there, the read
+    // was looking in the wrong place.
     const harness = createHarness({
       writable: false,
       entryId: 'renamed-entry',
-      descriptors: [{ ns: 'renamed-entry', user: { subagentEffort: 'low' }, value: { subagentEffort: 'low' } }, legacy({ subagentEffort: 'max' })],
+      descriptors: [
+        { ns: 'thinking-effort', user: { subagentEffort: 'low' }, value: { subagentEffort: 'low' } },
+        legacy({ subagentEffort: 'max' }),
+      ],
     })
 
     const result = await harness.listener('agent/request')?.callback(
