@@ -6,11 +6,11 @@ import {
   profilesFromNamespaces,
   saveProfileOps,
   validateProfileName,
-} from '../src/client/config-snapshot/library.js'
-import { deepEqualJson, planImport } from '../src/client/config-snapshot/plan.js'
-import { parseSnapshot, serializeSnapshot } from '../src/client/config-snapshot/parse.js'
-import type { ConfigSnapshot } from '../src/client/config-snapshot/types.js'
-import type { SettingsNamespace } from '../src/client/types.js'
+} from '../packages/settings-ui/src/client/config-snapshot/library.js'
+import { deepEqualJson, planImport } from '../packages/settings-ui/src/client/config-snapshot/plan.js'
+import { parseSnapshot, serializeSnapshot } from '../packages/settings-ui/src/client/config-snapshot/parse.js'
+import type { ConfigSnapshot } from '../packages/settings-ui/src/client/config-snapshot/types.js'
+import type { SettingsNamespace } from '@hytime/dsh-plugin-kit'
 
 const snapshotOf = (sections: Record<string, Record<string, unknown>>): ConfigSnapshot => ({
   kind: 'dsh-thinking-effort/config-snapshot',

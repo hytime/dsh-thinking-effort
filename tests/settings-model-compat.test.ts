@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { installOpenCodeSession } from '../src/host/opencode-session.ts'
-import { installSettingsWatcher } from '../src/host/settings.ts'
-import { resolveSubagentEffort } from '../src/host/subagent.ts'
-import { capabilitiesForVersion, settingsModelForRuntime, settingsModelForVersion } from '../src/compat/version-map.ts'
-import { readSettingsSection, settingsChangeEvents, settingsEntryId, settingsModelOf } from '../src/compat/settings-model.ts'
-import type { SettingsPathOp } from '../src/host/types.ts'
+import { installOpenCodeSession } from '@hytime/dsh-feature-opencode'
+import { installSettingsWatcher } from '@hytime/dsh-feature-levels'
+import { resolveSubagentEffort } from '@hytime/dsh-feature-subagent'
+import { capabilitiesForVersion, settingsModelForRuntime, settingsModelForVersion } from '@hytime/dsh-plugin-kit'
+import { readSettingsSection, settingsChangeEvents, settingsEntryId, settingsModelOf } from '@hytime/dsh-plugin-kit'
+import type { SettingsPathOp } from '@hytime/dsh-plugin-kit'
 
 /**
  * The 0.1.7-alpha.1 settings service: forms are derived from each Loader

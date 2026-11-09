@@ -1,13 +1,14 @@
 {
   "name": "@hytime/dsh-thinking-effort",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "为 DSH 的 pi-ai 第三方模型补充可配置的思考强度档位，并设置子 agent 默认思考强度。",
+  "icon": "./icon.svg",
   "private": false,
   "engines": {
     "dsh": ">=0.1.7-alpha.1"
   },
   "scripts": {
-    "build": "node scripts/check-locales.mjs && tsc -p tsconfig.json && tsdown -c tsdown.config.ts",
+    "build": "node scripts/check-locales.mjs && node scripts/clean-build.mjs && tsc -p tsconfig.json && node scripts/rewrite-dts-specifiers.mjs && tsdown -c tsdown.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
@@ -15,11 +16,14 @@
     "test:policy": "node --test scripts/pr-policy.test.mjs",
     "test:conventions": "node scripts/check-conventions.mjs",
     "test:watch": "vitest",
-    "prepublishOnly": "pnpm run build"
+    "check": "pnpm run test:conventions && node scripts/check-locales.mjs",
+    "verify": "pnpm run check && pnpm run build && pnpm run typecheck && pnpm run typecheck:test && pnpm run test && pnpm run test:release && pnpm run test:policy",
+    "prepublishOnly": "pnpm run build",
+    "check:entries": "node scripts/check-entries.mjs"
   },
   "type": "module",
   "main": "./lib/index.js",
-  "types": "./lib/types/index.d.ts",
+  "types": "./lib/types/src/index.d.ts",
   "homepage": "https://github.com/hytime/dsh-thinking-effort#readme",
   "repository": {
     "type": "git",
@@ -32,24 +36,25 @@
     "access": "public"
   },
   "files": [
-    "lib/index.js",
-    "lib/client.js",
-    "lib/types/**/*.d.ts",
-    "cordis.patch.yml",
-    "README.md",
-    "README.zh.md",
+    "LICENSE",
     "README.ja.md",
     "README.ko.md",
-    "docs/INSTALL.md",
-    "docs/INSTALL.zh.md",
-    "docs/INSTALL.ja.md",
-    "docs/INSTALL.ko.md",
-    "docs/SCREENSHOTS.md",
-    "docs/CHANGELOG.md",
+    "README.md",
+    "README.zh.md",
+    "cordis.patch.yml",
     "docs/CHANGELOG.ja.md",
     "docs/CHANGELOG.ko.md",
+    "docs/CHANGELOG.md",
+    "docs/INSTALL.ja.md",
+    "docs/INSTALL.ko.md",
+    "docs/INSTALL.md",
+    "docs/INSTALL.zh.md",
+    "docs/SCREENSHOTS.md",
     "docs/assets/",
-    "LICENSE"
+    "icon.svg",
+    "lib/*.js",
+    "lib/entries/",
+    "lib/types/**/*.d.ts"
   ],
   "dsh": {
     "bundle": {
@@ -67,14 +72,38 @@
   },
   "exports": {
     ".": {
-      "types": "./lib/types/index.d.ts",
+      "types": "./lib/types/src/index.d.ts",
       "default": "./lib/index.js"
     },
     "./client": {
-      "types": "./lib/types/client/index.d.ts",
+      "types": "./lib/types/src/client/index.d.ts",
       "default": "./lib/client.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./settings": {
+      "types": "./lib/types/src/entries/settings.d.ts",
+      "default": "./lib/entries/settings.js"
+    },
+    "./opencode": {
+      "types": "./lib/types/src/entries/opencode.d.ts",
+      "default": "./lib/entries/opencode.js"
+    },
+    "./compaction": {
+      "types": "./lib/types/src/entries/compaction.d.ts",
+      "default": "./lib/entries/compaction.js"
+    },
+    "./subagent": {
+      "types": "./lib/types/src/entries/subagent.d.ts",
+      "default": "./lib/entries/subagent.js"
+    },
+    "./migration": {
+      "types": "./lib/types/src/entries/migration.d.ts",
+      "default": "./lib/entries/migration.js"
+    },
+    "./composer": {
+      "types": "./lib/types/src/entries/composer.d.ts",
+      "default": "./lib/entries/composer.js"
+    }
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1 || ^4.0.6-alpha.1",
@@ -95,9 +124,17 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-settings": "0.1.1-rc.2",
     "@deepseek-ai/dsh-client-store": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-settings": "0.1.1-rc.2",
+    "@hytime/dsh-feature-compaction": "workspace:*",
+    "@hytime/dsh-feature-composer": "workspace:*",
+    "@hytime/dsh-feature-levels": "workspace:*",
+    "@hytime/dsh-feature-migration": "workspace:*",
+    "@hytime/dsh-feature-opencode": "workspace:*",
+    "@hytime/dsh-feature-settings-ui": "workspace:*",
+    "@hytime/dsh-feature-subagent": "workspace:*",
+    "@hytime/dsh-plugin-kit": "workspace:*",
     "@types/node": "^22.15.21",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.7",
@@ -106,6 +143,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "tsdown": "^0.22.14",
+    "turbo": "2.11.10",
     "typescript": "^5.9.3",
     "vitest": "^4.1.12"
   },

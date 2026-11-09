@@ -10,11 +10,11 @@ import {
   LOCALE_NS,
   NS,
   PRESETS,
-} from '../src/client/constants.js'
-import { directResult, settingsBridge } from '../src/client/settings-bridge.js'
-import { LOCALE_DATA, LOCALE_CODES } from '../src/client/locales.js'
-import { inventoryFrom, modelCompatKey, modelGatewayCompatViewFrom, modelGatewayCompatViewsFrom, providerGatewayCompatViewFrom, routeApi } from '../src/client/model-inventory.js'
-import { mergeModelUpdate, opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from '../src/client/model-ops.js'
+} from '../packages/settings-ui/src/client/constants.js'
+import { directResult, settingsBridge } from '../packages/settings-ui/src/client/settings-bridge.js'
+import { LOCALE_DATA, LOCALE_CODES } from '../packages/settings-ui/src/client/locales.js'
+import { inventoryFrom, modelCompatKey, modelGatewayCompatViewFrom, modelGatewayCompatViewsFrom, providerGatewayCompatViewFrom, routeApi } from '../packages/settings-ui/src/client/model-inventory.js'
+import { mergeModelUpdate, opsForModelArrayCompat, opsForModelCompat, opsForProviderCompat, setOps } from '../packages/settings-ui/src/client/model-ops.js'
 import {
   buildInput,
   buildLevels,
@@ -23,19 +23,19 @@ import {
   inputDraftFrom,
   validateContextWindow,
   validateLevels,
-} from '../src/client/validation.js'
-import { iosPalette } from '../src/client/theme.js'
-import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '../src/compat/model-source.js'
-import { resolveGatewayCompat, resolveModelGatewayCompat, resolveProviderGatewayCompat } from '../src/compat/gateway/resolve.js'
-import { editableProviderCompatFields, validateProviderCompat } from '../src/compat/gateway/validation.js'
-import type { GatewayCompatEditability, GatewayCompatFieldKey, GatewayCompatFieldResolution } from '../src/compat/gateway/types.js'
-import { capabilitiesForVersion } from '../src/compat/version-map.js'
-import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS, fieldsForApi } from '../src/compat/gateway/fields.js'
-import type { InventoryItem, ModelGatewayCompatUpdate, Translation } from '../src/client/types.js'
-import { revisionOf } from '../src/client/types.js'
-import { hasSessionRemote } from '../src/compat/model-directory.js'
-import { isSettingsConflict } from '../src/shared/conflict.js'
-import type { TakeoverRuntimeResolution } from '../src/client/takeover-runtime.js'
+} from '../packages/settings-ui/src/client/validation.js'
+import { iosPalette } from '../packages/settings-ui/src/client/theme.js'
+import { hasLayeredModelSourceConflict, hasModelSourceConflict } from '@hytime/dsh-plugin-kit'
+import { resolveGatewayCompat, resolveModelGatewayCompat, resolveProviderGatewayCompat } from '@hytime/dsh-plugin-kit'
+import { editableProviderCompatFields, validateProviderCompat } from '@hytime/dsh-plugin-kit'
+import type { GatewayCompatEditability, GatewayCompatFieldKey, GatewayCompatFieldResolution } from '@hytime/dsh-plugin-kit'
+import { capabilitiesForVersion } from '@hytime/dsh-plugin-kit'
+import { GATEWAY_COMPAT_FIELDS, GATEWAY_COMPAT_FIELD_KEYS, ALPHA1_PLUS_COMPAT_FIELDS, RC8_COMPAT_FIELDS, fieldsForApi } from '@hytime/dsh-plugin-kit'
+import type { InventoryItem, ModelGatewayCompatUpdate, Translation } from '@hytime/dsh-plugin-kit'
+import { revisionOf } from '@hytime/dsh-plugin-kit'
+import { hasSessionRemote } from '@hytime/dsh-plugin-kit'
+import { isSettingsConflict } from '@hytime/dsh-plugin-kit'
+import type { TakeoverRuntimeResolution } from '../packages/settings-ui/src/client/takeover-runtime.js'
 
 const translate: Translation = (key, params) => `${key}${params?.level ? `:${params.level}` : ''}`
 

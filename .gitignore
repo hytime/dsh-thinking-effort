@@ -38,3 +38,6 @@ docs/94d15cfd-3ff0-4695-ac9f-c10cb578b500.png
 # field from the published manifest unless it is published with
 # `--skip-manifest-obfuscation`, which the release job passes.
 /lefthook.yml
+
+# Turborepo local cache: machine-local build artifacts, never published.
+.turbo/

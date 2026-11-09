@@ -1,5 +1,28 @@
 # dsh-thinking-effort: 第三方模型思考强度档位插件（持久化组合条目）。
-# 安装后一行同时挂载：宿主自动补齐 + 客户端设置页。
+#
+# 每个组件在插件页「包含的组件」里独立一行、独立开关。关掉一个只影响它自己：
+# 各 entry 的 settings section 与监听器都随该 entry 的 fiber 生死。
+#
+# `thinking-effort` 这个 id 必须保留原样：用户现有 profile 的 cordis.patch.yml
+# 里已经有指向它的行，且带着完整 config。改名会让那份配置失效。
 - insert:
     - id: thinking-effort
       name: '@hytime/dsh-thinking-effort'
+
+    - id: thinking-effort-settings
+      name: '@hytime/dsh-thinking-effort/settings'
+
+    - id: thinking-effort-opencode
+      name: '@hytime/dsh-thinking-effort/opencode'
+
+    - id: thinking-effort-compaction
+      name: '@hytime/dsh-thinking-effort/compaction'
+
+    - id: thinking-effort-subagent
+      name: '@hytime/dsh-thinking-effort/subagent'
+
+    - id: thinking-effort-migration
+      name: '@hytime/dsh-thinking-effort/migration'
+
+    - id: thinking-effort-composer
+      name: '@hytime/dsh-thinking-effort/composer'

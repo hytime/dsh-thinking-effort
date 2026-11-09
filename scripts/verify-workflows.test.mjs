@@ -18,8 +18,10 @@ const requiredCommands = [
   'pnpm run typecheck:test',
   'pnpm test',
   'pnpm run test:release',
-  'node --check lib/index.js',
-  'node --check lib/client.js',
+  // One command covers every published entry, read from the manifest's own
+  // `exports`: the two literal paths this list used to name stopped covering
+  // the subpath entries the bundle split added.
+  'pnpm run check:entries',
   'pnpm pack --dry-run',
   'pnpm audit --audit-level=high',
   'git diff --check',
@@ -525,8 +527,10 @@ fi
   'pnpm run typecheck:test',
   'pnpm run test:release',
   'pnpm test',
-  'node --check lib/index.js',
-  'node --check lib/client.js',
+  // One command covers every published entry, read from the manifest's own
+  // `exports`: the two literal paths this list used to name stopped covering
+  // the subpath entries the bundle split added.
+  'pnpm run check:entries',
   'pnpm pack --dry-run',
   'pnpm audit --audit-level=high',
   'git diff --check',

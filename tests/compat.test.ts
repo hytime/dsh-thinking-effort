@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { ALPHA3_PLUS_COMPAT_FIELDS } from '../src/compat/gateway/fields.ts'
-import { clientCapabilities, hostCapabilities } from '../src/compat/capabilities.ts'
-import { capabilitiesForVersion, settingsModelForVersion, takeoverSupportedForVersion, takeoverTransportForVersion } from '../src/compat/version-map.ts'
-import { resolveCompatibility } from '../src/compat/version-adapter.ts'
+import { ALPHA3_PLUS_COMPAT_FIELDS } from '@hytime/dsh-plugin-kit'
+import { clientCapabilities, hostCapabilities } from '@hytime/dsh-plugin-kit'
+import { capabilitiesForVersion, settingsModelForVersion, takeoverSupportedForVersion, takeoverTransportForVersion } from '@hytime/dsh-plugin-kit'
+import { resolveCompatibility } from '@hytime/dsh-plugin-kit'
 
 const legacy = { settings: 'legacy', externalLanguages: false } as const
 const modern = { settings: 'remote', externalLanguages: true } as const

@@ -4,7 +4,7 @@ import {
   EXPRESSION_HELPER_NAMES,
   parseExpression,
   SESSION_CONTEXT_KEYS,
-} from '../src/compat/opencode-expression.js'
+} from '@hytime/dsh-plugin-kit'
 
 describe('parseExpression', () => {
   it('accepts a well-formed additive expression', () => {

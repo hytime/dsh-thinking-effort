@@ -2,12 +2,12 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OpenCodeFormatCard } from '../src/client/components/OpenCodeFormatCard.js'
-import { DEFAULT_FORMAT_DRAFT } from '../src/client/opencode-format-validation.js'
-import type { FormatDraft } from '../src/client/opencode-format-validation.js'
-import { zh } from '../src/client/locales.js'
-import { iosPalette } from '../src/client/theme.js'
-import type { ClientResult, SettingsApi, SettingsDescribeValue, SettingsNamespace, SettingsOp, Translation } from '../src/client/types.js'
+import { OpenCodeFormatCard } from '../packages/settings-ui/src/client/components/OpenCodeFormatCard.js'
+import { DEFAULT_FORMAT_DRAFT } from '../packages/settings-ui/src/client/opencode-format-validation.js'
+import type { FormatDraft } from '../packages/settings-ui/src/client/opencode-format-validation.js'
+import { zh } from '../packages/settings-ui/src/client/locales.js'
+import { iosPalette } from '../packages/settings-ui/src/client/theme.js'
+import type { ClientResult, SettingsApi, SettingsDescribeValue, SettingsNamespace, SettingsOp, Translation } from '@hytime/dsh-plugin-kit'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

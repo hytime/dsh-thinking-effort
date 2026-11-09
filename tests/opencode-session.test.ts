@@ -5,7 +5,7 @@ const settingsStub = {
   onChange: undefined as (() => void) | undefined,
 }
 
-import { installOpenCodeSession, OPENCODE_SESSION_SETTINGS_SCHEMA, resolveUserAgentValue } from '../src/host/opencode-session.ts'
+import { installOpenCodeSession, OPENCODE_SESSION_SETTINGS_SCHEMA, resolveUserAgentValue } from '@hytime/dsh-feature-opencode'
 import {
   isOpenCodeSessionEnabled,
   isOpenCodeSessionSectionId,
@@ -13,9 +13,9 @@ import {
   OPENCODE_SESSION_HEADER,
   OPENCODE_SESSION_NAMESPACE,
   PLUGIN_ENTRY_ID,
-} from '../src/compat/opencode-session.ts'
-import { isOpenCodeSessionNamespace, openCodeSessionOp } from '../src/client/model-header-ops.ts'
-import { createOpenCodeSessionState } from '../src/client/SectionEditor.js'
+} from '@hytime/dsh-plugin-kit'
+import { isOpenCodeSessionNamespace, openCodeSessionOp } from '../packages/settings-ui/src/client/model-header-ops.ts'
+import { createOpenCodeSessionState } from '../packages/settings-ui/src/client/SectionEditor.js'
 
 const baseFetch = globalThis.fetch
 

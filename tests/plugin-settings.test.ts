@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { schemaNodeAtPath } from '../src/compat/gateway/validation.ts'
-import { Config, PLUGIN_SETTINGS_SCHEMA } from '../src/host/plugin-settings.ts'
+import { schemaNodeAtPath } from '@hytime/dsh-plugin-kit'
+import { Config, PLUGIN_SETTINGS_SCHEMA } from '@hytime/dsh-plugin-kit'
 
 const section = {
   opencodeSession: { providers: { p: { models: { m: true } } } },
@@ -64,7 +64,7 @@ describe('PLUGIN_SETTINGS_SCHEMA', () => {
       subagentEffort: '',
       autoFillDefaults: true,
       subagentModel: { provider: '', model: '' },
-      compaction: { enabled: false, thresholdRatio: 0.6, retainRatio: 0.16, models: {} },
+      compaction: { thresholdRatio: 0.6, retainRatio: 0.16, models: {} },
       legacyMigration: legacyMigrationDefaults,
     })
     expect(opencodeSession).toEqual({
@@ -141,7 +141,7 @@ const pluginSettingsDefaults = {
   subagentEffort: '',
   autoFillDefaults: true,
   subagentModel: { provider: '', model: '' },
-  compaction: { enabled: false, thresholdRatio: 0.6, retainRatio: 0.16, models: {} },
+  compaction: { thresholdRatio: 0.6, retainRatio: 0.16, models: {} },
   legacyMigration: legacyMigrationDefaults,
   profiles: {},
   autoBackup: {

@@ -80,8 +80,9 @@ These identifiers have different responsibilities:
 | Composer effort slider | Registers an optional Composer `seat` when the Web runtime exposes `modelDirectories`, with host-resolved tiers for the current `provider/model` |
 | Subagent default | Apply the configured effort to subagent requests, overriding the inherited parent-session effort; with no default set the request is left untouched and the child keeps inheriting |
 | Subagent default model | Pick the provider/model a subagent starts on, applied through the official `agent.model.select()` during `agent/created`; with none configured the child keeps inheriting the parent session's route |
-| Compaction threshold | Set the trigger percentage and retained ratio per model; the plugin measures before each step and calls the official `compactRegion()` above its own threshold. Models without an override follow the global ratio, 60% by default |
+| Compaction threshold | Set the trigger percentage and retained ratio per model; the plugin measures before each step and calls the official `compactRegion()` above its own threshold. Empty fields follow the global ratio, 60% by default. There is no on/off switch: the percentages are the configuration, and DSH's own compaction always runs at its own threshold |
 | Multilingual settings | Includes Chinese, English, Japanese, and Korean dictionaries; Japanese/Korean switching uses DSH language-pack support |
+| Plugin icon | Declares `icon: "./icon.svg"`, so the Plugins page shows this package's own artwork on its card, detail page, and component rows instead of the default glyph |
 | Version watermark | Show the installed plugin version in the bottom-right corner |
 
 ## Install, upgrade, and remove

@@ -4,12 +4,16 @@ import { SettingsProvider } from '@deepseek-ai/dsh-settings'
 import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import { describe, expect, it, vi } from 'vitest'
 
-import { apply } from '../src/index.ts'
-import { installOpenCodeSession } from '../src/host/opencode-session.ts'
-import { readSubagentEffort, readSubagentModel, resolveSubagentEffort } from '../src/host/subagent.ts'
-import type { SettingsPathOp } from '../src/host/types.ts'
-import { OPENCODE_SESSION_NAMESPACE } from '../src/compat/opencode-session.ts'
-import { hasModelSourceConflict } from '../src/compat/model-source.ts'
+import { apply as applyCore } from '../src/index.ts'
+import { apply as applyOpenCode } from '../src/entries/opencode.ts'
+import { apply as applyCompaction } from '../src/entries/compaction.ts'
+import { apply as applySubagent } from '../src/entries/subagent.ts'
+import { apply as applyMigration } from '../src/entries/migration.ts'
+import { installOpenCodeSession } from '@hytime/dsh-feature-opencode'
+import { readSubagentEffort, readSubagentModel, resolveSubagentEffort } from '@hytime/dsh-feature-subagent'
+import type { SettingsPathOp } from '@hytime/dsh-plugin-kit'
+import { OPENCODE_SESSION_NAMESPACE } from '@hytime/dsh-plugin-kit'
+import { hasModelSourceConflict } from '@hytime/dsh-plugin-kit'
 
 type SettingsSection = Record<string, unknown> | undefined
 
@@ -224,7 +228,13 @@ function createHarness(options: HarnessOptions = {}) {
     },
   }
 
-  apply(ctx)
+  // The plugin ships as seven entries; this harness drives the host-plane ones
+  // so the cases below still describe the whole plugin rather than one row.
+  applyCore(ctx)
+  applyOpenCode(ctx)
+  applyCompaction(ctx)
+  applySubagent(ctx)
+  applyMigration(ctx)
 
   return {
     context: ctx,
@@ -311,7 +321,6 @@ const openCodeSessionUserAgentDefaults = { value: '', providers: {} }
  * test fail when a default moves.
  */
 const compactionDefaults = {
-  enabled: false,
   thresholdRatio: 0.6,
   retainRatio: 0.16,
   models: {},

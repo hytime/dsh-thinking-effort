@@ -10,11 +10,31 @@
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-09
+
+### 추가
+
+- 플러그인 아이콘을 추가했습니다. `package.json`이 `icon: "./icon.svg"`를 선언하며, 플러그인 카드, 상세 페이지, 컴포넌트 행에 이 아이콘이 표시되고 기본 도형으로 대체되지 않습니다. 아이콘은 36×36 자체 포함 SVG(그라디언트 트랙과 링 모양 손잡이, 플러그인의 사고 강도 단계에 대응)로, `rect`와 `circle` 도형만으로 구성하며 스크립트, 외부 참조, 폰트, 애니메이션이 없어 `<img>` 안에서 렌더링되고 밝은/어두운 테마 모두에서 잘 보입니다.
+- Added a plugin icon: `package.json` declares `icon: "./icon.svg"`, and the Plugins page shows it on the bundle card, its detail page, and its component rows instead of falling back to the default artwork. The image is a self-contained 36×36 SVG (a gradient track with a ring thumb, matching the plugin's thinking-effort levels) built from `rect` and `circle` geometry alone, with no scripts, external references, fonts, or animation, so it renders inside an `<img>` and reads in both themes.
+- 문서에 실측 스크린샷을 추가했습니다. DSH `0.2.2-rc.1` Web 인스턴스에서 `sub2api` 공급자(15개 모델)를 선언한 실제 `llm-pi-ai` 라우트로 플러그인 아이콘과 "모델 능력 및 사고 강도" 페이지를 촬영했습니다. `docs/SCREENSHOTS.md`를 참고하세요.
+- Documentation gained screenshots taken from a live DSH `0.2.2-rc.1` Web instance whose `llm-pi-ai` route declares a `sub2api` provider with 15 models: the plugin icon on the Plugins page and the Model capabilities and effort page, collected in `docs/SCREENSHOTS.md`.
+
+### 修复 / Fixed
+
+- 컨텍스트 압축의 "사용" 스위치를 제거했습니다. 비율 자체가 설정이며, 비워 두면 전역 비율(기본 60%)을 따릅니다. 기존 스위치는 "끄면 컨텍스트 압축이 중지된다"로 읽혔지만, DSH 공식 자동 압축은 이 플러그인의 영향을 받지 않고 자체 임계값으로 동작합니다. 이 플러그인이 제공하는 것은 "더 이른 압축" 한 겹뿐이며 "압축하지 않음"이 아닙니다. `compaction.enabled`를 저장한 문서는 그대로 로드되며 이 필드는 무시됩니다.
+- Removed the Context compaction on/off switch: the percentages ARE the configuration, and empty fields follow the global ratio (60% by default). The old switch read as "turn context compaction off", but DSH's own automatic compaction is unaffected by this plugin and keeps running at its own threshold — this plugin only offers an EARLIER pass, never "no compaction". Documents that already stored `compaction.enabled` still load; the field is ignored.
+- 압축 임계값과 유지 비율, 서브에이전트 기본 모델을 입력 시 자동 저장으로 변경하고 각각의 저장 버튼을 제거했습니다. 두 비율은 입력이 멈춘 시점에 한 번의 쓰기로 전송되며, 잘못된 조합(유지 비율이 임계값 이상, 숫자로 해석할 수 없는 값)은 입력을 유지한 채 이유를 그 자리에 표시하고 기록한 뒤 되돌리지 않습니다. 서브에이전트 공급자와 모델은 짝이 완성되면 한 번 기록하며, "상위 세션 상속"을 선택하면 unset으로 지웁니다.
+- The compaction ratios and the subagent default model now save as you type, and their Save buttons are gone. The two percentages commit as one write once typing pauses; an invalid pair keeps its text and explains itself in place rather than being written and rolled back. The subagent provider/model pair commits once complete, and choosing **Inherit parent session** clears it with an unset.
+- 컴포넌트 스위치가 이제 설정 페이지를 실제로 제어합니다. 7개 컴포넌트는 하나의 클라이언트 번들을 공유하므로 비활성화해도 설정 카드가 계속 렌더링되고 변경도 반영되지 않았습니다. 클라이언트는 호스트가 보고하는 활성 상태에 따라 각 면을 렌더링하고 호스트의 `plugin-manager/changed`를 구독하므로, 플러그인 페이지에서 스위치를 전환하면 페이지를 새로고침하지 않고도 카드가 나타나거나 사라집니다. 의존 관계도 반영됩니다. 루트를 끄면 의존하는 모든 컴포넌트가 함께 꺼지고, 설정 패널을 끄면 그것이 제공하는 OpenCode·압축·서브에이전트·마이그레이션 설정이 함께 꺼집니다. Composer 시트는 이 플러그인의 호스트 측에 의존하지 않으므로 독립적으로 유지됩니다.
+- Component switches now actually control the settings page: the seven components share one client bundle, so a disabled component used to keep rendering its card while its settings did nothing. The client now renders each surface from the enablement the Host reports and subscribes to `plugin-manager/changed`, so toggling a row in the plugin page adds or removes its card without a page refresh. Dependencies apply too: turning off the root component takes every component that depends on it, and turning off the settings panel takes the OpenCode, compaction, subagent and migration configuration it hosts; the Composer seat stays independent because it does not depend on this plugin's host half.
+- 게시 패키지에 이전 빌드의 잔여물이 섞이지 않습니다. 빌드 전에 `lib/`를 비우므로 오래된 공유 청크가 `files`의 glob으로 tarball에 포함되지 않습니다. CI의 구문 검사는 두 개의 옛 경로만이 아니라 `package.json`의 `exports`가 선언한 모든 엔트리를 대상으로 합니다.
+- The published package no longer carries leftovers from a previous build: `lib/` is cleared before compiling, so a stale shared chunk cannot be swept into the tarball by the `files` glob. The CI syntax check now covers every entry the manifest's `exports` declares instead of the two legacy paths only.
+
 ### 变更 / Changed
 
-- 最低支持的 DSH 版本从 `0.1.0-rc.7` 提高到 `0.1.7-alpha.1`，`engines.dsh` 与 `@deepseek-ai/dsh` peer 范围同步收紧。`0.1.7` 是 entry-config 设置模型的起点，也是本插件现在支持的最旧宿主。
+- 지원하는 최소 DSH 버전을 `0.1.0-rc.7`에서 `0.1.7-alpha.1`로 올리고 `engines.dsh`와 `@deepseek-ai/dsh` peer 범위도 함께 좁혔습니다. `0.1.7`은 entry-config 설정 모델의 시작이며 이 플러그인이 현재 지원하는 가장 오래된 호스트입니다.
 - Raised the minimum supported DSH version from `0.1.0-rc.7` to `0.1.7-alpha.1`, tightening both `engines.dsh` and the `@deepseek-ai/dsh` peer range. `0.1.7` is where the entry-config settings model begins and is now the oldest host this plugin supports.
-- 移除了只服务于旧版本的兼容层：版本映射表中 rc.7 / rc.8 / 0.1.2 / 0.1.3 / 0.1.6 五段能力窗口合并为一段，`namespace` 设置模型（`register` / `installSection` / `get` / `settings/updated` 事件）从代码中删除，`readSettingsSection` 只从 `describe()` 投影。发布 workflow 的兼容矩阵也由五个官方代表缩减为一个（`0.1.7-alpha.1`）。
+- 구버전만을 위한 호환 레이어를 제거했습니다. 버전 대응표의 rc.7 / rc.8 / 0.1.2 / 0.1.3 / 0.1.6 다섯 개 기능 윈도를 하나로 통합하고, `namespace` 설정 모델(`register` / `installSection` / `get` / `settings/updated` 이벤트)을 코드에서 삭제했으며, `readSettingsSection`은 `describe()`에서만 투영합니다. 릴리스 workflow의 호환 매트릭스도 다섯 개 공식 대표에서 하나(`0.1.7-alpha.1`)로 축소했습니다.
 - Removed the compatibility layer that only served the older releases: the version map's five capability windows (rc.7, rc.8, 0.1.2, 0.1.3, 0.1.6) collapsed into one, the `namespace` settings model (`register` / `installSection` / `get` and the `settings/updated` event) is gone from the code, and `readSettingsSection` projects from `describe()` alone. The release workflow's compatibility matrix shrank from five official representatives to one (`0.1.7-alpha.1`).
 
 ## [0.4.0] - 2026-11-07

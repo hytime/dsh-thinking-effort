@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LEGACY_MIGRATION_SOURCES, scanLegacyData, signatureOf } from '../src/host/legacy-scan.ts'
+import { LEGACY_MIGRATION_SOURCES, scanLegacyData, signatureOf } from '@hytime/dsh-feature-migration'
 
 /** The real `settings.yaml.imported` shapes, reduced to their plugin-owned parts. */
 const IMPORTED_DOCUMENT = `

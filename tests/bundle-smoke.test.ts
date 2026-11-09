@@ -3,12 +3,12 @@ import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 import vm from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { resolveTakeoverGatewayCompat } from '../src/compat/gateway/resolve.js'
+import { resolveTakeoverGatewayCompat } from '@hytime/dsh-plugin-kit'
 import {
   isCustomOpenAiGateway,
   resolveTakeoverProviders,
   takeoverProvidersOf,
-} from '../src/compat/gateway/takeover.js'
+} from '@hytime/dsh-plugin-kit'
 
 const root = resolve(import.meta.dirname, '..')
 
@@ -204,6 +204,10 @@ describe('build artifacts', () => {
         // Older DSH transports expose no `remote.session` (the seat's modern
         // session remote shape); a profile without it registers the base list.
         if (name === 'remote.session') return undefined
+        // The client entry declares `remote.pluginInventory` to learn which
+        // component rows the profile switched off. This fixture is an older host
+        // without that remote, so the entry must fall back to rendering every
+        // part rather than failing.
         if (name === 'remote') return undefined
         throw new Error(`Unexpected context read: ${name}`)
       },
@@ -218,9 +222,13 @@ describe('build artifacts', () => {
         return () => undefined
       },
       inject(names: string[], callback: (scope: ClientContext) => void) {
-        // Legacy compatibility path retained for older client plugins. The
-        // current seat uses the named plugin fiber above.
-        const allPresent = names.every((name) => context.get(name) !== undefined)
+        // `remote.pluginInventory` is a NAMESPACE on the `remote` service rather
+        // than a key `get` answers, so presence is resolved through the remote.
+        // This fixture is an older host without that namespace, which must leave
+        // the entry rendering every part.
+        const allPresent = names.every((name) => name === 'remote.pluginInventory'
+          ? (context.get('remote') as { pluginInventory?: unknown } | undefined)?.pluginInventory !== undefined
+          : context.get(name) !== undefined)
         if (allPresent) callback(context)
         return () => undefined
       },
@@ -230,6 +238,8 @@ describe('build artifacts', () => {
     }
 
     plugin.apply(context)
+    // The switch read finds no inventory remote, so the entry renders every
+    // part — including the settings panel, whose first act is this read.
     expect(remoteReads).toBe(1)
   })
 

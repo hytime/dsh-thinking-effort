@@ -1,36 +1,29 @@
-import { mark } from './host/marker.js'
-import { installSettingsWatcher } from './host/settings.js'
-import { installOpenCodeSession } from './host/opencode-session.js'
-import { installLegacyMigration } from './host/legacy-watcher.js'
-import { installCompactionPolicy } from './host/compaction.js'
-import { handleAgentCreated, handleAgentRequest } from './host/subagent.js'
-import type { HostContext } from './host/types.js'
+/**
+ * The core entry: the default-levels fill, plus the plugin's settings section.
+ *
+ * This entry keeps the `thinking-effort` id its bundle row always had. Existing
+ * profiles carry `- id: thinking-effort` with their whole `config` under it, so
+ * renaming the id would strand that configuration on upgrade.
+ *
+ * The other six features are their own entries — see `src/entries/`. Nothing
+ * else is installed here: a feature mounted twice would register its listeners
+ * twice, and the point of splitting the bundle is that each row owns exactly
+ * one thing.
+ */
+import { mark } from '@hytime/dsh-plugin-kit/host'
+import { installSettingsWatcher } from '@hytime/dsh-feature-levels'
+import type { HostContext } from '@hytime/dsh-plugin-kit'
 
 export const name = '@hytime/dsh-thinking-effort'
-export const inject = ['settings', 'timer', 'llm'] as const
+export const inject = ['settings', 'timer'] as const
 
 /**
  * The Loader entry's config schema. DSH 0.1.7 derives the settings form from
  * it, so it must stay exported from the package entry.
  */
-export { Config } from './host/plugin-settings.js'
+export { Config } from '@hytime/dsh-feature-levels'
 
 export function apply(ctx: HostContext): void {
   mark('apply')
   installSettingsWatcher(ctx)
-  installOpenCodeSession(ctx)
-  installLegacyMigration(ctx)
-  // The plugin's own compaction policy. It reaches the official backend through
-  // `ctx.get()` rather than an injection, because that backend lives inside each
-  // agent preset's isolate realm and a static dependency would park this fiber on
-  // every deployment that composes neither the preset registry nor a backend.
-  installCompactionPolicy(ctx)
-  ctx.on('agent/created', (...args: unknown[]) => {
-    handleAgentCreated(ctx, args[0])
-  }, { global: true })
-  ctx.on('agent/request', (...args: unknown[]) => {
-    const payload = args[0]
-    const next = args[1] as () => Promise<unknown>
-    return handleAgentRequest(ctx, payload, next)
-  }, { global: true })
 }

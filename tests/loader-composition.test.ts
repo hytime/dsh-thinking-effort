@@ -5,30 +5,30 @@ import { basename, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
-import { settingsBridge } from '../src/client/settings-bridge.js'
-import { inventoryFrom } from '../src/client/model-inventory.js'
-import { opsForModelArrayCompat } from '../src/client/model-ops.js'
-import { editableProviderCompatFields, schemaNodeAtPath } from '../src/compat/gateway/validation.js'
-import { PLUGIN_ENTRY_ID } from '../src/compat/settings-model.js'
-import type { SettingsModel } from '../src/compat/settings-model.js'
-import { capabilitiesForVersion } from '../src/compat/version-map.js'
+import { settingsBridge } from '../packages/settings-ui/src/client/settings-bridge.js'
+import { inventoryFrom } from '../packages/settings-ui/src/client/model-inventory.js'
+import { opsForModelArrayCompat } from '../packages/settings-ui/src/client/model-ops.js'
+import { editableProviderCompatFields, schemaNodeAtPath } from '@hytime/dsh-plugin-kit'
+import { PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
+import type { SettingsModel } from '@hytime/dsh-plugin-kit'
+import { capabilitiesForVersion } from '@hytime/dsh-plugin-kit'
 import {
   identifyTakeoverProviders,
   isCustomOpenAiGateway,
   resolveTakeoverProviders,
   takeoverProvidersOf,
-} from '../src/compat/gateway/takeover.js'
-import { opsForProviderCompat } from '../src/compat/gateway/ops.js'
+} from '@hytime/dsh-plugin-kit'
+import { opsForProviderCompat } from '@hytime/dsh-plugin-kit'
 import {
   LEGACY_RESULT_APPLIED,
   isLegacyMigrationPending,
   legacyCandidatesOf,
   legacyMigrationOf,
-} from '../src/compat/legacy-migration.js'
+} from '@hytime/dsh-plugin-kit'
 import {
   digestTail62 as digestTail62ForLoaderProbe,
   normalizeSessionId as normalizeSessionIdForLoaderProbe,
-} from '../src/host/opencode-session-format.js'
+} from '@hytime/dsh-feature-opencode'
 import { afterAll, describe, expect, it } from 'vitest'
 
 type PackageManifest = {
@@ -37,6 +37,7 @@ type PackageManifest = {
   readonly packageManager?: string
   readonly main?: string
   readonly types?: string
+  readonly icon?: string
   readonly exports: Record<string, string | { readonly types?: string; readonly default?: string }>
   readonly files: readonly string[]
   readonly engines?: { readonly dsh?: string }
@@ -1320,16 +1321,19 @@ describe('published package composition', () => {
   it('exposes built Host and Client artifacts with declarations', () => {
     const manifest = readPackage()
 
-    expect(manifest.version).toBe('0.4.0')
+    expect(manifest.version).toBe('0.4.1')
     expect(manifest.packageManager).toBe('pnpm@11.7.0')
     expect(manifest.main).toBe('./lib/index.js')
-    expect(manifest.types).toBe('./lib/types/index.d.ts')
+    // `rootDir` is the repository root so that `packages/*` emit declarations
+    // too, which mirrors `src/` under `lib/types/src/`. The published type
+    // entry follows the emitted layout rather than the pre-workspace one.
+    expect(manifest.types).toBe('./lib/types/src/index.d.ts')
     expect(manifest.exports['.']).toEqual({
-      types: './lib/types/index.d.ts',
+      types: './lib/types/src/index.d.ts',
       default: './lib/index.js',
     })
     expect(manifest.exports['./client']).toEqual({
-      types: './lib/types/client/index.d.ts',
+      types: './lib/types/src/client/index.d.ts',
       default: './lib/client.js',
     })
     expect(manifest.dsh?.client).toEqual({
@@ -1341,8 +1345,13 @@ describe('published package composition', () => {
       ],
       platform: 'web',
     })
-    expect(manifest.files).toContain('lib/index.js')
-    expect(manifest.files).toContain('lib/client.js')
+    // A multi-entry build also emits shared chunks (`lib/src-*.js`,
+    // `lib/opencode-session-*.js`, `lib/types-*.js`) beside the entry files, and
+    // every entry imports them. Listing only the entries published a package
+    // whose `apply` threw ERR_MODULE_NOT_FOUND on install, so the glob covers
+    // the whole root: `lib/entries/` carries the six subpath entries.
+    expect(manifest.files).toContain('lib/*.js')
+    expect(manifest.files).toContain('lib/entries/')
     expect(manifest.files).toContain('lib/types/**/*.d.ts')
     expect(manifest.files).toContain('cordis.patch.yml')
     for (const documentationFile of [
@@ -1358,6 +1367,12 @@ describe('published package composition', () => {
     expect(manifest.files).not.toContain('CHANGELOG.ja.md')
     expect(manifest.files).not.toContain('CHANGELOG.ko.md')
     expect(manifest.files).toContain('docs/assets/')
+    // `icon` is the only display field a package-root plugin declares in its
+    // manifest; the Plugin Manager reads it through the exported
+    // `./package.json` and turns the file into a data URL, so the image must be
+    // inside `files` or the card silently falls back to the default artwork.
+    expect(manifest.icon).toBe('./icon.svg')
+    expect(manifest.files).toContain('icon.svg')
   })
 
   it('declares its DSH version requirement the way the runtime reads it', () => {
@@ -1423,7 +1438,7 @@ integrationDescribe('official DSH loader composition', () => {
     const installedDir = join(profile, 'node_modules', '@hytime', 'dsh-thinking-effort')
     const installedManifest = JSON.parse(readFileSync(join(installedDir, 'package.json'), 'utf8')) as PackageManifest
     expect(installedManifest.name).toBe('@hytime/dsh-thinking-effort')
-    expect(installedManifest.version).toBe('0.4.0')
+    expect(installedManifest.version).toBe('0.4.1')
 
     const hostEntry = join(installedDir, 'lib', 'index.js')
     const clientEntry = join(installedDir, 'lib', 'client.js')
@@ -1479,11 +1494,11 @@ integrationDescribe('official DSH loader composition', () => {
         const settings = legacyRpc
           ? settingsBridge({ api: { settings: {
             describe: () => liveResult(describeEndpoint, {}),
-            mutate: (args: { ns: string; ops: readonly import('../src/client/types.js').SettingsOp[]; expectedRevision: number }) => liveResult(mutateEndpoint, args),
+            mutate: (args: { ns: string; ops: readonly import('@hytime/dsh-plugin-kit').SettingsOp[]; expectedRevision: number }) => liveResult(mutateEndpoint, args),
           } } })
           : settingsBridge(undefined, {
             describe: () => liveResult(describeEndpoint, {}),
-            mutate: (ns: string, ops: readonly import('../src/client/types.js').SettingsOp[], expectedRevision: number) => liveResult(mutateEndpoint, { ns, ops, expectedRevision }),
+            mutate: (ns: string, ops: readonly import('@hytime/dsh-plugin-kit').SettingsOp[], expectedRevision: number) => liveResult(mutateEndpoint, { ns, ops, expectedRevision }),
            })
 
         expect(settings).toBeDefined()

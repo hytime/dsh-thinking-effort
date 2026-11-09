@@ -1,0 +1,65 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "src/**",
+        "package.json",
+        "tsconfig.json",
+        "../../tsconfig.base.json"
+      ]
+    },
+    "typecheck": {
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "src/**",
+        "package.json",
+        "tsconfig.json",
+        "../../tsconfig.base.json"
+      ]
+    },
+    "test": {
+      "dependsOn": [
+        "^build"
+      ],
+      "inputs": [
+        "src/**",
+        "tests/**",
+        "package.json",
+        "vitest.config.ts"
+      ]
+    },
+    "check:locales": {
+      "inputs": [
+        "packages/settings-ui/src/locales/**",
+        "scripts/check-locales.mjs"
+      ]
+    },
+    "check:conventions": {
+      "inputs": [
+        "packages/kit/src/shared/**",
+        "docs/CONVENTIONS.md",
+        "scripts/check-conventions.mjs"
+      ]
+    },
+    "verify:release": {
+      "inputs": [
+        "package.json",
+        "docs/CHANGELOG*.md",
+        "scripts/verify-release.mjs"
+      ]
+    },
+    "check:policy": {
+      "inputs": [
+        "package.json",
+        "docs/CHANGELOG*.md",
+        "scripts/pr-policy.mjs"
+      ]
+    }
+  }
+}

@@ -5,8 +5,8 @@ import {
   FORMAT_KEYS,
   formatFieldErrors,
   formatOps,
-} from '../src/client/opencode-format-validation.js'
-import { PLUGIN_SETTINGS_SCHEMA } from '../src/host/plugin-settings.ts'
+} from '../packages/settings-ui/src/client/opencode-format-validation.js'
+import { PLUGIN_SETTINGS_SCHEMA } from '@hytime/dsh-plugin-kit'
 
 const draft = (over: Partial<Record<string, string>>) => ({ ...DEFAULT_FORMAT_DRAFT, ...over })
 
