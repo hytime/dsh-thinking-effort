@@ -8,6 +8,8 @@ import {
   readSettingsSection,
   settingsChangeEvents,
   settingsEntryId,
+  pluginSectionId,
+  settingsModelForRuntime,
 } from '@hytime/dsh-plugin-kit'
 import { OpenCodeSessionFormatter, resolveFormatConfig } from './format.js'
 import { PLUGIN_SETTINGS_SCHEMA } from '@hytime/dsh-plugin-kit'
@@ -217,7 +219,13 @@ function installEntryConfigSettingsSection(
   hooks: SettingsSectionHooks,
 ): void {
   const settings = ctx.settings
-  const entryId = settingsEntryId(ctx, fallbackNamespace)
+  // Under `entry-config` the section is the ROOT row's `Config`, not this
+  // feature's own row: the six behaviour entries publish no schema, so a read
+  // addressed by their id finds nothing. `fallbackNamespace` only applies to the
+  // legacy namespace model, where the plugin registers a namespace of its own.
+  const entryId = settingsModelForRuntime(ctx) === 'entry-config'
+    ? pluginSectionId()
+    : settingsEntryId(ctx, fallbackNamespace)
   hooks.setSource(() => readSettingsSection(settings, entryId) ?? {})
   hooks.onChange()
 
