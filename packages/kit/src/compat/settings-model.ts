@@ -18,6 +18,9 @@ export type SettingsModel = 'entry-config'
  * fiber to read a live id from addresses that section.
  */
 export { PLUGIN_ENTRY_ID } from '../shared/constants.js'
+// Imported as well as re-exported: `pluginSectionId` answers with this constant,
+// and a pure re-export creates no local binding to use.
+import { PLUGIN_ENTRY_ID } from '../shared/constants.js'
 
 function method(value: unknown, name: string): ((...args: unknown[]) => unknown) | undefined {
   if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return undefined
@@ -93,4 +96,24 @@ export function settingsEntryId(ctx: unknown, fallback: string): string {
   const entryId = record(record(id)?.entry)?.options
   const value = record(entryId)?.id
   return typeof value === 'string' && value.length > 0 ? value : fallback
+}
+
+/**
+ * The id of the section that holds THIS PLUGIN's configuration.
+ *
+ * The bundle splits into seven Loader entries, but only the ROOT row publishes a
+ * schema — `Config` is exported from the package entry, so the entry-config model
+ * derives exactly one section, addressed by `thinking-effort`. The other six rows
+ * are behaviour only: they carry no schema and publish no section.
+ *
+ * So a feature must NOT address itself by {@link settingsEntryId}: that answers
+ * the row the feature happens to run in (`thinking-effort-opencode`, `-migration`,
+ * …), and a read or write there finds a section nothing publishes. Before this
+ * existed, the subagent route silently fell back to the legacy namespace and the
+ * migration watcher wrote offers into a section no surface renders.
+ *
+ * @returns the root row's entry id.
+ */
+export function pluginSectionId(): string {
+  return PLUGIN_ENTRY_ID
 }

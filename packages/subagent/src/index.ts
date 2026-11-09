@@ -5,7 +5,7 @@ import {
   isAgentRequestConfig,
   isUnknownRecord,
 } from '@hytime/dsh-plugin-kit'
-import { readSettingsSection, readSettingsSectionUser, settingsEntryId, LLM_PI_AI_NS, PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
+import { readSettingsSection, readSettingsSectionUser, pluginSectionId, LLM_PI_AI_NS, PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
 
 /** The `llm-pi-ai` section id, the alias `levels` exports for it. */
 const SETTINGS_NAMESPACE = LLM_PI_AI_NS
@@ -205,7 +205,7 @@ function applySubagentRoute(
 ): void {
   const select = model.select
   if (typeof select !== 'function') return
-  const route = readSubagentModel(ctx.settings, settingsEntryId(ctx, PLUGIN_ENTRY_ID))
+  const route = readSubagentModel(ctx.settings, pluginSectionId())
   if (route === undefined) return
   Reflect.apply(select, model, [{ provider: route.provider, model: route.model }])
 }
@@ -226,7 +226,7 @@ function applySubagentEffort(
     ctx.settings,
     selection,
     log,
-    settingsEntryId(ctx, OPENCODE_SESSION_NAMESPACE),
+    pluginSectionId(),
   )
   if (effort === undefined || effort === selection.reasoningEffort) return
   Reflect.apply(select, model, [{
@@ -270,7 +270,7 @@ function noteUnappliedRoute(
   config: AgentRequestConfig,
 ): void {
   if (unappliedRouteWarned.has(agent)) return
-  const route = readSubagentModel(ctx.settings, settingsEntryId(ctx, PLUGIN_ENTRY_ID))
+  const route = readSubagentModel(ctx.settings, pluginSectionId())
   if (route === undefined) return
   if (config.provider === route.provider && config.model === route.model) return
   unappliedRouteWarned.add(agent)
@@ -299,7 +299,7 @@ export async function handleAgentRequest(
       ctx.settings,
       config,
       log,
-      settingsEntryId(ctx, OPENCODE_SESSION_NAMESPACE),
+      pluginSectionId(),
     )
     return effort === undefined ? config : { ...config, reasoningEffort: effort }
   } catch (error) {

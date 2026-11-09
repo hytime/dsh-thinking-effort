@@ -39,7 +39,7 @@ import { LOG_PREFIX, PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
 import { compactionPolicyFrom, policyForModel, retainTokens, thresholdTokens } from '@hytime/dsh-plugin-kit'
 import type { CompactionPolicySettings } from '@hytime/dsh-plugin-kit'
 import { isUnknownRecord } from '@hytime/dsh-plugin-kit'
-import { readSettingsSection, settingsEntryId } from '@hytime/dsh-plugin-kit'
+import { readSettingsSection, pluginSectionId } from '@hytime/dsh-plugin-kit'
 import type { HostContext } from '@hytime/dsh-plugin-kit'
 
 /** Cordis service names read through `ctx.get()`. */
@@ -136,7 +136,7 @@ function signalOf(value: unknown): AbortSignal | undefined {
  * later trigger raises the number.
  */
 function policyOf(ctx: HostContext): CompactionPolicySettings {
-  const section = readSettingsSection(ctx.settings, settingsEntryId(ctx, PLUGIN_ENTRY_ID))
+  const section = readSettingsSection(ctx.settings, pluginSectionId())
   return compactionPolicyFrom(isUnknownRecord(section) ? section.compaction : undefined)
 }
 
