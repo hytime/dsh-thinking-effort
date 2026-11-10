@@ -8,7 +8,7 @@
     "dsh": ">=0.1.7-alpha.1"
   },
   "scripts": {
-    "build": "node scripts/check-locales.mjs && node scripts/clean-build.mjs && tsc -p tsconfig.json && node scripts/rewrite-dts-specifiers.mjs && tsdown -c tsdown.config.ts",
+    "build": "node scripts/check-locales.mjs && node scripts/check-plugin-meta.mjs && node scripts/clean-build.mjs && tsc -p tsconfig.json && node scripts/rewrite-dts-specifiers.mjs && tsdown -c tsdown.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
@@ -19,7 +19,8 @@
     "check": "pnpm run test:conventions && node scripts/check-locales.mjs",
     "verify": "pnpm run check && pnpm run build && pnpm run typecheck && pnpm run typecheck:test && pnpm run test && pnpm run test:release && pnpm run test:policy",
     "prepublishOnly": "pnpm run build",
-    "check:entries": "node scripts/check-entries.mjs"
+    "check:entries": "node scripts/check-entries.mjs",
+    "check:meta": "node scripts/check-plugin-meta.mjs"
   },
   "type": "module",
   "main": "./lib/index.js",
@@ -36,6 +37,7 @@
     "access": "public"
   },
   "files": [
+    "./locale/",
     "LICENSE",
     "README.ja.md",
     "README.ko.md",
@@ -103,7 +105,18 @@
     "./composer": {
       "types": "./lib/types/src/entries/composer.d.ts",
       "default": "./lib/entries/composer.js"
-    }
+    },
+    "./settings/locale/*.json": "./locale/entries/settings/*.json",
+    "./opencode/locale/*.json": "./locale/entries/opencode/*.json",
+    "./compaction/locale/*.json": "./locale/entries/compaction/*.json",
+    "./subagent/locale/*.json": "./locale/entries/subagent/*.json",
+    "./migration/locale/*.json": "./locale/entries/migration/*.json",
+    "./composer/locale/*.json": "./locale/entries/composer/*.json",
+    "./icon": "./icon.svg",
+    "./locale/en.json": "./locale/en.json",
+    "./locale/zh.json": "./locale/zh.json",
+    "./locale/ja.json": "./locale/ja.json",
+    "./locale/ko.json": "./locale/ko.json"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1 || ^4.0.6-alpha.1",

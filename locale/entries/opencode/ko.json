@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OpenCode 세션 Header",
+    "description": "선택한 모델의 요청에 x-opencode-session 같은 Header를 주입하고 모델별 형식 템플릿과 User-Agent를 설정할 수 있습니다. 끄면 Header가 주입되지 않고 설정 페이지의 OpenCode 카드도 사라집니다."
+  }
+}

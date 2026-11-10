@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OpenCode セッション Header",
+    "description": "選択したモデルのリクエストに x-opencode-session などの Header を注入し、モデルごとに書式テンプレートと User-Agent を設定できます。オフにすると Header は注入されず、設定ページの OpenCode カードも消えます。"
+  }
+}

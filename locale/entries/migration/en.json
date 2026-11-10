@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Legacy config migration",
+    "description": "Only useful after upgrading from a release before 0.1.7: scans the settings.yaml that DSH's rename stranded and moves the old thinking levels and model toggles into the current section. It does nothing when there is no legacy data."
+  }
+}

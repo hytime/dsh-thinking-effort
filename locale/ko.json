@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "@hytime/dsh-thinking-effort",
+    "description": "직접 선언한 llm-pi-ai 모델에 설정 가능한 추론 강도를 추가하고, 모델별 컨텍스트 압축·서브에이전트 기본값·Composer 슬라이더를 제공합니다. 아래 각 컴포넌트는 개별적으로 전환할 수 있습니다."
+  }
+}

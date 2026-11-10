@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OpenCode 会话 Header",
+    "description": "为选中的模型在请求中注入 x-opencode-session 等 Header，并可按模型设置格式模板与 User-Agent。关闭后不再注入任何 Header，设置页里的 OpenCode 卡片一并消失。"
+  }
+}
