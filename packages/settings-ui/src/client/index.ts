@@ -72,7 +72,40 @@ function configFormsView(context: ClientContext): ConfigFormsService {
   return { get: (entryId) => resolve()?.get(entryId) }
 }
 
-export function apply(context: ClientContext, switches?: ComponentSwitchStore): void {
+export interface SettingsApplyOptions {
+  /** Whether each of the bundle's other components is switched on, read per render. */
+  readonly switches?: ComponentSwitchStore
+  /**
+   * Re-read the component switches and remount these surfaces.
+   *
+   * The panel cannot read the switches itself — that dependency belongs to the
+   * plugin entry — and a slot cannot be unregistered except through the disposer
+   * `register` returns. So the entry hands this in, and the panel drops its
+   * registrations before letting the entry mount again.
+   *
+   * Absent for an older caller, which then has no reload affordance.
+   */
+  readonly refresh?: () => Promise<ComponentSwitchStore | undefined>
+}
+
+export function apply(context: ClientContext, options: SettingsApplyOptions = {}): void {
+  const { switches } = options
+  /**
+   * Drops the current slot registrations.
+   *
+   * Assigned once the panel mounts; a refresh calls it before re-reading the
+   * switches so a surface whose row was just switched off loses its navigation
+   * entry instead of opening an empty page.
+   */
+  let disposeSurfaces: (() => void) | undefined
+  /**
+   * The refresh the mounted panel calls, if the entry supplied one.
+   *
+   * Read by `mount` when it builds the slot callback — which happens BEFORE this
+   * is assigned, so the callback must read it lazily (it does, inside the render
+   * closure) rather than destructure it at creation time.
+   */
+  let refreshHook: (() => Promise<void>) | undefined
   // The store is read per render rather than snapshotted here: a row toggled in
   // the plugin page must reach the panel without a page refresh, and a slot
   // registers once. `undefined` means an older caller, which renders everything.
@@ -82,7 +115,7 @@ export function apply(context: ClientContext, switches?: ComponentSwitchStore): 
   const locale = context.get('locale') as ClientLocale
   let mounted = false
 
-  const mount = (settings: ReturnType<typeof settingsBridge>): void => {
+  const mount = (settings: ReturnType<typeof settingsBridge>, store = switches): void => {
     if (mounted || settings === undefined) return
     mounted = true
     const runtime = createTakeoverRuntimeStore()
@@ -114,25 +147,33 @@ export function apply(context: ClientContext, switches?: ComponentSwitchStore): 
       }
     }, 'dsh-thinking-effort: language pack dictionaries')
 
-    slots.inject(SLOT_NAME, () => slots.register(
-      {
-        name: SLOT_NAME,
-        id: SLOT_ID,
-        order: SLOT_ORDER,
-        locale: LOCALE_NS,
-        label: () => translate('pageTitle'),
-      },
-      () => createElement(SectionEditor, { settings: observedSettings, locale, t: translate, takeoverRuntime: runtime, ...(switches === undefined ? {} : { switches }) }),
-    ))
-
-    // The migration dialog is its own Loader row: with `thinking-effort-migration`
-    // off there is no host watcher to offer anything. The slot is still
-    // registered so a row re-enabled while the page is open starts offering
-    // again; the component returns null while the row is off.
-    slots.inject(OVERLAY_NAME, () => slots.register(
-      { name: OVERLAY_NAME, id: OVERLAY_ID, order: OVERLAY_ORDER },
-      () => createElement(MigrationOverlayGate, { settings: observedSettings, t: translate, switches }),
-    ))
+    // Registered through a disposable scope rather than directly: a refresh
+    // re-reads the switches, and whether the panel exists at all is one of the
+    // things that can change. A slot cannot be unregistered any other way.
+    disposeSurfaces = () => {
+      const disposers = [
+        slots.inject(SLOT_NAME, () => slots.register(
+          {
+            name: SLOT_NAME,
+            id: SLOT_ID,
+            order: SLOT_ORDER,
+            locale: LOCALE_NS,
+            label: () => translate('pageTitle'),
+          },
+          () => createElement(SectionEditor, { settings: observedSettings, locale, t: translate, takeoverRuntime: runtime, switches: store, onRefresh: refreshHook }),
+        )),
+        // The migration dialog is its own Loader row: with `thinking-effort-migration`
+        // off there is no host watcher to offer anything. Its slot stays registered
+        // so a row re-enabled while the page is open starts offering again; the
+        // component returns null while the row is off.
+        slots.inject(OVERLAY_NAME, () => slots.register(
+          { name: OVERLAY_NAME, id: OVERLAY_ID, order: OVERLAY_ORDER },
+          () => createElement(MigrationOverlayGate, { settings: observedSettings, t: translate, switches: store }),
+        )),
+      ]
+      return () => { for (const dispose of disposers.reverse()) dispose() }
+    }
+    disposeSurfaces()
   }
 
   const mountFromRemote = (): void => {
@@ -142,4 +183,45 @@ export function apply(context: ClientContext, switches?: ComponentSwitchStore): 
   context.on('internal/service', (serviceName) => {
     if (serviceName === 'remote.settings' || serviceName === 'remote' || serviceName === 'configForms') mountFromRemote()
   })
+
+  /**
+   * Re-read the switches and remount these surfaces.
+   *
+   * Whether a surface exists is decided at mount, and a slot cannot be
+   * unregistered except through its disposer — so the order is: drop what this
+   * panel registered, ask the entry for a fresh answer, then mount again. A
+   * component switched off in the meantime loses its navigation entry; one
+   * switched on gains it.
+   *
+   * The answer comes back as a NEW store, and `mount` is re-entered with it: the
+   * slot callbacks captured the previous one, so assigning the outer binding
+   * would leave the remounted editor reading the old map.
+   */
+  /**
+   * Re-read the switches and remount these surfaces.
+   *
+   * Declared as a function so it is hoisted: `mount` runs during `apply` and its
+   * slot callback captures this binding, so a `const` assigned afterwards would
+   * leave every rendered panel with `undefined` — the button then does nothing.
+   *
+   * The order is: drop what this panel registered, ask the entry for a fresh
+   * answer, then mount again with it. A slot cannot be unregistered except
+   * through its disposer, and the remounted surfaces must read the NEW store —
+   * the previous one still holds the old map.
+   */
+  async function refreshSwitches(): Promise<void> {
+    if (options.refresh === undefined) return
+    // Read FIRST, then swap. Tearing the slot down unmounts the very component
+    // whose click handler is running, and that unmount cancels the rest of this
+    // async chain — which is why the button appeared to do nothing.
+    const next = await options.refresh()
+    disposeSurfaces?.()
+    disposeSurfaces = undefined
+    mounted = false
+    const bridge = settingsBridge(connection, context.get('remote.settings'), locale.addLanguage, configFormsView(context))
+    mount(bridge, next)
+  }
+
+  // Passed to every mount, so the panel always holds the real hook.
+  refreshHook = options.refresh === undefined ? undefined : refreshSwitches
 }
