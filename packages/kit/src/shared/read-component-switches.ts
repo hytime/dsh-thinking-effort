@@ -105,9 +105,5 @@ export function readComponentSwitches(
     // a page refresh.
     dispose = remote?.$on?.('plugin-manager/changed', read)
   })
-  // A host without the inventory remote never calls back. The panel still has
-  // to render there — that host is older than the remote, not broken — so the
-  // absence resolves to "every part on" instead of nothing mounting at all.
-  if (!called) onChange(unknownSwitches())
   return dispose
 }

@@ -3164,6 +3164,38 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     view.unmount()
   })
 
+  it('offers a reload button in the header, since only a reload can re-read the switches', async () => {
+    // The bundle this page loaded is one artifact for all seven rows, so a row
+    // switched in the plugin page cannot be discovered by re-rendering. The
+    // button performs the one action that can help, instead of leaving the user
+    // to work out why nothing changed.
+    const view = mountWith(switchesWith('opencode', true))
+    await settle()
+    const button = view.container.querySelector('[data-testid="thinking-effort-reload"]') as HTMLButtonElement | null
+    expect(button).not.toBeNull()
+    expect(button?.textContent).toContain(text('reloadPanel'))
+    // It must be reachable, not merely present in the tree.
+    expect(button?.disabled).toBe(false)
+    view.unmount()
+  })
+
+  it('calls the page reload when the header button is pressed', async () => {
+    const reload = vi.fn()
+    const original = window.location
+    // jsdom's location is read-only; replace the whole object for this test.
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...original, reload } })
+    try {
+      const view = mountWith(switchesWith('opencode', true))
+      await settle()
+      const button = view.container.querySelector('[data-testid="thinking-effort-reload"]') as HTMLButtonElement
+      act(() => { button.click() })
+      expect(reload).toHaveBeenCalledTimes(1)
+      view.unmount()
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: original })
+    }
+  })
+
   it('always renders the refresh hint, because a row toggle never reaches an open page', async () => {
     // The browser bundle is one artifact for all seven rows and was fetched for
     // the page already open, so a toggle in the plugin page cannot change what
@@ -3177,16 +3209,16 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     view.unmount()
   })
 
-  it('hides every configured card when the panel row itself is off', async () => {
-    // The panel's own row gates the cards it renders, and the features depend on
-    // it: with `settings` off there is no surface to configure them from, so the
-    // cascade resolves all four to off and the page shows none of their cards.
+  it('renders nothing at all when the panel row itself is off', async () => {
+    // A slot registers once and cannot be unregistered, so the row has to be
+    // excluded at MOUNT rather than rendered as an empty page: registering it
+    // anyway would leave a "Model capabilities and effort" entry in Settings
+    // pointing at nothing. `apply` therefore reads the switches first and skips
+    // the whole panel — this asserts the component honours that.
     const view = mountWith({ ...switchesWith('opencode', true), settings: 'off', opencode: 'off', compaction: 'off', subagent: 'off' })
     await settle()
-    expect(view.container.textContent).not.toContain(text('subagentCardTitle'))
-    openFirstModel(view.container)
-    expect(view.container.textContent).not.toContain(text('opencodeSessionHeaderTitle'))
-    expect(view.container.textContent).not.toContain(text('compactionSectionTitle'))
+    expect(view.container.textContent).toBe('')
+    expect(view.container.querySelector('[data-scope="component-switch-refresh"]')).toBeNull()
     view.unmount()
   })
 

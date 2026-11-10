@@ -96,6 +96,9 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     switches?.getSnapshot ?? NO_SNAPSHOT,
     switches?.getSnapshot ?? NO_SNAPSHOT,
   )
+  // The panel's own row first: with `thinking-effort-settings` off there is no
+  // page to render at all, and every card below it is unreachable anyway.
+  const settingsOn = switchSnapshot === undefined || partEnabled(switchSnapshot, 'settings')
   const opencodeOn = switchSnapshot === undefined || partEnabled(switchSnapshot, 'opencode')
   const compactionOn = switchSnapshot === undefined || partEnabled(switchSnapshot, 'compaction')
   const subagentOn = switchSnapshot === undefined || partEnabled(switchSnapshot, 'subagent')
@@ -127,6 +130,22 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
    * `successMessage` because that transport carries no response body to project
    * and would otherwise lose the "saved" notice the legacy path shows.
    */
+  /**
+   * Reload the page so the panel re-reads which components the Host has on.
+   *
+   * A row toggled in the plugin page is a Loader fact, and the browser bundle is
+   * one artifact that this page already fetched — re-rendering cannot discover a
+   * row that was switched while it was open. The Host applies the switch on its
+   * next start anyway, so a page reload is the only thing the panel can offer,
+   * and offering it beats leaving the user to guess why nothing changed.
+   *
+   * Guarded because a test environment has no real navigation; there the click
+   * only exercises the render.
+   */
+  const reloadPanel = (): void => {
+    if (typeof window !== 'undefined' && typeof window.location?.reload === 'function') window.location.reload()
+  }
+
   const load = (notice: string | null = null): void => {
     // Only the first read — before any inventory is on screen — swaps the page
     // for the loading placeholder. A save refreshes through here too, and
@@ -641,10 +660,20 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     onCommit: applySubagentModel,
   }
 
+  // Placed after every hook so the order cannot change when the switch flips
+  // while this panel is mounted.
+  if (!settingsOn) return <></>
+
   return <div className={css.settingsRoot} style={{ color: palette.text, fontFamily: '-apple-system, BlinkMacSystemFont, SF Pro Text, Segoe UI, sans-serif' }}>
     {state.notice ? <div style={{ position: 'sticky', top: '8px', zIndex: 20, height: 0, pointerEvents: 'none' }}><div role="status" aria-live="polite" style={{ position: 'absolute', right: '8px', top: 0, pointerEvents: 'auto', display: 'inline-flex', alignItems: 'center', gap: '5px', maxWidth: 'calc(100% - 16px)', padding: '6px 10px', border: `1px solid ${palette.accentBorder}`, borderRadius: '8px', color: palette.accent, backgroundColor: palette.accentSoft, boxShadow: palette.shadow, fontSize: '12px', lineHeight: '16px', fontWeight: 650 }}><Icon name="check" size={13} />{state.notice}</div></div> : null}
     <label className={css.controlRowEnd} style={{ fontSize: '12px', marginBottom: '4px' }}>{t('languageLabel')}<select value={snapshot.active} onChange={(event) => locale.setLocale?.(event.currentTarget.value)} style={{ height: '26px', padding: '0 7px', border: `1px solid ${palette.border}`, borderRadius: '7px', backgroundColor: palette.field, color: palette.text, fontSize: '12px' }}>{languageOptions.map(([id, key]) => available.has(id) ? <option key={id} value={id}>{t(key)}</option> : null)}</select></label>
-    <h3 style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: '8px', rowGap: '4px', fontSize: '18px', lineHeight: '24px', fontWeight: 700, letterSpacing: 0, margin: '0 0 7px' }}><Icon name="sliders" size={19} /><span>{t('pageTitle')}</span></h3>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 7px' }}>
+      <h3 style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: '8px', rowGap: '4px', fontSize: '18px', lineHeight: '24px', fontWeight: 700, letterSpacing: 0, margin: 0, minWidth: 0 }}><Icon name="sliders" size={19} /><span>{t('pageTitle')}</span></h3>
+      {/* The panel renders from the bundle this page already loaded, so a
+          component switch changed elsewhere only reaches it after a reload.
+          This is the reload, offered where the user notices the mismatch. */}
+      <ActionButton text={t('reloadPanel')} onClick={reloadPanel} palette={palette} icon="refresh" label={t('reloadPanelLabel')} testId="thinking-effort-reload" />
+    </div>
     {state.error ? <div role="alert" aria-live="assertive" style={{ fontSize: '12px', lineHeight: '18px', color: palette.danger, backgroundColor: palette.dangerBg, border: `1px solid ${palette.dangerBorder}`, borderRadius: '8px', padding: '6px 8px', margin: '0 0 8px' }}>{state.error}</div> : null}
     <RefreshNotice palette={palette} t={t} />
     <div data-scope="auto-fill-defaults" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '8px', marginBottom: '8px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.group, boxShadow: palette.shadow }}>

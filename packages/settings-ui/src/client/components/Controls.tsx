@@ -1,7 +1,7 @@
 import React, { type ReactNode } from 'react'
 import type { Palette } from '../theme.js'
 
-export type IconName = 'check' | 'chevronDown' | 'chevronUp' | 'context' | 'image' | 'layers' | 'model' | 'restore' | 'search' | 'settings' | 'sliders' | 'sparkles' | 'text'
+export type IconName = 'check' | 'chevronDown' | 'chevronUp' | 'context' | 'image' | 'layers' | 'model' | 'refresh' | 'restore' | 'search' | 'settings' | 'sliders' | 'sparkles' | 'text'
 export type ButtonTone = 'primary' | 'secondary' | 'danger' | 'ghost'
 
 interface IconProps {
@@ -24,6 +24,8 @@ export function Icon({ name, size = 15 }: IconProps): React.ReactElement {
     children.push(<path key="path" d="m18 15-6-6-6 6" />)
   } else if (name === 'check') {
     children.push(<path key="path" d="m5 12 4 4L19 6" />)
+  } else if (name === 'refresh') {
+    children.push(<path key="arc" d="M20 11a8 8 0 1 0-1.6 5.6" />, <path key="head" d="M20 5v6h-6" />)
   } else if (name === 'restore') {
     children.push(<path key="arrow" d="M9 7H5v4" />, <path key="curve" d="M5 11a7 7 0 1 1 2 6" />)
   } else if (name === 'search') {

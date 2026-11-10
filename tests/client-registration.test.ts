@@ -12,12 +12,20 @@ import { providerGatewayCompatViewFrom } from '../packages/settings-ui/src/clien
 import { resolveTakeoverGatewayCompat, resolveTakeoverProviders, takeoverGatewayCompatInputs } from '@hytime/dsh-plugin-kit'
 import type { ClientContext, SettingsNamespace } from '@hytime/dsh-plugin-kit'
 
-/** Every component row as a host with all of them enabled reports it. */
-function enabledRows(): Array<{ moduleName: string; enabled: boolean }> {
-  return Object.values(COMPONENT_ROWS).map((row) => ({ moduleName: row.moduleName, enabled: true }))
+/**
+ * Every component row as the Host reports it.
+ *
+ * @param disabled - module names to report as switched off.
+ * @returns one inventory row per component.
+ */
+function enabledRows(disabled: readonly string[] = []): Array<{ moduleName: string; enabled: boolean }> {
+  return Object.values(COMPONENT_ROWS).map((row) => ({
+    moduleName: row.moduleName,
+    enabled: !disabled.includes(row.moduleName),
+  }))
 }
 
-function createHarness(mode: 'modern' | 'legacy') {
+function createHarness(mode: 'modern' | 'legacy', disabled: readonly string[] = []) {
   const listeners: Array<(name: string) => void> = []
   const registrations: Array<{ descriptor: Record<string, unknown>; render: unknown }> = []
   const disposed: string[] = []
@@ -71,7 +79,7 @@ function createHarness(mode: 'modern' | 'legacy') {
   // mounts anything; this answers like a host with every row enabled.
   const remote = {
     pluginInventory: {
-      list: async () => ({ ok: true as const, value: { entries: enabledRows() } }),
+      list: async () => ({ ok: true as const, value: { entries: enabledRows(disabled) } }),
     },
   }
   const sessions = {}
@@ -154,6 +162,27 @@ async function flushSwitches(): Promise<void> {
   // read grows another step.
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
+
+describe('component switches gate the mounted surfaces', () => {
+  it('registers no slot when the panel row is off', async () => {
+    // A slot cannot be unregistered, so a panel mounted anyway would leave a
+    // "Model capabilities and effort" entry in Settings pointing at an empty
+    // page. `apply` reads the switches first and skips the panel entirely.
+    const harness = createHarness('modern', ['@hytime/dsh-thinking-effort/settings'])
+    apply(harness.context)
+    await flushSwitches()
+    // The Composer seat is a different row and stays; the settings section must not
+    // appear at all, or its navigation entry would open an empty page.
+    expect(harness.registrations.filter((entry) => entry.descriptor.name === 'settings.section')).toHaveLength(0)
+  })
+
+  it('registers the panel when its row is on', async () => {
+    const harness = createHarness('modern')
+    apply(harness.context)
+    await flushSwitches()
+    expect(harness.registrations.length).toBeGreaterThan(0)
+  })
+})
 
 describe('client registration through the guarded context', () => {
   it('mounts after the remote.settings service is announced without context.inject', async () => {
