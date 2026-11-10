@@ -283,5 +283,5 @@
   "subagentModelAutoSave": "선택하면 자동 저장됩니다",
   "subagentModelSaved": "Subagent 기본 모델이 저장되었습니다",
   "compactionSectionHint": "비워 두면 전역 비율을 따릅니다. 입력한 비율은 이 모델에만 적용됩니다.",
-  "componentSwitchRestartRequired": "컴포넌트 스위치가 변경되었습니다. 적용하려면 DSH를 재시작하세요"
+  "componentSwitchRefreshRequired": "플러그인 페이지에서 컴포넌트를 전환한 후 이 페이지를 새로고침하면 화면에 반영됩니다. 기능 자체는 DSH를 재시작해야 적용됩니다"
 }

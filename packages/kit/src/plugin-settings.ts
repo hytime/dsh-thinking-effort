@@ -200,20 +200,6 @@ export interface PluginSettings extends OpenCodeSessionSettings {
   readonly compaction?: CompactionPolicySettings
   /** The host-managed legacy-data migration control object. */
   readonly legacyMigration?: LegacyMigrationState
-  /**
-   * A counter the Host bumps whenever the Loader's component rows change.
-   *
-   * The plugin's client surfaces render from the switches the Host reports, and
-   * a row toggled in the plugin page emits no forwardable event of its own —
-   * `plugin-manager/changed` covers installs and removals only. This field is
-   * the plugin's own announcement: the Host writes it on a Loader update, which
-   * raises `settings/document-updated`, and the client re-reads the inventory
-   * when that lands.
-   *
-   * A counter rather than a timestamp because two toggles inside one clock tick
-   * are common and would otherwise be indistinguishable.
-   */
-  readonly switchesStamp?: number
   readonly profiles?: Readonly<Record<string, PluginStoredSnapshot>>
   readonly autoBackup?: PluginStoredSnapshot
 }
@@ -246,7 +232,6 @@ const PLUGIN_SETTINGS_FIELDS = {
    */
   compaction: compactionPolicy,
   legacyMigration,
-  switchesStamp: z.number().default(0),
   profiles: z.dict(configSnapshot).default({}),
   autoBackup: configSnapshot,
 }
@@ -279,7 +264,6 @@ const PLUGIN_SETTINGS_DEFAULTS = {
     scannedAt: '',
     decidedAt: '',
   },
-  switchesStamp: 0,
   profiles: {},
   autoBackup: {
     kind: SNAPSHOT_KIND,

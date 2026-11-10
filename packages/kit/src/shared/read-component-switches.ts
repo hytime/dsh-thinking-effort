@@ -98,28 +98,12 @@ export function readComponentSwitches(
       )
     }
     read()
-    // Two signals, because neither covers the whole set:
-    //
-    //   `plugin-manager/changed` is the Host's own announcement, but it fires
-    //   only for install, remove and update. Toggling a row in the plugin page
-    //   calls `setPluginEnabled`, which reloads the row and emits nothing, so
-    //   subscribing to it alone left every surface rendering a component the
-    //   user had just switched off.
-    //
-    //   `settings/document-updated` covers that gap: the Host-side
-    //   `installSwitchesStampWatcher` bumps a counter in the plugin's section on
-    //   every Loader row change, and this settings event carries it here. Both
-    //   are needed — installs can change the inventory without touching this
-    //   section, and this section can change without an install.
-    //
     // `$on` exists on every host that publishes the inventory remote; the
     // optional call keeps this working on one that does not.
-    const disposers: Array<() => void> = []
-    for (const event of ['plugin-manager/changed', 'settings/document-updated']) {
-      const off = remote?.$on?.(event, read)
-      if (typeof off === 'function') disposers.push(off)
-    }
-    dispose = () => { for (const off of disposers) off() }
+    // The Host announces every profile change here, including a row toggle made
+    // in the plugin page. Re-reading on it is what makes the panel react without
+    // a page refresh.
+    dispose = remote?.$on?.('plugin-manager/changed', read)
   })
   // A host without the inventory remote never calls back. The panel still has
   // to render there — that host is older than the remote, not broken — so the

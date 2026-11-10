@@ -283,5 +283,5 @@
   "subagentModelAutoSave": "选择后自动保存",
   "subagentModelSaved": "子 agent 默认模型已保存",
   "compactionSectionHint": "留空则跟随全局比例；填写的百分比只影响该模型。",
-  "componentSwitchRestartRequired": "组件开关已变更，重启 DSH 后生效"
+  "componentSwitchRefreshRequired": "在插件页切换组件开关后，刷新本页才能看到界面变化；功能本身需要重启 DSH 才生效"
 }

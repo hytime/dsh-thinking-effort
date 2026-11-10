@@ -356,9 +356,6 @@ describe('real Settings-backed OpenCode registration', () => {
         subagentModel: subagentModelDefaults,
         compaction: compactionDefaults,
         legacyMigration: legacyMigrationDefaults,
-        // The Host bumps this when the Loader's component rows change; see
-        // `installSwitchesStampWatcher`. Zero means nothing announced yet.
-        switchesStamp: 0,
         profiles: {},
         autoBackup: snapshotDefaults,
       })
@@ -397,9 +394,6 @@ describe('real Settings-backed OpenCode registration', () => {
         subagentModel: subagentModelDefaults,
         compaction: compactionDefaults,
         legacyMigration: legacyMigrationDefaults,
-        // The Host bumps this when the Loader's component rows change; see
-        // `installSwitchesStampWatcher`. Zero means nothing announced yet.
-        switchesStamp: 0,
         profiles: {},
         autoBackup: snapshotDefaults,
       })

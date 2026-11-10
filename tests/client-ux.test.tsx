@@ -191,7 +191,7 @@ function renderEditor(options: {
    */
   switches?: Record<string, 'on' | 'off' | 'unknown'>
   /** A live store the test drives, for asserting that a toggle reaches the page. */
-  liveStore?: { getSnapshot(): Record<string, 'on' | 'off'>; subscribe(listener: () => void): () => void; getVersion(): number }
+  liveStore?: { getSnapshot(): Record<string, 'on' | 'off'>; subscribe(listener: () => void): () => void }
 } = {}): {
   container: HTMLDivElement
   root: Root
@@ -223,8 +223,6 @@ function renderEditor(options: {
     const switchStore = options.liveStore ?? (options.switches === undefined ? undefined : {
       getSnapshot: () => options.switches as never,
       subscribe: () => () => undefined,
-      // A static fixture never changes, so it never announces a restart.
-      getVersion: () => 0,
     })
     root.render(<SectionEditor settings={settings} locale={locale} t={text as Translation} takeoverRuntime={takeoverRuntime} switches={switchStore as never} />)
   })
@@ -3139,9 +3137,6 @@ describe('SectionEditor compaction policy and subagent default route', () => {
         listeners.add(listener)
         return () => { listeners.delete(listener) }
       },
-      // This fixture drives card visibility only; the restart notice has its
-      // own test.
-      getVersion: () => 0,
     }
     const view = renderEditor({
       namespaces: [plugin, llm],
@@ -3169,45 +3164,16 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     view.unmount()
   })
 
-  it('shows the restart notice only after a switch actually changes', async () => {
-    // The panel follows a row toggle immediately, but the toggle is a Loader
-    // fact that needs a restart. Without this notice the user sees a card vanish
-    // and concludes the feature is off while its host half is still mounted.
-    const view = renderEditor({
-      namespaces: [withPluginSection({ revision: 9 }), openCodeLlmNamespace({ schema: realGatewaySchema })],
-      describe: async () => ({ ok: true, value: { namespaces: [] } }),
-      compatibilityProfile: 'modern',
-    })
+  it('always renders the refresh hint, because a row toggle never reaches an open page', async () => {
+    // The browser bundle is one artifact for all seven rows and was fetched for
+    // the page already open, so a toggle in the plugin page cannot change what
+    // this panel renders. The notice is static for that reason: it explains why
+    // the user must refresh, rather than pretending the change arrived.
+    const view = mountWith(switchesWith('opencode', true))
     await settle()
-    // Startup renders no notice: the first Host answer is not a user change.
-    expect(view.container.querySelector('[data-scope="component-switch-restart"]')).toBeNull()
-    view.unmount()
-  })
-
-  it('renders the restart notice once the store reports a change', async () => {
-    let version = 0
-    const listeners = new Set<() => void>()
-    // `useSyncExternalStore` compares snapshots by identity, so the object must
-    // be stable across renders or React reports a nested-update loop.
-    const snapshot = switchesWith('opencode', true)
-    const liveStore = {
-      getSnapshot: () => snapshot as never,
-      subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } },
-      getVersion: () => version,
-    }
-    const view = renderEditor({
-      namespaces: [withPluginSection({ revision: 9 }), openCodeLlmNamespace({ schema: realGatewaySchema })],
-      describe: async () => ({ ok: true, value: { namespaces: [] } }),
-      compatibilityProfile: 'modern',
-      liveStore: liveStore as never,
-    })
-    await settle()
-    expect(view.container.querySelector('[data-scope="component-switch-restart"]')).toBeNull()
-
-    act(() => { version = 1; for (const listener of listeners) listener() })
-    await settle()
-    expect(view.container.querySelector('[data-scope="component-switch-restart"]')).not.toBeNull()
-    expect(view.container.textContent).toContain(text('componentSwitchRestartRequired'))
+    const notice = view.container.querySelector('[data-scope="component-switch-refresh"]')
+    expect(notice).not.toBeNull()
+    expect(notice?.textContent).toContain(text('componentSwitchRefreshRequired'))
     view.unmount()
   })
 

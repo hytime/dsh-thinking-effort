@@ -20,16 +20,6 @@ export interface ComponentSwitchStore {
   getSnapshot(): Record<ComponentKey, ComponentSwitchState>
   /** Subscribe to updates; returns the unsubscribe. */
   subscribe(listener: () => void): () => void
-  /**
-   * How many times the answer has CHANGED after the first one.
-   *
-   * The panel has to tell "the Host just told me which rows are on" from "a row
-   * changed under me": the first is ordinary startup, while the second is a
-   * change the loaded code has not picked up yet and deserves a restart
-   * notice. A version is the cheapest way to express that without keeping the
-   * whole history.
-   */
-  getVersion(): number
 }
 
 /**
@@ -55,10 +45,6 @@ export function createComponentSwitchStore(): {
     composer: 'unknown',
   }
   const listeners = new Set<() => void>()
-  // Bumped only by a real change, so the first Host answer (which replaces the
-  // all-`unknown` seeding) is version 0 and every later change counts up.
-  let version = 0
-  let answered = false
   return {
     store: {
       getSnapshot: () => current,
@@ -66,7 +52,6 @@ export function createComponentSwitchStore(): {
         listeners.add(listener)
         return () => { listeners.delete(listener) }
       },
-      getVersion: () => version,
     },
     update: (next) => {
       // Identity is what `useSyncExternalStore` compares, so a re-read that
@@ -74,10 +59,6 @@ export function createComponentSwitchStore(): {
       // re-render every subscriber on every unrelated host event.
       if ((Object.keys(next) as ComponentKey[]).every((key) => next[key] === current[key])) return
       current = next
-      // The first answer seeds the store; it is not a change the user made, so
-      // it must not raise a restart notice.
-      if (answered) version += 1
-      answered = true
       for (const listener of listeners) listener()
     },
   }
