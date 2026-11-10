@@ -143,3 +143,47 @@ describe('component dependency cascade', () => {
     expect(componentEnabled(switches.opencode)).toBe(true)
   })
 })
+
+/**
+ * The client cannot learn about a row toggle from the Host's own announcement:
+ * `plugin-manager/changed` fires for install, remove and update only, while
+ * `setPluginEnabled` reloads the row and emits nothing. The Host therefore bumps
+ * `switchesStamp` itself and lets `settings/document-updated` carry the signal.
+ */
+describe('component switch announcement channel', () => {
+  const readerWith = (subscribed: string[], stopped: string[] = []) => {
+    const scope = {
+      get: () => ({
+        pluginInventory: { list: async () => ({ ok: true, value: { entries: [] } }) },
+        $on: (event: string) => {
+          subscribed.push(event)
+          return () => { stopped.push(event) }
+        },
+      }),
+    }
+    return {
+      inject: (_names: string[], callback: (s: unknown) => void) => { callback(scope) },
+      get: () => undefined,
+    }
+  }
+
+  it('subscribes to both the plugin-manager and settings events', async () => {
+    const { readComponentSwitches } = await import('../packages/kit/src/shared/read-component-switches.js')
+    const subscribed: string[] = []
+    readComponentSwitches(readerWith(subscribed) as never, () => undefined)
+    // Both, because either can move the inventory on its own: an install changes
+    // it without touching this plugin's section, and a row toggle changes it
+    // through that section only.
+    expect(subscribed).toContain('plugin-manager/changed')
+    expect(subscribed).toContain('settings/document-updated')
+  })
+
+  it('stops both subscriptions when the caller disposes', async () => {
+    const { readComponentSwitches } = await import('../packages/kit/src/shared/read-component-switches.js')
+    const subscribed: string[] = []
+    const stopped: string[] = []
+    const dispose = readComponentSwitches(readerWith(subscribed, stopped) as never, () => undefined)
+    dispose?.()
+    expect(stopped).toEqual(['plugin-manager/changed', 'settings/document-updated'])
+  })
+})

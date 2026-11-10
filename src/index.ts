@@ -11,7 +11,7 @@
  * one thing.
  */
 import { mark } from '@hytime/dsh-plugin-kit/host'
-import { installSettingsWatcher } from '@hytime/dsh-feature-levels'
+import { installSettingsWatcher, installSwitchesStampWatcher } from '@hytime/dsh-feature-levels'
 import type { HostContext } from '@hytime/dsh-plugin-kit'
 
 export const name = '@hytime/dsh-thinking-effort'
@@ -26,4 +26,9 @@ export { Config } from '@hytime/dsh-feature-levels'
 export function apply(ctx: HostContext): void {
   mark('apply')
   installSettingsWatcher(ctx)
+  // The client surfaces render from the Loader's row enablement, and a row
+  // toggled in the plugin page emits no forwardable event. This watcher turns
+  // the Loader's own update into a settings write, which reaches them through
+  // the ordinary settings channel.
+  installSwitchesStampWatcher(ctx)
 }

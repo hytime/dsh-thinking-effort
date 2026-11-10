@@ -8,6 +8,7 @@
  * depend on a feature instead of on the shared layer.
  */
 export { DEFAULT_LEVELS, SETTINGS_NAMESPACE, fillProviderDefaults, installSettingsWatcher } from './settings.js'
+export { installSwitchesStampWatcher } from './switches-stamp.js'
 export type { ProviderDefaultsResult } from './settings.js'
 export { Config, PLUGIN_SETTINGS_SCHEMA } from '@hytime/dsh-plugin-kit'
 export type { PluginSettings } from '@hytime/dsh-plugin-kit'

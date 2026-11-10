@@ -66,6 +66,7 @@ describe('PLUGIN_SETTINGS_SCHEMA', () => {
       subagentModel: { provider: '', model: '' },
       compaction: { thresholdRatio: 0.6, retainRatio: 0.16, models: {} },
       legacyMigration: legacyMigrationDefaults,
+      switchesStamp: 0,
     })
     expect(opencodeSession).toEqual({
       providers: { p: { models: { m: true } } },
@@ -76,7 +77,7 @@ describe('PLUGIN_SETTINGS_SCHEMA', () => {
 
   it('materializes every owned field for an empty section so editors see a stable shape', () => {
     const resolved = PLUGIN_SETTINGS_SCHEMA({ opencodeSession: { providers: {} } }) as unknown as Record<string, unknown>
-    expect(Object.keys(resolved)).toEqual(['opencodeSession', 'subagentEffort', 'autoFillDefaults', 'subagentModel', 'compaction', 'legacyMigration', 'profiles', 'autoBackup'])
+    expect(Object.keys(resolved)).toEqual(['opencodeSession', 'subagentEffort', 'autoFillDefaults', 'subagentModel', 'compaction', 'legacyMigration', 'switchesStamp', 'profiles', 'autoBackup'])
     expect(resolved.subagentEffort).toBe('')
     expect(resolved.profiles).toEqual({})
     expect((resolved.opencodeSession as Record<string, unknown>).format).toEqual(formatDefaults)
@@ -143,6 +144,9 @@ const pluginSettingsDefaults = {
   subagentModel: { provider: '', model: '' },
   compaction: { thresholdRatio: 0.6, retainRatio: 0.16, models: {} },
   legacyMigration: legacyMigrationDefaults,
+  // The Host bumps this when the Loader's component rows change; see
+  // `installSwitchesStampWatcher`. Zero is the "nothing announced yet" state.
+  switchesStamp: 0,
   profiles: {},
   autoBackup: {
     kind: 'dsh-thinking-effort/config-snapshot',
@@ -201,6 +205,6 @@ describe('Config', () => {
     const root = schemaNodeAtPath(envelope, [])
     expect(root?.type).toBe('object')
     expect(Object.keys(root?.dict ?? {}).sort())
-      .toEqual(['autoBackup', 'autoFillDefaults', 'compaction', 'legacyMigration', 'opencodeSession', 'profiles', 'subagentEffort', 'subagentModel'])
+      .toEqual(['autoBackup', 'autoFillDefaults', 'compaction', 'legacyMigration', 'opencodeSession', 'profiles', 'subagentEffort', 'subagentModel', 'switchesStamp'])
   })
 })
