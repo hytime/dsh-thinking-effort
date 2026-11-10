@@ -282,5 +282,6 @@
   "subagentModelHint": "New subagents switch to this model; choosing “Inherit the parent session” keeps the parent’s model.",
   "subagentModelAutoSave": "Saves automatically on selection",
   "subagentModelSaved": "Subagent default model saved",
-  "compactionSectionHint": "Empty fields follow the global ratio; a percentage here affects this model only."
+  "compactionSectionHint": "Empty fields follow the global ratio; a percentage here affects this model only.",
+  "componentSwitchRestartRequired": "A component switch changed; restart DSH to take effect"
 }

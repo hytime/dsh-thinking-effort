@@ -5,6 +5,7 @@ import {
   componentEnabled,
   componentSwitchesFrom,
 } from '@hytime/dsh-plugin-kit'
+import type { ComponentKey, ComponentSwitchState } from '@hytime/dsh-plugin-kit'
 
 /**
  * The bundle's seven rows share one browser artifact, so the client cannot tell
@@ -185,5 +186,51 @@ describe('component switch announcement channel', () => {
     const dispose = readComponentSwitches(readerWith(subscribed, stopped) as never, () => undefined)
     dispose?.()
     expect(stopped).toEqual(['plugin-manager/changed', 'settings/document-updated'])
+  })
+})
+
+/**
+ * The restart notice depends on telling the FIRST Host answer from a later
+ * change: the first is ordinary startup, the second means the loaded code has
+ * not caught up and the user should be told to restart.
+ */
+describe('component switch store version', () => {
+  const map = (overrides: Partial<Record<ComponentKey, ComponentSwitchState>> = {}) => {
+    const base = {
+      levels: 'on', settings: 'on', opencode: 'on', compaction: 'on',
+      subagent: 'on', migration: 'on', composer: 'on',
+    } as Record<ComponentKey, ComponentSwitchState>
+    return { ...base, ...overrides }
+  }
+
+  it('does not count the first Host answer as a change', async () => {
+    const { createComponentSwitchStore } = await import('../packages/kit/src/shared/component-switch-store.js')
+    const { store, update } = createComponentSwitchStore()
+    expect(store.getVersion()).toBe(0)
+    // The seeding answer arrives: the store now knows the real rows, but the
+    // user changed nothing, so a restart notice would be a lie.
+    update(map({ composer: 'off' }))
+    expect(store.getVersion()).toBe(0)
+  })
+
+  it('counts every change after that', async () => {
+    const { createComponentSwitchStore } = await import('../packages/kit/src/shared/component-switch-store.js')
+    const { store, update } = createComponentSwitchStore()
+    update(map({ composer: 'off' }))
+    update(map({ composer: 'on' }))
+    expect(store.getVersion()).toBe(1)
+    update(map({ opencode: 'off' }))
+    expect(store.getVersion()).toBe(2)
+  })
+
+  it('does not count a re-read that answers the same thing', async () => {
+    const { createComponentSwitchStore } = await import('../packages/kit/src/shared/component-switch-store.js')
+    const { store, update } = createComponentSwitchStore()
+    update(map({ composer: 'off' }))
+    // Every settings event re-reads the inventory; an unchanged answer must not
+    // keep incrementing or the notice would reappear spuriously.
+    update(map({ composer: 'off' }))
+    update(map({ composer: 'off' }))
+    expect(store.getVersion()).toBe(0)
   })
 })

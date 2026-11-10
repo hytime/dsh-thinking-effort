@@ -50,6 +50,7 @@ import css from './settings.module.css'
 import { ModelRow } from './components/ModelRow.js'
 import { SubagentSettings } from './components/SubagentSettings.js'
 import { ConfigBackupCard } from './components/ConfigBackupCard.js'
+import { RestartNotice } from './components/RestartNotice.js'
 import { OpenCodeFormatCard } from './components/OpenCodeFormatCard.js'
 import { renderGatewayCompatControls } from './components/GatewayCompatControls.js'
 
@@ -645,6 +646,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     <label className={css.controlRowEnd} style={{ fontSize: '12px', marginBottom: '4px' }}>{t('languageLabel')}<select value={snapshot.active} onChange={(event) => locale.setLocale?.(event.currentTarget.value)} style={{ height: '26px', padding: '0 7px', border: `1px solid ${palette.border}`, borderRadius: '7px', backgroundColor: palette.field, color: palette.text, fontSize: '12px' }}>{languageOptions.map(([id, key]) => available.has(id) ? <option key={id} value={id}>{t(key)}</option> : null)}</select></label>
     <h3 style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: '8px', rowGap: '4px', fontSize: '18px', lineHeight: '24px', fontWeight: 700, letterSpacing: 0, margin: '0 0 7px' }}><Icon name="sliders" size={19} /><span>{t('pageTitle')}</span></h3>
     {state.error ? <div role="alert" aria-live="assertive" style={{ fontSize: '12px', lineHeight: '18px', color: palette.danger, backgroundColor: palette.dangerBg, border: `1px solid ${palette.dangerBorder}`, borderRadius: '8px', padding: '6px 8px', margin: '0 0 8px' }}>{state.error}</div> : null}
+    <RestartNotice switches={switches} palette={palette} t={t} />
     <div data-scope="auto-fill-defaults" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '8px', marginBottom: '8px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.group, boxShadow: palette.shadow }}>
       <div style={{ display: 'grid', gap: '2px' }}><span style={{ fontSize: '13px', fontWeight: 700 }}>{t('autoFillDefaultsTitle')}</span><span style={{ fontSize: '12px', color: palette.secondary }}>{t('autoFillDefaultsDescription')}</span></div>
       <SwitchControl checked={state.pluginSection?.value.autoFillDefaults !== false} disabled={state.busy || state.pluginSection === null} label={t('autoFillDefaultsTitle')} palette={palette} onChange={applyAutoFillDefaults} />

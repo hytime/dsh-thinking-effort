@@ -282,5 +282,6 @@
   "subagentModelHint": "Subagent の作成時にこのモデルへ切り替えます。「親セッションを継承」を選ぶと親のモデルを使います。",
   "subagentModelAutoSave": "選択すると自動保存されます",
   "subagentModelSaved": "Subagent の既定モデルを保存しました",
-  "compactionSectionHint": "空欄は全体の割合に従います。入力した割合はこのモデルにのみ適用されます。"
+  "compactionSectionHint": "空欄は全体の割合に従います。入力した割合はこのモデルにのみ適用されます。",
+  "componentSwitchRestartRequired": "コンポーネントスイッチが変更されました。反映には DSH の再起動が必要です"
 }
