@@ -223,7 +223,7 @@ function installEntryConfigSettingsSection(
   // feature's own row: the six behaviour entries publish no schema, so a read
   // addressed by their id finds nothing. `fallbackNamespace` only applies to the
   // legacy namespace model, where the plugin registers a namespace of its own.
-  const entryId = settingsModelForRuntime(ctx) === 'entry-config'
+  const entryId = settingsModelForRuntime({ settings }) === 'entry-config'
     ? pluginSectionId()
     : settingsEntryId(ctx, fallbackNamespace)
   hooks.setSource(() => readSettingsSection(settings, entryId) ?? {})

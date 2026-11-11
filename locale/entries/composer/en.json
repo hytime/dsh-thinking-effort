@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Composer effort slider",
+    "description": "Replaces the official model selector beside the composer so effort and model can be dragged directly. Off: the official selector takes the slot back and this plugin's slider disappears."
+  }
+}

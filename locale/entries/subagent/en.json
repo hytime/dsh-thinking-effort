@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Subagent defaults",
+    "description": "Applies your default thinking effort and model route when a subagent is created; with neither set it inherits the parent session. Off: subagents always inherit the parent and the Subagent card leaves the settings page."
+  }
+}

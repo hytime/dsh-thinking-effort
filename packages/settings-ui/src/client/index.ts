@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { partEnabled } from '@hytime/dsh-plugin-kit'
+import { partEnabled, registerComponentSlot } from '@hytime/dsh-plugin-kit'
 import { LOCALE_DATA } from './locales.js'
 import { settingsBridge } from './settings-bridge.js'
 import { createTakeoverRuntimeStore, observeTakeoverSettings } from './takeover-runtime.js'
@@ -15,10 +15,7 @@ export const inject = ['slots', 'connection', 'locale'] as const
 /**
  * The legacy-migration dialog, rendered only while its Loader row is on.
  *
- * The slot itself stays registered for the life of the page: a slot cannot be
- * un-registered and re-registered on a switch change, so the row is consulted
- * per render instead. Returning `null` is what makes toggling the row take
- * effect without a page refresh.
+ * The slot stays registered so the dialog can appear when its row is enabled.
  */
 function MigrationOverlayGate({ settings, t, switches }: {
   readonly settings: Parameters<typeof LegacyMigrationModal>[0]['settings']
@@ -72,10 +69,14 @@ function configFormsView(context: ClientContext): ConfigFormsService {
   return { get: (entryId) => resolve()?.get(entryId) }
 }
 
-export function apply(context: ClientContext, switches?: ComponentSwitchStore): void {
-  // The store is read per render rather than snapshotted here: a row toggled in
-  // the plugin page must reach the panel without a page refresh, and a slot
-  // registers once. `undefined` means an older caller, which renders everything.
+export interface SettingsApplyOptions {
+  readonly switches?: ComponentSwitchStore
+  readonly reread?: () => Promise<unknown>
+}
+
+export function apply(context: ClientContext, options: SettingsApplyOptions = {}): void {
+  const { switches, reread } = options
+  const onMounted = reread === undefined ? undefined : () => { void reread() }
   const slots = context.get('slots') as ClientSlots | undefined
   if (slots === undefined) return
   const connection = context.get('connection') as import('@hytime/dsh-plugin-kit').ClientConnection | undefined
@@ -114,7 +115,7 @@ export function apply(context: ClientContext, switches?: ComponentSwitchStore): 
       }
     }, 'dsh-thinking-effort: language pack dictionaries')
 
-    slots.inject(SLOT_NAME, () => slots.register(
+    slots.inject(SLOT_NAME, () => registerComponentSlot(switches, 'settings', () => slots.register(
       {
         name: SLOT_NAME,
         id: SLOT_ID,
@@ -122,13 +123,11 @@ export function apply(context: ClientContext, switches?: ComponentSwitchStore): 
         locale: LOCALE_NS,
         label: () => translate('pageTitle'),
       },
-      () => createElement(SectionEditor, { settings: observedSettings, locale, t: translate, takeoverRuntime: runtime, ...(switches === undefined ? {} : { switches }) }),
-    ))
-
-    // The migration dialog is its own Loader row: with `thinking-effort-migration`
-    // off there is no host watcher to offer anything. The slot is still
-    // registered so a row re-enabled while the page is open starts offering
-    // again; the component returns null while the row is off.
+      () => createElement(SectionEditor, {
+        settings: observedSettings, locale, t: translate, takeoverRuntime: runtime,
+        switches, onMounted,
+      }),
+    )))
     slots.inject(OVERLAY_NAME, () => slots.register(
       { name: OVERLAY_NAME, id: OVERLAY_ID, order: OVERLAY_ORDER },
       () => createElement(MigrationOverlayGate, { settings: observedSettings, t: translate, switches }),

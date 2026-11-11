@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "@hytime/dsh-thinking-effort",
+    "description": "为手写声明的 llm-pi-ai 模型补充可配置的思考档位，并提供按模型的上下文压缩、子 agent 默认值与 Composer 滑块。下面每个组件各自独立开关。"
+  }
+}

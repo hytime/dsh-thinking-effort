@@ -80,6 +80,8 @@ export interface SectionEditorProps {
    * without a refresh. Absent means an older caller, which renders everything.
    */
   readonly switches?: ComponentSwitchStore
+  /** Re-read the switches when the user returns to Settings. */
+  readonly onMounted?: () => void
 }
 
 // The OpenCode session helpers and the state shape live in `section-editor/`;
@@ -87,7 +89,7 @@ export interface SectionEditorProps {
 // them from, and the split must not move a public entry point.
 export { applyOpenCodeSessionMutation, createOpenCodeSessionState, saveOpenCodeSession } from './section-editor/open-code-session.js'
 export type { OpenCodeSessionState } from '@hytime/dsh-plugin-kit'
-export function SectionEditor({ settings, locale, t, palette = iosPalette(), takeoverRuntime, switches }: SectionEditorProps): React.ReactElement {
+export function SectionEditor({ settings, locale, t, palette = iosPalette(), takeoverRuntime, switches, onMounted }: SectionEditorProps): React.ReactElement {
   // Subscribed rather than read once: a row toggled in the plugin page has to
   // take effect on the panel that is already open.
   const switchSnapshot = useSyncExternalStore(
@@ -95,8 +97,12 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     switches?.getSnapshot ?? NO_SNAPSHOT,
     switches?.getSnapshot ?? NO_SNAPSHOT,
   )
+  // The panel's own row first: with `thinking-effort-settings` off there is no
+  // page to render at all, and every card below it is unreachable anyway.
+  const settingsOn = switchSnapshot === undefined || partEnabled(switchSnapshot, 'settings')
   const opencodeOn = switchSnapshot === undefined || partEnabled(switchSnapshot, 'opencode')
   const compactionOn = switchSnapshot === undefined || partEnabled(switchSnapshot, 'compaction')
+  const migrationOn = switchSnapshot === undefined || partEnabled(switchSnapshot, 'migration')
   const subagentOn = switchSnapshot === undefined || partEnabled(switchSnapshot, 'subagent')
   const [state, setState] = React.useState<EditorState>(initialState)
   const takeoverResolution = React.useSyncExternalStore(
@@ -165,6 +171,8 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
   }
 
   React.useEffect(() => { load() }, [])
+
+  React.useEffect(() => { onMounted?.() }, [onMounted])
 
   React.useEffect(() => {
     setState((current) => reapplyCompatViews(current, settings.compatibilityProfile, takeoverResolution))
@@ -640,6 +648,10 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
     onCommit: applySubagentModel,
   }
 
+  // Placed after every hook so the order cannot change when the switch flips
+  // while this panel is mounted.
+  if (!settingsOn) return <></>
+
   return <div className={css.settingsRoot} style={{ color: palette.text, fontFamily: '-apple-system, BlinkMacSystemFont, SF Pro Text, Segoe UI, sans-serif' }}>
     {state.notice ? <div style={{ position: 'sticky', top: '8px', zIndex: 20, height: 0, pointerEvents: 'none' }}><div role="status" aria-live="polite" style={{ position: 'absolute', right: '8px', top: 0, pointerEvents: 'auto', display: 'inline-flex', alignItems: 'center', gap: '5px', maxWidth: 'calc(100% - 16px)', padding: '6px 10px', border: `1px solid ${palette.accentBorder}`, borderRadius: '8px', color: palette.accent, backgroundColor: palette.accentSoft, boxShadow: palette.shadow, fontSize: '12px', lineHeight: '16px', fontWeight: 650 }}><Icon name="check" size={13} />{state.notice}</div></div> : null}
     <label className={css.controlRowEnd} style={{ fontSize: '12px', marginBottom: '4px' }}>{t('languageLabel')}<select value={snapshot.active} onChange={(event) => locale.setLocale?.(event.currentTarget.value)} style={{ height: '26px', padding: '0 7px', border: `1px solid ${palette.border}`, borderRadius: '7px', backgroundColor: palette.field, color: palette.text, fontSize: '12px' }}>{languageOptions.map(([id, key]) => available.has(id) ? <option key={id} value={id}>{t(key)}</option> : null)}</select></label>
@@ -650,7 +662,7 @@ export function SectionEditor({ settings, locale, t, palette = iosPalette(), tak
       <SwitchControl checked={state.pluginSection?.value.autoFillDefaults !== false} disabled={state.busy || state.pluginSection === null} label={t('autoFillDefaultsTitle')} palette={palette} onChange={applyAutoFillDefaults} />
     </div>
     {subagentOn ? <SubagentSettings effort={state.subagent?.effort ?? null} namespaceFound={state.subagent !== null} draft={state.subagentDraft} custom={state.subagentCustom} busy={state.busy} palette={palette} t={t} onDraftChange={(value) => setState((current) => ({ ...current, notice: null, subagentDraft: value }))} onCustomChange={(value) => setState((current) => ({ ...current, notice: null, subagentCustom: value }))} onSave={applySubagentEffort} modelPicker={subagentModelPicker} /> : null}
-    <ConfigBackupCard settings={settings} palette={palette} t={t} onApplied={load} />
+    <ConfigBackupCard migrationEnabled={migrationOn} settings={settings} palette={palette} t={t} onApplied={load} />
     {opencodeOn ? <OpenCodeFormatCard settings={settings} palette={palette} t={t} revision={state.openCodeSessionReads} namespace={state.pluginSection?.ns ?? OPENCODE_SESSION_NS} onApplied={load} /> : null}
     {state.nsFound === false ? <p style={{ fontSize: '12px', opacity: 0.75 }}>{t('noNamespace')}</p> : <div>
       <div className={css.controlRow} style={{ marginBottom: state.quickSettingsOpen ? '4px' : '6px' }}><ActionButton text={t('quickSettings')} onClick={() => setState((current) => ({ ...current, quickSettingsOpen: !current.quickSettingsOpen }))} disabled={state.busy} palette={palette} icon={state.quickSettingsOpen ? 'chevronUp' : 'sliders'} />{state.quickSettingsOpen ? <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flexBasis: '100%', padding: '4px', border: `1px solid ${palette.border}`, borderRadius: '8px', backgroundColor: palette.field }}>{PRESETS.map((preset) => <ActionButton key={preset.key} text={t(preset.labelKey)} onClick={() => { setState((current) => ({ ...current, quickSettingsOpen: false })); applyPreset(preset.levels) }} disabled={state.busy} palette={palette} icon={preset.key === 'official' ? 'sparkles' : 'sliders'} />)}</div> : null}</div>

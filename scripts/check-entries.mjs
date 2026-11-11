@@ -29,6 +29,12 @@ function publishedEntries() {
     if (subpath === './package.json') continue
     const target = typeof value === 'string' ? value : value?.default
     if (typeof target !== 'string') continue
+    // A pattern export publishes a directory of files, not one module. The
+    // locale tables are JSON and the JSON schema checks them; `node --check`
+    // on a path containing `*` would look for a literal file and fail.
+    if (subpath.includes('*') || target.includes('*')) continue
+    // Only JavaScript reaches `--check`; JSON carries no syntax this can verify.
+    if (!/\.(?:c|m)?js$/.test(target)) continue
     targets.push({ subpath, file: resolve(ROOT, target) })
   }
   return targets

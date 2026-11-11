@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Thinking effort (core)",
+    "description": "Fills in configurable thinking-effort levels for hand-declared llm-pi-ai models and writes defaults on startup and settings changes. Off: the effort levels this plugin added leave the model menu; defaults already written stay."
+  }
+}

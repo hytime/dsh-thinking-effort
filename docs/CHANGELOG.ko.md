@@ -10,6 +10,22 @@
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-11
+
+### 新增 / Added
+
+- 插件页的七个组件行现在各有本地化标题与说明，四种语言（中、英、日、韩）齐全。此前七行都回退到同一个包描述，无法从名称判断哪个开关控制什么；现在每条说明都写清了关闭后会发生什么，例如子 agent 行会说明子 agent 回到继承父会话、设置卡片一并消失。
+- Added localized titles and descriptions to the seven component rows on the Plugins page, in all four languages the package ships (Chinese, English, Japanese, Korean). Previously every row fell back to the same bundle description, so there was no way to tell from the name what a switch controlled; each description now says what switching that row off stops — the subagent row, for instance, explains that subagents go back to inheriting the parent session and that its settings card disappears with it.
+
+### 修复 / Fixed
+
+- 设置面板现在受它自己那一行的开关控制。此前 `thinking-effort-settings` 关闭后，设置页仍会注册并出现「模型能力与档位」入口，点开是一个空页面。槽位一旦注册就无法撤销，因此在挂载时读取开关并直接跳过整个面板。同一改动也让组件开关真正生效：读取依赖随连接到达（本机实测约 160 毫秒），而旧的兜底在第一个微任务就返回了「未知」，`unknown` 被当作开启，所以无论配置如何面板都会挂载。
+- The settings panel now honours its own component row. With `thinking-effort-settings` switched off, the section still registered and its "Model capabilities and effort" entry appeared, opening an empty page. A slot cannot be unregistered, so the switch is read at mount and the whole panel is skipped. The same fix made component switches work at all: the inventory dependency arrives with the connection (measured at ~160 ms locally) while the old fallback fired on the first microtask and reported "unknown", which renders as on — so the panel mounted regardless of the profile.
+- 进入设置页时会重新读取组件开关，因此在插件页关闭某个组件后，它的卡片在下一次进入设置页时不再渲染。浏览器端只有这一处可以自行读取：行开关不会推送任何事件，而试图用写配置自行制造信号曾让插件页死锁，并把正在切换的行从配置里丢掉。
+- Entering the settings page now re-reads the component switches, so a component switched off in the plugin page stops rendering its card on the next visit. That visit is the only moment the client can read for itself: a row toggle pushes no event, and an attempt to manufacture a signal by writing settings deadlocked the plugin page and dropped the row being toggled from the profile.
+- 备份卡里的「重新扫描旧数据」按钮现在受迁移组件的开关控制：该组件关闭时宿主不再安装监听器，按钮原本会让用户触发一次没有东西会执行的扫描。
+- The configuration backup card's legacy rescan button now follows the migration component's switch: with that component off the host installs no watcher, so the button offered a scan nothing would run.
+
 ## [0.4.1] - 2026-11-09
 
 ### 추가

@@ -94,7 +94,7 @@ Use the official DSH CLI to manage the plugin profile. A plain `pnpm install` do
 dsh plugin --profile <profile> add @hytime/dsh-thinking-effort
 
 # Install a specific version
-dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.0
+dsh plugin --profile <profile> add @hytime/dsh-thinking-effort@0.4.2
 
 # Upgrade
 dsh plugin --profile <profile> update @hytime/dsh-thinking-effort

@@ -17,30 +17,9 @@
  * runtime exposes it, decided here by a shape probe via `context.get` (the
  * inject-free read face).
  */
-import { createElement, useSyncExternalStore } from 'react'
-import { LOCALE_NS, asModelDirectories, createModelDirectoryFaceResolver, hasSessionRemote, modelDirectoryCompatibility, partEnabled } from '@hytime/dsh-plugin-kit'
-import type { ClientContext, ClientLocale, ClientSlots, ComponentSwitchState, ComponentSwitchStore, Translation } from '@hytime/dsh-plugin-kit'
-import type { ComponentKey } from '@hytime/dsh-plugin-kit'
-
-/**
- * The live switch answer, or `undefined` when the caller passed no store.
- *
- * `useSyncExternalStore` needs stable callbacks; the fallbacks are module-level
- * constants rather than inline closures so a store-less mount does not resubscribe
- * on every render.
- */
-const NO_SUBSCRIBE = (): (() => void) => () => undefined
-const NO_SNAPSHOT = (): undefined => undefined
-
-function useSwitchSnapshot(
-  switches: ComponentSwitchStore | undefined,
-): Record<ComponentKey, ComponentSwitchState> | undefined {
-  return useSyncExternalStore(
-    switches?.subscribe ?? NO_SUBSCRIBE,
-    switches?.getSnapshot ?? NO_SNAPSHOT,
-    switches?.getSnapshot ?? NO_SNAPSHOT,
-  )
-}
+import { createElement } from 'react'
+import { LOCALE_NS, asModelDirectories, createModelDirectoryFaceResolver, hasSessionRemote, modelDirectoryCompatibility, registerComponentSlot } from '@hytime/dsh-plugin-kit'
+import type { ClientContext, ClientLocale, ClientSlots, ComponentSwitchStore, Translation } from '@hytime/dsh-plugin-kit'
 import { Slider } from './slider.js'
 import type { ModelDirectoryState, ModelSelection } from './slider.js'
 
@@ -119,29 +98,21 @@ export function apply(context: ClientContext, switches?: ComponentSwitchStore): 
         // Match the official ui-model-selection composition: slots.inject owns
         // the registration effect for the declaring plugin fiber and disposes
         // it when the fiber is unloaded or its slot declaration collapses.
-        scopedSlots.inject(SEAT_NAME, () => scopedSlots.register(
+        scopedSlots.inject(SEAT_NAME, () => registerComponentSlot(switches, 'composer', () => scopedSlots.register(
           {
             name: SEAT_NAME,
             priority: SEAT_PRIORITY,
             locale: LOCALE_NS,
             inject: (sessionId: string) => resolveFace(sessionId),
           },
-          // The seat SHADOWS the official model selector, so its row being off
-          // has to hand the slot back. Returning null does that: the official
-          // registration wins the single slot again, and toggling the row takes
-          // effect without a page reload.
-          (props: ComposerSeatInjected & { readonly locked?: boolean; readonly t: Translation }) => {
-            const snapshot = useSwitchSnapshot(switches)
-            if (snapshot !== undefined && !partEnabled(snapshot, 'composer')) return null
-            return createElement(Slider, {
-              directory: props.directory,
-              load: props.load,
-              select: props.select,
-              locked: props.locked,
-              t: props.t ?? translate,
-            })
-          },
-        ))
+          (props: ComposerSeatInjected & { readonly locked?: boolean; readonly t: Translation }) => createElement(Slider, {
+            directory: props.directory,
+            load: props.load,
+            select: props.select,
+            locked: props.locked,
+            t: props.t ?? translate,
+          }),
+        )))
       },
     })
   }

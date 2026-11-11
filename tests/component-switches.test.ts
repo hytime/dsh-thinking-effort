@@ -5,6 +5,7 @@ import {
   componentEnabled,
   componentSwitchesFrom,
 } from '@hytime/dsh-plugin-kit'
+import type { ComponentKey, ComponentSwitchState } from '@hytime/dsh-plugin-kit'
 
 /**
  * The bundle's seven rows share one browser artifact, so the client cannot tell
