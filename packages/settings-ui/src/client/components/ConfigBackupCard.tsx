@@ -37,6 +37,7 @@ import type { SettingsApi, SettingsNamespace, Translation } from '@hytime/dsh-pl
 export type { CardState, PendingImport } from './config-backup/card-state.js'
 
 export interface ConfigBackupCardProps {
+  readonly migrationEnabled?: boolean
   readonly settings: SettingsApi
   readonly palette: Palette
   readonly t: Translation
@@ -45,7 +46,7 @@ export interface ConfigBackupCardProps {
   readonly now?: () => Date
 }
 
-export function ConfigBackupCard({ settings, palette, t, onApplied, download = browserDownloadJson, now }: ConfigBackupCardProps): React.ReactElement {
+export function ConfigBackupCard({ migrationEnabled = true, settings, palette, t, onApplied, download = browserDownloadJson, now }: ConfigBackupCardProps): React.ReactElement {
   const [state, setState] = React.useState<CardState>(initialState)
   const fileInput = React.useRef<HTMLInputElement>(null)
   /**
@@ -213,7 +214,7 @@ export function ConfigBackupCard({ settings, palette, t, onApplied, download = b
   const legacy = legacyRescanView(ownSection, t)
   // Whether this host publishes the plugin's own Loader entry section, which is
   // the only one `installLegacyMigration` subscribes to.
-  const legacyRescanAvailable = legacy.available
+  const legacyRescanAvailable = migrationEnabled && legacy.available
   const [legacyBusy, setLegacyBusy] = React.useState(false)
   const rescanLegacyData = async (): Promise<void> => {
     if (!legacyRescanAvailable) return

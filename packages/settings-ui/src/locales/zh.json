@@ -282,8 +282,5 @@
   "subagentModelHint": "子 agent 创建时切换到该模型；选择「继承父会话」则沿用父会话的模型。",
   "subagentModelAutoSave": "选择后自动保存",
   "subagentModelSaved": "子 agent 默认模型已保存",
-  "compactionSectionHint": "留空则跟随全局比例；填写的百分比只影响该模型。",
-  "componentSwitchRefreshRequired": "在插件页切换组件开关后，点右上角「刷新」重载本页；功能本身需重启 DSH 才生效",
-  "reloadPanel": "刷新",
-  "reloadPanelLabel": "重新加载本页，读取最新的组件开关"
+  "compactionSectionHint": "留空则跟随全局比例；填写的百分比只影响该模型。"
 }

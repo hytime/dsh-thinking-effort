@@ -192,6 +192,8 @@ function renderEditor(options: {
   switches?: Record<string, 'on' | 'off' | 'unknown'>
   /** A live store the test drives, for asserting that a toggle reaches the page. */
   liveStore?: { getSnapshot(): Record<string, 'on' | 'off'>; subscribe(listener: () => void): () => void }
+  /** The once-per-mount re-read the entry supplies. */
+  onMounted?: () => void
 } = {}): {
   container: HTMLDivElement
   root: Root
@@ -223,8 +225,9 @@ function renderEditor(options: {
     const switchStore = options.liveStore ?? (options.switches === undefined ? undefined : {
       getSnapshot: () => options.switches as never,
       subscribe: () => () => undefined,
+      // A static fixture never moves away from what it rendered.
     })
-    root.render(<SectionEditor settings={settings} locale={locale} t={text as Translation} takeoverRuntime={takeoverRuntime} switches={switchStore as never} />)
+    root.render(<SectionEditor settings={settings} locale={locale} t={text as Translation} takeoverRuntime={takeoverRuntime} switches={switchStore as never} {...options.onMounted === undefined ? {} : { onMounted: options.onMounted }} />)
   })
   return {
     container,
@@ -3049,7 +3052,7 @@ describe('SectionEditor compaction policy and subagent default route', () => {
      * The panel reads the store per render, so these tests exercise the same
      * path a live toggle takes rather than a mount-time flag.
      */
-    const switchesWith = (key: 'opencode' | 'compaction' | 'subagent', on: boolean): Record<string, 'on' | 'off'> => ({
+    const switchesWith = (key: 'opencode' | 'compaction' | 'subagent' | 'migration', on: boolean): Record<string, 'on' | 'off'> => ({
       levels: 'on',
       settings: 'on',
       opencode: 'on',
@@ -3121,7 +3124,12 @@ describe('SectionEditor compaction policy and subagent default route', () => {
       closed.unmount()
     })
 
-    it('drops and restores a card when its row is toggled while the page is open', async () => {
+    it.each([
+      ['opencode', 'opencodeSessionHeaderTitle'],
+      ['compaction', 'compactionSectionTitle'],
+      ['subagent', 'subagentCardTitle'],
+      ['migration', 'legacyMigrationRescan'],
+    ] as const)('updates the %s UI while the page stays open', async (key, label) => {
     // The defect this covers: the panel used to read the switches once at
     // mount, so turning a row off in the plugin page only took effect after a
     // full page refresh. A store the component subscribes to is what fixes it,
@@ -3129,7 +3137,7 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     // than sampled once.
     const plugin = withPluginSection({ revision: 9 })
     const llm = openCodeLlmNamespace({ schema: realGatewaySchema })
-    let current: Record<string, 'on' | 'off'> = switchesWith('opencode', true)
+    let current: Record<string, 'on' | 'off'> = switchesWith(key, true)
     const listeners = new Set<() => void>()
     const liveStore = {
       getSnapshot: () => current,
@@ -3146,75 +3154,42 @@ describe('SectionEditor compaction policy and subagent default route', () => {
     })
     await settle()
     openFirstModel(view.container)
-    expect(view.container.textContent).toContain(text('opencodeSessionHeaderTitle'))
+    expect(view.container.textContent).toContain(text(label))
 
     act(() => {
-      current = switchesWith('opencode', false)
+      current = switchesWith(key, false)
       for (const listener of listeners) listener()
     })
     await settle()
-    expect(view.container.textContent).not.toContain(text('opencodeSessionHeaderTitle'))
+    expect(view.container.textContent).not.toContain(text(label))
+    expect(view.container.querySelector('[data-scope="component-switch-refresh"]')).toBeNull()
 
     act(() => {
-      current = switchesWith('opencode', true)
+      current = switchesWith(key, true)
       for (const listener of listeners) listener()
     })
     await settle()
-    expect(view.container.textContent).toContain(text('opencodeSessionHeaderTitle'))
+    expect(view.container.textContent).toContain(text(label))
     view.unmount()
   })
 
-  it('offers a reload button in the header, since only a reload can re-read the switches', async () => {
-    // The bundle this page loaded is one artifact for all seven rows, so a row
-    // switched in the plugin page cannot be discovered by re-rendering. The
-    // button performs the one action that can help, instead of leaving the user
-    // to work out why nothing changed.
-    const view = mountWith(switchesWith('opencode', true))
+  it('asks the entry to re-read once when the panel mounts', async () => {
+    // The read is what discovers a change, so it must run once per visit — not
+    // per render, which would poll the Host on every keystroke.
+    const onMounted = vi.fn()
+    const view = renderEditor({
+      namespaces: [withPluginSection({ revision: 9 }), openCodeLlmNamespace({ schema: realGatewaySchema })],
+      describe: async () => ({ ok: true, value: { namespaces: [] } }),
+      compatibilityProfile: 'modern',
+      onMounted,
+    })
     await settle()
-    const button = view.container.querySelector('[data-testid="thinking-effort-reload"]') as HTMLButtonElement | null
-    expect(button).not.toBeNull()
-    expect(button?.textContent).toContain(text('reloadPanel'))
-    // It must be reachable, not merely present in the tree.
-    expect(button?.disabled).toBe(false)
-    view.unmount()
-  })
-
-  it('calls the page reload when the header button is pressed', async () => {
-    const reload = vi.fn()
-    const original = window.location
-    // jsdom's location is read-only; replace the whole object for this test.
-    Object.defineProperty(window, 'location', { configurable: true, value: { ...original, reload } })
-    try {
-      const view = mountWith(switchesWith('opencode', true))
-      await settle()
-      const button = view.container.querySelector('[data-testid="thinking-effort-reload"]') as HTMLButtonElement
-      act(() => { button.click() })
-      expect(reload).toHaveBeenCalledTimes(1)
-      view.unmount()
-    } finally {
-      Object.defineProperty(window, 'location', { configurable: true, value: original })
-    }
-  })
-
-  it('always renders the refresh hint, because a row toggle never reaches an open page', async () => {
-    // The browser bundle is one artifact for all seven rows and was fetched for
-    // the page already open, so a toggle in the plugin page cannot change what
-    // this panel renders. The notice is static for that reason: it explains why
-    // the user must refresh, rather than pretending the change arrived.
-    const view = mountWith(switchesWith('opencode', true))
-    await settle()
-    const notice = view.container.querySelector('[data-scope="component-switch-refresh"]')
-    expect(notice).not.toBeNull()
-    expect(notice?.textContent).toContain(text('componentSwitchRefreshRequired'))
+    expect(onMounted).toHaveBeenCalledTimes(1)
     view.unmount()
   })
 
   it('renders nothing at all when the panel row itself is off', async () => {
-    // A slot registers once and cannot be unregistered, so the row has to be
-    // excluded at MOUNT rather than rendered as an empty page: registering it
-    // anyway would leave a "Model capabilities and effort" entry in Settings
-    // pointing at nothing. `apply` therefore reads the switches first and skips
-    // the whole panel — this asserts the component honours that.
+    // The editor also honors the switch when mounted on its own.
     const view = mountWith({ ...switchesWith('opencode', true), settings: 'off', opencode: 'off', compaction: 'off', subagent: 'off' })
     await settle()
     expect(view.container.textContent).toBe('')

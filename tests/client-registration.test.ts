@@ -10,7 +10,7 @@ import { COMPONENT_ROWS, PLUGIN_ENTRY_ID } from '@hytime/dsh-plugin-kit'
 import { observeTakeoverSettings, resolveTakeoverDescription } from '../packages/settings-ui/src/client/takeover-runtime.js'
 import { providerGatewayCompatViewFrom } from '../packages/settings-ui/src/client/model-inventory.js'
 import { resolveTakeoverGatewayCompat, resolveTakeoverProviders, takeoverGatewayCompatInputs } from '@hytime/dsh-plugin-kit'
-import type { ClientContext, SettingsNamespace } from '@hytime/dsh-plugin-kit'
+import type { ClientContext, ComponentSwitchStore, SettingsNamespace } from '@hytime/dsh-plugin-kit'
 
 /**
  * Every component row as the Host reports it.
@@ -77,10 +77,16 @@ function createHarness(mode: 'modern' | 'legacy', disabled: readonly string[] = 
   const sessionRemote = mode === 'modern' ? { modelCatalog: vi.fn().mockResolvedValue({ ok: true }) } : undefined
   // The client entry asks the Host which component rows are live before it
   // mounts anything; this answers like a host with every row enabled.
+  const inventory = vi.fn(async () => ({ ok: true as const, value: { entries: enabledRows(disabled) } }))
+  const managerListeners = new Set<() => void>()
   const remote = {
     pluginInventory: {
-      list: async () => ({ ok: true as const, value: { entries: enabledRows(disabled) } }),
+      list: inventory,
     },
+    $on: vi.fn((_event: string, listener: () => void) => {
+      managerListeners.add(listener)
+      return () => { managerListeners.delete(listener) }
+    }),
   }
   const sessions = {}
   // `ctx.configForms` is optional and belongs to a DIFFERENT client entry, so it
@@ -136,7 +142,8 @@ function createHarness(mode: 'modern' | 'legacy', disabled: readonly string[] = 
 
   return {
     context, slots, locale, listeners, registrations, disposed, addLanguage, register,
-    remoteSettings, legacySettings, sessionRemote, modelDirectories, directory,
+    remoteSettings, legacySettings, sessionRemote, modelDirectories, directory, inventory, managerListeners,
+    emitPluginChange: () => { for (const listener of managerListeners) listener() },
     // Present (or replace) the optional `configForms` service, mimicking a
     // late-activating sibling client entry. The event a real host emits for that
     // activation is this plugin's `internal/service` notification.
@@ -157,7 +164,7 @@ function createHarness(mode: 'modern' | 'legacy', disabled: readonly string[] = 
  */
 async function flushSwitches(): Promise<void> {
   // One macrotask drains the whole microtask chain the read builds: the inject
-  // callback, the Remote promise, and the `.then` that mounts. Counting
+  // callback and the Remote promise that precedes mounting. Counting
   // `Promise.resolve()` hops instead would silently stop working the moment the
   // read grows another step.
   await new Promise((resolve) => setTimeout(resolve, 0))
@@ -165,9 +172,6 @@ async function flushSwitches(): Promise<void> {
 
 describe('component switches gate the mounted surfaces', () => {
   it('registers no slot when the panel row is off', async () => {
-    // A slot cannot be unregistered, so a panel mounted anyway would leave a
-    // "Model capabilities and effort" entry in Settings pointing at an empty
-    // page. `apply` reads the switches first and skips the panel entirely.
     const harness = createHarness('modern', ['@hytime/dsh-thinking-effort/settings'])
     apply(harness.context)
     await flushSwitches()
@@ -181,6 +185,69 @@ describe('component switches gate the mounted surfaces', () => {
     apply(harness.context)
     await flushSwitches()
     expect(harness.registrations.length).toBeGreaterThan(0)
+  })
+
+  it('updates the mounted panel after each row toggle and retains its state after a failed read', async () => {
+    const harness = createHarness('modern')
+    apply(harness.context)
+    await flushSwitches()
+    const section = harness.registrations.find((entry) => entry.descriptor.name === 'settings.section')
+    const { props } = (section?.render as () => {
+      props: { switches: ComponentSwitchStore; onMounted: () => void }
+    })()
+
+    harness.inventory.mockResolvedValue({ ok: true, value: { entries: enabledRows([COMPONENT_ROWS.subagent.moduleName]) } })
+    harness.emitPluginChange()
+    await flushSwitches()
+    expect(props.switches.getSnapshot().subagent).toBe('off')
+
+    harness.inventory.mockRejectedValueOnce(new Error('offline'))
+    props.onMounted()
+    await flushSwitches()
+    expect(props.switches.getSnapshot().subagent).toBe('off')
+
+    props.onMounted()
+    await flushSwitches()
+    expect(harness.registrations.filter((entry) => entry.descriptor.name === 'settings.section')).toHaveLength(1)
+
+    harness.inventory.mockResolvedValue({ ok: true, value: { entries: enabledRows() } })
+    harness.emitPluginChange()
+    await flushSwitches()
+    expect(props.switches.getSnapshot().subagent).toBe('on')
+
+    harness.disposeAllEffects()
+    expect(harness.managerListeners.size).toBe(0)
+  })
+
+  it('adds the settings navigation when its row is re-enabled', async () => {
+    const harness = createHarness('modern', [COMPONENT_ROWS.settings.moduleName])
+    apply(harness.context)
+    await flushSwitches()
+    const sections = () => harness.registrations.filter((entry) => entry.descriptor.name === 'settings.section')
+    expect(sections()).toHaveLength(0)
+
+    harness.inventory.mockResolvedValue({ ok: true, value: { entries: enabledRows() } })
+    harness.emitPluginChange()
+    await flushSwitches()
+    expect(sections()).toHaveLength(1)
+
+    harness.inventory.mockResolvedValue({ ok: true, value: { entries: enabledRows([COMPONENT_ROWS.settings.moduleName]) } })
+    harness.emitPluginChange()
+    await flushSwitches()
+    expect(harness.disposed).toContain('slot')
+  })
+
+  it('leaves the official composer seat available until the plugin row is enabled', async () => {
+    const harness = createHarness('modern', [COMPONENT_ROWS.composer.moduleName])
+    apply(harness.context)
+    await flushSwitches()
+    const seats = () => harness.registrations.filter((entry) => entry.descriptor.name === 'conversation.input.model')
+    expect(seats()).toHaveLength(0)
+
+    harness.inventory.mockResolvedValue({ ok: true, value: { entries: enabledRows() } })
+    harness.emitPluginChange()
+    await flushSwitches()
+    expect(seats()).toHaveLength(1)
   })
 })
 
@@ -904,10 +971,6 @@ describe('client registration', () => {
 
     expect(harness.register).toHaveBeenCalledWith(LOCALE_NS, expect.objectContaining({ zh: expect.any(Object), en: expect.any(Object), ja: expect.any(Object), ko: expect.any(Object) }))
     expect(harness.addLanguage).toHaveBeenCalledTimes(2)
-    // One direct effect (language-pack dictionaries); the three slot
-    // registrations go through slots.inject, whose teardown is the returned
-    // disposer (Cordis fiber effect). All are torn down via disposeAllEffects.
-    expect(harness.context.effect).toHaveBeenCalledTimes(1)
     harness.disposeAllEffects()
     expect(harness.disposed).toEqual(['slot', 'slot', 'slot', 'ko', 'ja', 'dictionary'])
   })
