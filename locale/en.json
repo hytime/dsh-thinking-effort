@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "@hytime/dsh-thinking-effort",
+    "description": "Adds configurable thinking-effort levels to hand-declared llm-pi-ai models, with per-model context compaction, subagent defaults and a composer slider. Each part is its own switch below."
+  }
+}

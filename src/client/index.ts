@@ -25,24 +25,30 @@ import type { ClientContext } from '@hytime/dsh-plugin-kit'
 export const name = '@hytime/dsh-thinking-effort'
 export const inject = ['slots', 'connection', 'locale'] as const
 
-/**
- * Register every client surface this plugin contributes.
- *
- * Mounting is NOT gated on the switches: a slot registers once and cannot be
- * re-registered, so deciding here would mean a row toggled in the plugin page
- * needed a page refresh. Instead each surface receives the store and re-reads it
- * per render, which is what makes the change visible immediately.
- *
- * The store starts at "every part on" so the first frame renders the full panel;
- * the first Host answer then corrects it.
- *
- * @param context - the client root context.
- */
+// The inventory dependency can arrive after the client starts. Older hosts
+// never provide it, so mount with the store's defaults after a bounded wait.
+const SWITCHES_TIMEOUT_MS = 3000
+
 export function apply(context: ClientContext): void {
-  const switches = createComponentSwitchStore()
-  readComponentSwitches(context, switches.update)
-  // Both surfaces take the store, not a snapshot: the Composer seat's own
-  // registration is a slot as well, so it re-checks on every render.
-  applySettings(context, switches.store)
-  applyComposer(context, switches.store)
+  const { store, update } = createComponentSwitchStore()
+  let mounted = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+
+  const mount = (): void => {
+    if (mounted) return
+    mounted = true
+    if (timer !== undefined) clearTimeout(timer)
+    applySettings(context, {
+      switches: store,
+      reread,
+    })
+    applyComposer(context, store)
+  }
+
+  const reread = readComponentSwitches(context, (switches) => {
+    update(switches)
+    mount()
+  })
+  // The packaged client smoke test runs in a VM without browser timers.
+  if (!mounted && typeof setTimeout === 'function') timer = setTimeout(mount, SWITCHES_TIMEOUT_MS)
 }

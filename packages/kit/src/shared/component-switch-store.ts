@@ -1,17 +1,4 @@
-/**
- * A live view of which of this bundle's components are switched on.
- *
- * The value cannot be captured once at mount: a user can toggle a row in the
- * plugin page and expect the settings panel to lose that card without a page
- * reload. Slots are registered once and cannot be re-registered, so the panel
- * has to READ the switches per render instead of receiving them as fixed props.
- *
- * This is the smallest thing that supports that: a snapshot plus subscribers,
- * which is the shape React's `useSyncExternalStore` consumes.
- *
- * @module @hytime/dsh-plugin-kit/shared/component-switch-store
- */
-import { componentEnabled } from './component-switches.js'
+import { componentEnabled, componentSwitchesFrom } from './component-switches.js'
 import type { ComponentKey, ComponentSwitchState } from './component-switches.js'
 
 /** The live switch face a client surface reads. */
@@ -35,16 +22,10 @@ export function createComponentSwitchStore(): {
   store: ComponentSwitchStore
   update(next: Record<ComponentKey, ComponentSwitchState>): void
 } {
-  let current: Record<ComponentKey, ComponentSwitchState> = {
-    levels: 'unknown',
-    settings: 'unknown',
-    opencode: 'unknown',
-    compaction: 'unknown',
-    subagent: 'unknown',
-    migration: 'unknown',
-    composer: 'unknown',
-  }
+  let current = componentSwitchesFrom(undefined)
   const listeners = new Set<() => void>()
+
+  const notify = (): void => { for (const listener of listeners) listener() }
   return {
     store: {
       getSnapshot: () => current,
@@ -52,14 +33,13 @@ export function createComponentSwitchStore(): {
         listeners.add(listener)
         return () => { listeners.delete(listener) }
       },
+
     },
     update: (next) => {
-      // Identity is what `useSyncExternalStore` compares, so a re-read that
-      // answers the same thing must not hand back a new object: doing so would
-      // re-render every subscriber on every unrelated host event.
-      if ((Object.keys(next) as ComponentKey[]).every((key) => next[key] === current[key])) return
+      const keys = Object.keys(next) as ComponentKey[]
+      if (keys.every((key) => next[key] === current[key])) return
       current = next
-      for (const listener of listeners) listener()
+      notify()
     },
   }
 }
@@ -76,4 +56,28 @@ export function partEnabled(
   key: ComponentKey,
 ): boolean {
   return componentEnabled(snapshot[key])
+}
+
+/** Keep a slot registered for as long as its component is enabled. */
+export function registerComponentSlot(
+  switches: ComponentSwitchStore | undefined,
+  key: ComponentKey,
+  register: () => () => void,
+): () => void {
+  let unregister: (() => void) | undefined
+  const sync = (): void => {
+    if (switches === undefined || partEnabled(switches.getSnapshot(), key)) {
+      unregister ??= register()
+    } else {
+      unregister?.()
+      unregister = undefined
+    }
+  }
+
+  sync()
+  const unsubscribe = switches?.subscribe(sync)
+  return () => {
+    unsubscribe?.()
+    unregister?.()
+  }
 }

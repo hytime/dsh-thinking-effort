@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "OpenCode session header",
+    "description": "Injects headers such as x-opencode-session into requests for the models you select, with per-model format templates and User-Agent. Off: no header is injected and the OpenCode card leaves the settings page too."
+  }
+}

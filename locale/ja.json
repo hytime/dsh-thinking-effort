@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "@hytime/dsh-thinking-effort",
+    "description": "手動で宣言した llm-pi-ai モデルに設定可能な推論強度を追加し、モデルごとのコンテキスト圧縮、サブエージェントの既定値、Composer スライダーを提供します。以下の各コンポーネントは個別に切り替えられます。"
+  }
+}

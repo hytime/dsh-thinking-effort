@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Context compaction",
+    "description": "Measures context pressure before each step and condenses a tool-pairing-balanced range early once you pass your configured percentage. Off: no early pass, while DSH's own automatic compaction keeps running at its own threshold."
+  }
+}

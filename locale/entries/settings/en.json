@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Settings panel",
+    "description": "The \"Model capabilities and effort\" settings page itself: model levels, compaction thresholds, subagent routing and configuration backup are edited there. Off: the page is gone while the other components keep running with no surface to configure them."
+  }
+}
